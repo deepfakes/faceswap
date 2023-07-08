@@ -1,0 +1,166 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-06-08 16:43+0100\n"
+"PO-Revision-Date: 2023-06-12 19:42+0700\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: ru_RU\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 3.3.1\n"
+
+#: plugins/extract/_config.py:32
+msgid "Options that apply to all extraction plugins"
+msgstr "Параметры, применимые ко всем плагинам извлечения"
+
+#: plugins/extract/_config.py:38
+msgid "settings"
+msgstr "настройки"
+
+#: plugins/extract/_config.py:39
+msgid ""
+"Enable the Tensorflow GPU `allow_growth` configuration "
+"option. This option prevents Tensorflow from allocating all of the GPU VRAM "
+"at launch but can lead to higher VRAM fragmentation and slower performance. "
+"Should only be enabled if you are having problems running extraction."
+msgstr ""
+"Включите опцию конфигурации Tensorflow GPU "
+"`allow_growth`. Эта опция не позволяет Tensorflow выделять всю видеопамять "
+"видеокарты при запуске, но может привести к повышенной фрагментации "
+"видеопамяти и снижению производительности. Следует включать только в том "
+"случае, если у вас есть проблемы с запуском извлечения."
+
+#: plugins/extract/_config.py:50 plugins/extract/_config.py:64
+#: plugins/extract/_config.py:78 plugins/extract/_config.py:89
+#: plugins/extract/_config.py:99 plugins/extract/_config.py:108
+#: plugins/extract/_config.py:119
+msgid "filters"
+msgstr "фильтры"
+
+#: plugins/extract/_config.py:51
+msgid ""
+"Filters out faces below this size. This is a multiplier of the minimum "
+"dimension of the frame (i.e. 1280x720 = 720). If the original face extract "
+"box is smaller than the minimum dimension times this multiplier, it is "
+"considered a false positive and discarded. Faces which are found to be "
+"unusually smaller than the frame tend to be misaligned images, except in "
+"extreme long-shots. These can be usually be safely discarded."
+msgstr ""
+"Отфильтровывает лица меньше этого размера. Это множитель минимального "
+"размера кадра (т.е. 1280x720 = 720). Если исходное поле извлечения лица "
+"меньше минимального размера, умноженного на этот множитель, оно считается "
+"ложным срабатыванием и отбрасывается. Лица, которые оказываются необычно "
+"меньшего размера, чем кадр, как правило, являются неправильно выровненными "
+"изображениями, за исключением экстремально длинных снимков. Обычно их можно "
+"смело отбрасывать."
+
+#: plugins/extract/_config.py:65
+msgid ""
+"Filters out faces above this size. This is a multiplier of the minimum "
+"dimension of the frame (i.e. 1280x720 = 720). If the original face extract "
+"box is larger than the minimum dimension times this multiplier, it is "
+"considered a false positive and discarded. Faces which are found to be "
+"unusually larger than the frame tend to be misaligned images except in "
+"extreme close-ups. These can be usually be safely discarded."
+msgstr ""
+"Отфильтровывает лица, превышающие этот размер. Это множитель минимального "
+"размера кадра (т.е. 1280x720 = 720). Если исходный блок извлечения лица "
+"больше, чем минимальный размер кадра, умноженный на этот множитель, он "
+"считается ложным срабатыванием и отбрасывается. Лица, размер которых "
+"необычно превышает размер кадра, как правило, являются несогласованными "
+"изображениями, за исключением экстремальных крупных планов. Обычно их можно "
+"смело отбрасывать."
+
+#: plugins/extract/_config.py:79
+msgid ""
+"Filters out faces who's landmarks are above this distance from an 'average' "
+"face. Values above 15 tend to be fairly safe. Values above 10 will remove "
+"more false positives, but may also filter out some faces at extreme angles."
+msgstr ""
+"Отфильтровывает лица, ориентиры которых находятся на расстоянии, превышающем "
+"это расстояние от 'среднего' лица. Значения выше 15, как правило, достаточно "
+"безопасны. Значения выше 10 устраняют больше ложных срабатываний, но также "
+"могут отфильтровать некоторые лица под экстремальными углами."
+
+#: plugins/extract/_config.py:90
+msgid ""
+"Filters out faces who's calculated roll is greater than zero +/- this value "
+"in degrees. Aligned faces should have a roll value close to zero. Values "
+"that are a significant distance from 0 degrees tend to be misaligned images. "
+"These can usually be safely disgarded."
+msgstr ""
+"Отфильтровывает лица, у которых расчетный угол наклона больше нуля +/- это "
+"значение в градусах. Выровненные лица должны иметь значение угла наклона, "
+"близкое к нулю. Значения, которые значительно удалены от 0 градусов, как "
+"правило, представляют собой неправильно выровненные изображения. Обычно их "
+"можно смело отбрасывать."
+
+#: plugins/extract/_config.py:100
+msgid ""
+"Filters out faces where the lowest point of the aligned face's eye or "
+"eyebrow is lower than the highest point of the aligned face's mouth. Any "
+"faces where this occurs are misaligned and can be safely disgarded."
+msgstr ""
+"Отфильтровывает лица, у которых нижняя точка глаза или брови выровненного "
+"лица находится ниже, чем верхняя точка рта выровненного лица. Все лица, на "
+"которых это происходит, являются неправильно выровненными и могут быть смело "
+"отброшены."
+
+#: plugins/extract/_config.py:109
+msgid ""
+"If enabled, and 're-feed' has been selected for extraction, then interim "
+"alignments will be filtered prior to averaging the final landmarks. This can "
+"help improve the final alignments by removing any obvious misaligns from the "
+"interim results, and may also help pick up difficult alignments. If "
+"disabled, then all re-feed results will be averaged."
+msgstr ""
+"Если эта функция включена, и для извлечения выбрана 'повторная подача'('re-"
+"feed'), то промежуточные выравнивания будут отфильтрованы перед усреднением "
+"окончательных ориентиров. Это может помочь улучшить окончательное "
+"выравнивание, удалив любые очевидные несоответствия из промежуточных "
+"результатов, а также может помочь выявить сложные выравнивания. Если эта "
+"функция отключена, то все результаты повторной подачи будут усреднены."
+
+#: plugins/extract/_config.py:120
+msgid ""
+"If enabled, saves any filtered out images into a sub-folder during the "
+"extraction process. If disabled, filtered faces are deleted. Note: The faces "
+"will always be filtered out of the alignments file, regardless of whether "
+"you keep the faces or not."
+msgstr ""
+"Если включена, то в процессе извлечения отфильтрованные изображения "
+"сохраняются в подпапке. Если отключено, отфильтрованные лица удаляются. "
+"Примечание: Лица всегда будут отфильтрованы из файла выравнивания, "
+"независимо от того, сохраняете вы эти лица или нет."
+
+#: plugins/extract/_config.py:129 plugins/extract/_config.py:138
+msgid "re-align"
+msgstr "повторное выравнивание"
+
+#: plugins/extract/_config.py:130
+msgid ""
+"If enabled, and 're-align' has been selected for extraction, then all re-"
+"feed iterations are re-aligned. If disabled, then only the final averaged "
+"output from re-feed will be re-aligned."
+msgstr ""
+"Если включено, и для извлечения выбрано 'повторное выравнивание'('re-"
+"align'), то все итерации повторной подачи выравниваются повторно. Если "
+"отключено, то выравнивается только конечный усредненный результат повторной "
+"подачи."
+
+#: plugins/extract/_config.py:139
+msgid ""
+"If enabled, and 're-align' has been selected for extraction, then any "
+"alignments which would be filtered out will not be re-aligned."
+msgstr ""
+"Если эта функция включена, и для извлечения выбрано 'повторное "
+"выравнивание'('re-align'), то все выравнивания, которые будут отфильтрованы, "
+"не будут повторно выравниваться."

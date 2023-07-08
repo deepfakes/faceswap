@@ -1,11 +1,12 @@
 #!/usr/bin python3
 """ Utilities available across all scripts """
-
+from __future__ import annotations
 import json
 import logging
 import os
 import sys
 import tkinter as tk
+import typing as T
 import warnings
 import zipfile
 
@@ -14,18 +15,12 @@ from re import finditer
 from socket import timeout as socket_timeout, error as socket_error
 from threading import get_ident
 from time import time
-from typing import cast, Dict, List, Optional, Union, Tuple, TYPE_CHECKING
 from urllib import request, error as urlliberror
 
 import numpy as np
 from tqdm import tqdm
 
-if sys.version_info < (3, 8):
-    from typing_extensions import get_args, Literal
-else:
-    from typing import get_args, Literal
-
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from http.client import HTTPResponse
 
 # Global variables
@@ -34,8 +29,8 @@ _image_extensions = [  # pylint:disable=invalid-name
 _video_extensions = [  # pylint:disable=invalid-name
     ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
     ".ts", ".vob"]
-_TF_VERS: Optional[Tuple[int, int]] = None
-ValidBackends = Literal["amd", "nvidia", "cpu", "apple_silicon", "directml", "rocm"]
+_TF_VERS: tuple[int, int] | None = None
+ValidBackends = T.Literal["nvidia", "cpu", "apple_silicon", "directml", "rocm"]
 
 
 class _Backend():  # pylint:disable=too-few-public-methods
@@ -44,12 +39,11 @@ class _Backend():  # pylint:disable=too-few-public-methods
 
     If file doesn't exist and a variable hasn't been set, create the config file. """
     def __init__(self) -> None:
-        self._backends: Dict[str, ValidBackends] = {"1": "cpu",
+        self._backends: dict[str, ValidBackends] = {"1": "cpu",
                                                     "2": "directml",
                                                     "3": "nvidia",
                                                     "4": "apple_silicon",
-                                                    "5": "rocm",
-                                                    "6": "amd"}
+                                                    "5": "rocm"}
         self._valid_backends = list(self._backends.values())
         self._config_file = self._get_config_file()
         self.backend = self._get_backend()
@@ -79,9 +73,9 @@ class _Backend():  # pylint:disable=too-few-public-methods
         """
         # Check if environment variable is set, if so use that
         if "FACESWAP_BACKEND" in os.environ:
-            fs_backend = cast(ValidBackends, os.environ["FACESWAP_BACKEND"].lower())
-            assert fs_backend in get_args(ValidBackends), (
-                f"Faceswap backend must be one of {get_args(ValidBackends)}")
+            fs_backend = T.cast(ValidBackends, os.environ["FACESWAP_BACKEND"].lower())
+            assert fs_backend in T.get_args(ValidBackends), (
+                f"Faceswap backend must be one of {T.get_args(ValidBackends)}")
             print(f"Setting Faceswap backend from environment variable to {fs_backend.upper()}")
             return fs_backend
         # Intercept for sphinx docs build
@@ -138,7 +132,7 @@ def get_backend() -> ValidBackends:
     Returns
     -------
     str
-        The backend configuration in use by Faceswap. One of  ["amd", "cpu", "directml", "nvidia",
+        The backend configuration in use by Faceswap. One of  ["cpu", "directml", "nvidia", "rocm",
         "apple_silicon"]
 
     Example
@@ -155,7 +149,7 @@ def set_backend(backend: str) -> None:
 
     Parameters
     ----------
-    backend: ["amd", "cpu", "directml", "nvidia", "apple_silicon"]
+    backend: ["cpu", "directml", "nvidia", "rocm", "apple_silicon"]
         The backend to set faceswap to
 
     Example
@@ -164,11 +158,11 @@ def set_backend(backend: str) -> None:
     >>> set_backend("nvidia")
     """
     global _FS_BACKEND  # pylint:disable=global-statement
-    backend = cast(ValidBackends, backend.lower())
+    backend = T.cast(ValidBackends, backend.lower())
     _FS_BACKEND = backend
 
 
-def get_tf_version() -> Tuple[int, int]:
+def get_tf_version() -> tuple[int, int]:
     """ Obtain the major. minor version of currently installed Tensorflow.
 
     Returns
@@ -180,7 +174,7 @@ def get_tf_version() -> Tuple[int, int]:
     -------
     >>> from lib.utils import get_tf_version
     >>> get_tf_version()
-    (2, 9)
+    (2, 10)
     """
     global _TF_VERS  # pylint:disable=global-statement
     if _TF_VERS is None:
@@ -226,7 +220,7 @@ def get_folder(path: str, make_folder: bool = True) -> str:
     return path
 
 
-def get_image_paths(directory: str, extension: Optional[str] = None) -> List[str]:
+def get_image_paths(directory: str, extension: str | None = None) -> list[str]:
     """ Gets the image paths from a given directory.
 
     The function searches for files with the specified extension(s) in the given directory, and
@@ -275,7 +269,7 @@ def get_image_paths(directory: str, extension: Optional[str] = None) -> List[str
     return dir_contents
 
 
-def get_dpi() -> Optional[float]:
+def get_dpi() -> float | None:
     """ Gets the DPI (dots per inch) of the display screen.
 
     Returns
@@ -339,7 +333,7 @@ def convert_to_secs(*args: int) -> int:
     return retval
 
 
-def full_path_split(path: str) -> List[str]:
+def full_path_split(path: str) -> list[str]:
     """ Split a file path into all of its parts.
 
     Parameters
@@ -361,7 +355,7 @@ def full_path_split(path: str) -> List[str]:
     ['relative', 'path', 'to', 'file.txt']]
     """
     logger = logging.getLogger(__name__)
-    allparts: List[str] = []
+    allparts: list[str] = []
     while True:
         parts = os.path.split(path)
         if parts[0] == path:   # sentinel for absolute paths
@@ -411,7 +405,7 @@ def set_system_verbosity(log_level: str):
             warnings.simplefilter(action='ignore', category=warncat)
 
 
-def deprecation_warning(function: str, additional_info: Optional[str] = None) -> None:
+def deprecation_warning(function: str, additional_info: str | None = None) -> None:
     """ Log a deprecation warning message.
 
     This function logs a warning message to indicate that the specified function has been
@@ -437,7 +431,7 @@ def deprecation_warning(function: str, additional_info: Optional[str] = None) ->
     logger.warning(msg)
 
 
-def camel_case_split(identifier: str) -> List[str]:
+def camel_case_split(identifier: str) -> list[str]:
     """ Split a camelCase string into a list of its individual parts
 
     Parameters
@@ -542,7 +536,7 @@ class GetModel():  # pylint:disable=too-few-public-methods
     >>> model_downloader = GetModel("s3fd_keras_v2.h5", 11)
     """
 
-    def __init__(self, model_filename: Union[str, List[str]], git_model_id: int) -> None:
+    def __init__(self, model_filename: str | list[str], git_model_id: int) -> None:
         self.logger = logging.getLogger(__name__)
         if not isinstance(model_filename, list):
             model_filename = [model_filename]
@@ -577,7 +571,7 @@ class GetModel():  # pylint:disable=too-few-public-methods
         return retval
 
     @property
-    def model_path(self) -> Union[str, List[str]]:
+    def model_path(self) -> str | list[str]:
         """ str or list[str]: The model path(s) in the cache folder.
 
         Example
@@ -588,7 +582,7 @@ class GetModel():  # pylint:disable=too-few-public-methods
         '/path/to/s3fd_keras_v2.h5'
         """
         paths = [os.path.join(self._cache_dir, fname) for fname in self._model_filename]
-        retval: Union[str, List[str]] = paths[0] if len(paths) == 1 else paths
+        retval: str | list[str] = paths[0] if len(paths) == 1 else paths
         self.logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
@@ -663,7 +657,7 @@ class GetModel():  # pylint:disable=too-few-public-methods
                                      self._url_download, self._cache_dir)
                     sys.exit(1)
 
-    def _write_zipfile(self, response: "HTTPResponse", downloaded_size: int) -> None:
+    def _write_zipfile(self, response: HTTPResponse, downloaded_size: int) -> None:
         """ Write the model zip file to disk.
 
         Parameters
@@ -763,10 +757,10 @@ class DebugTimes():
     """
     def __init__(self,
                  show_min: bool = True, show_mean: bool = True, show_max: bool = True) -> None:
-        self._times: Dict[str, List[float]] = {}
-        self._steps: Dict[str, float] = {}
+        self._times: dict[str, list[float]] = {}
+        self._steps: dict[str, float] = {}
         self._interval = 1
-        self._display = dict(min=show_min, mean=show_mean, max=show_max)
+        self._display = {"min": show_min, "mean": show_mean, "max": show_max}
 
     def step_start(self, name: str, record: bool = True) -> None:
         """ Start the timer for the given step name.

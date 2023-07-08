@@ -5,10 +5,10 @@ import locale
 import os
 import platform
 import sys
+import typing as T
 
 from collections import namedtuple
 from io import StringIO
-from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -51,17 +51,17 @@ def test_init(sys_info_instance: _SysInfo) -> None:
 
     assert hasattr(sys_info_instance, "_system")
     assert isinstance(sys_info_instance._system, dict)
-    assert sys_info_instance._system == dict(platform=platform.platform(),
-                                             system=platform.system().lower(),
-                                             machine=platform.machine(),
-                                             release=platform.release(),
-                                             processor=platform.processor(),
-                                             cpu_count=os.cpu_count())
+    assert sys_info_instance._system == {"platform": platform.platform(),
+                                         "system": platform.system().lower(),
+                                         "machine": platform.machine(),
+                                         "release": platform.release(),
+                                         "processor": platform.processor(),
+                                         "cpu_count": os.cpu_count()}
 
     assert hasattr(sys_info_instance, "_python")
     assert isinstance(sys_info_instance._python, dict)
-    assert sys_info_instance._python == dict(implementation=platform.python_implementation(),
-                                             version=platform.python_version())
+    assert sys_info_instance._python == {"implementation": platform.python_implementation(),
+                                         "version": platform.python_version()}
 
     assert hasattr(sys_info_instance, "_gpu")
     assert isinstance(sys_info_instance._gpu, GPUInfo)
@@ -258,8 +258,8 @@ def test__configs__parse_configs(configs_instance: _Configs,
     """
     assert hasattr(configs_instance, "_parse_configs")
     assert isinstance(configs_instance._parse_configs([]), str)
-    configs_instance._parse_ini = cast(MagicMock, mocker.MagicMock())  # type:ignore
-    configs_instance._parse_json = cast(MagicMock,  mocker.MagicMock())  # type:ignore
+    configs_instance._parse_ini = T.cast(MagicMock, mocker.MagicMock())  # type:ignore
+    configs_instance._parse_json = T.cast(MagicMock,  mocker.MagicMock())  # type:ignore
     configs_instance._parse_configs(config_files=["test.ini", ".faceswap"])
     assert configs_instance._parse_ini.called
     assert configs_instance._parse_json.called
@@ -302,7 +302,7 @@ def test__configs__parse_json(configs_instance: _Configs,
 
     """
     assert hasattr(configs_instance, "_parse_json")
-    file = ('{"test": "param"}')
+    file = '{"test": "param"}'
     monkeypatch.setattr("builtins.open", lambda *args, **kwargs: StringIO(file))
 
     converted = configs_instance._parse_json(".file")

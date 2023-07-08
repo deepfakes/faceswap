@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """ Tool to preview swaps and tweak configuration prior to running a convert """
-
+from __future__ import annotations
 import gettext
 import logging
 import random
 import tkinter as tk
+import typing as T
+
 from tkinter import ttk
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
 import os
 import sys
-
 
 from threading import Event, Lock, Thread
 
@@ -29,13 +29,7 @@ from plugins.extract.pipeline import ExtractMedia
 from .control_panels import ActionFrame, ConfigTools, OptionsBook
 from .viewer import FacesDisplay, ImagesCanvas
 
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from argparse import Namespace
     from lib.queue_manager import EventQueue
     from .control_panels import BusyProgressBar
@@ -62,7 +56,7 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
     """
     _w: str
 
-    def __init__(self, arguments: "Namespace") -> None:
+    def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         super().__init__()
         self._config_tools = ConfigTools()
@@ -73,9 +67,9 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
         self._patch = Patch(self, arguments)
 
         self._initialize_tkinter()
-        self._image_canvas: Optional[ImagesCanvas] = None
-        self._opts_book: Optional[OptionsBook] = None
-        self._cli_frame: Optional[ActionFrame] = None  # cli frame holds cli options
+        self._image_canvas: ImagesCanvas | None = None
+        self._opts_book: OptionsBook | None = None
+        self._cli_frame: ActionFrame | None = None  # cli frame holds cli options
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -102,7 +96,7 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
         return self._lock
 
     @property
-    def progress_bar(self) -> "BusyProgressBar":
+    def progress_bar(self) -> BusyProgressBar:
         """ :class:`~tools.preview.control_panels.BusyProgressBar`: The progress bar that indicates
         a swap/patch thread is running """
         assert self._cli_frame is not None
@@ -278,13 +272,13 @@ class Samples():
         The number of samples to take from the input video/images
     """
 
-    def __init__(self, app: Preview, arguments: "Namespace", sample_size: int) -> None:
+    def __init__(self, app: Preview, arguments: Namespace, sample_size: int) -> None:
         logger.debug("Initializing %s: (app: %s, arguments: '%s', sample_size: %s)",
                      self.__class__.__name__, app, arguments, sample_size)
         self._sample_size = sample_size
         self._app = app
-        self._input_images: List[ConvertItem] = []
-        self._predicted_images: List[Tuple[ConvertItem, np.ndarray]] = []
+        self._input_images: list[ConvertItem] = []
+        self._predicted_images: list[tuple[ConvertItem, np.ndarray]] = []
 
         self._images = Images(arguments)
         self._alignments = Alignments(arguments,
@@ -302,7 +296,7 @@ class Samples():
         self._indices = self._get_indices()
 
         self._predictor = Predict(queue_manager.get_queue("preview_predict_in"),
-                                  sample_size,
+                                  self._sample_size,
                                   arguments)
         self._app._display.set_centering(self._predictor.centering)
         self.generate()
@@ -310,7 +304,7 @@ class Samples():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def available_masks(self) -> List[str]:
+    def available_masks(self) -> list[str]:
         """ list: The mask names that are available for every face in the alignments file """
         retval = [key
                   for key, val in self.alignments.mask_summary.items()
@@ -323,7 +317,7 @@ class Samples():
         return self._sample_size
 
     @property
-    def predicted_images(self) -> List[Tuple[ConvertItem, np.ndarray]]:
+    def predicted_images(self) -> list[tuple[ConvertItem, np.ndarray]]:
         """ list: The predicted faces output from the Faceswap model """
         return self._predicted_images
 
@@ -338,13 +332,13 @@ class Samples():
         return self._predictor
 
     @property
-    def _random_choice(self) -> List[int]:
+    def _random_choice(self) -> list[int]:
         """ list: Random indices from the :attr:`_indices` group """
         retval = [random.choice(indices) for indices in self._indices]
         logger.debug(retval)
         return retval
 
-    def _get_filelist(self) -> List[str]:
+    def _get_filelist(self) -> list[str]:
         """ Get a list of files for the input, filtering out those frames which do
         not contain faces.
 
@@ -372,7 +366,7 @@ class Samples():
             raise FaceswapError(msg) from err
         return retval
 
-    def _get_indices(self) -> List[List[int]]:
+    def _get_indices(self) -> list[list[int]]:
         """ Get indices for each sample group.
 
         Obtain :attr:`self.sample_size` evenly sized groups of indices
@@ -385,6 +379,7 @@ class Samples():
         """
         # Remove start and end values to get a list divisible by self.sample_size
         no_files = len(self._filelist)
+        self._sample_size = min(self._sample_size, no_files)
         crop = no_files % self._sample_size
         top_tail = list(range(no_files))[
             crop // 2:no_files - (crop - (crop // 2))]
@@ -449,9 +444,8 @@ class Samples():
             idx = 0
             while idx < self._sample_size:
                 logger.debug("Predicting face %s of %s", idx + 1, self._sample_size)
-                items: Union[Literal["EOF"],
-                             List[Tuple[ConvertItem,
-                                        np.ndarray]]] = self._predictor.out_queue.get()
+                items: (T.Literal["EOF"] |
+                        list[tuple[ConvertItem, np.ndarray]]) = self._predictor.out_queue.get()
                 if items == "EOF":
                     logger.debug("Received EOF")
                     break
@@ -480,12 +474,12 @@ class Patch():  # pylint:disable=too-few-public-methods
     converter_arguments: dict
         The currently selected converter command line arguments for the patch queue
     """
-    def __init__(self, app: Preview, arguments: "Namespace") -> None:
+    def __init__(self, app: Preview, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (app: %s, arguments: '%s')",
                      self.__class__.__name__, app, arguments)
         self._app = app
         self._queue_patch_in = queue_manager.get_queue("preview_patch_in")
-        self.converter_arguments: Optional[Dict[str, Any]] = None  # Updated converter args dict
+        self.converter_arguments: dict[str, T.Any] | None = None  # Updated converter args
 
         configfile = arguments.configfile if hasattr(arguments, "configfile") else None
         self._converter = Converter(output_size=app._samples.predictor.output_size,
@@ -512,8 +506,8 @@ class Patch():  # pylint:disable=too-few-public-methods
         return self._converter
 
     @staticmethod
-    def _generate_converter_arguments(arguments: "Namespace",
-                                      available_masks: List[str]) -> "Namespace":
+    def _generate_converter_arguments(arguments: Namespace,
+                                      available_masks: list[str]) -> Namespace:
         """ Add the default converter arguments to the initial arguments. Ensure the mask selection
         is available.
 
@@ -549,7 +543,7 @@ class Patch():  # pylint:disable=too-few-public-methods
         return arguments
 
     def _process(self,
-                 patch_queue_in: "EventQueue",
+                 patch_queue_in: EventQueue,
                  trigger_event: Event,
                  samples: Samples) -> None:
         """ The face patching process.
@@ -600,7 +594,7 @@ class Patch():  # pylint:disable=too-few-public-methods
         logger.debug("Updated Converter cli arguments")
 
     @staticmethod
-    def _feed_swapped_faces(patch_queue_in: "EventQueue", samples: Samples) -> None:
+    def _feed_swapped_faces(patch_queue_in: EventQueue, samples: Samples) -> None:
         """ Feed swapped faces to the converter's in-queue.
 
         Parameters
@@ -619,9 +613,9 @@ class Patch():  # pylint:disable=too-few-public-methods
         patch_queue_in.put("EOF")
 
     def _patch_faces(self,
-                     queue_in: "EventQueue",
-                     queue_out: "EventQueue",
-                     sample_size: int) -> List[np.ndarray]:
+                     queue_in: EventQueue,
+                     queue_out: EventQueue,
+                     sample_size: int) -> list[np.ndarray]:
         """ Patch faces.
 
         Run the convert process on the swapped faces and return the patched faces.

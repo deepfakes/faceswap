@@ -1,0 +1,76 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-06-11 23:28+0100\n"
+"PO-Revision-Date: 2023-06-12 21:25+0700\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: ru_RU\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 3.3.1\n"
+
+#: lib/config.py:393
+msgid ""
+"\n"
+"This option can be updated for existing models.\n"
+msgstr ""
+"\n"
+"Эта настройка будет обновлена для существующих моделей.\n"
+
+#: lib/config.py:395
+msgid ""
+"\n"
+"If selecting multiple options then each option should be separated by a "
+"space or a comma (e.g. item1, item2, item3)\n"
+msgstr ""
+"\n"
+"Если выбираете несколько опций, тогда каждая опция должна быть "
+"разделена пробелом или запятой (например: опция1, опция2, опция3)\n"
+
+#: lib/config.py:398
+msgid ""
+"\n"
+"Choose from: {}"
+msgstr ""
+"\n"
+"Выберите из: {}"
+
+#: lib/config.py:400
+msgid ""
+"\n"
+"Choose from: True, False"
+msgstr ""
+"\n"
+"Выберите из: True, False"
+
+#: lib/config.py:404
+msgid ""
+"\n"
+"Select an integer between {} and {}"
+msgstr ""
+"\n"
+"Выберите число между {} и {}"
+
+#: lib/config.py:408
+msgid ""
+"\n"
+"Select a decimal number between {} and {}"
+msgstr ""
+"\n"
+"Выберите десятичное число между {} и {}"
+
+#: lib/config.py:409
+msgid ""
+"\n"
+"[Default: {}]"
+msgstr ""
+"\n"
+"[По умолчанию: {}]"

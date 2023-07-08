@@ -4,78 +4,37 @@ Base class for Models. ALL Models should at least inherit from this class.
 
 See :mod:`~plugins.train.model.original` for an annotated example for how to create model plugins.
 """
+from __future__ import annotations
 import logging
 import os
 import sys
 import time
+import typing as T
 
 from collections import OrderedDict
-from typing import cast, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
 
 import numpy as np
+import tensorflow as tf
+
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.keras import backend as K  # pylint:disable=import-error
+from tensorflow.keras.layers import Input  # pylint:disable=import-error
+from tensorflow.keras.models import load_model, Model as KModel  # noqa:E501  # pylint:disable=import-error
 
 from lib.serializer import get_serializer
 from lib.model.nn_blocks import set_config as set_nnblock_config
-from lib.utils import get_backend, FaceswapError
+from lib.utils import FaceswapError
 from plugins.train._config import Config
 
 from .io import IO, get_all_sub_models, Weights
 from .settings import Loss, Optimizer, Settings
 
-if get_backend() == "amd":
-    import keras
-    from keras import backend as K
-    from keras.layers import Input
-    from keras.models import load_model, Model as KModel
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow import keras  # pylint:disable=import-error
-    from tensorflow.keras import backend as K  # pylint:disable=import-error
-    from tensorflow.keras.layers import Input  # pylint:disable=import-error,no-name-in-module
-    from tensorflow.keras.models import load_model, Model as KModel  # noqa pylint:disable=import-error,no-name-in-module
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     import argparse
     from lib.config import ConfigValueType
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-_CONFIG: Dict[str, "ConfigValueType"] = {}
-
-
-def KerasModel(inputs: list, outputs: list, name: str) -> keras.models.Model:  # noqa, pylint:disable=invalid-name
-    """ wrapper for :class:`keras.models.Model`.
-
-    There are some minor foibles between Keras 2.2 and the Tensorflow version of Keras, so this
-    catches potential issues and fixes prior to returning the requested model.
-
-    All models created within plugins should use this method, and should not call keras directly
-    for a model.
-
-    Parameters
-    ----------
-    inputs: a keras.Input object or list of keras.Input objects.
-        The input(s) of the model
-    outputs: keras objects
-        The output(s) of the model.
-    name: str
-        The name of the model.
-
-    Returns
-    -------
-    :class:`keras.models.Model`
-        A Keras Model
-    """
-    if get_backend() == "amd":
-        logger.debug("Flattening inputs (%s) and outputs (%s) for AMD", inputs, outputs)
-        inputs = np.array(inputs).flatten().tolist()
-        outputs = np.array(outputs).flatten().tolist()
-        logger.debug("Flattened inputs (%s) and outputs (%s)", inputs, outputs)
-    return KModel(inputs, outputs, name=name)
+_CONFIG: dict[str, ConfigValueType] = {}
 
 
 class ModelBase():
@@ -108,19 +67,19 @@ class ModelBase():
     """
     def __init__(self,
                  model_dir: str,
-                 arguments: "argparse.Namespace",
+                 arguments: argparse.Namespace,
                  predict: bool = False) -> None:
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', arguments: %s, predict: %s)",
                      self.__class__.__name__, model_dir, arguments, predict)
 
         # Input shape must be set within the plugin after initializing
-        self.input_shape: Tuple[int, ...] = ()
+        self.input_shape: tuple[int, ...] = ()
         self.trainer = "original"  # Override for plugin specific trainer
-        self.color_order: Literal["bgr", "rgb"] = "bgr"  # Override for image color channel order
+        self.color_order: T.Literal["bgr", "rgb"] = "bgr"  # Override for image color channel order
 
         self._args = arguments
         self._is_predict = predict
-        self._model: Optional[keras.models.Model] = None
+        self._model: tf.keras.models.Model | None = None
 
         self._configfile = arguments.configfile if hasattr(arguments, "configfile") else None
         self._load_config()
@@ -134,15 +93,8 @@ class ModelBase():
             raise FaceswapError("'Learn Mask' has been selected but you have not chosen a Mask to "
                                 "use. Please select a mask or disable 'Learn Mask'.")
 
-        self._mixed_precision = self.config["mixed_precision"] and get_backend() != "amd"
-        # self._io = IO(self, model_dir, self._is_predict, self.config["save_optimizer"])
-        # TODO - Re-enable saving of optimizer once this bug is fixed:
-        # File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
-        # File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
-        # File "h5py/h5d.pyx", line 87, in h5py.h5d.create
-        # ValueError: Unable to create dataset (name already exists)
-
-        self._io = IO(self, model_dir, self._is_predict, "never")
+        self._mixed_precision = self.config["mixed_precision"]
+        self._io = IO(self, model_dir, self._is_predict, self.config["save_optimizer"])
         self._check_multiple_models()
 
         self._state = State(model_dir,
@@ -158,12 +110,12 @@ class ModelBase():
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 
     @property
-    def model(self) -> keras.models.Model:
+    def model(self) -> tf.keras.models.Model:
         """:class:`Keras.models.Model`: The compiled model for this plugin. """
         return self._model
 
     @property
-    def command_line_arguments(self) -> "argparse.Namespace":
+    def command_line_arguments(self) -> argparse.Namespace:
         """ :class:`argparse.Namespace`: The command line arguments passed to the model plugin from
         either the train or convert script """
         return self._args
@@ -210,16 +162,16 @@ class ModelBase():
         return self.name
 
     @property
-    def input_shapes(self) -> List[Tuple[None, int, int, int]]:
+    def input_shapes(self) -> list[tuple[None, int, int, int]]:
         """ list: A flattened list corresponding to all of the inputs to the model. """
-        shapes = [cast(Tuple[None, int, int, int], K.int_shape(inputs))
+        shapes = [T.cast(tuple[None, int, int, int], K.int_shape(inputs))
                   for inputs in self.model.inputs]
         return shapes
 
     @property
-    def output_shapes(self) -> List[Tuple[None, int, int, int]]:
+    def output_shapes(self) -> list[tuple[None, int, int, int]]:
         """ list: A flattened list corresponding to all of the outputs of the model. """
-        shapes = [cast(Tuple[None, int, int, int], K.int_shape(output))
+        shapes = [T.cast(tuple[None, int, int, int], K.int_shape(output))
                   for output in self.model.outputs]
         return shapes
 
@@ -312,9 +264,12 @@ class ModelBase():
                 inputs = self._get_inputs()
                 if not self._settings.use_mixed_precision and not is_summary:
                     # Store layer names which can be switched to mixed precision
-                    self._state.add_mixed_precision_layers(
-                        self._settings.get_mixed_precision_layers(self.build_model, inputs))
-                self._model = self.build_model(inputs)
+                    model, mp_layers = self._settings.get_mixed_precision_layers(self.build_model,
+                                                                                 inputs)
+                    self._state.add_mixed_precision_layers(mp_layers)
+                    self._model = model
+                else:
+                    self._model = self.build_model(inputs)
             if not is_summary and not self._is_predict:
                 self._compile_model()
             self._output_summary()
@@ -342,13 +297,13 @@ class ModelBase():
         os.mkdir(self.model_dir)
         new_model = self.build_model(self._get_inputs())
         for model_name, layer_name in legacy_mapping.items():
-            old_model: keras.models.Model = load_model(os.path.join(archive_dir, model_name),
-                                                       compile=False)
+            old_model: tf.keras.models.Model = load_model(os.path.join(archive_dir, model_name),
+                                                          compile=False)
             layer = [layer for layer in new_model.layers if layer.name == layer_name]
             if not layer:
                 logger.warning("Skipping legacy weights from '%s'...", model_name)
                 continue
-            klayer: keras.layers.Layer = layer[0]
+            klayer: tf.keras.layers.Layer = layer[0]
             logger.info("Updating legacy weights from '%s'...", model_name)
             klayer.set_weights(old_model.get_weights())
         filename = self._io._filename  # pylint:disable=protected-access
@@ -368,7 +323,7 @@ class ModelBase():
         a list of 2 shape tuples of 3 dimensions. """
         assert len(self.input_shape) == 3, "Input shape should be a 3 dimensional shape tuple"
 
-    def _get_inputs(self) -> List[keras.layers.Input]:
+    def _get_inputs(self) -> list[tf.keras.layers.Input]:
         """ Obtain the standardized inputs for the model.
 
         The inputs will be returned for the "A" and "B" sides in the shape as defined by
@@ -387,7 +342,7 @@ class ModelBase():
         logger.debug("inputs: %s", inputs)
         return inputs
 
-    def build_model(self, inputs: List[keras.layers.Input]) -> keras.models.Model:
+    def build_model(self, inputs: list[tf.keras.layers.Input]) -> tf.keras.models.Model:
         """ Override for Model Specific autoencoder builds.
 
         Parameters
@@ -399,11 +354,9 @@ class ModelBase():
         Returns
         -------
         :class:`keras.models.Model`
-            The output of this function must be a keras model generated from
-            :class:`plugins.train.model._base.KerasModel`. See Keras documentation for the correct
-            structure, but note that parameter :attr:`name` is a required rather than an optional
-            argument in Faceswap. You should assign this to the attribute ``self.name`` that is
-            automatically generated from the plugin's filename.
+            See Keras documentation for the correct structure, but note that parameter :attr:`name`
+            is a required rather than an optional argument in Faceswap. You should assign this to
+            the attribute ``self.name`` that is automatically generated from the plugin's filename.
         """
         raise NotImplementedError
 
@@ -448,15 +401,12 @@ class ModelBase():
         if self.state.model_needs_rebuild:
             self._model = self._settings.check_model_precision(self._model, self._state)
 
-        autoclip = get_backend() != "amd" and self.config["autoclip"]
         optimizer = Optimizer(self.config["optimizer"],
                               self.config["learning_rate"],
-                              autoclip,
+                              self.config["autoclip"],
                               10 ** int(self.config["epsilon_exponent"])).optimizer
         if self._settings.use_mixed_precision:
             optimizer = self._settings.loss_scale_optimizer(optimizer)
-        if get_backend() == "amd":
-            self._rewrite_plaid_outputs()
 
         weights = Weights(self)
         weights.load(self._io.model_exists)
@@ -467,29 +417,7 @@ class ModelBase():
         self._state.add_session_loss_names(self._loss.names)
         logger.debug("Compiled Model: %s", self.model)
 
-    def _rewrite_plaid_outputs(self) -> None:
-        """ Rewrite the output names for models using the PlaidML (Keras 2.2.4) backend
-
-        Keras 2.2.4 duplicates model output names if any of the models have multiple outputs
-        so we need to rename the outputs so we can successfully map the loss dictionaries.
-
-        This is a bit of a hack, but it does work.
-        """
-        # TODO Remove this rewrite code if PlaidML updates to a version of Keras where this is
-        # no longer necessary
-        if len(self.model.output_names) == len(set(self.model.output_names)):
-            logger.debug("Output names are unique, not rewriting: %s", self.model.output_names)
-            return
-        seen = {name: 0 for name in set(self.model.output_names)}
-        new_names = []
-        for name in self.model.output_names:
-            new_names.append(f"{name}_{seen[name]}")
-            seen[name] += 1
-        logger.debug("Output names rewritten: (old: %s, new: %s)",
-                     self.model.output_names, new_names)
-        self.model.output_names = new_names
-
-    def _legacy_mapping(self) -> Optional[dict]:
+    def _legacy_mapping(self) -> dict | None:
         """ The mapping of separate model files to single model layers for transferring of legacy
         weights.
 
@@ -501,7 +429,7 @@ class ModelBase():
         """
         return None
 
-    def add_history(self, loss: List[float]) -> None:
+    def add_history(self, loss: list[float]) -> None:
         """ Add the current iteration's loss history to :attr:`_io.history`.
 
         Called from the trainer after each iteration, for tracking loss drop over time between
@@ -544,18 +472,18 @@ class State():
         self._filename = os.path.join(model_dir, filename)
         self._name = model_name
         self._iterations = 0
-        self._mixed_precision_layers: List[str] = []
+        self._mixed_precision_layers: list[str] = []
         self._rebuild_model = False
-        self._sessions: Dict[int, dict] = {}
-        self._lowest_avg_loss: Dict[str, float] = {}
-        self._config: Dict[str, "ConfigValueType"] = {}
+        self._sessions: dict[int, dict] = {}
+        self._lowest_avg_loss: dict[str, float] = {}
+        self._config: dict[str, ConfigValueType] = {}
         self._load(config_changeable_items)
         self._session_id = self._new_session_id()
         self._create_new_session(no_logs, config_changeable_items)
         logger.debug("Initialized %s:", self.__class__.__name__)
 
     @property
-    def loss_names(self) -> List[str]:
+    def loss_names(self) -> list[str]:
         """ list: The loss names for the current session """
         return self._sessions[self._session_id]["loss_names"]
 
@@ -580,7 +508,7 @@ class State():
         return self._session_id
 
     @property
-    def mixed_precision_layers(self) -> List[str]:
+    def mixed_precision_layers(self) -> list[str]:
         """list: Layers that can be switched between mixed-float16 and float32. """
         return self._mixed_precision_layers
 
@@ -619,14 +547,14 @@ class State():
             values
         """
         logger.debug("Creating new session. id: %s", self._session_id)
-        self._sessions[self._session_id] = dict(timestamp=time.time(),
-                                                no_logs=no_logs,
-                                                loss_names=[],
-                                                batchsize=0,
-                                                iterations=0,
-                                                config=config_changeable_items)
+        self._sessions[self._session_id] = {"timestamp": time.time(),
+                                            "no_logs": no_logs,
+                                            "loss_names": [],
+                                            "batchsize": 0,
+                                            "iterations": 0,
+                                            "config": config_changeable_items}
 
-    def add_session_loss_names(self, loss_names: List[str]) -> None:
+    def add_session_loss_names(self, loss_names: list[str]) -> None:
         """ Add the session loss names to the sessions dictionary.
 
         The loss names are used for Tensorboard logging
@@ -655,7 +583,7 @@ class State():
         self._iterations += 1
         self._sessions[self._session_id]["iterations"] += 1
 
-    def add_mixed_precision_layers(self, layers: List[str]) -> None:
+    def add_mixed_precision_layers(self, layers: list[str]) -> None:
         """ Add the list of model's layers that are compatible for mixed precision to the
         state dictionary """
         logger.debug("Storing mixed precision layers: %s", layers)
@@ -717,14 +645,14 @@ class State():
         legacy_update = self._update_legacy_config()
         # Add any new items to state config for legacy purposes where the new default may be
         # detrimental to an existing model.
-        legacy_defaults: Dict[str, Union[str, int, bool]] = dict(centering="legacy",
-                                                                 mask_loss_function="mse",
-                                                                 l2_reg_term=100,
-                                                                 optimizer="adam",
-                                                                 mixed_precision=False)
+        legacy_defaults: dict[str, str | int | bool] = {"centering": "legacy",
+                                                        "mask_loss_function": "mse",
+                                                        "l2_reg_term": 100,
+                                                        "optimizer": "adam",
+                                                        "mixed_precision": False}
         for key, val in _CONFIG.items():
             if key not in self._config.keys():
-                setting: "ConfigValueType" = legacy_defaults.get(key, val)
+                setting: ConfigValueType = legacy_defaults.get(key, val)
                 logger.info("Adding new config item to state file: '%s': '%s'", key, setting)
                 self._config[key] = setting
         self._update_changed_config_items(config_changeable_items)
@@ -838,7 +766,7 @@ class State():
                 continue
             self._config[key] = val
             logger.info("Config item: '%s' has been updated from '%s' to '%s'", key, old_val, val)
-            self._rebuild_model = not self._rebuild_model and key in rebuild_tasks
+            self._rebuild_model = self._rebuild_model or key in rebuild_tasks
 
 
 class _Inference():  # pylint:disable=too-few-public-methods
@@ -852,7 +780,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
         ``True`` if the swap should be performed "B" > "A" ``False`` if the swap should be
         "A" > "B"
     """
-    def __init__(self, saved_model: keras.models.Model, switch_sides: bool) -> None:
+    def __init__(self, saved_model: tf.keras.models.Model, switch_sides: bool) -> None:
         logger.debug("Initializing: %s (saved_model: %s, switch_sides: %s)",
                      self.__class__.__name__, saved_model, switch_sides)
         self._config = saved_model.get_config()
@@ -865,11 +793,11 @@ class _Inference():  # pylint:disable=too-few-public-methods
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
-    def model(self) -> keras.models.Model:
+    def model(self) -> tf.keras.models.Model:
         """ :class:`keras.models.Model`: The Faceswap model, compiled for inference. """
         return self._model
 
-    def _get_nodes(self, nodes: np.ndarray) -> List[Tuple[str, int]]:
+    def _get_nodes(self, nodes: np.ndarray) -> list[tuple[str, int]]:
         """ Given in input list of nodes from a :attr:`keras.models.Model.get_config` dictionary,
         filters the layer name(s) and output index of the node, splitting to the correct output
         index in the event of multiple inputs.
@@ -895,7 +823,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
         retval = [(node[0], node[2]) for node in anodes]
         return retval
 
-    def _make_inference_model(self, saved_model: keras.models.Model) -> keras.models.Model:
+    def _make_inference_model(self, saved_model: tf.keras.models.Model) -> tf.keras.models.Model:
         """ Extract the sub-models from the saved model that are required for inference.
 
         Parameters
@@ -911,7 +839,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
         logger.debug("Compiling inference model. saved_model: %s", saved_model)
         struct = self._get_filtered_structure()
         model_inputs = self._get_inputs(saved_model.inputs)
-        compiled_layers: Dict[str, keras.layers.Layer] = {}
+        compiled_layers: dict[str, tf.keras.layers.Layer] = {}
         for layer in saved_model.layers:
             if layer.name not in struct:
                 logger.debug("Skipping unused layer: '%s'", layer.name)
@@ -936,16 +864,12 @@ class _Inference():  # pylint:disable=too-few-public-methods
                     else:
                         next_input = inbound_layer
 
-                    if get_backend() == "amd" and isinstance(next_input, list):
-                        # tensorflow.keras and keras 2.2 behave differently for layer inputs
-                        layer_inputs.extend(next_input)
-                    else:
-                        layer_inputs.append(next_input)
+                    layer_inputs.append(next_input)
 
                 logger.debug("Compiling layer '%s': layer inputs: %s", layer.name, layer_inputs)
                 model = layer(layer_inputs)
             compiled_layers[layer.name] = model
-            retval = KerasModel(model_inputs, model, name=f"{saved_model.name}_inference")
+            retval = KModel(model_inputs, model, name=f"{saved_model.name}_inference")
         logger.debug("Compiled inference model '%s': %s", retval.name, retval)
         return retval
 

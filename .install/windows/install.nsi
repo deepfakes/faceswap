@@ -22,7 +22,7 @@ InstallDir $PROFILE\faceswap
 # Install cli flags
 !define flagsConda "/S /RegisterPython=0 /AddToPath=0 /D=$PROFILE\MiniConda3"
 !define flagsRepo "--depth 1 --no-single-branch ${wwwRepo}"
-!define flagsEnv "-y python=3."
+!define flagsEnv "-y python=3.10"
 
 # Folders
 Var ProgramData
@@ -129,32 +129,25 @@ Function pgPrereqCreate
         ${NSD_CreateLabel} 10% $lblPos% 80% 14u "Faceswap"
         Pop $0
 
-        StrCpy $lblPos 50
+        StrCpy $lblPos 46
     # Info Custom Options
-    ${NSD_CreateGroupBox} 5% 40% 90% 120% "Custom Items"
+    ${NSD_CreateGroupBox} 5% 40% 90% 60% "Custom Items"
     Pop $0
         ${NSD_CreateRadioButton} 10% $lblPos% 27% 11u "Setup for NVIDIA GPU"
             Pop $ctlRadio
 		    ${NSD_AddStyle} $ctlRadio ${WS_GROUP}
             nsDialogs::SetUserData $ctlRadio "nvidia"
             ${NSD_OnClick} $ctlRadio RadioClick
-        ${NSD_CreateRadioButton} 50% $lblPos% 30% 11u "Setup for DirectML"
+        ${NSD_CreateRadioButton} 40% $lblPos% 25% 11u "Setup for DirectML"
             Pop $ctlRadio
             nsDialogs::SetUserData $ctlRadio "directml"
             ${NSD_OnClick} $ctlRadio RadioClick
-
-        intOp $lblPos $lblPos + 10
-
-        ${NSD_CreateRadioButton} 10% $lblPos% 25% 11u "Setup for CPU"
+        ${NSD_CreateRadioButton} 70% $lblPos% 20% 11u "Setup for CPU"
             Pop $ctlRadio
             nsDialogs::SetUserData $ctlRadio "cpu"
             ${NSD_OnClick} $ctlRadio RadioClick
-        ${NSD_CreateRadioButton} 50% $lblPos% 40% 11u "Setup for AMD (deprecated)"
-            Pop $ctlRadio
-            nsDialogs::SetUserData $ctlRadio "amd"
-            ${NSD_OnClick} $ctlRadio RadioClick
 
-        intOp $lblPos $lblPos + 12
+        intOp $lblPos $lblPos + 10
 
         ${NSD_CreateLabel} 10% $lblPos% 80% 10u "Environment Name (NB: Existing envs with this name will be deleted):"
         pop $0
@@ -404,11 +397,7 @@ Function SetEnvironment
 
     CreateEnv:
         SetDetailsPrint listonly
-        ${If} $setupType == "amd"
-            StrCpy $0 "${flagsEnv}8"
-        ${else}
-            StrCpy $0 "${flagsEnv}9"
-        ${EndIf}        
+        StrCpy $0 "${flagsEnv}"
         ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda create $0 -n  $\"$envName$\" && conda deactivate"
         pop $0
         ExecDos::wait $0

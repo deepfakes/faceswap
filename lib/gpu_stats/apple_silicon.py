@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """ Collects and returns Information on available Apple Silicon SoCs in Apple Macs. """
-from typing import Any, List
+import typing as T
 
 import os
 import psutil
@@ -35,7 +35,7 @@ class AppleSiliconStats(_GPUStats):
     """
     def __init__(self, log: bool = True) -> None:
         # Following attribute set in :func:``_initialize``
-        self._tf_devices: List[Any] = []
+        self._tf_devices: list[T.Any] = []
 
         super().__init__(log=log)
 
@@ -142,7 +142,7 @@ class AppleSiliconStats(_GPUStats):
         self._log("debug", f"GPU Driver: {driver}")
         return driver
 
-    def _get_device_names(self) -> List[str]:
+    def _get_device_names(self) -> list[str]:
         """ Obtain the list of names of available Apple Silicon SoC(s) as identified in
         :attr:`_handles`.
 
@@ -155,7 +155,7 @@ class AppleSiliconStats(_GPUStats):
         self._log("debug", f"GPU Devices: {names}")
         return names
 
-    def _get_vram(self) -> List[int]:
+    def _get_vram(self) -> list[int]:
         """ Obtain the VRAM in Megabytes for each available Apple Silicon SoC(s) as identified in
         :attr:`_handles`.
 
@@ -175,7 +175,7 @@ class AppleSiliconStats(_GPUStats):
         self._log("debug", f"SoC RAM: {vram}")
         return vram
 
-    def _get_free_vram(self) -> List[int]:
+    def _get_free_vram(self) -> list[int]:
         """ Obtain the amount of VRAM that is available, in Megabytes, for each available Apple
         Silicon SoC.
 

@@ -1,17 +1,17 @@
 #!/usr/bin python3
 """ Utilities for working with images and videos """
-
+from __future__ import annotations
 import logging
 import re
 import subprocess
 import os
 import struct
 import sys
+import typing as T
 
 from ast import literal_eval
 from bisect import bisect
 from concurrent import futures
-from typing import Optional, TYPE_CHECKING, Union
 from zlib import crc32
 
 import cv2
@@ -24,7 +24,7 @@ from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager, QueueEmpty
 from lib.utils import convert_to_secs, FaceswapError, _video_extensions, get_image_paths
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from lib.align.alignments import PNGHeaderDict
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
@@ -558,7 +558,7 @@ def update_existing_metadata(filename, metadata):
 
 def encode_image(image: np.ndarray,
                  extension: str,
-                 metadata: Optional["PNGHeaderDict"] = None) -> bytes:
+                 metadata: PNGHeaderDict | None = None) -> bytes:
     """ Encode an image.
 
     Parameters
@@ -800,7 +800,7 @@ def count_frames(filename, fast=False):
     process = subprocess.Popen(cmd,
                                stderr=subprocess.STDOUT,
                                stdout=subprocess.PIPE,
-                               universal_newlines=True)
+                               universal_newlines=True, encoding="utf8")
     pbar = None
     duration = None
     init_tqdm = False
@@ -1433,8 +1433,8 @@ class ImagesSaver(ImageIO):
 
     def _save(self,
               filename: str,
-              image: Union[bytes, np.ndarray],
-              sub_folder: Optional[str]) -> None:
+              image: bytes | np.ndarray,
+              sub_folder: str | None) -> None:
         """ Save a single image inside a ThreadPoolExecutor
 
         Parameters
@@ -1468,8 +1468,8 @@ class ImagesSaver(ImageIO):
 
     def save(self,
              filename: str,
-             image: Union[bytes, np.ndarray],
-             sub_folder: Optional[str] = None) -> None:
+             image: bytes | np.ndarray,
+             sub_folder: str | None = None) -> None:
         """ Save the given image in the background thread
 
         Ensure that :func:`close` is called once all save operations are complete.

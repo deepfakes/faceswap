@@ -1,10 +1,9 @@
 #!/usr/bin python3
 """ VGG_Face2 inference and sorting """
 
+from __future__ import annotations
 import logging
-import sys
-
-from typing import cast, Dict, Generator, List, Tuple, Optional
+import typing as T
 
 import numpy as np
 import psutil
@@ -15,11 +14,8 @@ from lib.model.session import KSession
 from lib.utils import FaceswapError
 from ._base import BatchType, RecogBatch, Identity
 
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
+if T.TYPE_CHECKING:
+    from collections.abc import Generator
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -64,7 +60,7 @@ class Recognition(Identity):
     def init_model(self) -> None:
         """ Initialize VGG Face 2 Model. """
         assert isinstance(self.model_path, str)
-        model_kwargs = dict(custom_objects={'L2_normalize': L2_normalize})
+        model_kwargs = {"custom_objects": {"L2_normalize": L2_normalize}}
         self.model = KSession(self.name,
                               self.model_path,
                               model_kwargs=model_kwargs,
@@ -76,7 +72,7 @@ class Recognition(Identity):
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
         assert isinstance(batch, RecogBatch)
-        batch.feed = np.array([cast(np.ndarray, feed.face)[..., :3]
+        batch.feed = np.array([T.cast(np.ndarray, feed.face)[..., :3]
                                for feed in batch.feed_faces],
                               dtype="float32") - self._average_img
         logger.trace("feed shape: %s", batch.feed.shape)  # type:ignore
@@ -121,15 +117,15 @@ class Cluster():  # pylint: disable=too-few-public-methods
 
     def __init__(self,
                  predictions: np.ndarray,
-                 method: Literal["single", "centroid", "median", "ward"],
-                 threshold: Optional[float] = None) -> None:
+                 method: T.Literal["single", "centroid", "median", "ward"],
+                 threshold: float | None = None) -> None:
         logger.debug("Initializing: %s (predictions: %s, method: %s, threshold: %s)",
                      self.__class__.__name__, predictions.shape, method, threshold)
         self._num_predictions = predictions.shape[0]
 
         self._should_output_bins = threshold is not None
         self._threshold = 0.0 if threshold is None else threshold
-        self._bins: Dict[int, int] = {}
+        self._bins: dict[int, int] = {}
         self._iterator = self._integer_iterator()
 
         self._result_linkage = self._do_linkage(predictions, method)
@@ -192,7 +188,7 @@ class Cluster():  # pylint: disable=too-few-public-methods
 
     def _do_linkage(self,
                     predictions: np.ndarray,
-                    method: Literal["single", "centroid", "median", "ward"]) -> np.ndarray:
+                    method: T.Literal["single", "centroid", "median", "ward"]) -> np.ndarray:
         """ Use FastCluster to perform vector or standard linkage
 
         Parameters
@@ -218,7 +214,7 @@ class Cluster():  # pylint: disable=too-few-public-methods
 
     def _process_leaf_node(self,
                            current_index: int,
-                           current_bin: int) -> List[Tuple[int, int]]:
+                           current_bin: int) -> list[tuple[int, int]]:
         """ Process the output when we have hit a leaf node """
         if not self._should_output_bins:
             return [(current_index, 0)]
@@ -263,7 +259,7 @@ class Cluster():  # pylint: disable=too-few-public-methods
                    tree: np.ndarray,
                    points: int,
                    current_index: int,
-                   current_bin: int = 0) -> List[Tuple[int, int]]:
+                   current_bin: int = 0) -> list[tuple[int, int]]:
         """ Seriation method for sorted similarity.
 
         Seriation computes the order implied by a hierarchical tree (dendrogram).
@@ -298,7 +294,7 @@ class Cluster():  # pylint: disable=too-few-public-methods
 
         return serate_left + serate_right  # type: ignore
 
-    def __call__(self) -> List[Tuple[int, int]]:
+    def __call__(self) -> list[tuple[int, int]]:
         """ Process the linkages.
 
         Transforms a distance matrix into a sorted distance matrix according to the order implied

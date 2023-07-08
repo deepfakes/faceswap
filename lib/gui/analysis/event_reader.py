@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """ Handles the loading and collation of events from Tensorflow event log files. """
-
+from __future__ import annotations
 import logging
 import os
-import sys
+import typing as T
 import zlib
 
 from dataclasses import dataclass, field
-from typing import Any, cast, Dict, Iterator, Generator, List, Optional, Tuple, Union
 
 import numpy as np
 import tensorflow as tf
@@ -16,13 +15,9 @@ from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
     errors_impl as tf_errors)
 
 from lib.serializer import get_serializer
-from lib.utils import get_backend
 
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
+if T.TYPE_CHECKING:
+    from collections.abc import Generator, Iterator
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -39,7 +34,7 @@ class EventData:
         The loss values collected for A and B sides for the event step
     """
     timestamp: float = 0.0
-    loss: List[float] = field(default_factory=list)
+    loss: list[float] = field(default_factory=list)
 
 
 class _LogFiles():
@@ -57,11 +52,11 @@ class _LogFiles():
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
-    def session_ids(self) -> List[int]:
+    def session_ids(self) -> list[int]:
         """ list[int]: Sorted list of `ints` of available session ids. """
         return list(sorted(self._filenames))
 
-    def _get_log_filenames(self) -> Dict[int, str]:
+    def _get_log_filenames(self) -> dict[int, str]:
         """ Get the Tensorflow event filenames for all existing sessions.
 
         Returns
@@ -70,7 +65,7 @@ class _LogFiles():
             The full path of each log file for each training session id that has been run
         """
         logger.debug("Loading log filenames. base_dir: '%s'", self._logs_folder)
-        retval: Dict[int, str] = {}
+        retval: dict[int, str] = {}
         for dirpath, _, filenames in os.walk(self._logs_folder):
             if not any(filename.startswith("events.out.tfevents") for filename in filenames):
                 continue
@@ -83,7 +78,7 @@ class _LogFiles():
         return retval
 
     @classmethod
-    def _get_session_id(cls, folder: str) -> Optional[int]:
+    def _get_session_id(cls, folder: str) -> int | None:
         """ Obtain the session id for the given folder.
 
         Parameters
@@ -104,7 +99,7 @@ class _LogFiles():
         return retval
 
     @classmethod
-    def _get_log_filename(cls, folder: str, filenames: List[str]) -> str:
+    def _get_log_filename(cls, folder: str, filenames: list[str]) -> str:
         """ Obtain the session log file for the given folder. If multiple log files exist for the
         given folder, then the most recent log file is used, as earlier files are assumed to be
         obsolete.
@@ -162,10 +157,10 @@ class _CacheData():
     loss: :class:`np.ndarray`
         The loss values collected for A and B sides for the session
     """
-    def __init__(self, labels: List[str], timestamps: np.ndarray, loss: np.ndarray) -> None:
+    def __init__(self, labels: list[str], timestamps: np.ndarray, loss: np.ndarray) -> None:
         self.labels = labels
-        self._loss = zlib.compress(cast(bytes, loss))
-        self._timestamps = zlib.compress(cast(bytes, timestamps))
+        self._loss = zlib.compress(T.cast(bytes, loss))
+        self._timestamps = zlib.compress(T.cast(bytes, timestamps))
         self._timestamps_shape = timestamps.shape
         self._loss_shape = loss.shape
 
@@ -193,8 +188,8 @@ class _CacheData():
         timestamps: :class:`numpy.ndarray`
             The latest timestamps  to add to the cache
         """
-        new_buffer: List[bytes] = []
-        new_shapes: List[Tuple[int, ...]] = []
+        new_buffer: list[bytes] = []
+        new_shapes: list[tuple[int, ...]] = []
         for data, buffer, dtype, shape in zip([timestamps, loss],
                                               [self._timestamps, self._loss],
                                               ["float64", "float32"],
@@ -221,9 +216,9 @@ class _Cache():
     """ Holds parsed Tensorflow log event data in a compressed cache in memory. """
     def __init__(self) -> None:
         logger.debug("Initializing: %s", self.__class__.__name__)
-        self._data: Dict[int, _CacheData] = {}
-        self._carry_over: Dict[int, EventData] = {}
-        self._loss_labels: List[str] = []
+        self._data: dict[int, _CacheData] = {}
+        self._carry_over: dict[int, EventData] = {}
+        self._loss_labels: list[str] = []
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def is_cached(self, session_id: int) -> bool:
@@ -243,8 +238,8 @@ class _Cache():
 
     def cache_data(self,
                    session_id: int,
-                   data: Dict[int, EventData],
-                   labels: List[str],
+                   data: dict[int, EventData],
+                   labels: list[str],
                    is_live: bool = False) -> None:
         """ Add a full session's worth of event data to :attr:`_data`.
 
@@ -279,8 +274,8 @@ class _Cache():
             self._add_latest_live(session_id, loss, timestamps)
 
     def _to_numpy(self,
-                  data: Dict[int, EventData],
-                  is_live: bool) -> Tuple[np.ndarray, np.ndarray]:
+                  data: dict[int, EventData],
+                  is_live: bool) -> tuple[np.ndarray, np.ndarray]:
         """ Extract each individual step data into separate numpy arrays for loss and timestamps.
 
         Timestamps are stored float64 as the extra accuracy is needed for correct timings. Arrays
@@ -334,7 +329,7 @@ class _Cache():
 
         return n_times, n_loss
 
-    def _collect_carry_over(self, data: Dict[int, EventData]) -> None:
+    def _collect_carry_over(self, data: dict[int, EventData]) -> None:
         """ For live data, collect carried over data from the previous update and merge into the
         current data dictionary.
 
@@ -358,8 +353,8 @@ class _Cache():
             logger.debug("Merged carry over data: %s", update)
 
     def _process_data(self,
-                      data: Dict[int, EventData],
-                      is_live: bool) -> Tuple[List[float], List[List[float]]]:
+                      data: dict[int, EventData],
+                      is_live: bool) -> tuple[list[float], list[list[float]]]:
         """ Process live update data.
 
         Live data requires different processing as often we will only have partial data for the
@@ -384,8 +379,8 @@ class _Cache():
         timestamps, loss = zip(*[(data[idx].timestamp, data[idx].loss)
                                for idx in sorted(data)])
 
-        l_loss: List[List[float]] = list(loss)
-        l_timestamps: List[float] = list(timestamps)
+        l_loss: list[list[float]] = list(loss)
+        l_timestamps: list[float] = list(timestamps)
 
         if len(l_loss[-1]) != len(self._loss_labels):
             logger.debug("Truncated loss found. loss count: %s", len(l_loss))
@@ -419,8 +414,8 @@ class _Cache():
 
         self._data[session_id].add_live_data(timestamps, loss)
 
-    def get_data(self, session_id: int, metric: Literal["loss", "timestamps"]
-                 ) -> Optional[Dict[int, Dict[str, Union[np.ndarray, List[str]]]]]:
+    def get_data(self, session_id: int, metric: T.Literal["loss", "timestamps"]
+                 ) -> dict[int, dict[str, np.ndarray | list[str]]] | None:
         """ Retrieve the decompressed cached data from the cache for the given session id.
 
         Parameters
@@ -446,10 +441,10 @@ class _Cache():
                 return None
             raw = {session_id: data}
 
-        retval: Dict[int, Dict[str, Union[np.ndarray, List[str]]]] = {}
+        retval: dict[int, dict[str, np.ndarray | list[str]]] = {}
         for idx, data in raw.items():
             array = data.loss if metric == "loss" else data.timestamps
-            val: Dict[str, Union[np.ndarray, List[str]]] = {str(metric): array}
+            val: dict[str, np.ndarray | list[str]] = {str(metric): array}
             if metric == "loss":
                 val["labels"] = data.labels
             retval[idx] = val
@@ -489,7 +484,7 @@ class TensorBoardLogs():
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
-    def session_ids(self) -> List[int]:
+    def session_ids(self) -> list[int]:
         """ list[int]: Sorted list of integers of available session ids. """
         return self._log_files.session_ids
 
@@ -540,7 +535,7 @@ class TensorBoardLogs():
         parser = _EventParser(iterator, self._cache, live_data)
         parser.cache_events(session_id)
 
-    def _check_cache(self, session_id: Optional[int] = None) -> None:
+    def _check_cache(self, session_id: int | None = None) -> None:
         """ Check if the given session_id has been cached and if not, cache it.
 
         Parameters
@@ -558,7 +553,7 @@ class TensorBoardLogs():
                 if not self._cache.is_cached(idx):
                     self._cache_data(idx)
 
-    def get_loss(self, session_id: Optional[int] = None) -> Dict[int, Dict[str, np.ndarray]]:
+    def get_loss(self, session_id: int | None = None) -> dict[int, dict[str, np.ndarray]]:
         """ Read the loss from the TensorBoard event logs
 
         Parameters
@@ -574,7 +569,7 @@ class TensorBoardLogs():
             and list of loss values for each step
         """
         logger.debug("Getting loss: (session_id: %s)", session_id)
-        retval: Dict[int, Dict[str, np.ndarray]] = {}
+        retval: dict[int, dict[str, np.ndarray]] = {}
         for idx in [session_id] if session_id else self.session_ids:
             self._check_cache(idx)
             full_data = self._cache.get_data(idx, "loss")
@@ -589,7 +584,7 @@ class TensorBoardLogs():
                       for key, val in retval.items()})
         return retval
 
-    def get_timestamps(self, session_id: Optional[int] = None) -> Dict[int, np.ndarray]:
+    def get_timestamps(self, session_id: int | None = None) -> dict[int, np.ndarray]:
         """ Read the timestamps from the TensorBoard logs.
 
         As loss timestamps are slightly different for each loss, we collect the timestamp from the
@@ -609,7 +604,7 @@ class TensorBoardLogs():
 
         logger.debug("Getting timestamps: (session_id: %s, is_training: %s)",
                      session_id, self._is_training)
-        retval: Dict[int, np.ndarray] = {}
+        retval: dict[int, np.ndarray] = {}
         for idx in [session_id] if session_id else self.session_ids:
             self._check_cache(idx)
             data = self._cache.get_data(idx, "timestamps")
@@ -641,7 +636,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
         self._live_data = live_data
         self._cache = cache
         self._iterator = self._get_latest_live(iterator) if live_data else iterator
-        self._loss_labels: List[str] = []
+        self._loss_labels: list[str] = []
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @classmethod
@@ -684,7 +679,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
             The session id that the data is being cached for
         """
         assert self._iterator is not None
-        data: Dict[int, EventData] = {}
+        data: dict[int, EventData] = {}
         try:
             for record in self._iterator:
                 event = event_pb2.Event.FromString(record)  # pylint:disable=no-member
@@ -692,9 +687,6 @@ class _EventParser():  # pylint:disable=too-few-public-methods
                     continue
                 if event.summary.value[0].tag == "keras":
                     self._parse_outputs(event)
-                if get_backend() == "amd":
-                    # No model is logged for AMD so need to get loss labels from state file
-                    self._add_amd_loss_labels(session_id)
                 if event.summary.value[0].tag.startswith("batch_"):
                     data[event.step] = self._process_event(event,
                                                            data.get(event.step, EventData()))
@@ -747,7 +739,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
         logger.debug("Collated loss labels: %s", self._loss_labels)
 
     @classmethod
-    def _get_outputs(cls, model_config: Dict[str, Any]) -> np.ndarray:
+    def _get_outputs(cls, model_config: dict[str, T.Any]) -> np.ndarray:
         """ Obtain the output names, instance index and output index for the given model.
 
         If there is only a single output, the shape of the array is expanded to remain consistent
@@ -771,28 +763,6 @@ class _EventParser():  # pylint:disable=too-few-public-methods
                          outputs, outputs.shape)
         return outputs
 
-    def _add_amd_loss_labels(self, session_id: int) -> None:
-        """ It is not possible to store the model config in the Tensorboard logs for AMD so we
-        need to obtain the loss labels from the model's state file. This is called now so we know
-        event data is being written, and therefore the most current loss label data is available
-        in the state file.
-
-        Loss names are added to :attr:`_loss_labels`
-
-        Parameters
-        ----------
-        session_id: int
-            The session id that the data is being cached for
-
-        """
-        if self._cache._loss_labels:  # pylint:disable=protected-access
-            return
-        # Import global session here to prevent circular import
-        from . import Session  # pylint:disable=import-outside-toplevel
-        loss_labels = sorted(Session.get_loss_keys(session_id=session_id))
-        self._loss_labels = loss_labels
-        logger.debug("Collated loss labels: %s", self._loss_labels)
-
     @classmethod
     def _process_event(cls, event: event_pb2.Event, step: EventData) -> EventData:
         """ Process a single Tensorflow event.
@@ -815,7 +785,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
         """
         summary = event.summary.value[0]
 
-        if summary.tag in ("batch_loss", "batch_total"):  # Pre tf2.3 totals were "batch_total"
+        if summary.tag == "batch_total":
             step.timestamp = event.wall_time
             return step
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """ Custom Feature Map Loss Functions for faceswap.py """
+from __future__ import annotations
 from dataclasses import dataclass, field
 import logging
-
-from typing import Any, Callable, Dict, Optional, List, Tuple
+import typing as T
 
 # Ignore linting errors from Tensorflow's thoroughly broken import system
 import tensorflow as tf
@@ -14,8 +14,11 @@ import tensorflow.keras.backend as K  # pylint:disable=no-name-in-module,import-
 
 import numpy as np
 
-from lib.model.nets import AlexNet, SqueezeNet
+from lib.model.networks import AlexNet, SqueezeNet
 from lib.utils import GetModel
+
+if T.TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +42,10 @@ class NetInfo:
     """
     model_id: int = 0
     model_name: str = ""
-    net: Optional[Callable] = None
-    init_kwargs: Dict[str, Any] = field(default_factory=dict)
+    net: Callable | None = None
+    init_kwargs: dict[str, T.Any] = field(default_factory=dict)
     needs_init: bool = True
-    outputs: List[Layer] = field(default_factory=list)
+    outputs: list[Layer] = field(default_factory=list)
 
 
 class _LPIPSTrunkNet():  # pylint:disable=too-few-public-methods
@@ -67,22 +70,22 @@ class _LPIPSTrunkNet():  # pylint:disable=too-few-public-methods
         logger.debug("Initialized: %s ", self.__class__.__name__)
 
     @property
-    def _nets(self) -> Dict[str, NetInfo]:
+    def _nets(self) -> dict[str, NetInfo]:
         """ :class:`NetInfo`: The Information about the requested net."""
-        return dict(
-            alex=NetInfo(model_id=15,
-                         model_name="alexnet_imagenet_no_top_v1.h5",
-                         net=AlexNet,
-                         outputs=[f"features.{idx}" for idx in (0, 3, 6, 8, 10)]),
-            squeeze=NetInfo(model_id=16,
-                            model_name="squeezenet_imagenet_no_top_v1.h5",
-                            net=SqueezeNet,
-                            outputs=[f"features.{idx}" for idx in (0, 4, 7, 9, 10, 11, 12)]),
-            vgg16=NetInfo(model_id=17,
-                          model_name="vgg16_imagenet_no_top_v1.h5",
-                          net=kapp.vgg16.VGG16,
-                          init_kwargs=dict(include_top=False, weights=None),
-                          outputs=[f"block{i + 1}_conv{2 if i < 2 else 3}" for i in range(5)]))
+        return {
+            "alex": NetInfo(model_id=15,
+                            model_name="alexnet_imagenet_no_top_v1.h5",
+                            net=AlexNet,
+                            outputs=[f"features.{idx}" for idx in (0, 3, 6, 8, 10)]),
+            "squeeze": NetInfo(model_id=16,
+                               model_name="squeezenet_imagenet_no_top_v1.h5",
+                               net=SqueezeNet,
+                               outputs=[f"features.{idx}" for idx in (0, 4, 7, 9, 10, 11, 12)]),
+            "vgg16": NetInfo(model_id=17,
+                             model_name="vgg16_imagenet_no_top_v1.h5",
+                             net=kapp.vgg16.VGG16,
+                             init_kwargs={"include_top": False, "weights": None},
+                             outputs=[f"block{i + 1}_conv{2 if i < 2 else 3}" for i in range(5)])}
 
     @classmethod
     def _normalize_output(cls, inputs: tf.Tensor, epsilon: float = 1e-10) -> tf.Tensor:
@@ -176,17 +179,17 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):  # pylint:disable=too-few-public-methods
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
-    def _nets(self) -> Dict[str, NetInfo]:
+    def _nets(self) -> dict[str, NetInfo]:
         """ :class:`NetInfo`: The Information about the requested net."""
-        return dict(
-            alex=NetInfo(model_id=18,
-                         model_name="alexnet_lpips_v1.h5",),
-            squeeze=NetInfo(model_id=19,
-                            model_name="squeezenet_lpips_v1.h5"),
-            vgg16=NetInfo(model_id=20,
-                          model_name="vgg16_lpips_v1.h5"))
+        return {
+            "alex": NetInfo(model_id=18,
+                            model_name="alexnet_lpips_v1.h5",),
+            "squeeze": NetInfo(model_id=19,
+                               model_name="squeezenet_lpips_v1.h5"),
+            "vgg16": NetInfo(model_id=20,
+                             model_name="vgg16_lpips_v1.h5")}
 
-    def _linear_block(self, net_output_layer: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
+    def _linear_block(self, net_output_layer: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
         """ Build a linear block for a trunk network output.
 
         Parameters
@@ -275,7 +278,7 @@ class LPIPSLoss():  # pylint:disable=too-few-public-methods
         ``True`` to return the loss value per feature output layer otherwise ``False``.
         Default: ``False``
     """
-    def __init__(self,
+    def __init__(self,  # pylint:disable=too-many-arguments
                  trunk_network: str,
                  trunk_pretrained: bool = True,
                  trunk_eval_mode: bool = True,
@@ -319,7 +322,7 @@ class LPIPSLoss():  # pylint:disable=too-few-public-methods
             tf.keras.mixed_precision.set_global_policy("mixed_float16")
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _process_diffs(self, inputs: List[tf.Tensor]) -> List[tf.Tensor]:
+    def _process_diffs(self, inputs: list[tf.Tensor]) -> list[tf.Tensor]:
         """ Perform processing on the Trunk Network outputs.
 
         If :attr:`use_ldip` is enabled, process the diff values through the linear network,

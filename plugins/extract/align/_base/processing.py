@@ -1,21 +1,16 @@
 #!/usr/bin/env python3
 """ Processing methods for aligner plugins """
+from __future__ import annotations
 import logging
-import sys
+import typing as T
 
 from threading import Lock
-from typing import Dict, List, Optional, Tuple, TYPE_CHECKING, Union
 
 import numpy as np
 
 from lib.align import AlignedFace
 
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from lib.align import DetectedFace
     from .aligner import AlignerBatch
     from lib.align.aligned_face import CenteringType
@@ -72,16 +67,16 @@ class AlignedFilter():
                                         min_scale > 0.0 or
                                         distance > 0.0 or
                                         roll > 0.0)
-        self._counts: Dict[str, int] = dict(features=0,
-                                            min_scale=0,
-                                            max_scale=0,
-                                            distance=0,
-                                            roll=0)
+        self._counts: dict[str, int] = {"features": 0,
+                                        "min_scale": 0,
+                                        "max_scale": 0,
+                                        "distance": 0,
+                                        "roll": 0}
         logger.debug("Initialized %s: ", self.__class__.__name__)
 
     def _scale_test(self,
                     face: AlignedFace,
-                    minimum_dimension: int) -> Optional[Literal["min", "max"]]:
+                    minimum_dimension: int) -> T.Literal["min", "max"] | None:
         """ Test if a face is below or above the min/max size thresholds. Returns as soon as a test
         fails.
 
@@ -116,9 +111,9 @@ class AlignedFilter():
 
     def _handle_filtered(self,
                          key: str,
-                         face: "DetectedFace",
-                         faces: List["DetectedFace"],
-                         sub_folders: List[Optional[str]],
+                         face: DetectedFace,
+                         faces: list[DetectedFace],
+                         sub_folders: list[str | None],
                          sub_folder_index: int) -> None:
         """ Add the filtered item to the filter counts.
 
@@ -145,8 +140,8 @@ class AlignedFilter():
         faces.append(face)
         sub_folders[sub_folder_index] = f"_align_filt_{key}"
 
-    def __call__(self, faces: List["DetectedFace"], minimum_dimension: int
-                 ) -> Tuple[List["DetectedFace"], List[Optional[str]]]:
+    def __call__(self, faces: list[DetectedFace], minimum_dimension: int
+                 ) -> tuple[list[DetectedFace], list[str | None]]:
         """ Apply the filter to the incoming batch
 
         Parameters
@@ -165,11 +160,11 @@ class AlignedFilter():
             List of ``Nones`` if saving filtered faces has not been selected or list of ``Nones``
             and sub folder names corresponding the filtered face location
         """
-        sub_folders: List[Optional[str]] = [None for _ in range(len(faces))]
+        sub_folders: list[str | None] = [None for _ in range(len(faces))]
         if not self._active:
             return faces, sub_folders
 
-        retval: List["DetectedFace"] = []
+        retval: list[DetectedFace] = []
         for idx, face in enumerate(faces):
             aligned = AlignedFace(landmarks=face.landmarks_xy, centering="face")
 
@@ -194,8 +189,8 @@ class AlignedFilter():
         return retval, sub_folders
 
     def filtered_mask(self,
-                      batch: "AlignerBatch",
-                      skip: Optional[Union[np.ndarray, List[int]]] = None) -> np.ndarray:
+                      batch: AlignerBatch,
+                      skip: np.ndarray | list[int] | None = None) -> np.ndarray:
         """ Obtain a list of boolean values for the given batch indicating whether they pass the
         filter test.
 
@@ -262,13 +257,14 @@ class ReAlign():
         self._active = active
         self._do_refeeds = do_refeeds
         self._do_filter = do_filter
-        self._centering: "CenteringType" = "face"
+        self._centering: CenteringType = "face"
         self._size = 0
         self._tracked_lock = Lock()
-        self._tracked_batchs: Dict[int, Dict[Literal["filtered_landmarks"], List[np.ndarray]]] = {}
+        self._tracked_batchs: dict[int,
+                                   dict[T.Literal["filtered_landmarks"], list[np.ndarray]]] = {}
         # TODO. Probably does not need to be a list, just alignerbatch
         self._queue_lock = Lock()
-        self._queued: List["AlignerBatch"] = []
+        self._queued: list[AlignerBatch] = []
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -301,7 +297,7 @@ class ReAlign():
         with self._tracked_lock:
             return bool(self._tracked_batchs)
 
-    def set_input_size_and_centering(self, input_size: int, centering: "CenteringType") -> None:
+    def set_input_size_and_centering(self, input_size: int, centering: CenteringType) -> None:
         """ Set the input size of the loaded plugin once the model has been loaded
 
         Parameters
@@ -344,7 +340,7 @@ class ReAlign():
         with self._tracked_lock:
             del self._tracked_batchs[batch_id]
 
-    def add_batch(self, batch: "AlignerBatch") -> None:
+    def add_batch(self, batch: AlignerBatch) -> None:
         """ Add first pass alignments to the queue for picking up for re-alignment, update their
         :attr:`second_pass` attribute to ``True`` and clear attributes not required.
 
@@ -362,7 +358,7 @@ class ReAlign():
             batch.data = []
             self._queued.append(batch)
 
-    def get_batch(self) -> "AlignerBatch":
+    def get_batch(self) -> AlignerBatch:
         """ Retrieve the next batch currently queued for re-alignment
 
         Returns
@@ -376,7 +372,7 @@ class ReAlign():
                          retval.filename)
         return retval
 
-    def process_batch(self, batch: "AlignerBatch") -> List[np.ndarray]:
+    def process_batch(self, batch: AlignerBatch) -> list[np.ndarray]:
         """ Pre process a batch object for re-aligning through the aligner.
 
         Parameters
@@ -391,8 +387,8 @@ class ReAlign():
         """
         logger.trace("Processing batch: %s, landmarks: %s",  # type: ignore[attr-defined]
                      batch.filename, [b.shape for b in batch.landmarks])
-        retval: List[np.ndarray] = []
-        filtered_landmarks: List[np.ndarray] = []
+        retval: list[np.ndarray] = []
+        filtered_landmarks: list[np.ndarray] = []
         for landmarks, masks in zip(batch.landmarks, batch.second_pass_masks):
             if not np.all(masks):  # At least one face has not already been filtered
                 aligned_faces = [AlignedFace(lms,
@@ -415,7 +411,7 @@ class ReAlign():
         batch.landmarks = np.array([])  # Clear the old landmarks
         return retval
 
-    def _transform_to_frame(self, batch: "AlignerBatch") -> np.ndarray:
+    def _transform_to_frame(self, batch: AlignerBatch) -> np.ndarray:
         """ Transform the predicted landmarks from the aligned face image back into frame
         co-ordinates
 
@@ -430,14 +426,14 @@ class ReAlign():
         :class:`numpy.ndarray`
             The landmarks transformed to frame space
         """
-        faces: List[AlignedFace] = batch.data[0]["aligned_faces"]
+        faces: list[AlignedFace] = batch.data[0]["aligned_faces"]
         retval = np.array([aligned.transform_points(landmarks, invert=True)
                            for landmarks, aligned in zip(batch.landmarks, faces)])
         logger.trace("Transformed points: original max: %s, "  # type: ignore[attr-defined]
                      "new max: %s", batch.landmarks.max(), retval.max())
         return retval
 
-    def _re_insert_filtered(self, batch: "AlignerBatch", masks: np.ndarray) -> np.ndarray:
+    def _re_insert_filtered(self, batch: AlignerBatch, masks: np.ndarray) -> np.ndarray:
         """ Re-insert landmarks that were filtered out from the re-align process back into the
         landmark results
 
@@ -473,7 +469,7 @@ class ReAlign():
 
         return retval
 
-    def process_output(self, subbatches: List["AlignerBatch"], batch_masks: np.ndarray) -> None:
+    def process_output(self, subbatches: list[AlignerBatch], batch_masks: np.ndarray) -> None:
         """ Process the output from the re-align pass.
 
         - Transform landmarks from aligned face space to face space

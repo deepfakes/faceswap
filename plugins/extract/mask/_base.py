@@ -12,9 +12,11 @@ For each source item, the plugin must pass a dict to finalize containing:
 >>> {"filename": <filename of source frame>,
 >>>  "detected_faces": <list of bounding box dicts from lib/plugins/extract/detect/_base>}
 """
+from __future__ import annotations
 import logging
+import typing as T
+
 from dataclasses import dataclass, field
-from typing import Generator, List, Optional, Tuple, TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -22,10 +24,11 @@ import numpy as np
 from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module  # noqa
 
 from lib.align import AlignedFace, transform_image
-from lib.utils import get_backend, FaceswapError
+from lib.utils import FaceswapError
 from plugins.extract._base import BatchType, Extractor, ExtractorBatch, ExtractMedia
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
+    from collections.abc import Generator
     from queue import Queue
     from lib.align import DetectedFace
     from lib.align.aligned_face import CenteringType
@@ -44,9 +47,9 @@ class MaskerBatch(ExtractorBatch):
     roi_masks: list
         The region of interest masks for the batch
     """
-    detected_faces: List["DetectedFace"] = field(default_factory=list)
-    roi_masks: List[np.ndarray] = field(default_factory=list)
-    feed_faces: List[AlignedFace] = field(default_factory=list)
+    detected_faces: list[DetectedFace] = field(default_factory=list)
+    roi_masks: list[np.ndarray] = field(default_factory=list)
+    feed_faces: list[AlignedFace] = field(default_factory=list)
 
 
 class Masker(Extractor):  # pylint:disable=abstract-method
@@ -77,9 +80,9 @@ class Masker(Extractor):  # pylint:disable=abstract-method
     """
 
     def __init__(self,
-                 git_model_id: Optional[int] = None,
-                 model_filename: Optional[str] = None,
-                 configfile: Optional[str] = None,
+                 git_model_id: int | None = None,
+                 model_filename: str | None = None,
+                 configfile: str | None = None,
                  instance: int = 0,
                  **kwargs) -> None:
         logger.debug("Initializing %s: (configfile: %s)", self.__class__.__name__, configfile)
@@ -93,11 +96,11 @@ class Masker(Extractor):  # pylint:disable=abstract-method
 
         self._plugin_type = "mask"
         self._storage_name = self.__module__.rsplit(".", maxsplit=1)[-1].replace("_", "-")
-        self._storage_centering: "CenteringType" = "face"  # Centering to store the mask at
+        self._storage_centering: CenteringType = "face"  # Centering to store the mask at
         self._storage_size = 128  # Size to store masks at. Leave this at default
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def get_batch(self, queue: "Queue") -> Tuple[bool, MaskerBatch]:
+    def get_batch(self, queue: Queue) -> tuple[bool, MaskerBatch]:
         """ Get items for inputting into the masker from the queue in batches
 
         Items are returned from the ``queue`` in batches of
@@ -222,23 +225,6 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                    "CLI: Edit the file faceswap/config/extract.ini)."
                    "\n3) Enable 'Single Process' mode.")
             raise FaceswapError(msg) from err
-        except Exception as err:
-            if get_backend() == "amd":
-                # pylint:disable=import-outside-toplevel
-                from lib.plaidml_utils import is_plaidml_error
-                if (is_plaidml_error(err) and (
-                        "CL_MEM_OBJECT_ALLOCATION_FAILURE" in str(err).upper() or
-                        "enough memory for the current schedule" in str(err).lower())):
-                    msg = ("You do not have enough GPU memory available to run detection at "
-                           "the selected batch size. You can try a number of things:"
-                           "\n1) Close any other application that is using your GPU (web "
-                           "browsers are particularly bad for this)."
-                           "\n2) Lower the batchsize (the amount of images fed into the "
-                           "model) by editing the plugin settings (GUI: Settings > Configure "
-                           "extract settings, CLI: Edit the file "
-                           "faceswap/config/extract.ini).")
-                    raise FaceswapError(msg) from err
-            raise
 
     def finalize(self, batch: BatchType) -> Generator[ExtractMedia, None, None]:
         """ Finalize the output from Masker

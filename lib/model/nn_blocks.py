@@ -1,30 +1,20 @@
 #!/usr/bin/env python3
 """ Neural Network Blocks for faceswap.py. """
-
+from __future__ import annotations
 import logging
-from typing import Dict, Optional, Tuple, Union
+import typing as T
 
-from lib.utils import get_backend
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.keras.layers import (  # pylint:disable=import-error
+    Activation, Add, BatchNormalization, Concatenate, Conv2D as KConv2D, Conv2DTranspose,
+    DepthwiseConv2D as KDepthwiseConv2d, LeakyReLU, PReLU, SeparableConv2D, UpSampling2D)
+from tensorflow.keras.initializers import he_uniform, VarianceScaling  # noqa:E501  # pylint:disable=import-error
 
 from .initializers import ICNR, ConvolutionAware
 from .layers import PixelShuffler, ReflectionPadding2D, Swish, KResizeImages
 from .normalization import InstanceNormalization
 
-if get_backend() == "amd":
-    from keras.layers import (
-        Activation, Add, BatchNormalization, Concatenate, Conv2D as KConv2D, Conv2DTranspose,
-        DepthwiseConv2D as KDepthwiseConv2d, LeakyReLU, PReLU, SeparableConv2D, UpSampling2D)
-    from keras.initializers import he_uniform, VarianceScaling  # pylint:disable=no-name-in-module
-    # type checking:
-    import keras
-    from plaidml.tile import Value as Tensor  # pylint:disable=import-error
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow.keras.layers import (  # noqa pylint:disable=no-name-in-module,import-error
-        Activation, Add, BatchNormalization, Concatenate, Conv2D as KConv2D, Conv2DTranspose,
-        DepthwiseConv2D as KDepthwiseConv2d, LeakyReLU, PReLU, SeparableConv2D, UpSampling2D)
-    from tensorflow.keras.initializers import he_uniform, VarianceScaling  # noqa pylint:disable=no-name-in-module,import-error
-    # type checking:
+if T.TYPE_CHECKING:
     from tensorflow import keras
     from tensorflow import Tensor
 
@@ -33,7 +23,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 _CONFIG: dict = {}
-_NAMES: Dict[str, int] = {}
+_NAMES: dict[str, int] = {}
 
 
 def set_config(configuration: dict) -> None:
@@ -199,7 +189,7 @@ class Conv2DOutput():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int]],
+                 kernel_size: int | tuple[int],
                  activation: str = "sigmoid",
                  padding: str = "same", **kwargs) -> None:
         self._name = kwargs.pop("name") if "name" in kwargs else _get_name(
@@ -275,11 +265,11 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int, int]] = 5,
-                 strides: Union[int, Tuple[int, int]] = 2,
+                 kernel_size: int | tuple[int, int] = 5,
+                 strides: int | tuple[int, int] = 2,
                  padding: str = "same",
-                 normalization: Optional[str] = None,
-                 activation: Optional[str] = "leakyrelu",
+                 normalization: str | None = None,
+                 activation: str | None = "leakyrelu",
                  use_depthwise: bool = False,
                  relu_alpha: float = 0.1,
                  **kwargs) -> None:
@@ -292,8 +282,9 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
 
         self._use_reflect_padding = _CONFIG["reflect_padding"]
 
+        kernel_size = (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
         self._args = (kernel_size, ) if use_depthwise else (filters, kernel_size)
-        self._strides = strides
+        self._strides = (strides, strides) if isinstance(strides, int) else strides
         self._padding = "valid" if self._use_reflect_padding else padding
         self._kwargs = kwargs
         self._normalization = None if not normalization else normalization.lower()
@@ -324,8 +315,8 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
             The output tensor from the Convolution 2D Layer
         """
         if self._use_reflect_padding:
-            inputs = ReflectionPadding2D(stride=self._strides,
-                                         kernel_size=self._args[-1],
+            inputs = ReflectionPadding2D(stride=self._strides[0],
+                                         kernel_size=self._args[-1][0],  # type:ignore[index]
                                          name=f"{self._name}_reflectionpadding2d")(inputs)
         conv: keras.layers.Layer = DepthwiseConv2D if self._use_depthwise else Conv2D
         var_x = conv(*self._args,
@@ -372,8 +363,8 @@ class SeparableConv2DBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int, int]] = 5,
-                 strides: Union[int, Tuple[int, int]] = 2, **kwargs) -> None:
+                 kernel_size: int | tuple[int, int] = 5,
+                 strides: int | tuple[int, int] = 2, **kwargs) -> None:
         self._name = _get_name(f"separableconv2d_{filters}")
         logger.debug("name: %s, filters: %s, kernel_size: %s, strides: %s, kwargs: %s)",
                      self._name, filters, kernel_size, strides, kwargs)
@@ -444,11 +435,11 @@ class UpscaleBlock():  # pylint:disable=too-few-public-methods
 
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int, int]] = 3,
+                 kernel_size: int | tuple[int, int] = 3,
                  padding: str = "same",
                  scale_factor: int = 2,
-                 normalization: Optional[str] = None,
-                 activation: Optional[str] = "leakyrelu",
+                 normalization: str | None = None,
+                 activation: str | None = "leakyrelu",
                  **kwargs) -> None:
         self._name = _get_name(f"upscale_{filters}")
         logger.debug("name: %s. filters: %s, kernel_size: %s, padding: %s, scale_factor: %s, "
@@ -531,9 +522,9 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int, int]] = 3,
+                 kernel_size: int | tuple[int, int] = 3,
                  padding: str = "same",
-                 activation: Optional[str] = "leakyrelu",
+                 activation: str | None = "leakyrelu",
                  interpolation: str = "bilinear",
                  sr_ratio: float = 0.5,
                  scale_factor: int = 2,
@@ -625,11 +616,11 @@ class UpscaleResizeImagesBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int, int]] = 3,
+                 kernel_size: int | tuple[int, int] = 3,
                  padding: str = "same",
-                 activation: Optional[str] = "leakyrelu",
+                 activation: str | None = "leakyrelu",
                  scale_factor: int = 2,
-                 interpolation: str = "bilinear") -> None:
+                 interpolation: T.Literal["nearest", "bilinear"] = "bilinear") -> None:
         self._name = _get_name(f"upscale_ri_{filters}")
         self._interpolation = interpolation
         self._size = scale_factor
@@ -710,9 +701,9 @@ class UpscaleDNYBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int, int]] = 3,
+                 kernel_size: int | tuple[int, int] = 3,
                  padding: str = "same",
-                 activation: Optional[str] = "leakyrelu",
+                 activation: str | None = "leakyrelu",
                  size: int = 2,
                  interpolation: str = "bilinear",
                  **kwargs) -> None:
@@ -767,7 +758,7 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int, int]] = 3,
+                 kernel_size: int | tuple[int, int] = 3,
                  padding: str = "same",
                  **kwargs) -> None:
         self._name = _get_name(f"residual_{filters}")
@@ -776,7 +767,8 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
         self._use_reflect_padding = _CONFIG["reflect_padding"]
 
         self._filters = filters
-        self._kernel_size = kernel_size
+        self._kernel_size = (kernel_size,
+                             kernel_size) if isinstance(kernel_size, int) else kernel_size
         self._padding = "valid" if self._use_reflect_padding else padding
         self._kwargs = kwargs
 
@@ -796,7 +788,7 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
         var_x = inputs
         if self._use_reflect_padding:
             var_x = ReflectionPadding2D(stride=1,
-                                        kernel_size=self._kernel_size,
+                                        kernel_size=self._kernel_size[0],
                                         name=f"{self._name}_reflectionpadding2d_0")(var_x)
         var_x = Conv2D(self._filters,
                        kernel_size=self._kernel_size,
@@ -806,7 +798,7 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
         var_x = LeakyReLU(alpha=0.2, name=f"{self._name}_leakyrelu_1")(var_x)
         if self._use_reflect_padding:
             var_x = ReflectionPadding2D(stride=1,
-                                        kernel_size=self._kernel_size,
+                                        kernel_size=self._kernel_size[0],
                                         name=f"{self._name}_reflectionpadding2d_1")(var_x)
 
         kwargs = {key: val for key, val in self._kwargs.items() if key != "kernel_initializer"}

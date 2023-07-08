@@ -4,11 +4,10 @@ import datetime
 import gettext
 import logging
 import os
-import sys
 import tkinter as tk
+import typing as T
 
 from tkinter import ttk
-from typing import Dict, Optional, Tuple
 
 from lib.training.preview_tk import PreviewTk
 
@@ -18,11 +17,6 @@ from .custom_widgets import Tooltip
 from .analysis import Calculations, Session
 from .control_helper import set_slider_rounding
 from .utils import FileHandler, get_config, get_images, preview_trigger
-
-if sys.version_info < (3, 8):
-    from typing_extensions import get_args, Literal
-else:
-    from typing import get_args, Literal
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -92,7 +86,7 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         logger.debug("Initializing %s (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
         self._preview = get_images().preview_train
-        self._display: Optional[PreviewTk] = None
+        self._display: PreviewTk | None = None
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -177,9 +171,9 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
                  tab_name: str,
                  helptext: str,
                  wait_time: int,
-                 command: Optional[str] = None) -> None:
-        self._trace_vars: Dict[Literal["smoothgraph", "display_iterations"],
-                               Tuple[tk.BooleanVar, str]] = {}
+                 command: str | None = None) -> None:
+        self._trace_vars: dict[T.Literal["smoothgraph", "display_iterations"],
+                               tuple[tk.BooleanVar, str]] = {}
         super().__init__(parent, tab_name, helptext, wait_time, command)
 
     def set_vars(self) -> None:
@@ -446,7 +440,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
     def _add_trace_variables(self) -> None:
         """ Add tracing for when the option sliders are updated, for updating the graph. """
-        for name, action in zip(get_args(Literal["smoothgraph", "display_iterations"]),
+        for name, action in zip(T.get_args(T.Literal["smoothgraph", "display_iterations"]),
                                 (self._smooth_amount_callback, self._iteration_limit_callback)):
             var = self.vars[name]
             if name not in self._trace_vars:

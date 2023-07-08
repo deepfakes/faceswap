@@ -4,36 +4,30 @@
 If Tkinter is installed, then this will be used to manage the preview image, otherwise we
 fallback to opencv's imshow
 """
+from __future__ import annotations
 import logging
-import sys
+import typing as T
 
 from threading import Event, Lock
 from time import sleep
 
-from typing import Dict, Generator, List, Optional, Tuple, TYPE_CHECKING
-
 import cv2
 
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
-
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
+    from collections.abc import Generator
     import numpy as np
 
 logger = logging.getLogger(__name__)
-TriggerType = Dict[Literal["toggle_mask", "refresh", "save", "quit", "shutdown"], Event]
-TriggerKeysType = Literal["m", "r", "s", "enter"]
-TriggerNamesType = Literal["toggle_mask", "refresh", "save", "quit"]
+TriggerType = dict[T.Literal["toggle_mask", "refresh", "save", "quit", "shutdown"], Event]
+TriggerKeysType = T.Literal["m", "r", "s", "enter"]
+TriggerNamesType = T.Literal["toggle_mask", "refresh", "save", "quit"]
 
 
 class PreviewBuffer():
     """ A thread safe class for holding preview images """
     def __init__(self) -> None:
         logger.debug("Initializing: %s", self.__class__.__name__)
-        self._images: Dict[str, "np.ndarray"] = {}
+        self._images: dict[str, np.ndarray] = {}
         self._lock = Lock()
         self._updated = Event()
         logger.debug("Initialized: %s", self.__class__.__name__)
@@ -43,7 +37,7 @@ class PreviewBuffer():
         """ bool: ``True`` when new images have been loaded into the  preview buffer """
         return self._updated.is_set()
 
-    def add_image(self, name: str, image: "np.ndarray") -> None:
+    def add_image(self, name: str, image: np.ndarray) -> None:
         """ Add an image to the preview buffer in a thread safe way """
         logger.debug("Adding image: (name: '%s', shape: %s)", name, image.shape)
         with self._lock:
@@ -51,7 +45,7 @@ class PreviewBuffer():
         logger.debug("Added images: %s", list(self._images))
         self._updated.set()
 
-    def get_images(self) -> Generator[Tuple[str, "np.ndarray"], None, None]:
+    def get_images(self) -> Generator[tuple[str, np.ndarray], None, None]:
         """ Get the latest images from the preview buffer. When iterator is exhausted clears the
         :attr:`updated` event.
 
@@ -86,15 +80,15 @@ class PreviewBase():  # pylint:disable=too-few-public-methods
      """
     def __init__(self,
                  preview_buffer: PreviewBuffer,
-                 triggers: Optional[TriggerType] = None) -> None:
+                 triggers: TriggerType | None = None) -> None:
         logger.debug("Initializing %s parent (triggers: %s)",
                      self.__class__.__name__, triggers)
         self._triggers = triggers
         self._buffer = preview_buffer
-        self._keymaps: Dict[TriggerKeysType, TriggerNamesType] = dict(m="toggle_mask",
-                                                                      r="refresh",
-                                                                      s="save",
-                                                                      enter="quit")
+        self._keymaps: dict[TriggerKeysType, TriggerNamesType] = {"m": "toggle_mask",
+                                                                  "r": "refresh",
+                                                                  "s": "save",
+                                                                  "enter": "quit"}
         self._title = ""
         logger.debug("Initialized %s parent", self.__class__.__name__)
 
@@ -141,7 +135,7 @@ class PreviewCV(PreviewBase):  # pylint:disable=too-few-public-methods
         logger.debug("Unable to import Tkinter. Falling back to OpenCV")
         super().__init__(preview_buffer, triggers=triggers)
         self._triggers: TriggerType = self._triggers
-        self._windows: List[str] = []
+        self._windows: list[str] = []
 
         self._lookup = {ord(key): val
                         for key, val in self._keymaps.items() if key != "enter"}

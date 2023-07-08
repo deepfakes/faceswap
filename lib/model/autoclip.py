@@ -1,11 +1,6 @@
-""" Auto clipper for clipping gradients.
-
-Non AMD Only
-"""
-from typing import List
-
+""" Auto clipper for clipping gradients. """
+import numpy as np
 import tensorflow as tf
-import tensorflow_probability as tfp
 
 
 class AutoClipper():  # pylint:disable=too-few-public-methods
@@ -25,12 +20,56 @@ class AutoClipper():  # pylint:disable=too-few-public-methods
     original paper: https://arxiv.org/abs/2007.14469
     """
     def __init__(self, clip_percentile: int, history_size: int = 10000):
-        self._clip_percentile = clip_percentile
+        self._clip_percentile = tf.cast(clip_percentile, tf.float64)
         self._grad_history = tf.Variable(tf.zeros(history_size), trainable=False)
         self._index = tf.Variable(0, trainable=False)
         self._history_size = history_size
 
-    def __call__(self, grads_and_vars: List[tf.Tensor]) -> List[tf.Tensor]:
+    def _percentile(self, grad_history: tf.Tensor) -> tf.Tensor:
+        """ Compute the clip percentile of the gradient history
+
+        Parameters
+        ----------
+        grad_history: :class:`tensorflow.Tensor`
+            Tge gradient history to calculate the clip percentile for
+
+        Returns
+        -------
+        :class:`tensorflow.Tensor`
+            A rank(:attr:`clip_percentile`) `Tensor`
+
+        Notes
+        -----
+        Adapted from
+        https://github.com/tensorflow/probability/blob/r0.14/tensorflow_probability/python/stats/quantiles.py
+        to remove reliance on full tensorflow_probability libraray
+        """
+        with tf.name_scope("percentile"):
+            frac_at_q_or_below = self._clip_percentile / 100.
+            sorted_hist = tf.sort(grad_history, axis=-1, direction="ASCENDING")
+
+            num = tf.cast(tf.shape(grad_history)[-1], tf.float64)
+
+            # get indices
+            indices = tf.round((num - 1) * frac_at_q_or_below)
+            indices = tf.clip_by_value(tf.cast(indices, tf.int32),
+                                       0,
+                                       tf.shape(grad_history)[-1] - 1)
+            gathered_hist = tf.gather(sorted_hist, indices, axis=-1)
+
+            # Propagate NaNs. Apparently tf.is_nan doesn't like other dtypes
+            nan_batch_members = tf.reduce_any(tf.math.is_nan(grad_history), axis=None)
+            right_rank_matched_shape = tf.pad(tf.shape(nan_batch_members),
+                                              paddings=[[0, tf.rank(self._clip_percentile)]],
+                                              constant_values=1)
+            nan_batch_members = tf.reshape(nan_batch_members, shape=right_rank_matched_shape)
+
+            nan = np.array(np.nan, gathered_hist.dtype.as_numpy_dtype)
+            gathered_hist = tf.where(nan_batch_members, nan, gathered_hist)
+
+            return gathered_hist
+
+    def __call__(self, grads_and_vars: list[tf.Tensor]) -> list[tf.Tensor]:
         """ Call the AutoClip function.
 
         Parameters
@@ -43,8 +82,7 @@ class AutoClipper():  # pylint:disable=too-few-public-methods
         assign_idx = tf.math.mod(self._index, self._history_size)
         self._grad_history = self._grad_history[assign_idx].assign(total_norm)
         self._index = self._index.assign_add(1)
-        clip_value = tfp.stats.percentile(self._grad_history[: self._index],
-                                          q=self._clip_percentile)
+        clip_value = self._percentile(self._grad_history[: self._index])
         return [(tf.clip_by_norm(g, clip_value), v) for g, v in grads_and_vars]
 
     @classmethod

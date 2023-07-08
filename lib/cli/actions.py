@@ -7,7 +7,7 @@ as well as adding a mechanism for indicating to the GUI how specific options sho
 
 import argparse
 import os
-from typing import Any, List, Optional, Tuple, Union
+import typing as T
 
 
 # << FILE HANDLING >>
@@ -69,7 +69,7 @@ class FileFullPaths(_FullPaths):
     >>>        filetypes="video))"
     """
     # pylint: disable=too-few-public-methods
-    def __init__(self, *args, filetypes: Optional[str] = None, **kwargs) -> None:
+    def __init__(self, *args, filetypes: str | None = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.filetypes = filetypes
 
@@ -111,7 +111,7 @@ class FilesFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
     >>>        filetypes="image",
     >>>        nargs="+"))
     """
-    def __init__(self, *args, filetypes: Optional[str] = None, **kwargs) -> None:
+    def __init__(self, *args, filetypes: str | None = None, **kwargs) -> None:
         if kwargs.get("nargs", None) is None:
             opt = kwargs["option_strings"]
             raise ValueError(f"nargs must be provided for FilesFullPaths: {opt}")
@@ -250,8 +250,8 @@ class ContextFullPaths(FileFullPaths):
     # pylint: disable=too-few-public-methods, too-many-arguments
     def __init__(self,
                  *args,
-                 filetypes: Optional[str] = None,
-                 action_option: Optional[str] = None,
+                 filetypes: str | None = None,
+                 action_option: str | None = None,
                  **kwargs) -> None:
         opt = kwargs["option_strings"]
         if kwargs.get("nargs", None) is not None:
@@ -263,7 +263,7 @@ class ContextFullPaths(FileFullPaths):
         super().__init__(*args, filetypes=filetypes, **kwargs)
         self.action_option = action_option
 
-    def _get_kwargs(self) -> List[Tuple[str, Any]]:
+    def _get_kwargs(self) -> list[tuple[str, T.Any]]:
         names = ["option_strings",
                  "dest",
                  "nargs",
@@ -382,8 +382,8 @@ class Slider(argparse.Action):  # pylint: disable=too-few-public-methods
     """
     def __init__(self,
                  *args,
-                 min_max: Optional[Union[Tuple[int, int], Tuple[float, float]]] = None,
-                 rounding: Optional[int] = None,
+                 min_max: tuple[int, int] | tuple[float, float] | None = None,
+                 rounding: int | None = None,
                  **kwargs) -> None:
         opt = kwargs["option_strings"]
         if kwargs.get("nargs", None) is not None:
@@ -401,7 +401,7 @@ class Slider(argparse.Action):  # pylint: disable=too-few-public-methods
         self.min_max = min_max
         self.rounding = rounding
 
-    def _get_kwargs(self) -> List[Tuple[str, Any]]:
+    def _get_kwargs(self) -> list[tuple[str, T.Any]]:
         names = ["option_strings",
                  "dest",
                  "nargs",

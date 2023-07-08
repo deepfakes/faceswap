@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """ Processes the augmentation of images for feeding into a Faceswap model. """
+from __future__ import annotations
 from dataclasses import dataclass
 import logging
-from typing import Dict, Tuple, TYPE_CHECKING
+import typing as T
 
 import cv2
 import numexpr as ne
@@ -11,7 +12,7 @@ from scipy.interpolate import griddata
 
 from lib.image import batch_convert_color
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from lib.config import ConfigValueType
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -56,7 +57,7 @@ class AugConstants:
     transform_zoom: float
     transform_shift: float
     warp_maps: np.ndarray
-    warp_pad: Tuple[int, int]
+    warp_pad: tuple[int, int]
     warp_slices: slice
     warp_lm_edge_anchors: np.ndarray
     warp_lm_grids: np.ndarray
@@ -79,7 +80,7 @@ class ImageAugmentation():
     def __init__(self,
                  batchsize: int,
                  processing_size: int,
-                 config: Dict[str, "ConfigValueType"]) -> None:
+                 config: dict[str, ConfigValueType]) -> None:
         logger.debug("Initializing %s: (batchsize: %s, processing_size: %s, "
                      "config: %s)",
                      self.__class__.__name__, batchsize, processing_size, config)
@@ -332,7 +333,7 @@ class ImageAugmentation():
         slices = self._constants.warp_slices
         rands = np.random.normal(size=(self._batchsize, 2, 5, 5),
                                  scale=self._warp_scale).astype("float32")
-        batch_maps = ne.evaluate("m + r", local_dict=dict(m=self._constants.warp_maps, r=rands))
+        batch_maps = ne.evaluate("m + r", local_dict={"m": self._constants.warp_maps, "r": rands})
         batch_interp = np.array([[cv2.resize(map_, self._constants.warp_pad)[slices, slices]
                                   for map_ in maps]
                                  for maps in batch_maps])

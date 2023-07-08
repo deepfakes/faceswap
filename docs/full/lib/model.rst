@@ -22,7 +22,7 @@ model.initializers module
 
 .. autosummary::
    :nosignatures:
-   
+
    ~lib.model.initializers.ConvolutionAware
    ~lib.model.initializers.ICNR
    ~lib.model.initializers.compute_fans
@@ -39,14 +39,17 @@ model.layers module
 
 .. autosummary::
    :nosignatures:
-   
+
    ~lib.model.layers.GlobalMinPooling2D
    ~lib.model.layers.GlobalStdDevPooling2D
+   ~lib.model.layers.KResizeImages
    ~lib.model.layers.L2_normalize
    ~lib.model.layers.PixelShuffler
+   ~lib.model.layers.QuickGELU
    ~lib.model.layers.ReflectionPadding2D
    ~lib.model.layers.SubPixelUpscaling
-   
+   ~lib.model.layers.Swish
+
 .. automodule:: lib.model.layers
    :members:
    :undoc-members:
@@ -54,10 +57,6 @@ model.layers module
 
 model.losses module
 ===================
-
-The losses listed here are generated from the docstrings in :mod:`lib.model.losses_tf`, however
-the functions are exactly the same for :mod:`lib.model.losses_plaid`. The correct loss module will
-be imported as :mod:`lib.model.losses` depending on the backend in use.
 
 .. rubric:: Module Summary
 
@@ -137,9 +136,9 @@ model.normalization module
 
 .. autosummary::
    :nosignatures:
-   
+
    ~lib.model.normalization.InstanceNormalization
-   
+
 .. automodule:: lib.model.normalization
    :members:
    :undoc-members:
@@ -147,10 +146,6 @@ model.normalization module
 
 model.optimizers module
 =======================
-
-The optimizers listed here are generated from the docstrings in :mod:`lib.model.optimizers_tf`, however
-the functions are excactly the same for :mod:`lib.model.optimizers_plaid`. The correct optimizers module will
-be imported as :mod:`lib.model.optimizers` depending on the backend in use.
 
 .. rubric:: Module Summary
 

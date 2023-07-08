@@ -23,15 +23,16 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+from __future__ import annotations
 import logging
-from typing import cast, List, Tuple, TYPE_CHECKING
+import typing as T
 
 import cv2
 import numpy as np
 
 from ._base import Aligner, AlignerBatch, BatchType
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from lib.align.detected_face import DetectedFace
 
 logger = logging.getLogger(__name__)
@@ -89,9 +90,9 @@ class Align(Aligner):
         assert isinstance(batch, AlignerBatch)
         lfaces, roi, offsets = self.align_image(batch)
         batch.feed = np.array(lfaces)[..., :3]
-        batch.data.append(dict(roi=roi, offsets=offsets))
+        batch.data.append({"roi": roi, "offsets": offsets})
 
-    def _get_box_and_offset(self, face: "DetectedFace") -> Tuple[List[int], int]:
+    def _get_box_and_offset(self, face: DetectedFace) -> tuple[list[int], int]:
         """Obtain the bounding box and offset from a detected face.
 
 
@@ -108,17 +109,17 @@ class Align(Aligner):
             The offset of the box (difference between half width vs height)
         """
 
-        box = cast(List[int], [face.left,
-                               face.top,
-                               face.right,
-                               face.bottom])
-        diff_height_width = cast(int, face.height) - cast(int, face.width)
+        box = T.cast(list[int], [face.left,
+                                 face.top,
+                                 face.right,
+                                 face.bottom])
+        diff_height_width = T.cast(int, face.height) - T.cast(int, face.width)
         offset = int(abs(diff_height_width / 2))
         return box, offset
 
-    def align_image(self, batch: AlignerBatch) -> Tuple[List[np.ndarray],
-                                                        List[List[int]],
-                                                        List[Tuple[int, int]]]:
+    def align_image(self, batch: AlignerBatch) -> tuple[list[np.ndarray],
+                                                        list[list[int]],
+                                                        list[tuple[int, int]]]:
         """ Align the incoming image for prediction
 
         Parameters
@@ -159,8 +160,8 @@ class Align(Aligner):
 
     @classmethod
     def move_box(cls,
-                 box: List[int],
-                 offset: Tuple[int, int]) -> List[int]:
+                 box: list[int],
+                 offset: tuple[int, int]) -> list[int]:
         """Move the box to direction specified by vector offset
 
         Parameters
@@ -182,7 +183,7 @@ class Align(Aligner):
         return [left, top, right, bottom]
 
     @staticmethod
-    def get_square_box(box: List[int]) -> List[int]:
+    def get_square_box(box: list[int]) -> list[int]:
         """Get a square box out of the given box, by expanding it.
 
         Parameters
@@ -226,7 +227,7 @@ class Align(Aligner):
         return [left, top, right, bottom]
 
     @classmethod
-    def pad_image(cls, box: List[int], image: np.ndarray) -> Tuple[np.ndarray, Tuple[int, int]]:
+    def pad_image(cls, box: list[int], image: np.ndarray) -> tuple[np.ndarray, tuple[int, int]]:
         """Pad image if face-box falls outside of boundaries
 
         Parameters

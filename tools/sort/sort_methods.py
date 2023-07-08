@@ -4,11 +4,13 @@
 All sorting methods inherit from :class:`SortMethod` and control functions for scorting one item,
 sorting a full list of scores and binning based on those sorted scores.
 """
+from __future__ import annotations
 import logging
 import operator
 import sys
+import typing as T
 
-from typing import Any, cast, Dict, Generator, List, Optional, Tuple, TYPE_CHECKING, Union
+from collections.abc import Generator
 
 import cv2
 import numpy as np
@@ -19,21 +21,16 @@ from lib.image import FacesLoader, ImagesLoader, read_image_meta_batch, update_e
 from lib.utils import FaceswapError
 from plugins.extract.recognition.vgg_face2 import Cluster, Recognition as VGGFace
 
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from argparse import Namespace
     from lib.align.alignments import PNGHeaderAlignmentsDict, PNGHeaderSourceDict
 
 logger = logging.getLogger(__name__)
 
 
-ImgMetaType = Generator[Tuple[str,
-                              Optional[np.ndarray],
-                              Optional["PNGHeaderAlignmentsDict"]], None, None]
+ImgMetaType: T.TypeAlias = Generator[tuple[str,
+                                           np.ndarray | None,
+                                           T.Union["PNGHeaderAlignmentsDict", None]], None, None]
 
 
 class InfoLoader():
@@ -50,14 +47,14 @@ class InfoLoader():
     """
     def __init__(self,
                  input_dir: str,
-                 info_type: Literal["face", "meta", "all"]) -> None:
+                 info_type: T.Literal["face", "meta", "all"]) -> None:
         logger.debug("Initializing: %s (input_dir: %s, info_type: %s)",
                      self.__class__.__name__, input_dir, info_type)
         self._info_type = info_type
         self._iterator = None
         self._description = "Reading image statistics..."
         self._loader = ImagesLoader(input_dir) if info_type == "face" else FacesLoader(input_dir)
-        self._cached_source_data: Dict[str, "PNGHeaderSourceDict"] = {}
+        self._cached_source_data: dict[str, PNGHeaderSourceDict] = {}
         if self._loader.count == 0:
             logger.error("No images to process in location: '%s'", input_dir)
             sys.exit(1)
@@ -103,7 +100,7 @@ class InfoLoader():
 
     def _get_alignments(self,
                         filename: str,
-                        metadata: Dict[str, Any]) -> Optional["PNGHeaderAlignmentsDict"]:
+                        metadata: dict[str, T.Any]) -> PNGHeaderAlignmentsDict | None:
         """ Obtain the alignments from a PNG Header.
 
         The other image metadata is cached locally in case a sort method needs to write back to the
@@ -182,7 +179,7 @@ class InfoLoader():
                                     leave=False):
             yield filename, image, None
 
-    def update_png_header(self, filename: str, alignments: "PNGHeaderAlignmentsDict") -> None:
+    def update_png_header(self, filename: str, alignments: PNGHeaderAlignmentsDict) -> None:
         """ Update the PNG header of the given file with the given alignments.
 
         NB: Header information can only be updated if the face is already on at least alignment
@@ -201,7 +198,7 @@ class InfoLoader():
             return
 
         self._cached_source_data[filename]["alignments_version"] = 2.3 if vers == 2.2 else vers
-        header = dict(alignments=alignments, source=self._cached_source_data[filename])
+        header = {"alignments": alignments, "source": self._cached_source_data[filename]}
         update_existing_metadata(filename, header)
 
 
@@ -221,8 +218,8 @@ class SortMethod():
         Default: ``False``
     """
     def __init__(self,
-                 arguments: "Namespace",
-                 loader_type: Literal["face", "meta", "all"] = "meta",
+                 arguments: Namespace,
+                 loader_type: T.Literal["face", "meta", "all"] = "meta",
                  is_group: bool = False) -> None:
         logger.debug("Initializing %s: loader_type: '%s' is_group: %s, arguments: %s",
                      self.__class__.__name__, loader_type, is_group, arguments)
@@ -231,22 +228,22 @@ class SortMethod():
         self._method = arguments.group_method if self._is_group else arguments.sort_method
 
         self._num_bins: int = arguments.num_bins
-        self._bin_names: List[str] = []
+        self._bin_names: list[str] = []
 
         self._loader_type = loader_type
         self._iterator = self._get_file_iterator(arguments.input_dir)
 
-        self._result: List[Tuple[str, Union[float, np.ndarray]]] = []
-        self._binned: List[List[str]] = []
+        self._result: list[tuple[str, float | np.ndarray]] = []
+        self._binned: list[list[str]] = []
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def loader_type(self) -> Literal["face", "meta", "all"]:
+    def loader_type(self) -> T.Literal["face", "meta", "all"]:
         """  ["face", "meta", "all"]: The loader that this sorter uses """
         return self._loader_type
 
     @property
-    def binned(self) -> List[List[str]]:
+    def binned(self) -> list[list[str]]:
         """ list: List of bins (list) containing the filenames belonging to the bin. The binning
         process is called when this property is first accessed"""
         if not self._binned:
@@ -255,7 +252,7 @@ class SortMethod():
         return self._binned
 
     @property
-    def sorted_filelist(self) -> List[str]:
+    def sorted_filelist(self) -> list[str]:
         """ list: List of sorted filenames for given sorter in a single list. The sort process is
         called when this property is first accessed """
         if not self._result:
@@ -267,7 +264,7 @@ class SortMethod():
         return retval
 
     @property
-    def bin_names(self) -> List[str]:
+    def bin_names(self) -> list[str]:
         """ list: The name of each created bin, if they exist, otherwise an empty list """
         return self._bin_names
 
@@ -305,7 +302,7 @@ class SortMethod():
                      [r[0] if isinstance(r, (tuple, list)) else r for r in self._result])
 
     @classmethod
-    def _get_unique_labels(cls, numbers: np.ndarray) -> List[str]:
+    def _get_unique_labels(cls, numbers: np.ndarray) -> list[str]:
         """ For a list of threshold values for displaying in the bin name, get the lowest number of
         decimal figures (down to int) required to have a unique set of folder names and return the
         formatted numbers.
@@ -338,7 +335,7 @@ class SortMethod():
         logger.debug("rounded values: %s, formatted labels: %s", rounded, retval)
         return retval
 
-    def _binning_linear_threshold(self, units: str = "", multiplier: int = 1) -> List[List[str]]:
+    def _binning_linear_threshold(self, units: str = "", multiplier: int = 1) -> list[list[str]]:
         """ Standard linear binning method for binning by threshold.
 
         The minimum and maximum result from :attr:`_result` are taken, A range is created between
@@ -367,7 +364,7 @@ class SortMethod():
                            f"{labels[idx]}{units}_to_{labels[idx + 1]}{units}"
                            for idx in range(self._num_bins)]
 
-        bins: List[List[str]] = [[] for _ in range(self._num_bins)]
+        bins: list[list[str]] = [[] for _ in range(self._num_bins)]
         for filename, result in self._result:
             bin_idx = next(bin_id for bin_id, thresh in enumerate(thresholds)
                            if result <= thresh) - 1
@@ -375,7 +372,7 @@ class SortMethod():
 
         return bins
 
-    def _binning(self) -> List[List[str]]:
+    def _binning(self) -> list[list[str]]:
         """ Called when :attr:`binning` is first accessed. Checks if sorting has been done, if not
         triggers it, then does binning
 
@@ -404,8 +401,8 @@ class SortMethod():
 
     def score_image(self,
                     filename: str,
-                    image: Optional[np.ndarray],
-                    alignments: Optional["PNGHeaderAlignmentsDict"]) -> None:
+                    image: np.ndarray | None,
+                    alignments: PNGHeaderAlignmentsDict | None) -> None:
         """ Override for sort method's specificic logic. This method should be executed to get a
         single score from a single image  and add the result to :attr:`_result`
 
@@ -420,7 +417,7 @@ class SortMethod():
         """
         raise NotImplementedError()
 
-    def binning(self) -> List[List[str]]:
+    def binning(self) -> list[list[str]]:
         """ Group into bins by their sorted score. Override for method specific binning techniques.
 
         Binning takes the results from :attr:`_result` compiled during :func:`_sort_filelist` and
@@ -434,7 +431,7 @@ class SortMethod():
         raise NotImplementedError()
 
     @classmethod
-    def _mask_face(cls, image: np.ndarray, alignments: "PNGHeaderAlignmentsDict") -> np.ndarray:
+    def _mask_face(cls, image: np.ndarray, alignments: PNGHeaderAlignmentsDict) -> np.ndarray:
         """ Function for applying the mask to an aligned face if both the face image and alignment
         data are available.
 
@@ -481,7 +478,7 @@ class SortMultiMethod(SortMethod):
         A sort method object used for sorting and binning the images
     """
     def __init__(self,
-                 arguments: "Namespace",
+                 arguments: Namespace,
                  sort_method: SortMethod,
                  group_method: SortMethod) -> None:
         self._sorter = sort_method
@@ -515,8 +512,8 @@ class SortMultiMethod(SortMethod):
 
     def score_image(self,
                     filename: str,
-                    image: Optional[np.ndarray],
-                    alignments: Optional["PNGHeaderAlignmentsDict"]) -> None:
+                    image: np.ndarray | None,
+                    alignments: PNGHeaderAlignmentsDict | None) -> None:
         """ Score a single image for sort method: "distance", "yaw" "pitch" or "size" and add the
         result to :attr:`_result`
 
@@ -542,7 +539,7 @@ class SortMultiMethod(SortMethod):
         self._bin_names = self._grouper.bin_names
         logger.debug("Sorted")
 
-    def binning(self) -> List[List[str]]:
+    def binning(self) -> list[list[str]]:
         """ Override standard binning, to bin by the group-by method and sort by the sorting
         method.
 
@@ -555,9 +552,9 @@ class SortMultiMethod(SortMethod):
             List of bins of filenames
         """
         sorted_ = self._result
-        output: List[List[str]] = []
+        output: list[list[str]] = []
         for bin_ in tqdm(self._binned, desc="Binning and sorting", file=sys.stdout, leave=False):
-            indices: Dict[int, str] = {}
+            indices: dict[int, str] = {}
             for filename in bin_:
                 indices[sorted_.index(filename)] = filename
             output.append([indices[idx] for idx in sorted(indices)])
@@ -575,7 +572,7 @@ class SortBlur(SortMethod):
         Set to ``True`` if this class is going to be called exclusively for binning.
         Default: ``False``
     """
-    def __init__(self, arguments: "Namespace", is_group: bool = False) -> None:
+    def __init__(self, arguments: Namespace, is_group: bool = False) -> None:
         super().__init__(arguments, loader_type="all", is_group=is_group)
         method = arguments.group_method if self._is_group else arguments.sort_method
         self._use_fft = method == "blur_fft"
@@ -608,7 +605,7 @@ class SortBlur(SortMethod):
 
     def estimate_blur_fft(self,
                           image: np.ndarray,
-                          alignments: Optional["PNGHeaderAlignmentsDict"] = None) -> float:
+                          alignments: PNGHeaderAlignmentsDict | None = None) -> float:
         """ Estimate the amount of blur a fft filtered image has.
 
         Parameters
@@ -649,8 +646,8 @@ class SortBlur(SortMethod):
 
     def score_image(self,
                     filename: str,
-                    image: Optional[np.ndarray],
-                    alignments: Optional["PNGHeaderAlignmentsDict"]) -> None:
+                    image: np.ndarray | None,
+                    alignments: PNGHeaderAlignmentsDict | None) -> None:
         """ Score a single image for blur or blur-fft and add the result to :attr:`_result`
 
         Parameters
@@ -677,7 +674,7 @@ class SortBlur(SortMethod):
         logger.info("Sorting...")
         self._result = sorted(self._result, key=operator.itemgetter(1), reverse=True)
 
-    def binning(self) -> List[List[str]]:
+    def binning(self) -> list[list[str]]:
         """ Create bins to split linearly from the lowest to the highest sample value
 
         Returns
@@ -699,7 +696,7 @@ class SortColor(SortMethod):
         Set to ``True`` if this class is going to be called exclusively for binning.
         Default: ``False``
     """
-    def __init__(self, arguments: "Namespace", is_group: bool = False) -> None:
+    def __init__(self, arguments: Namespace, is_group: bool = False) -> None:
         super().__init__(arguments, loader_type="face", is_group=is_group)
         self._desired_channel = {'gray': 0, 'luma': 0, 'orange': 1, 'green': 2}
 
@@ -728,7 +725,7 @@ class SortColor(SortMethod):
         path = np.einsum_path(operation, image[..., :3], conversion, optimize='optimal')[0]
         return np.einsum(operation, image[..., :3], conversion, optimize=path).astype('float32')
 
-    def _near_split(self, bin_range: int) -> List[int]:
+    def _near_split(self, bin_range: int) -> list[int]:
         """ Obtain the split for the given number of bins for the given range
 
         Parameters
@@ -750,14 +747,14 @@ class SortColor(SortMethod):
             uplimit += sep
         return bins
 
-    def binning(self) -> List[List[str]]:
+    def binning(self) -> list[list[str]]:
         """ Group into bins by percentage of black pixels """
         # TODO. Only grouped by black pixels. Check color
 
         logger.info("Grouping by percentage of %s...", self._method)
 
         # Starting the binning process
-        bins: List[List[str]] = [[] for _ in range(self._num_bins)]
+        bins: list[list[str]] = [[] for _ in range(self._num_bins)]
         # Get edges of bins from 0 to 100
         bins_edges = self._near_split(100)
         # Get the proper bin number for each img order
@@ -772,8 +769,8 @@ class SortColor(SortMethod):
 
     def score_image(self,
                     filename: str,
-                    image: Optional[np.ndarray],
-                    alignments: Optional["PNGHeaderAlignmentsDict"]) -> None:
+                    image: np.ndarray | None,
+                    alignments: PNGHeaderAlignmentsDict | None) -> None:
         """ Score a single image for color
 
         Parameters
@@ -835,18 +832,18 @@ class SortFace(SortMethod):
         Set to ``True`` if this class is going to be called exclusively for binning.
         Default: ``False``
     """
-    def __init__(self, arguments: "Namespace", is_group: bool = False) -> None:
+    def __init__(self, arguments: Namespace, is_group: bool = False) -> None:
         super().__init__(arguments, loader_type="all", is_group=is_group)
         self._vgg_face = VGGFace(exclude_gpus=arguments.exclude_gpus)
         self._vgg_face.init_model()
         threshold = arguments.threshold
         self._output_update_info = True
-        self._threshold: Optional[float] = 0.25 if threshold < 0 else threshold
+        self._threshold: float | None = 0.25 if threshold < 0 else threshold
 
     def score_image(self,
                     filename: str,
-                    image: Optional[np.ndarray],
-                    alignments: Optional["PNGHeaderAlignmentsDict"]) -> None:
+                    image: np.ndarray | None,
+                    alignments: PNGHeaderAlignmentsDict | None) -> None:
         """ Processing logic for sort by face method.
 
         Reads header information from the PNG file to look for VGGFace2 embedding. If it does not
@@ -912,7 +909,7 @@ class SortFace(SortMethod):
         indices = Cluster(np.array(preds), "ward", threshold=self._threshold)()
         self._result = [(self._result[idx][0], float(score)) for idx, score in indices]
 
-    def binning(self) -> List[List[str]]:
+    def binning(self) -> list[list[str]]:
         """ Group into bins by their sorted score
 
         The bin ID has been output in the 2nd column of :attr:`_result` so use that for binnin
@@ -924,7 +921,7 @@ class SortFace(SortMethod):
         """
         num_bins = len(set(int(i[1]) for i in self._result))
         logger.info("Grouping by %s...", self.__class__.__name__.replace("Sort", ""))
-        bins: List[List[str]] = [[] for _ in range(num_bins)]
+        bins: list[list[str]] = [[] for _ in range(num_bins)]
 
         for filename, bin_id in self._result:
             bins[int(bin_id)].append(filename)
@@ -943,7 +940,7 @@ class SortHistogram(SortMethod):
         Set to ``True`` if this class is going to be called exclusively for binning.
         Default: ``False``
     """
-    def __init__(self, arguments: "Namespace", is_group: bool = False) -> None:
+    def __init__(self, arguments: Namespace, is_group: bool = False) -> None:
         super().__init__(arguments, loader_type="all", is_group=is_group)
         method = arguments.group_method if self._is_group else arguments.sort_method
         self._is_dissim = method == "hist-dissim"
@@ -951,7 +948,7 @@ class SortHistogram(SortMethod):
 
     def _calc_histogram(self,
                         image: np.ndarray,
-                        alignments: Optional["PNGHeaderAlignmentsDict"]) -> np.ndarray:
+                        alignments: PNGHeaderAlignmentsDict | None) -> np.ndarray:
         if alignments:
             image = self._mask_face(image, alignments)
         return cv2.calcHist([image], [0], None, [256], [0, 256])
@@ -994,7 +991,7 @@ class SortHistogram(SortMethod):
                                                                 self._result[i + 1])
 
     @classmethod
-    def _get_avg_score(cls, image: np.ndarray, references: List[np.ndarray]) -> float:
+    def _get_avg_score(cls, image: np.ndarray, references: list[np.ndarray]) -> float:
         """ Return the average histogram score between a face and reference images
 
         Parameters
@@ -1015,22 +1012,22 @@ class SortHistogram(SortMethod):
             scores.append(score)
         return sum(scores) / len(scores)
 
-    def binning(self) -> List[List[str]]:
+    def binning(self) -> list[list[str]]:
         """ Group into bins by histogram """
         msg = "dissimilarity" if self._is_dissim else "similarity"
         logger.info("Grouping by %s...", msg)
 
         # Groups are of the form: group_num -> reference histogram
-        reference_groups: Dict[int, List[np.ndarray]] = {}
+        reference_groups: dict[int, list[np.ndarray]] = {}
 
         # Bins array, where index is the group number and value is
         # an array containing the file paths to the images in that group
-        bins: List[List[str]] = []
+        bins: list[list[str]] = []
 
         threshold = self._threshold
 
         img_list_len = len(self._result)
-        reference_groups[0] = [cast(np.ndarray, self._result[0][1])]
+        reference_groups[0] = [T.cast(np.ndarray, self._result[0][1])]
         bins.append([self._result[0][0]])
 
         for i in tqdm(range(1, img_list_len),
@@ -1045,7 +1042,7 @@ class SortHistogram(SortMethod):
                     current_key, current_score = key, score
 
             if current_score < threshold:
-                reference_groups[cast(int, current_key)].append(self._result[i][1])
+                reference_groups[T.cast(int, current_key)].append(self._result[i][1])
                 bins[current_key].append(self._result[i][0])
             else:
                 reference_groups[len(reference_groups)] = [self._result[i][1]]
@@ -1055,8 +1052,8 @@ class SortHistogram(SortMethod):
 
     def score_image(self,
                     filename: str,
-                    image: Optional[np.ndarray],
-                    alignments: Optional["PNGHeaderAlignmentsDict"]) -> None:
+                    image: np.ndarray | None,
+                    alignments: PNGHeaderAlignmentsDict | None) -> None:
         """ Collect the histogram for the given face
 
         Parameters

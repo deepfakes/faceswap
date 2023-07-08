@@ -9,21 +9,18 @@
     """
 import logging
 
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.keras.layers import (  # pylint:disable=import-error
+    AveragePooling2D, BatchNormalization, Concatenate, Dense, Dropout, Flatten, Input, Reshape,
+    LeakyReLU, UpSampling2D)
+from tensorflow.keras.models import Model as KModel  # pylint:disable=import-error
+
 from lib.model.nn_blocks import (Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock,
                                  Upscale2xBlock)
-from lib.utils import FaceswapError, get_backend
+from lib.utils import FaceswapError
 
-from ._base import ModelBase, KerasModel
+from ._base import ModelBase
 
-if get_backend() == "amd":
-    from keras.layers import (
-        AveragePooling2D, BatchNormalization, Concatenate, Dense, Dropout, Flatten, Input, Reshape,
-        LeakyReLU, UpSampling2D)
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow.keras.layers import (  # pylint:disable=import-error,no-name-in-module
-        AveragePooling2D, BatchNormalization, Concatenate, Dense, Dropout, Flatten, Input, Reshape,
-        LeakyReLU, UpSampling2D)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -35,21 +32,22 @@ class Model(ModelBase):
         super().__init__(*args, **kwargs)
         self.input_shape = (128, 128, 3)
 
-        self.features = dict(lowmem=0, fair=1, best=2)[self.config["features"]]
+        self.features = {"lowmem": 0, "fair": 1, "best": 2}[self.config["features"]]
         self.encoder_filters = 64 if self.features > 0 else 48
 
         bonum_fortunam = 128
         self.encoder_dim = {0: 512 + bonum_fortunam,
                             1: 1024 + bonum_fortunam,
                             2: 1536 + bonum_fortunam}[self.features]
-        self.details = dict(fast=0, good=1)[self.config["details"]]
+        self.details = {"fast": 0, "good": 1}[self.config["details"]]
         try:
             self.upscale_ratio = {128: 2,
                                   256: 4,
                                   384: 6}[self.config["output_size"]]
-        except KeyError:
+        except KeyError as err:
             logger.error("Config error: output_size must be one of: 128, 256, or 384.")
-            raise FaceswapError("Config error: output_size must be one of: 128, 256, or 384.")
+            raise FaceswapError("Config error: output_size must be one of: "
+                                "128, 256, or 384.") from err
 
         logger.debug("output_size: %s, features: %s, encoder_filters: %s, encoder_dim: %s, "
                      " details: %s, upscale_ratio: %s", self.config["output_size"], self.features,
@@ -65,7 +63,7 @@ class Model(ModelBase):
 
         outputs = [self.decoder_a()(encoder_a), decoder_b()(encoder_b)]
 
-        autoencoder = KerasModel(inputs, outputs, name=self.model_name)
+        autoencoder = KModel(inputs, outputs, name=self.model_name)
         return autoencoder
 
     def encoder(self):
@@ -104,7 +102,7 @@ class Model(ModelBase):
         var_x = Dropout(0.05)(var_x)
         var_x = Reshape((4, 4, 1024))(var_x)
 
-        return KerasModel(input_, var_x, name="encoder")
+        return KModel(input_, var_x, name="encoder")
 
     def decoder_a(self):
         """ DeLight Decoder A(old face) Network """
@@ -136,7 +134,7 @@ class Model(ModelBase):
 
             outputs.append(var_y)
 
-        return KerasModel([input_], outputs=outputs, name="decoder_a")
+        return KModel([input_], outputs=outputs, name="decoder_a")
 
     def decoder_b_fast(self):
         """ DeLight Fast Decoder B(new face) Network  """
@@ -171,7 +169,7 @@ class Model(ModelBase):
 
             outputs.append(var_y)
 
-        return KerasModel([input_], outputs=outputs, name="decoder_b_fast")
+        return KModel([input_], outputs=outputs, name="decoder_b_fast")
 
     def decoder_b(self):
         """ DeLight Decoder B(new face) Network  """
@@ -223,7 +221,7 @@ class Model(ModelBase):
 
             outputs.append(var_y)
 
-        return KerasModel([input_], outputs=outputs, name="decoder_b")
+        return KModel([input_], outputs=outputs, name="decoder_b")
 
     def _legacy_mapping(self):
         """ The mapping of legacy separate model names to single model names """

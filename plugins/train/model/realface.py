@@ -10,17 +10,13 @@
 import logging
 import sys
 
-from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
-from lib.utils import get_backend
-from ._base import ModelBase, KerasModel
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.keras.initializers import RandomNormal  # pylint:disable=import-error
+from tensorflow.keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape  # noqa:E501  # pylint:disable=import-error
+from tensorflow.keras.models import Model as KModel  # pylint:disable=import-error
 
-if get_backend() == "amd":
-    from keras.initializers import RandomNormal  # pylint:disable=no-name-in-module
-    from keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow.keras.initializers import RandomNormal  # noqa pylint:disable=import-error,no-name-in-module
-    from tensorflow.keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape  # noqa pylint:disable=import-error,no-name-in-module
+from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
+from ._base import ModelBase
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -80,7 +76,7 @@ class Model(ModelBase):
 
         outputs = [self.decoder_a()(encoder_a), self.decoder_b()(encoder_b)]
 
-        autoencoder = KerasModel(inputs, outputs, name=self.model_name)
+        autoencoder = KModel(inputs, outputs, name=self.model_name)
         return autoencoder
 
     def encoder(self):
@@ -98,7 +94,7 @@ class Model(ModelBase):
 
         var_x = Conv2DBlock(encoder_complexity * 2**(idx + 1), activation="leakyrelu")(var_x)
 
-        return KerasModel(input_, var_x, name="encoder")
+        return KModel(input_, var_x, name="encoder")
 
     def decoder_b(self):
         """ RealFace Decoder Network """
@@ -142,7 +138,7 @@ class Model(ModelBase):
 
             outputs += [var_y]
 
-        return KerasModel(input_, outputs=outputs, name="decoder_b")
+        return KModel(input_, outputs=outputs, name="decoder_b")
 
     def decoder_a(self):
         """ RealFace Decoder (A) Network """
@@ -187,7 +183,7 @@ class Model(ModelBase):
 
             outputs += [var_y]
 
-        return KerasModel(input_, outputs=outputs, name="decoder_a")
+        return KModel(input_, outputs=outputs, name="decoder_a")
 
     def _legacy_mapping(self):
         """ The mapping of legacy separate model names to single model names """

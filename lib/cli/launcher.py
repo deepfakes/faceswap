@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """ Launches the correct script with the given Command Line Arguments """
+from __future__ import annotations
 import logging
 import os
 import platform
 import sys
+import typing as T
 
 from importlib import import_module
-from typing import Callable, TYPE_CHECKING
 
 from lib.gpu_stats import set_exclude_devices, GPUStats
 from lib.logger import crash_log, log_setup
-from lib.utils import (deprecation_warning, FaceswapError, get_backend, get_tf_version,
+from lib.utils import (FaceswapError, get_backend, get_tf_version,
                        safe_shutdown, set_backend, set_system_verbosity)
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     import argparse
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -83,6 +85,14 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             logger.debug("Setting `KMP_DUPLICATE_LIB_OK` environment variable to `TRUE`")
             os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
+        # There is a memory leak in TF2.10+ predict function. This fix will work for tf2.10 but not
+        # for later versions. This issue has been patched recently, but we'll probably need to
+        # skip some TF versions
+        # ref: https://github.com/tensorflow/tensorflow/issues/58676
+        # TODO remove this fix post TF2.10 and check memleak is fixed
+        logger.debug("Setting TF_RUN_EAGER_OP_AS_FUNCTION env var to False")
+        os.environ["TF_RUN_EAGER_OP_AS_FUNCTION"] = "false"
+
     def _test_for_tf_version(self) -> None:
         """ Check that the required Tensorflow version is installed.
 
@@ -91,9 +101,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         FaceswapError
             If Tensorflow is not found, or is not between versions 2.4 and 2.9
         """
-        amd_ver = (2, 2)
-        directml_ver = rocm_ver = (2, 10)
-        min_ver = (2, 7)
+        min_ver = (2, 10)
         max_ver = (2, 10)
         try:
             import tensorflow as tf  # noqa pylint:disable=import-outside-toplevel,unused-import
@@ -113,26 +121,13 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             self._handle_import_error(msg)
 
         tf_ver = get_tf_version()
-        backend = get_backend()
-        if backend != "amd" and tf_ver < min_ver:
+        if tf_ver < min_ver:
             msg = (f"The minimum supported Tensorflow is version {min_ver} but you have version "
                    f"{tf_ver} installed. Please upgrade Tensorflow.")
             self._handle_import_error(msg)
-        if backend != "amd" and tf_ver > max_ver:
+        if tf_ver > max_ver:
             msg = (f"The maximum supported Tensorflow is version {max_ver} but you have version "
                    f"{tf_ver} installed. Please downgrade Tensorflow.")
-            self._handle_import_error(msg)
-        if backend == "amd" and tf_ver != amd_ver:
-            msg = (f"The supported Tensorflow version for AMD cards is {amd_ver} but you have "
-                   f"version {tf_ver} installed. Please install the correct version.")
-            self._handle_import_error(msg)
-        if backend == "directml" and tf_ver != directml_ver:
-            msg = (f"The supported Tensorflow version for DirectML cards is {directml_ver} but "
-                   f"you have version {tf_ver} installed. Please install the correct version.")
-            self._handle_import_error(msg)
-        if backend == "rocm" and tf_ver != rocm_ver:
-            msg = (f"The supported Tensorflow version for ROCm cards is {rocm_ver} but "
-                   f"you have version {tf_ver} installed. Please install the correct version.")
             self._handle_import_error(msg)
         logger.debug("Installed Tensorflow Version: %s", tf_ver)
 
@@ -206,7 +201,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
                             "See https://support.apple.com/en-gb/HT201341")
             raise FaceswapError("No display detected. GUI mode has been disabled.")
 
-    def execute_script(self, arguments: "argparse.Namespace") -> None:
+    def execute_script(self, arguments: argparse.Namespace) -> None:
         """ Performs final set up and launches the requested :attr:`_command` with the given
         command line arguments.
 
@@ -247,7 +242,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         finally:
             safe_shutdown(got_error=not success)
 
-    def _configure_backend(self, arguments: "argparse.Namespace") -> None:
+    def _configure_backend(self, arguments: argparse.Namespace) -> None:
         """ Configure the backend.
 
         Exclude any GPUs for use by Faceswap when requested.
@@ -275,42 +270,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
 
         if GPUStats().exclude_all_devices:
             msg = "Switching backend to CPU"
-            if get_backend() == "amd":
-                msg += (". Using Tensorflow for CPU operations.")
-                os.environ["KERAS_BACKEND"] = "tensorflow"
             set_backend("cpu")
             logger.info(msg)
 
         logger.debug("Executing: %s. PID: %s", self._command, os.getpid())
-
-        if get_backend() == "amd" and not self._setup_amd(arguments):
-            safe_shutdown(got_error=True)
-
-    @classmethod
-    def _setup_amd(cls, arguments: "argparse.Namespace") -> bool:
-        """ Test for plaidml and perform setup for AMD.
-
-        Parameters
-        ----------
-        arguments: :class:`argparse.Namespace`
-            The command line arguments passed to Faceswap.
-
-        Returns
-        -------
-        bool
-            ``True`` if AMD was set up succesfully otherwise ``False``
-        """
-        logger.debug("Setting up for AMD")
-        if platform.system() == "Windows":
-            deprecation_warning("The AMD backend",
-                                additional_info="Please consider re-installing using the "
-                                                "'DirectML' backend")
-        try:
-            import plaidml  # noqa pylint:disable=unused-import,import-outside-toplevel
-        except ImportError:
-            logger.error("PlaidML not found. Run `pip install plaidml-keras` for AMD support")
-            return False
-        from lib.gpu_stats import setup_plaidml  # pylint:disable=import-outside-toplevel
-        setup_plaidml(arguments.loglevel, arguments.exclude_gpus)
-        logger.debug("setup up for PlaidML")
-        return True

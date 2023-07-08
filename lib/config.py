@@ -13,7 +13,6 @@ from collections import OrderedDict
 from configparser import ConfigParser
 from dataclasses import dataclass
 from importlib import import_module
-from typing import Dict, List, Optional, Tuple, Union
 
 from lib.utils import full_path_split
 
@@ -21,16 +20,11 @@ from lib.utils import full_path_split
 _LANG = gettext.translation("lib.config", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
-# Can't type OrderedDict fully on Python 3.8 or lower
-if sys.version_info < (3, 9):
-    OrderedDictSectionType = OrderedDict
-    OrderedDictItemType = OrderedDict
-else:
-    OrderedDictSectionType = OrderedDict[str, "ConfigSection"]
-    OrderedDictItemType = OrderedDict[str, "ConfigItem"]
+OrderedDictSectionType = OrderedDict[str, "ConfigSection"]
+OrderedDictItemType = OrderedDict[str, "ConfigItem"]
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-ConfigValueType = Union[bool, int, float, List[str], str, None]
+ConfigValueType = bool | int | float | list[str] | str | None
 
 
 @dataclass
@@ -60,11 +54,11 @@ class ConfigItem:
     helptext: str
     datatype: type
     rounding: int
-    min_max: Optional[Union[Tuple[int, int], Tuple[float, float]]]
-    choices: Union[str, List[str]]
+    min_max: tuple[int, int] | tuple[float, float] | None
+    choices: str | list[str]
     gui_radio: bool
     fixed: bool
-    group: Optional[str]
+    group: str | None
 
 
 @dataclass
@@ -84,7 +78,7 @@ class ConfigSection:
 
 class FaceswapConfig():
     """ Config Items """
-    def __init__(self, section: Optional[str], configfile: Optional[str] = None) -> None:
+    def __init__(self, section: str | None, configfile: str | None = None) -> None:
         """ Init Configuration
 
         Parameters
@@ -106,11 +100,11 @@ class FaceswapConfig():
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
-    def changeable_items(self) -> Dict[str, ConfigValueType]:
+    def changeable_items(self) -> dict[str, ConfigValueType]:
         """ Training only.
             Return a dict of config items with their set values for items
             that can be altered after the model has been created """
-        retval: Dict[str, ConfigValueType] = {}
+        retval: dict[str, ConfigValueType] = {}
         sections = [sect for sect in self.config.sections() if sect.startswith("global")]
         all_sections = sections if self.section is None else sections + [self.section]
         for sect in all_sections:
@@ -189,10 +183,10 @@ class FaceswapConfig():
         logger.debug("Added defaults: %s", section)
 
     @property
-    def config_dict(self) -> Dict[str, ConfigValueType]:
+    def config_dict(self) -> dict[str, ConfigValueType]:
         """ dict: Collate global options and requested section into a dictionary with the correct
         data types """
-        conf: Dict[str, ConfigValueType] = {}
+        conf: dict[str, ConfigValueType] = {}
         sections = [sect for sect in self.config.sections() if sect.startswith("global")]
         if self.section is not None:
             sections.append(self.section)
@@ -240,7 +234,7 @@ class FaceswapConfig():
         logger.debug("Returning item: (type: %s, value: %s)", datatype, retval)
         return retval
 
-    def _parse_list(self, section: str, option: str) -> List[str]:
+    def _parse_list(self, section: str, option: str) -> list[str]:
         """ Parse options that are stored as lists in the config file. These can be space or
         comma-separated items in the config file. They will be returned as a list of strings,
         regardless of what the final data type should be, so conversion from strings to other
@@ -268,7 +262,7 @@ class FaceswapConfig():
                      raw_option, retval, section, option)
         return retval
 
-    def _get_config_file(self, configfile: Optional[str]) -> str:
+    def _get_config_file(self, configfile: str | None) -> str:
         """ Return the config file from the calling folder or the provided file
 
         Parameters
@@ -309,17 +303,17 @@ class FaceswapConfig():
         self.defaults[title] = ConfigSection(helptext=info, items=OrderedDict())
 
     def add_item(self,
-                 section: Optional[str] = None,
-                 title: Optional[str] = None,
+                 section: str | None = None,
+                 title: str | None = None,
                  datatype: type = str,
                  default: ConfigValueType = None,
-                 info: Optional[str] = None,
-                 rounding: Optional[int] = None,
-                 min_max: Optional[Union[Tuple[int, int], Tuple[float, float]]] = None,
-                 choices: Optional[Union[str, List[str]]] = None,
+                 info: str | None = None,
+                 rounding: int | None = None,
+                 min_max: tuple[int, int] | tuple[float, float] | None = None,
+                 choices: str | list[str] | None = None,
                  gui_radio: bool = False,
                  fixed: bool = True,
-                 group: Optional[str] = None) -> None:
+                 group: str | None = None) -> None:
         """ Add a default item to a config section
 
             For int or float values, rounding and min_max must be set
@@ -382,10 +376,10 @@ class FaceswapConfig():
     @classmethod
     def _expand_helptext(cls,
                          helptext: str,
-                         choices: Union[str, List[str]],
+                         choices: str | list[str],
                          default: ConfigValueType,
                          datatype: type,
-                         min_max: Optional[Union[Tuple[int, int], Tuple[float, float]]],
+                         min_max: tuple[int, int] | tuple[float, float] | None,
                          fixed: bool) -> str:
         """ Add extra helptext info from parameters """
         helptext += "\n"
@@ -437,7 +431,7 @@ class FaceswapConfig():
     def insert_config_section(self,
                               section: str,
                               helptext: str,
-                              config: Optional[ConfigParser] = None) -> None:
+                              config: ConfigParser | None = None) -> None:
         """ Insert a section into the config
 
         Parameters
@@ -464,7 +458,7 @@ class FaceswapConfig():
                             item: str,
                             default: ConfigValueType,
                             option: ConfigItem,
-                            config: Optional[ConfigParser] = None) -> None:
+                            config: ConfigParser | None = None) -> None:
         """ Insert an item into a config section
 
         Parameters

@@ -1,6 +1,6 @@
 #!/usr/bin python3
 """ The pop-up window of the Faceswap GUI for the setting of configuration options. """
-
+from __future__ import annotations
 from collections import OrderedDict
 from configparser import ConfigParser
 import gettext
@@ -9,7 +9,8 @@ import os
 import sys
 import tkinter as tk
 from tkinter import ttk
-from typing import Dict, TYPE_CHECKING
+import typing as T
+
 from importlib import import_module
 
 from lib.serializer import get_serializer
@@ -18,7 +19,7 @@ from .control_helper import ControlPanel, ControlPanelOption
 from .custom_widgets import Tooltip
 from .utils import FileHandler, get_config, get_images, PATHCACHE
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from lib.config import FaceswapConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -124,7 +125,7 @@ class _ConfigurePlugins(tk.Toplevel):
         super().__init__()
         self._root = get_config().root
         self._set_geometry()
-        self._tk_vars = dict(header=tk.StringVar())
+        self._tk_vars = {"header": tk.StringVar()}
 
         theme = {**get_config().user_theme["group_panel"],
                  **get_config().user_theme["group_settings"]}
@@ -402,7 +403,7 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
     """
     def __init__(self, top_level, parent, configurations, tree, theme):
         super().__init__(parent)
-        self._configs: Dict[str, "FaceswapConfig"] = configurations
+        self._configs: dict[str, FaceswapConfig] = configurations
         self._theme = theme
         self._tree = tree
         self._vars = {}
@@ -443,7 +444,7 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
                 sect = section.split(".")[-1]
                 # Elevate global to root
                 key = plugin if sect == "global" else f"{plugin}|{category}|{sect}"
-                retval[key] = dict(helptext=None, options=OrderedDict())
+                retval[key] = {"helptext": None, "options": OrderedDict()}
 
                 retval[key]["helptext"] = conf.defaults[section].helptext
                 for option, params in conf.defaults[section].items.items():
@@ -632,7 +633,7 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _get_new_config(self,
                         page_only: bool,
-                        config: "FaceswapConfig",
+                        config: FaceswapConfig,
                         category: str,
                         lookup: str) -> ConfigParser:
         """ Obtain a new configuration file for saving
@@ -812,9 +813,9 @@ class _Presets():
             return None
 
         args = ("save_filename", "json") if action == "save" else ("filename", "json")
-        kwargs = dict(title=f"{action.title()} Preset...",
-                      initial_folder=self._preset_path,
-                      parent=self._parent)
+        kwargs = {"title": f"{action.title()} Preset...",
+                  "initial_folder": self._preset_path,
+                  "parent": self._parent}
         if action == "save":
             kwargs["initial_file"] = self._get_initial_filename()
 

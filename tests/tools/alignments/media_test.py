@@ -1,8 +1,10 @@
 #!/usr/bin python3
 """ Pytest unit tests for :mod:`tools.alignments.media` """
+from __future__ import annotations
 import os
+import typing as T
+
 from operator import itemgetter
-from typing import cast, Dict, Generator, List, Tuple
 from unittest.mock import MagicMock
 
 import cv2
@@ -18,6 +20,9 @@ log_setup("DEBUG", f"{__name__}.log", "PyTest, False")
 from lib.utils import FaceswapError  # noqa:E402
 from tools.alignments.media import (AlignmentData, Faces, ExtractedFaces,  # noqa:E402
                                     Frames, MediaLoader)
+
+if T.TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 class TestAlignmentData:
@@ -224,8 +229,8 @@ class TestMediaLoader:
         """
         media_loader = media_loader_instance
         expected = np.random.rand(256, 256, 3)
-        media_loader.load_video_frame = cast(MagicMock,  # type:ignore
-                                             mocker.MagicMock(return_value=expected))
+        media_loader.load_video_frame = T.cast(MagicMock,  # type:ignore
+                                               mocker.MagicMock(return_value=expected))
         read_image_patch = mocker.patch("tools.alignments.media.read_image", return_value=expected)
         filename = "test.png"
         output = media_loader.load_image(filename)
@@ -263,7 +268,7 @@ class TestMediaLoader:
         vid_cap = mocker.MagicMock(cv2.VideoCapture)
         vid_cap.read.side_effect = ((1, expected), )
 
-        media_loader._vid_reader = cast(MagicMock,  vid_cap)  # type:ignore
+        media_loader._vid_reader = T.cast(MagicMock,  vid_cap)  # type:ignore
         output = media_loader.load_video_frame(filename)
         vid_cap.set.assert_called_once()
         np.testing.assert_equal(output, expected)
@@ -440,9 +445,9 @@ class TestFaces:
         src_filename = "test_0001.png"
         src_face_idx = 0
         paths = [os.path.join(faces.folder, fname) for fname in os.listdir(faces.folder)]
-        data = dict(source=dict(source_filename=src_filename,
-                                face_index=src_face_idx))
-        seen: Dict[str, List[int]] = {}
+        data = {"source": {"source_filename": src_filename,
+                           "face_index": src_face_idx}}
+        seen: dict[str, list[int]] = {}
 
         # New item
         is_dupe = faces._handle_duplicate(paths[0], data, seen)  # type:ignore
@@ -477,7 +482,7 @@ class TestFaces:
         faces = faces_instance
         read_image_meta_mock = mocker.patch("tools.alignments.media.read_image_meta_batch")
         img_sources = [os.path.join(faces.folder, fname) for fname in os.listdir(faces.folder)]
-        meta_data = dict(itxt=dict(source=(dict(source_filename="data.png"))))
+        meta_data = {"itxt": {"source": ({"source_filename": "data.png"})}}
         expected = [(fname, meta_data["itxt"]) for fname in os.listdir(faces.folder)]
         read_image_meta_mock.side_effect = [[(src, meta_data) for src in img_sources]]
 
@@ -527,16 +532,16 @@ class TestFaces:
             The class instance for testing
         """
         faces = faces_instance
-        data = [(f"file{idx}.png", dict(source=dict(source_filename=f"src{idx}.png",
-                                                    face_index=0)))
+        data = [(f"file{idx}.png", {"source": {"source_filename": f"src{idx}.png",
+                                               "face_index": 0}})
                 for idx in range(4)]
         faces.file_list_sorted = data  # type: ignore
         expected = {"src0.png": [0], "src1.png": [0], "src2.png": [0], "src3.png": [0]}
         result = faces.load_items()
         assert result == expected
 
-        data = [(f"file{idx}.png", dict(source=dict(source_filename=f"src{idx // 2}.png",
-                                                    face_index=0 if idx % 2 == 0 else 1)))
+        data = [(f"file{idx}.png", {"source": {"source_filename": f"src{idx // 2}.png",
+                                               "face_index": 0 if idx % 2 == 0 else 1}})
                 for idx in range(4)]
         faces.file_list_sorted = data  # type: ignore
         expected = {"src0.png": [0, 1], "src1.png": [0, 1]}
@@ -556,7 +561,7 @@ class TestFaces:
             Fixture for mocking various logic calls
         """
         faces = faces_instance
-        data: List[Tuple[str, dict]] = [("file4.png", {}), ("file3.png", {}),
+        data: list[tuple[str, dict]] = [("file4.png", {}), ("file3.png", {}),
                                         ("file1.png", {}), ("file2.png", {})]
         expected = sorted(data)
         process_folder_mock = mocker.patch("tools.alignments.media.Faces.process_folder",
@@ -605,8 +610,8 @@ class TestFrames:
         folder : str
             Dummy media folder
         """
-        expected = [dict(frame_fullname="a.png", frame_name="a", frame_extension=".png"),
-                    dict(frame_fullname="b.png", frame_name="b", frame_extension=".png")]
+        expected = [{"frame_fullname": "a.png", "frame_name": "a", "frame_extension": ".png"},
+                    {"frame_fullname": "b.png", "frame_name": "b", "frame_extension": ".png"}]
 
         frames = Frames(folder, None)
         returned = sorted(list(frames.process_frames()), key=itemgetter("frame_fullname"))
@@ -620,12 +625,12 @@ class TestFrames:
         folder : str
             Dummy media folder
         """
-        expected = [dict(frame_fullname="images_000001.png",
-                         frame_name="images_000001",
-                         frame_extension=".png"),
-                    dict(frame_fullname="images_000002.png",
-                         frame_name="images_000002",
-                         frame_extension=".png")]
+        expected = [{"frame_fullname": "images_000001.png",
+                     "frame_name": "images_000001",
+                     "frame_extension": ".png"},
+                    {"frame_fullname": "images_000002.png",
+                     "frame_name": "images_000002",
+                     "frame_extension": ".png"}]
 
         frames = Frames(folder, None)
         returned = list(frames.process_video())
@@ -657,14 +662,14 @@ class TestFrames:
             Fixture for mocking process_folder call
         """
         frames = Frames(folder, None)
-        data = [dict(frame_fullname="c.png", frame_name="c", frame_extension=".png"),
-                dict(frame_fullname="d.png", frame_name="d", frame_extension=".png"),
-                dict(frame_fullname="b.jpg", frame_name="b", frame_extension=".jpg"),
-                dict(frame_fullname="a.png", frame_name="a", frame_extension=".png")]
-        expected = [dict(frame_fullname="a.png", frame_name="a", frame_extension=".png"),
-                    dict(frame_fullname="b.jpg", frame_name="b", frame_extension=".jpg"),
-                    dict(frame_fullname="c.png", frame_name="c", frame_extension=".png"),
-                    dict(frame_fullname="d.png", frame_name="d", frame_extension=".png")]
+        data = [{"frame_fullname": "c.png", "frame_name": "c", "frame_extension": ".png"},
+                {"frame_fullname": "d.png", "frame_name": "d", "frame_extension": ".png"},
+                {"frame_fullname": "b.jpg", "frame_name": "b", "frame_extension": ".jpg"},
+                {"frame_fullname": "a.png", "frame_name": "a", "frame_extension": ".png"}]
+        expected = [{"frame_fullname": "a.png", "frame_name": "a", "frame_extension": ".png"},
+                    {"frame_fullname": "b.jpg", "frame_name": "b", "frame_extension": ".jpg"},
+                    {"frame_fullname": "c.png", "frame_name": "c", "frame_extension": ".png"},
+                    {"frame_fullname": "d.png", "frame_name": "d", "frame_extension": ".png"}]
         process_folder_mock = mocker.patch("tools.alignments.media.Frames.process_folder",
                                            side_effect=[data])
         result = frames.sorted_items()
@@ -796,7 +801,7 @@ class TestExtractedFaces:
             Fixture for mocking get_faces method
         """
         faces = extracted_faces_instance
-        faces.get_faces = cast(MagicMock, mocker.MagicMock())  # type:ignore
+        faces.get_faces = T.cast(MagicMock, mocker.MagicMock())  # type:ignore
 
         frame = "test_frame"
         img = None
@@ -837,7 +842,7 @@ class TestExtractedFaces:
             The expected output for the given ROI box
         """
         faces = extracted_faces_instance
-        faces.get_faces = cast(MagicMock, mocker.MagicMock())  # type:ignore
+        faces.get_faces = T.cast(MagicMock, mocker.MagicMock())  # type:ignore
 
         frame = "test_frame"
         faces.get_roi_size_for_frame(frame)

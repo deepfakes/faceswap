@@ -3,8 +3,9 @@
     Code adapted and modified from:
     https://github.com/1adrianb/face-alignment
 """
+from __future__ import annotations
 import logging
-from typing import cast, List, TYPE_CHECKING
+import typing as T
 
 import cv2
 import numpy as np
@@ -12,7 +13,7 @@ import numpy as np
 from lib.model.session import KSession
 from ._base import Aligner, AlignerBatch, BatchType
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from lib.align import DetectedFace
 
 logger = logging.getLogger(__name__)
@@ -76,10 +77,10 @@ class Align(Aligner):
         logger.trace("Aligning faces around center")  # type:ignore[attr-defined]
         center_scale = self.get_center_scale(batch.detected_faces)
         batch.feed = np.array(self.crop(batch, center_scale))[..., :3]
-        batch.data.append(dict(center_scale=center_scale))
+        batch.data.append({"center_scale": center_scale})
         logger.trace("Aligned image around center")  # type:ignore[attr-defined]
 
-    def get_center_scale(self, detected_faces: List["DetectedFace"]) -> np.ndarray:
+    def get_center_scale(self, detected_faces: list[DetectedFace]) -> np.ndarray:
         """ Get the center and set scale of bounding box
 
         Parameters
@@ -95,11 +96,11 @@ class Align(Aligner):
         logger.trace("Calculating center and scale")  # type:ignore[attr-defined]
         center_scale = np.empty((len(detected_faces), 68, 3), dtype='float32')
         for index, face in enumerate(detected_faces):
-            x_center = (cast(int, face.left) + face.right) / 2.0
-            y_center = (cast(int, face.top) + face.bottom) / 2.0 - cast(int, face.height) * 0.12
-            scale = (cast(int, face.width) + cast(int, face.height)) * self.reference_scale
-            center_scale[index, :, 0] = np.full(68, x_center, dtype='float32')
-            center_scale[index, :, 1] = np.full(68, y_center, dtype='float32')
+            x_ctr = (T.cast(int, face.left) + face.right) / 2.0
+            y_ctr = (T.cast(int, face.top) + face.bottom) / 2.0 - T.cast(int, face.height) * 0.12
+            scale = (T.cast(int, face.width) + T.cast(int, face.height)) * self.reference_scale
+            center_scale[index, :, 0] = np.full(68, x_ctr, dtype='float32')
+            center_scale[index, :, 1] = np.full(68, y_ctr, dtype='float32')
             center_scale[index, :, 2] = np.full(68, scale, dtype='float32')
         logger.trace("Calculated center and scale: %s", center_scale)  # type:ignore[attr-defined]
         return center_scale
@@ -144,7 +145,7 @@ class Align(Aligner):
                           dsize=(self.input_size, self.input_size),
                           interpolation=interp)
 
-    def crop(self, batch: AlignerBatch, center_scale: np.ndarray) -> List[np.ndarray]:
+    def crop(self, batch: AlignerBatch, center_scale: np.ndarray) -> list[np.ndarray]:
         """ Crop image around the center point
 
         Parameters

@@ -4,8 +4,7 @@
 import logging
 import os
 import re
-
-from typing import Any, List, Optional
+import typing as T
 
 import numpy as np
 
@@ -14,7 +13,7 @@ from plugins.convert._config import Config
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def get_config(plugin_name: str, configfile: Optional[str] = None) -> dict:
+def get_config(plugin_name: str, configfile: str | None = None) -> dict:
     """ Obtain the configuration settings for the writer plugin.
 
     Parameters
@@ -44,7 +43,7 @@ class Output():
         The full path to a custom configuration ini file. If ``None`` is passed
         then the file is loaded from the default location. Default: ``None``.
     """
-    def __init__(self, output_folder: str, configfile: Optional[str] = None) -> None:
+    def __init__(self, output_folder: str, configfile: str | None = None) -> None:
         logger.debug("Initializing %s: (output_folder: '%s')",
                      self.__class__.__name__, output_folder)
         self.config: dict = get_config(".".join(self.__module__.split(".")[-2:]),
@@ -69,7 +68,7 @@ class Output():
         retval = hasattr(self, "frame_order")
         return retval
 
-    def output_filename(self, filename: str, separate_mask: bool = False) -> List[str]:
+    def output_filename(self, filename: str, separate_mask: bool = False) -> list[str]:
         """ Obtain the full path for the output file, including the correct extension, for the
         given input filename.
 
@@ -124,7 +123,7 @@ class Output():
         logger.trace("Added to cache. Frame no: %s", frame_no)  # type: ignore
         logger.trace("Current cache: %s", sorted(self.cache.keys()))  # type:ignore
 
-    def write(self, filename: str, image: Any) -> None:
+    def write(self, filename: str, image: T.Any) -> None:
         """ Override for specific frame writing method.
 
         Parameters
@@ -137,7 +136,7 @@ class Output():
         """
         raise NotImplementedError
 
-    def pre_encode(self, image: np.ndarray) -> Any:  # pylint: disable=unused-argument
+    def pre_encode(self, image: np.ndarray) -> T.Any:  # pylint: disable=unused-argument
         """ Some writer plugins support the pre-encoding of images prior to saving out. As
         patching is done in multiple threads, but writing is done in a single thread, it can
         speed up the process to do any pre-encoding as part of the converter process.

@@ -3,10 +3,10 @@
 import logging
 import os
 import sys
+import typing as T
 
 from argparse import Namespace
 from multiprocessing import Process
-from typing import Any, cast, List, Dict, Optional
 
 from lib.utils import _video_extensions, FaceswapError
 from .media import AlignmentData
@@ -66,7 +66,7 @@ class Alignments():  # pylint:disable=too-few-public-methods
         logger.debug("Running in batch mode")
         return batch_mode
 
-    def _get_alignments_locations(self) -> Dict[str, List[Optional[str]]]:
+    def _get_alignments_locations(self) -> dict[str, list[str | None]]:
         """ Obtain the full path to alignments files in a parent (batch) location
 
         These are jobs that only require an alignments file as input, so frames and face locations
@@ -92,12 +92,12 @@ class Alignments():  # pylint:disable=too-few-public-methods
             sys.exit(1)
 
         logger.info("Batch mode selected. Processing alignments: %s", alignments)
-        retval = dict(alignments_file=alignments,
-                      faces_dir=[None for _ in range(len(alignments))],
-                      frames_dir=[None for _ in range(len(alignments))])
+        retval = {"alignments_file": alignments,
+                  "faces_dir": [None for _ in range(len(alignments))],
+                  "frames_dir": [None for _ in range(len(alignments))]}
         return retval
 
-    def _get_frames_locations(self) -> Dict[str, List[Optional[str]]]:
+    def _get_frames_locations(self) -> dict[str, list[str | None]]:
         """ Obtain the full path to frame locations along with corresponding alignments file
         locations contained within the parent (batch) location
 
@@ -138,7 +138,7 @@ class Alignments():  # pylint:disable=too-few-public-methods
             sys.exit(1)
 
         if self._args.job not in self._requires_faces:  # faces not required for frames input
-            faces: list[Optional[str]] = [None for _ in range(len(frames))]
+            faces: list[str | None] = [None for _ in range(len(frames))]
         else:
             if not self._args.faces_dir:
                 logger.error("Please provide a 'faces_dir' location for '%s' job", self._args.job)
@@ -149,11 +149,11 @@ class Alignments():  # pylint:disable=too-few-public-methods
         logger.info("Batch mode selected. Processing frames: %s",
                     [os.path.basename(frame) for frame in frames])
 
-        return dict(alignments_file=cast(List[Optional[str]], alignments),
-                    frames_dir=cast(List[Optional[str]], frames),
-                    faces_dir=faces)
+        return {"alignments_file": T.cast(list[str | None], alignments),
+                "frames_dir": T.cast(list[str | None], frames),
+                "faces_dir": faces}
 
-    def _get_locations(self) -> Dict[str, List[Optional[str]]]:
+    def _get_locations(self) -> dict[str, list[str | None]]:
         """ Obtain the full path to any frame, face and alignments input locations for the
         selected job when running in batch mode. If not running in batch mode, then the original
         passed in values are returned in lists
@@ -166,9 +166,9 @@ class Alignments():  # pylint:disable=too-few-public-methods
         """
         job: str = self._args.job
         if not self._batch_mode:  # handle with given arguments
-            retval = dict(alignments_file=[self._args.alignments_file],
-                          faces_dir=[self._args.faces_dir],
-                          frames_dir=[self._args.frames_dir])
+            retval = {"alignments_file": [self._args.alignments_file],
+                      "faces_dir": [self._args.faces_dir],
+                      "frames_dir": [self._args.frames_dir]}
 
         elif job in self._requires_alignments:  # Jobs only requiring an alignments file location
             retval = self._get_alignments_locations()
@@ -185,9 +185,9 @@ class Alignments():  # pylint:disable=too-few-public-methods
                 logger.error("No folders found in '%s'", self._args.faces_dir)
                 sys.exit(1)
 
-            retval = dict(faces_dir=faces,
-                          frames_dir=[None for _ in range(len(faces))],
-                          alignments_file=[None for _ in range(len(faces))])
+            retval = {"faces_dir": faces,
+                      "frames_dir": [None for _ in range(len(faces))],
+                      "alignments_file": [None for _ in range(len(faces))]}
             logger.info("Batch mode selected. Processing faces: %s",
                         [os.path.basename(folder) for folder in faces])
         else:
@@ -306,7 +306,7 @@ class _Alignments():  # pylint:disable=too-few-public-methods
         Launches the selected alignments job.
         """
         if self._args.job in ("missing-alignments", "missing-frames", "multi-faces", "no-faces"):
-            job: Any = Check
+            job: T.Any = Check
         else:
             job = globals()[self._args.job.title().replace("-", "")]
         job = job(self.alignments, self._args)

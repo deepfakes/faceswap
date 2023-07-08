@@ -1,7 +1,8 @@
 #!/usr/bin python3
 """ Pytest unit tests for :mod:`lib.gpu_stats._base` """
+import typing as T
+
 from dataclasses import dataclass
-from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -71,8 +72,8 @@ def test__gpu_stats_init_(gpu_stats_instance: _GPUStats) -> None:
     """
     # Ensure that the object is initialized and shutdown correctly
     assert gpu_stats_instance._is_initialized is False
-    assert cast(MagicMock, gpu_stats_instance._initialize).call_count == 1
-    assert cast(MagicMock, gpu_stats_instance._shutdown).call_count == 1
+    assert T.cast(MagicMock, gpu_stats_instance._initialize).call_count == 1
+    assert T.cast(MagicMock, gpu_stats_instance._shutdown).call_count == 1
 
     # Ensure that the object correctly gets and stores the device count, active devices,
     # handles, driver, device names, and VRAM information

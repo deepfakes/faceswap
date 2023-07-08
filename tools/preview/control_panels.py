@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """ Manages the widgets that hold the bottom 'control' area of the preview tool """
+from __future__ import annotations
 import gettext
 import logging
+import typing as T
+
 import tkinter as tk
 
 from tkinter import ttk
 from configparser import ConfigParser
-from typing import Any, Callable, cast, Dict, List, Optional, TYPE_CHECKING, Union
 
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.control_helper import ControlPanel, ControlPanelOption
@@ -14,7 +16,8 @@ from lib.gui.utils import get_images
 from plugins.plugin_loader import PluginLoader
 from plugins.convert._config import Config
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
+    from collections.abc import Callable
     from .preview import Preview
 
 logger = logging.getLogger(__name__)
@@ -34,10 +37,8 @@ class ConfigTools():
     """
     def __init__(self) -> None:
         self._config = Config(None)
-        self.tk_vars: Dict[str, Dict[str, Union[tk.BooleanVar,
-                                                tk.StringVar,
-                                                tk.IntVar,
-                                                tk.DoubleVar]]] = {}
+        self.tk_vars: dict[str, dict[str, tk.BooleanVar | tk.StringVar | tk.IntVar | tk.DoubleVar]
+                           ] = {}
         self._config_dicts = self._get_config_dicts()  # Holds currently saved config
 
     @property
@@ -46,18 +47,18 @@ class ConfigTools():
         return self._config
 
     @property
-    def config_dicts(self) -> Dict[str, Any]:
+    def config_dicts(self) -> dict[str, T.Any]:
         """ dict: The convert configuration options in dictionary form."""
         return self._config_dicts
 
     @property
-    def sections(self) -> List[str]:
+    def sections(self) -> list[str]:
         """ list: The sorted section names that exist within the convert Configuration options. """
         return sorted(set(plugin.split(".")[0] for plugin in self._config.config.sections()
                           if plugin.split(".")[0] != "writer"))
 
     @property
-    def plugins_dict(self) -> Dict[str, List[str]]:
+    def plugins_dict(self) -> dict[str, list[str]]:
         """ dict: Dictionary of configuration option sections as key with a list of containing
         plugins as the value """
         return {section: sorted([plugin.split(".")[1] for plugin in self._config.config.sections()
@@ -81,7 +82,7 @@ class ConfigTools():
                                  section, item, old_value, new_value)
                     self._config.config[section][item] = new_value
 
-    def _get_config_dicts(self) -> Dict[str, Dict[str, Any]]:
+    def _get_config_dicts(self) -> dict[str, dict[str, T.Any]]:
         """ Obtain a custom configuration dictionary for convert configuration items in use
         by the preview tool formatted for control helper.
 
@@ -91,7 +92,7 @@ class ConfigTools():
             Each configuration section as keys, with the values as a dict of option:
             :class:`lib.gui.control_helper.ControlOption` pairs. """
         logger.debug("Formatting Config for GUI")
-        config_dicts: Dict[str, Dict[str, Any]] = {}
+        config_dicts: dict[str, dict[str, T.Any]] = {}
         for section in self._config.config.sections():
             if section.startswith("writer."):
                 continue
@@ -114,7 +115,7 @@ class ConfigTools():
         logger.debug("Formatted Config for GUI: %s", config_dicts)
         return config_dicts
 
-    def reset_config_to_saved(self, section: Optional[str] = None) -> None:
+    def reset_config_to_saved(self, section: str | None = None) -> None:
         """ Reset the GUI parameters to their saved values within the configuration file.
 
         Parameters
@@ -135,7 +136,7 @@ class ConfigTools():
                     logger.debug("Setting %s - %s to saved value %s", config_section, item, val)
         logger.debug("Reset to saved config: %s", section)
 
-    def reset_config_to_default(self, section: Optional[str] = None) -> None:
+    def reset_config_to_default(self, section: str | None = None) -> None:
         """ Reset the GUI parameters to their default configuration values.
 
         Parameters
@@ -157,7 +158,7 @@ class ConfigTools():
                                  config_section, item, default)
         logger.debug("Reset to default: %s", section)
 
-    def save_config(self, section: Optional[str] = None) -> None:
+    def save_config(self, section: str | None = None) -> None:
         """ Save the configuration ``.ini`` file with the currently stored values.
 
         Notes
@@ -258,18 +259,18 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     parent: tkinter object
         The parent tkinter object that holds the Action Frame
     """
-    def __init__(self, app: 'Preview', parent: ttk.Frame) -> None:
+    def __init__(self, app: Preview, parent: ttk.Frame) -> None:
         logger.debug("Initializing %s: (app: %s, parent: %s)",
                      self.__class__.__name__, app, parent)
         self._app = app
 
         super().__init__(parent)
         self.pack(side=tk.LEFT, anchor=tk.N, fill=tk.Y)
-        self._tk_vars: Dict[str, tk.StringVar] = {}
+        self._tk_vars: dict[str, tk.StringVar] = {}
 
-        self._options = dict(
-            color=app._patch.converter.cli_arguments.color_adjustment.replace("-", "_"),
-            mask_type=app._patch.converter.cli_arguments.mask_type.replace("-", "_"))
+        self._options = {
+            "color": app._patch.converter.cli_arguments.color_adjustment.replace("-", "_"),
+            "mask_type": app._patch.converter.cli_arguments.mask_type.replace("-", "_")}
         defaults = {opt: self._format_to_display(val)
                     for opt, val in self._options.items()}
         self._busy_bar = self._build_frame(defaults,
@@ -279,7 +280,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                                            app._samples.predictor.has_predicted_mask)
 
     @property
-    def convert_args(self) -> Dict[str, Any]:
+    def convert_args(self) -> dict[str, T.Any]:
         """ dict: Currently selected Command line arguments from the :class:`ActionFrame`. """
         return {opt if opt != "color" else "color_adjustment":
                 self._format_from_display(self._tk_vars[opt].get())
@@ -323,10 +324,10 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         return var.replace("_", " ").replace("-", " ").title()
 
     def _build_frame(self,
-                     defaults: Dict[str, Any],
+                     defaults: dict[str, T.Any],
                      refresh_callback: Callable[[], None],
                      patch_callback: Callable[[], None],
-                     available_masks: List[str],
+                     available_masks: list[str],
                      has_predicted_mask: bool) -> BusyProgressBar:
         """ Build the :class:`ActionFrame`.
 
@@ -366,8 +367,8 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
 
     def _add_cli_choices(self,
                          parent: ttk.Frame,
-                         defaults: Dict[str, Any],
-                         available_masks: List[str],
+                         defaults: dict[str, T.Any],
+                         available_masks: list[str],
                          has_predicted_mask: bool) -> None:
         """ Create :class:`lib.gui.control_helper.ControlPanel` object for the command
         line options.
@@ -382,13 +383,13 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             Whether the model was trained with a mask
         """
         cp_options = self._get_control_panel_options(defaults, available_masks, has_predicted_mask)
-        panel_kwargs = dict(blank_nones=False, label_width=10, style="CPanel")
+        panel_kwargs = {"blank_nones": False, "label_width": 10, "style": "CPanel"}
         ControlPanel(parent, cp_options, header_text=None, **panel_kwargs)
 
     def _get_control_panel_options(self,
-                                   defaults: Dict[str, Any],
-                                   available_masks: List[str],
-                                   has_predicted_mask: bool) -> List[ControlPanelOption]:
+                                   defaults: dict[str, T.Any],
+                                   available_masks: list[str],
+                                   has_predicted_mask: bool) -> list[ControlPanelOption]:
         """ Create :class:`lib.gui.control_helper.ControlPanelOption` objects for the command
         line options.
 
@@ -404,7 +405,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         list
             The list of `lib.gui.control_helper.ControlPanelOption` objects for the Action Frame
         """
-        cp_options: List[ControlPanelOption] = []
+        cp_options: list[ControlPanelOption] = []
         for opt in self._options:
             if opt == "mask_type":
                 choices = self._create_mask_choices(defaults, available_masks, has_predicted_mask)
@@ -422,9 +423,9 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         return cp_options
 
     def _create_mask_choices(self,
-                             defaults: Dict[str, Any],
-                             available_masks: List[str],
-                             has_predicted_mask: bool) -> List[str]:
+                             defaults: dict[str, T.Any],
+                             available_masks: list[str],
+                             has_predicted_mask: bool) -> list[str]:
         """ Set the mask choices and default mask based on available masks.
 
         Parameters
@@ -537,7 +538,7 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         self.pack(side=tk.RIGHT, anchor=tk.N, fill=tk.BOTH, expand=True)
         self.config_tools = config_tools
 
-        self._tabs: Dict[str, Dict[str, Union[ttk.Notebook, ConfigFrame]]] = {}
+        self._tabs: dict[str, dict[str, ttk.Notebook | ConfigFrame]] = {}
         self._build_tabs()
         self._build_sub_tabs()
         self._add_patch_callback(patch_callback)
@@ -560,7 +561,7 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
                 tab = ConfigFrame(self, config_key, config_dict)
                 self._tabs[section][plugin] = tab
                 text = plugin.replace("_", " ").title()
-                cast(ttk.Notebook, self._tabs[section]["tab"]).add(tab, text=text)
+                T.cast(ttk.Notebook, self._tabs[section]["tab"]).add(tab, text=text)
 
     def _add_patch_callback(self, patch_callback: Callable[[], None]) -> None:
         """ Add callback to re-patch images on configuration option change.
@@ -591,7 +592,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     def __init__(self,
                  parent: OptionsBook,
                  config_key: str,
-                 options: Dict[str, Any]):
+                 options: dict[str, T.Any]):
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -616,7 +617,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             The section/plugin key for these configuration options
         """
         logger.debug("Add Config Frame")
-        panel_kwargs = dict(columns=2, option_columns=2, blank_nones=False, style="CPanel")
+        panel_kwargs = {"columns": 2, "option_columns": 2, "blank_nones": False, "style": "CPanel"}
         frame = ttk.Frame(self)
         frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         cp_options = [opt for key, opt in self._options.items() if key != "helptext"]

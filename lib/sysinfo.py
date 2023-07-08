@@ -6,11 +6,12 @@ import locale
 import os
 import platform
 import sys
+
 from subprocess import PIPE, Popen
-from typing import List, Optional
 
 import psutil
 
+from lib.git import git
 from lib.gpu_stats import GPUStats, GPUInfo
 from lib.utils import get_backend
 from setup import CudaCheck
@@ -21,14 +22,14 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
     def __init__(self) -> None:
         self._state_file = _State().state_file
         self._configs = _Configs().configs
-        self._system = dict(platform=platform.platform(),
-                            system=platform.system().lower(),
-                            machine=platform.machine(),
-                            release=platform.release(),
-                            processor=platform.processor(),
-                            cpu_count=os.cpu_count())
-        self._python = dict(implementation=platform.python_implementation(),
-                            version=platform.python_version())
+        self._system = {"platform": platform.platform(),
+                        "system": platform.system().lower(),
+                        "machine": platform.machine(),
+                        "release": platform.release(),
+                        "processor": platform.processor(),
+                        "cpu_count": os.cpu_count()}
+        self._python = {"implementation": platform.python_implementation(),
+                        "version": platform.python_version()}
         self._gpu = self._get_gpu_info()
         self._cuda_check = CudaCheck()
 
@@ -66,7 +67,7 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
                       (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix))
         else:
             prefix = os.path.dirname(sys.prefix)
-            retval = (os.path.basename(prefix) == "envs")
+            retval = os.path.basename(prefix) == "envs"
         return retval
 
     @property
@@ -126,26 +127,12 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
         return "\n".join(version)
 
     @property
-    def _git_branch(self) -> str:
-        """ str: The git branch that is currently being used to execute Faceswap. """
-        with Popen("git status", shell=True, stdout=PIPE, stderr=PIPE) as git:
-            stdout, stderr = git.communicate()
-        if stderr:
-            return "Not Found"
-        branch = stdout.decode(self._encoding,
-                               errors="replace").splitlines()[0].replace("On branch ", "")
-        return branch
-
-    @property
     def _git_commits(self) -> str:
         """ str: The last 5 git commits for the currently running Faceswap. """
-        with Popen("git log --pretty=oneline --abbrev-commit -n 5",
-                   shell=True, stdout=PIPE, stderr=PIPE) as git:
-            stdout, stderr = git.communicate()
-        if stderr:
+        commits = git.get_commits(3)
+        if not commits:
             return "Not Found"
-        commits = stdout.decode(self._encoding, errors="replace").splitlines()
-        return ". ".join(commits)
+        return " | ".join(commits)
 
     @property
     def _cuda_version(self) -> str:
@@ -210,7 +197,7 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
                     "sys_processor": self._system["processor"],
                     "sys_ram": self._format_ram(),
                     "encoding": self._encoding,
-                    "git_branch": self._git_branch,
+                    "git_branch": git.branch,
                     "git_commits": self._git_commits,
                     "gpu_cuda": self._cuda_version,
                     "gpu_cudnn": self._cudnn_version,
@@ -295,7 +282,7 @@ class _Configs():  # pylint:disable=too-few-public-methods
         except FileNotFoundError:
             return ""
 
-    def _parse_configs(self, config_files: List[str]) -> str:
+    def _parse_configs(self, config_files: list[str]) -> str:
         """ Parse the given list of config files into a human readable format.
 
         Parameters
@@ -399,7 +386,7 @@ class _State():  # pylint:disable=too-few-public-methods
         return len(sys.argv) > 1 and sys.argv[1].lower() == "train"
 
     @staticmethod
-    def _get_arg(*args: str) -> Optional[str]:
+    def _get_arg(*args: str) -> str | None:
         """ Obtain the value for a given command line option from sys.argv.
 
         Returns

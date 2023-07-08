@@ -1,25 +1,21 @@
 # NB Do not install from this requirements file
 # It is for documentation purposes only
 
-sphinx==5.0.2
-sphinx_rtd_theme==1.0.0
-tqdm==4.64
-psutil==5.8.0
-numexpr>=2.8.3
-numpy>=1.18.0
-opencv-python>=4.5.5.0
-pillow==8.3.1
-scikit-learn>=1.0.2
-fastcluster>=1.2.4
-matplotlib==3.5.1
-numexpr
-imageio==2.9.0
-imageio-ffmpeg==0.4.7
-ffmpy==0.2.3
-nvidia-ml-py<11.515
-plaidml==0.7.0
+sphinx>=6.0.0,<7.0.0
+sphinx_rtd_theme==1.2.2
+tqdm==4.65
+psutil==5.9.0
+numexpr>=2.8.4
+numpy>=1.25.0
+opencv-python>=4.7.0.0
+pillow==9.4.0
+scikit-learn>=1.2.2
+fastcluster>=1.2.6
+matplotlib==3.7.1
+imageio==2.31.1
+imageio-ffmpeg==0.4.8
+ffmpy==0.3.0
+nvidia-ml-py>=11.525,<11.526
 pytest==7.2.0
 pytest-mock==3.10.0
-tensorflow>=2.8.0,<2.9.0
-tensorflow_probability<0.17
-typing-extensions>=4.0.0
+tensorflow>=2.10.0,<2.11.0

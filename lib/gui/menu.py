@@ -1,18 +1,15 @@
 #!/usr/bin python3
 """ The Menu Bars for faceswap GUI """
-
+from __future__ import annotations
 import gettext
-import locale
 import logging
 import os
-import sys
 import tkinter as tk
 import typing as T
 from tkinter import ttk
 import webbrowser
 
-from subprocess import Popen, PIPE, STDOUT
-
+from lib.git import git
 from lib.multithreading import MultiThread
 from lib.serializer import get_serializer, Serializer
 from lib.utils import FaceswapError
@@ -31,9 +28,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _LANG = gettext.translation("gui.menu", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
-_WORKING_DIR = os.path.dirname(os.path.realpath(sys.argv[0]))
-
-_RESOURCES: T.List[T.Tuple[str, str]] = [
+_RESOURCES: list[tuple[str, str]] = [
     (_("faceswap.dev - Guides and Forum"), "https://www.faceswap.dev"),
     (_("Patreon - Support this project"), "https://www.patreon.com/faceswap"),
     (_("Discord - The FaceSwap Discord server"), "https://discord.gg/VasFUAy"),
@@ -48,7 +43,7 @@ class MainMenuBar(tk.Menu):  # pylint:disable=too-many-ancestors
     master: :class:`tkinter.Tk`
         The root tkinter object
     """
-    def __init__(self, master: "FaceswapGui") -> None:
+    def __init__(self, master: FaceswapGui) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(master)
         self.root = master
@@ -274,13 +269,40 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         self.root.config(cursor="")
 
     @classmethod
-    def _check_for_updates(cls, encoding: str, check: bool = False) -> bool:
+    def _process_status_output(cls, status: list[str]) -> bool:
+        """ Process the output of a git status call and output information
+
+        Parameters
+        ----------
+        status : list[str]
+            The lines returned from a git status call
+
+        Returns
+        -------
+        bool
+            ``True`` if the repo can be updated otherwise ``False``
+        """
+        for line in status:
+            if line.lower().startswith("your branch is ahead"):
+                logger.warning("Your branch is ahead of the remote repo. Not updating")
+                return False
+            if line.lower().startswith("your branch is up to date"):
+                logger.info("Faceswap is up to date.")
+                return False
+            if "have diverged" in line.lower():
+                logger.warning("Your branch has diverged from the remote repo. Not updating")
+                return False
+            if line.lower().startswith("your branch is behind"):
+                return True
+
+        logger.warning("Unable to retrieve status of branch")
+        return False
+
+    def _check_for_updates(self, check: bool = False) -> bool:
         """ Check whether an update is required
 
         Parameters
         ----------
-        encoding: str
-            The encoding to use for decoding process returns
         check: bool
             ``True`` if we are just checking for updates ``False`` if a check and update is to be
             performed. Default: ``False``
@@ -292,53 +314,33 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         """
         # Do the check
         logger.info("Checking for updates...")
-        update = False
-        msg = ""
-        gitcmd = "git remote update && git status -uno"
-        with Popen(gitcmd, shell=True, stdout=PIPE, stderr=STDOUT, cwd=_WORKING_DIR) as cmd:
-            stdout, _ = cmd.communicate()
-            retcode = cmd.poll()
-        if retcode != 0:
-            msg = ("Git is not installed or you are not running a cloned repo. "
-                   "Unable to check for updates")
-        else:
-            chk = stdout.decode(encoding, errors="replace").splitlines()
-            for line in chk:
-                if line.lower().startswith("your branch is ahead"):
-                    msg = "Your branch is ahead of the remote repo. Not updating"
-                    break
-                if line.lower().startswith("your branch is up to date"):
-                    msg = "Faceswap is up to date."
-                    break
-                if line.lower().startswith("your branch is behind"):
-                    msg = "There are updates available"
-                    update = True
-                    break
-                if "have diverged" in line.lower():
-                    msg = "Your branch has diverged from the remote repo. Not updating"
-                    break
-        if not update or check:
-            logger.info(msg)
-        logger.debug("Checked for update. Update required: %s", update)
-        return update
+        msg = ("Git is not installed or you are not running a cloned repo. "
+               "Unable to check for updates")
+
+        sync = git.update_remote()
+        if not sync:
+            logger.warning(msg)
+            return False
+
+        status = git.status
+        if not status:
+            logger.warning(msg)
+            return False
+
+        retval = self._process_status_output(status)
+        if retval and check:
+            logger.info("There are updates available")
+        return retval
 
     def _check(self) -> None:
         """ Check for updates and clone repository """
         logger.debug("Checking for updates...")
         self.root.config(cursor="watch")
-        encoding = locale.getpreferredencoding()
-        logger.debug("Encoding: %s", encoding)
-        self._check_for_updates(encoding, check=True)
+        self._check_for_updates(check=True)
         self.root.config(cursor="")
 
-    @classmethod
-    def _do_update(cls, encoding: str) -> bool:
+    def _do_update(self) -> bool:
         """ Update Faceswap
-
-        Parameters
-        ----------
-        encoding: str
-            The encoding to use for decoding process returns
 
         Returns
         -------
@@ -346,39 +348,18 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
             ``True`` if update was successful
         """
         logger.info("A new version is available. Updating...")
-        gitcmd = "git pull"
-        with Popen(gitcmd,
-                   shell=True,
-                   stdout=PIPE,
-                   stderr=STDOUT,
-                   bufsize=1,
-                   cwd=_WORKING_DIR) as cmd:
-            while True:
-                out = cmd.stdout
-                output = "" if out is None else out.readline().decode(encoding, errors="replace")
-                if output == "" and cmd.poll() is not None:
-                    break
-                if output:
-                    logger.debug("'%s' output: '%s'", gitcmd, output.strip())
-                    print(output.strip())
-            retcode = cmd.poll()
-        logger.debug("'%s' returncode: %s", gitcmd, retcode)
-        if retcode != 0:
-            logger.info("An error occurred during update. return code: %s", retcode)
-            retval = False
-        else:
-            retval = True
-        return retval
+        success = git.pull()
+        if not success:
+            logger.info("An error occurred during update")
+        return success
 
     def _update(self) -> None:
         """ Check for updates and clone repository """
         logger.debug("Updating Faceswap...")
         self.root.config(cursor="watch")
-        encoding = locale.getpreferredencoding()
-        logger.debug("Encoding: %s", encoding)
         success = False
-        if self._check_for_updates(encoding):
-            success = self._do_update(encoding)
+        if self._check_for_updates():
+            success = self._do_update()
         update_deps.main(is_gui=True)
         if success:
             logger.info("Please restart Faceswap to complete the update.")
@@ -416,11 +397,11 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         bool
             ``True`` if menu was successfully built otherwise ``False``
         """
-        stdout = self._get_branches()
-        if stdout is None:
+        branches = git.branches
+        if not branches:
             return False
 
-        branches = self._filter_branches(stdout)
+        branches = self._filter_branches(branches)
         if not branches:
             return False
 
@@ -431,36 +412,13 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         return True
 
     @classmethod
-    def _get_branches(cls) -> T.Optional[str]:
-        """ Get the available github branches
-
-        Returns
-        -------
-        str or ``None``
-            The list of branches available. If no branches were found or there was an
-            error then `None` is returned
-        """
-        gitcmd = "git branch -a"
-        with Popen(gitcmd, shell=True, stdout=PIPE, stderr=STDOUT, cwd=_WORKING_DIR) as cmd:
-            stdout, _ = cmd.communicate()
-            retcode = cmd.poll()
-        if retcode != 0:
-            logger.debug("Unable to list git branches. return code: %s, message: %s",
-                         retcode,
-                         stdout.decode(locale.getpreferredencoding(),
-                                       errors="replace").strip().replace("\n", " - "))
-            return None
-        return stdout.decode(locale.getpreferredencoding(), errors="replace")
-
-    @classmethod
-    def _filter_branches(cls, stdout: str) -> T.List[str]:
-        """ Filter the branches, remove duplicates and the current branch and return a sorted
-        list.
+    def _filter_branches(cls, branches: list[str]) -> list[str]:
+        """ Filter the branches, remove any non-local branches
 
         Parameters
         ----------
-        stdout: str
-            The output from the git branch query converted to a string
+        branches: list[str]
+            list of available git branches
 
         Returns
         -------
@@ -468,20 +426,22 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
             Unique list of available branches sorted in alphabetical order
         """
         current = None
-        branches = set()
-        for line in stdout.splitlines():
-            branch = line[line.rfind("/") + 1:] if "/" in line else line.strip()
+        unique = set()
+        for line in branches:
+            branch = line.strip()
+            if branch.startswith("remotes"):
+                continue
             if branch.startswith("*"):
                 branch = branch.replace("*", "").strip()
                 current = branch
                 continue
-            branches.add(branch)
-        logger.debug("Found branches: %s", branches)
-        if current in branches:
+            unique.add(branch)
+        logger.debug("Found branches: %s", unique)
+        if current in unique:
             logger.debug("Removing current branch from output: %s", current)
-            branches.remove(current)
+            unique.remove(current)
 
-        retval = sorted(list(branches), key=str.casefold)
+        retval = sorted(list(unique), key=str.casefold)
         logger.debug("Final branches: %s", retval)
         return retval
 
@@ -495,15 +455,8 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
             The branch to switch to
         """
         logger.info("Switching branch to '%s'...", branch)
-        gitcmd = f"git checkout {branch}"
-        with Popen(gitcmd, shell=True, stdout=PIPE, stderr=STDOUT, cwd=_WORKING_DIR) as cmd:
-            stdout, _ = cmd.communicate()
-            retcode = cmd.poll()
-        if retcode != 0:
-            logger.error("Unable to switch branch. return code: %s, message: %s",
-                         retcode,
-                         stdout.decode(T.cast(str, locale.getdefaultlocale()),
-                                       errors="replace").strip().replace("\n", " - "))
+        if not git.checkout(branch):
+            logger.error("Unable to switch branch to '%s'", branch)
             return
         logger.info("Succesfully switched to '%s'. You may want to check for updates to make sure "
                     "that you have the latest code.", branch)
@@ -548,7 +501,7 @@ class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         self._section_separator()
 
     @classmethod
-    def _loader_and_kwargs(cls, btntype: str) -> T.Tuple[str, T.Dict[str, bool]]:
+    def _loader_and_kwargs(cls, btntype: str) -> tuple[str, dict[str, bool]]:
         """ Get the loader name and key word arguments for the given button type
 
         Parameters

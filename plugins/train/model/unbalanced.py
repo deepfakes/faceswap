@@ -3,17 +3,14 @@
     Based on the original https://www.reddit.com/r/deepfakes/
         code sample + contributions """
 
-from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
-from lib.utils import get_backend
-from ._base import ModelBase, KerasModel
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.keras.initializers import RandomNormal  # pylint:disable=import-error
+from tensorflow.keras.layers import (  # pylint:disable=import-error
+    Dense, Flatten, Input, LeakyReLU, Reshape, SpatialDropout2D)
+from tensorflow.keras.models import Model as KModel  # pylint:disable=import-error
 
-if get_backend() == "amd":
-    from keras.initializers import RandomNormal  # pylint:disable=no-name-in-module
-    from keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape, SpatialDropout2D
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow.keras.initializers import RandomNormal  # noqa pylint:disable=import-error,no-name-in-module
-    from tensorflow.keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape, SpatialDropout2D  # noqa pylint:disable=import-error,no-name-in-module
+from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
+from ._base import ModelBase
 
 
 class Model(ModelBase):
@@ -33,12 +30,12 @@ class Model(ModelBase):
 
         outputs = [self.decoder_a()(encoder_a), self.decoder_b()(encoder_b)]
 
-        autoencoder = KerasModel(inputs, outputs, name=self.model_name)
+        autoencoder = KModel(inputs, outputs, name=self.model_name)
         return autoencoder
 
     def encoder(self):
         """ Unbalanced Encoder """
-        kwargs = dict(kernel_initializer=self.kernel_initializer)
+        kwargs = {"kernel_initializer": self.kernel_initializer}
         encoder_complexity = 128 if self.low_mem else self.config["complexity_encoder"]
         dense_dim = 384 if self.low_mem else 512
         dense_shape = self.input_shape[0] // 16
@@ -61,11 +58,11 @@ class Model(ModelBase):
         var_x = Dense(dense_shape * dense_shape * dense_dim,
                       kernel_initializer=self.kernel_initializer)(var_x)
         var_x = Reshape((dense_shape, dense_shape, dense_dim))(var_x)
-        return KerasModel(input_, var_x, name="encoder")
+        return KModel(input_, var_x, name="encoder")
 
     def decoder_a(self):
         """ Decoder for side A """
-        kwargs = dict(kernel_size=5, kernel_initializer=self.kernel_initializer)
+        kwargs = {"kernel_size": 5, "kernel_initializer": self.kernel_initializer}
         decoder_complexity = 320 if self.low_mem else self.config["complexity_decoder_a"]
         dense_dim = 384 if self.low_mem else 512
         decoder_shape = self.input_shape[0] // 16
@@ -93,11 +90,11 @@ class Model(ModelBase):
             var_y = UpscaleBlock(decoder_complexity // 4, activation="leakyrelu")(var_y)
             var_y = Conv2DOutput(1, 5, name="mask_out_a")(var_y)
             outputs.append(var_y)
-        return KerasModel(input_, outputs=outputs, name="decoder_a")
+        return KModel(input_, outputs=outputs, name="decoder_a")
 
     def decoder_b(self):
         """ Decoder for side B """
-        kwargs = dict(kernel_size=5, kernel_initializer=self.kernel_initializer)
+        kwargs = {"kernel_size": 5, "kernel_initializer": self.kernel_initializer}
         decoder_complexity = 384 if self.low_mem else self.config["complexity_decoder_b"]
         dense_dim = 384 if self.low_mem else 512
         decoder_shape = self.input_shape[0] // 16
@@ -137,7 +134,7 @@ class Model(ModelBase):
                 var_y = UpscaleBlock(decoder_complexity // 8, activation="leakyrelu")(var_y)
             var_y = Conv2DOutput(1, 5, name="mask_out_b")(var_y)
             outputs.append(var_y)
-        return KerasModel(input_, outputs=outputs, name="decoder_b")
+        return KModel(input_, outputs=outputs, name="decoder_b")
 
     def _legacy_mapping(self):
         """ The mapping of legacy separate model names to single model names """

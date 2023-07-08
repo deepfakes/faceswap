@@ -251,11 +251,36 @@ class Config(FaceswapConfig):
                 "to 0.001 (1e-3)."))
         self.add_item(
             section=section,
+            title="save_optimizer",
+            datatype=str,
+            group=_("optimizer"),
+            default="exit",
+            fixed=False,
+            gui_radio=True,
+            choices=["never", "always", "exit"],
+            info=_(
+                "When to save the Optimizer Weights. Saving the optimizer weights is not "
+                "necessary and will increase the model file size 3x (and by extension the amount "
+                "of time it takes to save the model). However, it can be useful to save these "
+                "weights if you want to guarantee that a resumed model carries off exactly from "
+                "where it left off, rather than spending a few hundred iterations catching up."
+                "\n\t never - Don't save optimizer weights."
+                "\n\t always - Save the optimizer weights at every save iteration. Model saving "
+                "will take longer, due to the increased file size, but you will always have the "
+                "last saved optimizer state in your model file."
+                "\n\t exit - Only save the optimizer weights when explicitly terminating a "
+                "model. This can be when the model is actively stopped or when the target "
+                "iterations are met. Note: If the training session ends because of another "
+                "reason (e.g. power outage, Out of Memory Error, NaN detected) then the "
+                "optimizer weights will NOT be saved."))
+
+        self.add_item(
+            section=section,
             title="autoclip",
             datatype=bool,
             default=False,
             info=_(
-                "[Not PlaidML] Apply AutoClipping to the gradients. AutoClip analyzes the "
+                "Apply AutoClipping to the gradients. AutoClip analyzes the "
                 "gradient weights and adjusts the normalization value dynamically to fit the "
                 "data. Can help prevent NaNs and improve model optimization at the expense of "
                 "VRAM. Ref: AutoClip: Adaptive Gradient Clipping for Source Separation Networks "
@@ -283,7 +308,7 @@ class Config(FaceswapConfig):
             group=_("network"),
             fixed=False,
             info=_(
-                "[Nvidia Only]. Enable the Tensorflow GPU 'allow_growth' configuration option. "
+                "Enable the Tensorflow GPU 'allow_growth' configuration option. "
                 "This option prevents Tensorflow from allocating all of the GPU VRAM at launch "
                 "but can lead to higher VRAM fragmentation and slower performance. Should only "
                 "be enabled if you are receiving errors regarding 'cuDNN fails to initialize' "
@@ -296,7 +321,7 @@ class Config(FaceswapConfig):
             fixed=False,
             group=_("network"),
             info=_(
-                "[Not PlaidML], NVIDIA GPUs can run operations in float16 faster than in "
+                "NVIDIA GPUs can run operations in float16 faster than in "
                 "float32. Mixed precision allows you to use a mix of float16 with float32, to "
                 "get the performance benefits from float16 and the numeric stability benefits "
                 "from float32.\n\nThis is untested on DirectML backend, but will run on most "

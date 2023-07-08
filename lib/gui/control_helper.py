@@ -5,10 +5,10 @@ import logging
 import re
 
 import tkinter as tk
+import typing as T
 from tkinter import colorchooser, ttk
 from itertools import zip_longest
 from functools import partial
-from typing import Any, Dict
 
 from _tkinter import Tcl_Obj, TclError
 
@@ -24,7 +24,9 @@ _ = _LANG.gettext
 # We store Tooltips, ContextMenus and Commands globally when they are created
 # Because we need to add them back to newly cloned widgets (they are not easily accessible from
 # original config or are prone to getting destroyed when the original widget is destroyed)
-_RECREATE_OBJECTS: Dict[str, Dict[str, Any]] = dict(tooltips={}, commands={}, contextmenus={})
+_RECREATE_OBJECTS: dict[str, dict[str, T.Any]] = {"tooltips": {},
+                                                  "commands": {},
+                                                  "contextmenus": {}}
 
 
 def _get_tooltip(widget, text=None, text_variable=None):
@@ -154,17 +156,17 @@ class ControlPanelOption():
         self.dtype = dtype
         self.sysbrowser = sysbrowser
         self._command = command
-        self._options = dict(title=title,
-                             subgroup=subgroup,
-                             group=group,
-                             default=default,
-                             initial_value=initial_value,
-                             choices=choices,
-                             is_radio=is_radio,
-                             is_multi_option=is_multi_option,
-                             rounding=rounding,
-                             min_max=min_max,
-                             helptext=helptext)
+        self._options = {"title": title,
+                         "subgroup": subgroup,
+                         "group": group,
+                         "default": default,
+                         "initial_value": initial_value,
+                         "choices": choices,
+                         "is_radio": is_radio,
+                         "is_multi_option": is_multi_option,
+                         "rounding": rounding,
+                         "min_max": min_max,
+                         "helptext": helptext}
         self.control = self.get_control()
         self.tk_var = self.get_tk_var(initial_value, track_modified)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -421,7 +423,7 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         self.group_frames = {}
         self._sub_group_frames = {}
 
-        canvas_kwargs = dict(bd=0, highlightthickness=0, bg=self._theme["panel_background"])
+        canvas_kwargs = {"bd": 0, "highlightthickness": 0, "bg": self._theme["panel_background"]}
 
         self._canvas = tk.Canvas(self, **canvas_kwargs)
         self._canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -525,8 +527,8 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
 
             group_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5, anchor=tk.NW)
 
-            self.group_frames[group] = dict(frame=retval,
-                                            chkbtns=self.checkbuttons_frame(retval))
+            self.group_frames[group] = {"frame": retval,
+                                        "chkbtns": self.checkbuttons_frame(retval)}
         group_frame = self.group_frames[group]
         return group_frame
 
@@ -720,12 +722,12 @@ class AutoFillContainer():
         """
         retval = {}
         if widget.__class__.__name__ == "MultiOption":
-            retval = dict(value=widget._value,  # pylint:disable=protected-access
-                          variable=widget._master_variable)  # pylint:disable=protected-access
+            retval = {"value": widget._value,  # pylint:disable=protected-access
+                      "variable": widget._master_variable}  # pylint:disable=protected-access
         elif widget.__class__.__name__ == "ToggledFrame":
             # Toggled Frames need to have their variable tracked
-            retval = dict(text=widget._text,  # pylint:disable=protected-access
-                          toggle_var=widget._toggle_var)  # pylint:disable=protected-access
+            retval = {"text": widget._text,  # pylint:disable=protected-access
+                      "toggle_var": widget._toggle_var}  # pylint:disable=protected-access
         return retval
 
     def get_all_children_config(self, widget, child_list):
@@ -988,7 +990,7 @@ class ControlBuilder():
         if self.option.control != ttk.Checkbutton:
             ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
             if self.option.helptext is not None and not self.helpset:
-                tooltip_kwargs = dict(text=self.option.helptext)
+                tooltip_kwargs = {"text": self.option.helptext}
                 if self.option.sysbrowser is not None:
                     tooltip_kwargs["text_variable"] = self.option.tk_var
                 _get_tooltip(ctl, **tooltip_kwargs)
@@ -1071,7 +1073,7 @@ class ControlBuilder():
                      "rounding: %s, min_max: %s)", self.option.name, self.option.dtype,
                      self.option.rounding, self.option.min_max)
         validate = self.slider_check_int if self.option.dtype == int else self.slider_check_float
-        vcmd = (self.frame.register(validate))
+        vcmd = self.frame.register(validate)
         tbox = tk.Entry(self.frame,
                         width=8,
                         textvariable=self.option.tk_var,
@@ -1246,15 +1248,15 @@ class FileBrowser():
     @property
     def helptext(self):
         """ Dict containing tooltip text for buttons """
-        retval = dict(folder=_("Select a folder..."),
-                      load=_("Select a file..."),
-                      load2=_("Select a file..."),
-                      picture=_("Select a folder of images..."),
-                      video=_("Select a video..."),
-                      model=_("Select a model folder..."),
-                      multi_load=_("Select one or more files..."),
-                      context=_("Select a file or folder..."),
-                      save_as=_("Select a save location..."))
+        retval = {"folder": _("Select a folder..."),
+                  "load": _("Select a file..."),
+                  "load2": _("Select a file..."),
+                  "picture": _("Select a folder of images..."),
+                  "video": _("Select a video..."),
+                  "model": _("Select a model folder..."),
+                  "multi_load": _("Select one or more files..."),
+                  "context": _("Select a file or folder..."),
+                  "save_as": _("Select a save location...")}
         return retval
 
     @staticmethod
