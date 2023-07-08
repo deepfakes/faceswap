@@ -132,6 +132,12 @@ def test_pixel_shuffler(dummy):  # pylint:disable=unused-argument
 
 
 @pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
+def test_quick_gelu(dummy):  # pylint:disable=unused-argument
+    """ Global Standard Deviation Pooling 2D layer test """
+    layer_test(layers.QuickGELU, input_shape=(2, 4, 4, 1024))
+
+
+@pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
 def test_reflection_padding_2d(dummy):  # pylint:disable=unused-argument
     """ Reflection Padding 2D layer test """
     layer_test(layers.ReflectionPadding2D, input_shape=(2, 4, 4, 512))

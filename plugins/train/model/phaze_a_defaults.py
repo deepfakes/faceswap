@@ -47,6 +47,8 @@ _HELPTEXT: str = (
     "understand the parameters better.")
 
 _ENCODERS: list[str] = sorted([
+    "clipv_vit-b-16", "clipv_vit-b-32", "clipv_vit-l-14", "clipv_vit-l-14-336px",
+    "clipv_farl-b_16-16", "clipv_farl-b_16-64",
     "densenet121", "densenet169", "densenet201", "efficientnet_b0", "efficientnet_b1",
     "efficientnet_b2", "efficientnet_b3", "efficientnet_b4", "efficientnet_b5", "efficientnet_b6",
     "efficientnet_b7", "efficientnet_v2_b0", "efficientnet_v2_b1", "efficientnet_v2_b2",
@@ -140,6 +142,11 @@ _DEFAULTS = {
             "The encoder architecture to use. See the relevant config sections for specific "
             "architecture tweaking.\nNB: For keras based pre-built models, the global "
             "initializers and padding options will be ignored for the selected encoder."
+            "\n\n\tCLIPv: This is an implementation of the Visual encoder from the CLIP "
+            "transformer. The ViT weights are trained on imagenet whilst the FaRL weights are "
+            "trained on face related tasks. All have a default input size of 224px except for "
+            "ViT-L-14-336px that has an input size of 336px. Ref: Learning Transferable Visual "
+            "Models From Natural Language Supervision (2021): https://arxiv.org/abs/2103.00020"
             "\n\n\tdensenet: (32px -224px). Ref: Densely Connected Convolutional Networks "
             "(2016): https://arxiv.org/abs/1608.06993?source=post_page"
             "\n\n\tefficientnet: [Tensorflow 2.3+ only] EfficientNet has numerous variants (B0 - "
@@ -197,7 +204,7 @@ _DEFAULTS = {
             "the minimum and maximum sizes for each encoder. NB: The input size will be rounded "
             "down to the nearest 16 pixels."),
         "datatype": int,
-        "min_max": (0, 100),
+        "min_max": (0, 200),
         "rounding": 1,
         "group": "encoder",
         "fixed": True},
@@ -221,11 +228,14 @@ _DEFAULTS = {
             "\n\taverage_pooling: Use a Global Average Pooling 2D layer for the bottleneck."
             "\n\tdense: Use a Dense layer for the bottleneck (the traditional Faceswap method). "
             "You can set the size of the Dense layer with the 'bottleneck_size' parameter."
-            "\n\tmax_pooling: Use a Global Max Pooling 2D layer for the bottleneck."),
+            "\n\tmax_pooling: Use a Global Max Pooling 2D layer for the bottleneck."
+            "\n\flatten: Don't use a bottleneck at all. Some encoders output in a size that make "
+            "a bottleneck unnecessary. This option flattens the output from the encoder, with no "
+            "further operations"),
         "datatype": str,
         "group": "bottleneck",
         "gui_radio": True,
-        "choices": ["average_pooling", "dense", "max_pooling"],
+        "choices": ["average_pooling", "dense", "max_pooling", "flatten"],
         "fixed": True},
     "bottleneck_norm": {
         "default": "none",

@@ -45,6 +45,7 @@ model.layers module
    ~lib.model.layers.KResizeImages
    ~lib.model.layers.L2_normalize
    ~lib.model.layers.PixelShuffler
+   ~lib.model.layers.QuickGELU
    ~lib.model.layers.ReflectionPadding2D
    ~lib.model.layers.SubPixelUpscaling
    ~lib.model.layers.Swish

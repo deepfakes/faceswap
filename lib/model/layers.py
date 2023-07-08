@@ -393,6 +393,36 @@ class PixelShuffler(tf.keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+class QuickGELU(tf.keras.layers.Layer):
+    """ Applies GELU approximation that is fast but somewhat inaccurate.
+
+    Parameters
+    ----------
+    name: str, optional
+        The name for the layer. Default: "QuickGELU"
+    kwargs: dict
+        The standard Keras Layer keyword arguments (if any)
+    """
+
+    def __init__(self, name: str = "QuickGELU", **kwargs) -> None:
+        super().__init__(name=name, **kwargs)
+
+    def call(self, inputs: tf.Tensor, *args, **kwargs) -> tf.Tensor:
+        """ Call the QuickGELU layerr
+
+        Parameters
+        ----------
+        inputs : :class:`tf.Tensor`
+            The input Tensor
+
+        Returns
+        -------
+        :class:`tf.Tensor`
+            The output Tensor
+        """
+        return inputs * K.sigmoid(1.702 * inputs)
+
+
 class ReflectionPadding2D(tf.keras.layers.Layer):
     """Reflection-padding layer for 2D input (e.g. picture).
 
