@@ -248,13 +248,17 @@ class EmbeddingLayer(tf.keras.layers.Layer):
         Amount to scale the random initialization by
     name: str
         The name of the layer
+    dtype: str, optional
+        The datatype for the layer. Mixed precision can mess up the embeddings. Default: "float32"
     """
     def __init__(self,
                  input_shape: tuple[int, ...],
                  scale: int,
                  name: str,
-                 *args, **kwargs) -> None:
-        super().__init__(name=name, *args, **kwargs)
+                 *args,
+                 dtype="float32",
+                 **kwargs) -> None:
+        super().__init__(name=name, dtype=dtype, *args, **kwargs)
         self._input_shape = input_shape
         self._scale = scale
         self._var: tf.Variable
@@ -268,9 +272,9 @@ class EmbeddingLayer(tf.keras.layers.Layer):
             The input shape of the incoming tensor
         """
         self._var = tf.Variable(self._scale * tf.random.normal(self._input_shape,
-                                                               dtype=self.compute_dtype),
+                                                               dtype=self.dtype),
                                 trainable=True,
-                                dtype=self.compute_dtype)
+                                dtype=self.dtype)
         super().build(input_shape)
 
     def get_config(self) -> dict[str, T.Any]:
@@ -805,7 +809,7 @@ class ViT():  # pylint:disable=too-few-public-methods
                                   layer_config=layer_config,
                                   output_dim=embed_dim,
                                   heads=vision_heads,
-                                  name=self._name.lower())
+                                  name="visual")
         vision_heads = width // 64
         return VisualTransformer(input_resolution=resolution,
                                  width=width,
@@ -813,7 +817,7 @@ class ViT():  # pylint:disable=too-few-public-methods
                                  output_dim=embed_dim,
                                  heads=vision_heads,
                                  patch_size=patch_size,
-                                 name=self._name.lower())
+                                 name="visual")
 
     def __call__(self) -> tf.keras.Model:
         """ Get the configured ViT model
@@ -829,7 +833,9 @@ class ViT():  # pylint:disable=too-few-public-methods
             return net
         if self._load_weights:
             model_path = GetModel(f"CLIPv_{self._name}_v1.h5", self._git_id).model_path
+            logger.info("Loading CLIPv trained weights for '%s'", self._name)
             net.load_weights(model_path, by_name=True, skip_mismatch=True)
+
         return net
 
 

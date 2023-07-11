@@ -48,7 +48,7 @@ _HELPTEXT: str = (
 
 _ENCODERS: list[str] = sorted([
     "clipv_vit-b-16", "clipv_vit-b-32", "clipv_vit-l-14", "clipv_vit-l-14-336px",
-    "clipv_farl-b_16-16", "clipv_farl-b_16-64",
+    "clipv_farl-b-16-16", "clipv_farl-b-16-64",
     "densenet121", "densenet169", "densenet201", "efficientnet_b0", "efficientnet_b1",
     "efficientnet_b2", "efficientnet_b3", "efficientnet_b4", "efficientnet_b5", "efficientnet_b6",
     "efficientnet_b7", "efficientnet_v2_b0", "efficientnet_v2_b1", "efficientnet_v2_b2",

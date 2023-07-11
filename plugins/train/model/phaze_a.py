@@ -251,6 +251,8 @@ class Model(ModelBase):
         layers = self.config["freeze_layers"]
         # EfficientNetV2 is inconsistent with other model's naming conventions
         keras_name = _MODEL_MAPPING[arch].keras_name.replace("EfficientNetV2", "EfficientNetV2-")
+        # CLIPv model is always called 'visual' regardless of weights/format loaded
+        keras_name = "visual" if arch.startswith("clipv_") else keras_name
 
         if "keras_encoder" not in self.config["freeze_layers"]:
             retval = layers
@@ -260,6 +262,7 @@ class Model(ModelBase):
         else:
             retval = [layer for layer in layers if layer != "keras_encoder"]
             logger.debug("Removing 'keras_encoder' for '%s'", arch)
+
         return retval
 
     def _get_input_shape(self) -> tuple[int, int, int]:

@@ -192,7 +192,7 @@ class Conv2DOutput():  # pylint:disable=too-few-public-methods
                  kernel_size: int | tuple[int],
                  activation: str = "sigmoid",
                  padding: str = "same", **kwargs) -> None:
-        self._name = kwargs.pop("name") if "name" in kwargs else _get_name(
+        self._name = _get_name(kwargs.pop("name")) if "name" in kwargs else _get_name(
             f"conv_output_{filters}")
         self._filters = filters
         self._kernel_size = kernel_size
