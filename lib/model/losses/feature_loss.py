@@ -14,7 +14,7 @@ import tensorflow.keras.backend as K  # pylint:disable=no-name-in-module,import-
 
 import numpy as np
 
-from lib.model.nets import AlexNet, SqueezeNet
+from lib.model.networks import AlexNet, SqueezeNet
 from lib.utils import GetModel
 
 if T.TYPE_CHECKING:
