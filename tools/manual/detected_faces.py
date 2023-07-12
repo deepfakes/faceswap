@@ -490,10 +490,10 @@ class Filter():
         retval = (
             filter_mode == "All Frames" or
             (filter_mode == "No Faces" and not frame_faces) or
-            (filter_mode == "Has Face(s)" and frame_faces) or
+            (filter_mode == "Has Face(s)" and len(frame_faces) > 0) or
             (filter_mode == "Multiple Faces" and len(frame_faces) > 1) or
             (filter_mode == "Misaligned Faces" and any(face.aligned.average_distance > distance
-             for face in frame_faces)))
+                                                       for face in frame_faces)))
         assert isinstance(retval, bool)
         logger.trace("filter_mode: %s, frame meets criteria: %s",  # type:ignore[attr-defined]
                      filter_mode, retval)
