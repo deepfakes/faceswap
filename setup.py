@@ -1146,7 +1146,7 @@ class ProgressBar():
     def __init__(self):
         self._width_desc = 21
         self._width_size = 9
-        self._width_bar = 37
+        self._width_bar = 35
         self._width_pct = 4
         self._marker = "█"
 

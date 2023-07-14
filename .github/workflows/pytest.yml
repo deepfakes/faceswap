@@ -24,10 +24,6 @@ jobs:
             backend: "rocm"
           - os: "windows-latest"
             backend: "directml"
-        exclude:
-          # pynvx does not currently build for Python3.10 and without CUDA it may not build at all
-          - os: "macos-latest"
-            backend: "nvidia"
     steps:
       - uses: actions/checkout@v3
       - name: Set cache date

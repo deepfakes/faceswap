@@ -4,7 +4,7 @@
   - [Hardware Requirements](#hardware-requirements)
   - [Supported operating systems](#supported-operating-systems)
 - [Important before you proceed](#important-before-you-proceed)
-- [Linux and Windows Install Guide](#linux-and-windows-install-guide)
+- [Linux, Windows and macOS Install Guide](#linux-windows-and-macos-install-guide)
   - [Installer](#installer)
   - [Manual Install](#manual-install)
   - [Prerequisites](#prerequisites-1)
@@ -83,10 +83,10 @@ Alternatively, there is a docker image that is based on Debian.
 
 The developers are also not responsible for any damage you might cause to your own computer.
 
-# Linux and Windows Install Guide
+# Linux, Windows and macOS Install Guide
 
 ## Installer
-Windows and Linux now both have an installer which installs everything for you and creates a desktop shortcut to launch straight into the GUI. You can download the installer from https://github.com/deepfakes/faceswap/releases.
+Windows, Linux and macOS all have installers which set up everything for you. You can download the installer from https://github.com/deepfakes/faceswap/releases.
 
 If you have issues with the installer then read on for the more manual way to install faceswap on Windows.
 
@@ -164,6 +164,8 @@ It's good to keep faceswap up to date as new features are added and bugs are fix
 - Once the latest version has downloaded, make sure your dependencies are up to date. There is a script to help with this: `python update_deps.py`
 
 # macOS (Apple Silicon) Install Guide
+
+macOS now has [an installer](#linux-windows-and-macos-install-guide) which sets everything up for you, but if you run into difficulties and need to set things up manually, the steps are as follows:
 
 ## Prerequisites
 
