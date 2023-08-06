@@ -693,8 +693,11 @@ class _Samples():  # pylint:disable=too-few-public-methods
         """
         logger.debug("Getting Predictions")
         preds: dict[str, np.ndarray] = {}
-        standard = self._model.model.predict([feed_a, feed_b], verbose=0)
-        swapped = self._model.model.predict([feed_b, feed_a], verbose=0)
+
+        # Calling model.predict() can lead to both VRAM and system memory leaks, so call model
+        # directly
+        standard = [t.numpy() for t in self._model.model([feed_a, feed_b])]
+        swapped = [t.numpy() for t in self._model.model([feed_b, feed_a])]
 
         if self._model.config["learn_mask"]:  # Add mask to 4th channel of final output
             standard = [np.concatenate(side[-2:], axis=-1) for side in standard]
