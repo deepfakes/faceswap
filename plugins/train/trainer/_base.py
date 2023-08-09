@@ -696,15 +696,19 @@ class _Samples():  # pylint:disable=too-few-public-methods
 
         # Calling model.predict() can lead to both VRAM and system memory leaks, so call model
         # directly
-        standard = [t.numpy() for t in self._model.model([feed_a, feed_b])]
-        swapped = [t.numpy() for t in self._model.model([feed_b, feed_a])]
+        standard = self._model.model([feed_a, feed_b])
+        swapped = self._model.model([feed_b, feed_a])
 
         if self._model.config["learn_mask"]:  # Add mask to 4th channel of final output
-            standard = [np.concatenate(side[-2:], axis=-1) for side in standard]
-            swapped = [np.concatenate(side[-2:], axis=-1) for side in swapped]
+            standard = [np.concatenate(side[-2:], axis=-1)
+                        for side in [[s.numpy() for s in t] for t in standard]]
+            swapped = [np.concatenate(side[-2:], axis=-1)
+                       for side in [[s.numpy() for s in t] for t in swapped]]
         else:  # Retrieve final output
-            standard = [side[-1] if isinstance(side, list) else side for side in standard]
-            swapped = [side[-1] if isinstance(side, list) else side for side in swapped]
+            standard = [side[-1] if isinstance(side, list) else side
+                        for side in [t.numpy() for t in standard]]
+            swapped = [side[-1] if isinstance(side, list) else side
+                       for side in [t.numpy() for t in swapped]]
 
         preds["a_a"] = standard[0]
         preds["b_b"] = standard[1]
