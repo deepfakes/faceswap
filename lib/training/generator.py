@@ -724,3 +724,236 @@ class PreviewDataGenerator(DataGenerator):
         samples = self._create_samples(images, detected_faces)
 
         return feed, samples
+
+
+class Feeder():
+    """ Handles the processing of a Batch for training the model and generating samples.
+
+    Parameters
+    ----------
+    images: dict
+        The list of full paths to the training images for this :class:`_Feeder` for each side
+    model: plugin from :mod:`plugins.train.model`
+        The selected model that will be running this trainer
+    batch_size: int
+        The size of the batch to be processed for each side at each iteration
+    config: dict
+        The configuration for this trainer
+    include_preview: bool, optional
+        ``True`` to create a feeder for generating previews. Default: ``True``
+    """
+    def __init__(self,
+                 images: dict[T.Literal["a", "b"], list[str]],
+                 model: ModelBase,
+                 batch_size: int,
+                 config: dict[str, ConfigValueType],
+                 include_preview: bool = True) -> None:
+        logger.debug("Initializing %s: num_images: %s, batch_size: %s, config: %s, "
+                     "include_preview: %s)", self.__class__.__name__,
+                     {k: len(v) for k, v in images.items()}, batch_size, config, include_preview)
+        self._model = model
+        self._images = images
+        self._batch_size = batch_size
+        self._config = config
+        self._feeds = {
+            side: self._load_generator(side, False).minibatch_ab()
+            for side in T.get_args(T.Literal["a", "b"])}
+
+        self._display_feeds = {"preview": self._set_preview_feed() if include_preview else {},
+                               "timelapse": {}}
+        logger.debug("Initialized %s:", self.__class__.__name__)
+
+    def _load_generator(self,
+                        side: T.Literal["a", "b"],
+                        is_display: bool,
+                        batch_size: int | None = None,
+                        images: list[str] | None = None) -> DataGenerator:
+        """ Load the :class:`~lib.training_data.TrainingDataGenerator` for this feeder.
+
+        Parameters
+        ----------
+        side: ["a", "b"]
+            The side of the model to load the generator for
+        is_display: bool
+            ``True`` if the generator is for creating preview/time-lapse images. ``False`` if it is
+            for creating training images
+        batch_size: int, optional
+            If ``None`` then the batch size selected in command line arguments is used, otherwise
+            the batch size provided here is used.
+        images: list, optional. Default: ``None``
+            If provided then this will be used as the list of images for the generator. If ``None``
+            then the training folder images for the side will be used. Default: ``None``
+
+        Returns
+        -------
+        :class:`~lib.training_data.TrainingDataGenerator`
+            The training data generator
+        """
+        logger.debug("Loading generator, side: %s, is_display: %s,  batch_size: %s",
+                     side, is_display, batch_size)
+        generator = PreviewDataGenerator if is_display else TrainingDataGenerator
+        retval = generator(self._config,
+                           self._model,
+                           side,
+                           self._images[side] if images is None else images,
+                           self._batch_size if batch_size is None else batch_size)
+        return retval
+
+    def _set_preview_feed(self) -> dict[T.Literal["a", "b"], Generator[BatchType, None, None]]:
+        """ Set the preview feed for this feeder.
+
+        Creates a generator from :class:`lib.training_data.PreviewDataGenerator` specifically
+        for previews for the feeder.
+
+        Returns
+        -------
+        dict
+            The side ("a" or "b") as key, :class:`~lib.training_data.PreviewDataGenerator` as
+            value.
+        """
+        retval: dict[T.Literal["a", "b"], Generator[BatchType, None, None]] = {}
+        num_images = self._config.get("preview_images", 14)
+        assert isinstance(num_images, int)
+        for side in T.get_args(T.Literal["a", "b"]):
+            logger.debug("Setting preview feed: (side: '%s')", side)
+            preview_images = min(max(num_images, 2), 16)
+            batchsize = min(len(self._images[side]), preview_images)
+            retval[side] = self._load_generator(side,
+                                                True,
+                                                batch_size=batchsize).minibatch_ab()
+        return retval
+
+    def get_batch(self) -> tuple[list[list[np.ndarray]], ...]:
+        """ Get the feed data and the targets for each training side for feeding into the model's
+        train function.
+
+        Returns
+        -------
+        model_inputs: list
+            The inputs to the model for each side A and B
+        model_targets: list
+            The targets for the model for each side A and B
+        """
+        model_inputs: list[list[np.ndarray]] = []
+        model_targets: list[list[np.ndarray]] = []
+        for side in ("a", "b"):
+            side_feed, side_targets = next(self._feeds[side])
+            if self._model.config["learn_mask"]:  # Add the face mask as it's own target
+                side_targets += [side_targets[-1][..., 3][..., None]]
+            logger.trace("side: %s, input_shapes: %s, target_shapes: %s",  # type: ignore
+                         side, side_feed.shape, [i.shape for i in side_targets])
+            model_inputs.append([side_feed])
+            model_targets.append(side_targets)
+
+        return model_inputs, model_targets
+
+    def generate_preview(self, is_timelapse: bool = False
+                         ) -> dict[T.Literal["a", "b"], list[np.ndarray]]:
+        """ Generate the images for preview window or timelapse
+
+        Parameters
+        ----------
+        is_timelapse, bool, optional
+            ``True`` if preview is to be generated for a Timelapse otherwise ``False``.
+            Default: ``False``
+
+        Returns
+        -------
+        dict
+            Dictionary for side A and B of list of numpy arrays corresponding to the
+            samples, targets and masks for this preview
+        """
+        logger.debug("Generating preview (is_timelapse: %s)", is_timelapse)
+
+        batchsizes: list[int] = []
+        feed: dict[T.Literal["a", "b"], np.ndarray] = {}
+        samples: dict[T.Literal["a", "b"], np.ndarray] = {}
+        masks: dict[T.Literal["a", "b"], np.ndarray] = {}
+
+        # MyPy can't recurse into nested dicts to get the type :(
+        iterator = T.cast(dict[T.Literal["a", "b"], "Generator[BatchType, None, None]"],
+                          self._display_feeds["timelapse" if is_timelapse else "preview"])
+        for side in T.get_args(T.Literal["a", "b"]):
+            side_feed, side_samples = next(iterator[side])
+            batchsizes.append(len(side_samples[0]))
+            samples[side] = side_samples[0]
+            feed[side] = side_feed[..., :3]
+            masks[side] = side_feed[..., 3][..., None]
+
+        logger.debug("Generated samples: is_timelapse: %s, images: %s", is_timelapse,
+                     {key: {k: v.shape for k, v in item.items()}
+                      for key, item
+                      in zip(("feed", "samples", "sides"), (feed, samples, masks))})
+        return self.compile_sample(min(batchsizes), feed, samples, masks)
+
+    def compile_sample(self,
+                       image_count: int,
+                       feed: dict[T.Literal["a", "b"], np.ndarray],
+                       samples: dict[T.Literal["a", "b"], np.ndarray],
+                       masks: dict[T.Literal["a", "b"], np.ndarray]
+                       ) -> dict[T.Literal["a", "b"], list[np.ndarray]]:
+        """ Compile the preview samples for display.
+
+        Parameters
+        ----------
+        image_count: int
+            The number of images to limit the sample output to.
+        feed: dict
+            Dictionary for side "a", "b" of :class:`numpy.ndarray`. The images that should be fed
+            into the model for obtaining a prediction
+        samples: dict
+            Dictionary for side "a", "b" of :class:`numpy.ndarray`. The 100% coverage target images
+            that should be used for creating the preview.
+        masks: dict
+            Dictionary for side "a", "b" of :class:`numpy.ndarray`. The masks that should be used
+            for creating the preview.
+
+        Returns
+        -------
+        list
+            The list of samples, targets and masks as :class:`numpy.ndarrays` for creating a
+            preview image
+         """
+        num_images = self._config.get("preview_images", 14)
+        assert isinstance(num_images, int)
+        num_images = min(image_count, num_images)
+        retval: dict[T.Literal["a", "b"], list[np.ndarray]] = {}
+        for side in T.get_args(T.Literal["a", "b"]):
+            logger.debug("Compiling samples: (side: '%s', samples: %s)", side, num_images)
+            retval[side] = [feed[side][0:num_images],
+                            samples[side][0:num_images],
+                            masks[side][0:num_images]]
+        logger.debug("Compiled Samples: %s", {k: [i.shape for i in v] for k, v in retval.items()})
+        return retval
+
+    def set_timelapse_feed(self,
+                           images: dict[T.Literal["a", "b"], list[str]],
+                           batch_size: int) -> None:
+        """ Set the time-lapse feed for this feeder.
+
+        Creates a generator from :class:`lib.training_data.PreviewDataGenerator` specifically
+        for generating time-lapse previews for the feeder.
+
+        Parameters
+        ----------
+        images: dict
+            The list of full paths to the images for creating the time-lapse for each side
+        batch_size: int
+            The number of images to be used to create the time-lapse preview.
+        """
+        logger.debug("Setting time-lapse feed: (input_images: '%s', batch_size: %s)",
+                     images, batch_size)
+
+        # MyPy can't recurse into nested dicts to get the type :(
+        iterator = T.cast(dict[T.Literal["a", "b"], "Generator[BatchType, None, None]"],
+                          self._display_feeds["timelapse"])
+
+        for side in T.get_args(T.Literal["a", "b"]):
+            imgs = images[side]
+            logger.debug("Setting preview feed: (side: '%s', images: %s)", side, len(imgs))
+
+            iterator[side] = self._load_generator(side,
+                                                  True,
+                                                  batch_size=batch_size,
+                                                  images=imgs).minibatch_ab(do_shuffle=False)
+        logger.debug("Set time-lapse feed: %s", self._display_feeds["timelapse"])
