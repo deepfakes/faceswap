@@ -119,7 +119,7 @@ class IO():
                      self._plugin.name, plugins, test, retval)
         return retval
 
-    def _load(self) -> tf.keras.models.Model:
+    def load(self) -> tf.keras.models.Model:
         """ Loads the model from disk
 
         If the predict function is to be called and the model cannot be found in the model folder
@@ -162,7 +162,10 @@ class IO():
         logger.info("Loaded model from disk: '%s'", self._filename)
         return model
 
-    def save(self, is_exit: bool = False, force_save_optimizer: bool = False) -> None:
+    def save(self,
+             is_exit: bool = False,
+             force_save_optimizer: bool = False,
+             is_init: bool = False) -> None:
         """ Backup and save the model and state file.
 
         Parameters
@@ -170,10 +173,13 @@ class IO():
         is_exit: bool, optional
             ``True`` if the save request has come from an exit process request otherwise ``False``.
             Default: ``False``
-
         force_save_optimizer: bool, optional
             ``True`` to force saving the optimizer weights with the model, otherwise ``False``.
             Default:``False``
+        is_init: bool, optional
+            ``True`` if the save has been requested as part of model initialization (eg:
+            LR Finder) and state information/optimizer state should not be saved. ``False`` for all
+            other instances. Default: ``False``
 
         Notes
         -----
@@ -183,16 +189,18 @@ class IO():
         save substantial amount of time.
         """
         logger.debug("Backing up and saving models")
-        print("")  # Insert a new line to avoid spamming the same row as loss output
+        if not is_init:
+            print("")  # Insert a new line to avoid spamming the same row as loss output
         save_averages = self._get_save_averages()
-        if save_averages and self._should_backup(save_averages):
+        if not is_init and save_averages and self._should_backup(save_averages):
             self._backup.backup_model(self._filename)
             # pylint:disable=protected-access
             self._backup.backup_model(self._plugin.state._filename)
 
-        include_optimizer = (force_save_optimizer or
+        include_optimizer = (not is_init and (
+                             force_save_optimizer or
                              self._save_optimizer == "always" or
-                             (self._save_optimizer == "exit" and is_exit))
+                             (self._save_optimizer == "exit" and is_exit)))
 
         try:
             self._plugin.model.save(self._filename, include_optimizer=include_optimizer)
@@ -204,9 +212,12 @@ class IO():
             else:
                 raise
 
+        if is_init:
+            return
+
         self._plugin.state.save()
 
-        msg = "[Saved optimizer state for Snapshot]" if force_save_optimizer else "[Saved models]"
+        msg = "[Saved optimizer state for Snapshot]" if force_save_optimizer else "[Saved model]"
         if save_averages:
             lossmsg = [f"face_{side}: {avg:.5f}"
                        for side, avg in zip(("a", "b"), save_averages)]

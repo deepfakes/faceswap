@@ -138,6 +138,11 @@ class ModelBase():
         return self._io._model_dir  # pylint:disable=protected-access
 
     @property
+    def model_exists(self) -> bool:
+        """bool: ``True`` if the model exists in the save location, otherwise ``False``. """
+        return self._io.model_exists
+
+    @property
     def config(self) -> dict:
         """ dict: The configuration dictionary for current plugin, as set by the user's
         configuration settings. """
@@ -253,7 +258,7 @@ class ModelBase():
         is_summary = hasattr(self._args, "summary") and self._args.summary
         with self._settings.strategy_scope():
             if self._io.model_exists:
-                model = self._io._load()  # pylint:disable=protected-access
+                model = self.load()
                 if self._is_predict:
                     inference = _Inference(model, self._args.swap_model)
                     self._model = inference.model
@@ -374,7 +379,23 @@ class ModelBase():
             model.summary(line_length=100, print_fn=print_fn)
         parent.summary(line_length=100, print_fn=print_fn)
 
-    def save(self, is_exit: bool = False) -> None:
+    def load(self) -> tf.keras.models.Model:
+        """ Loads the model from disk
+
+        If the predict function is to be called and the model cannot be found in the model folder
+        then an error is logged and the process exits.
+
+        When loading the model, the plugin model folder is scanned for custom layers which are
+        added to Keras' custom objects.
+
+        Returns
+        -------
+        :class:`tensorflow.keras.models.Model`
+            The saved model loaded from disk
+        """
+        return self._io.load()
+
+    def save(self, is_exit: bool = False, is_init: bool = False) -> None:
         """ Save the model to disk.
 
         Saves the serialized model, with weights, to the folder location specified when
@@ -386,8 +407,12 @@ class ModelBase():
         is_exit: bool, optional
             ``True`` if the save request has come from an exit process request otherwise ``False``
             Default: ``False``
+        is_init: bool, optional
+            ``True`` if the save has been requested as part of model initialization (eg:
+            LR Finder) and state information/optimizer state should not be saved. ``False`` for all
+            other instances. Default: ``False``
         """
-        self._io.save(is_exit=is_exit)
+        self._io.save(is_exit=is_exit, is_init=is_init)
 
     def snapshot(self) -> None:
         """ Creates a snapshot of the model folder to the models parent folder, with the number
