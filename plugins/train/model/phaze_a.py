@@ -186,7 +186,7 @@ class Model(ModelBase):
             super().build()
             return
         with self._settings.strategy_scope():
-            model = self.load()
+            model = self.io.load()
             model = self._update_dropouts(model)
             self._model = model
             self._compile_model()

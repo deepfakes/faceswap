@@ -262,7 +262,7 @@ class Train():  # pylint:disable=too-few-public-methods
         except KeyboardInterrupt:
             try:
                 logger.debug("Keyboard Interrupt Caught. Saving Weights and exiting")
-                model.save(is_exit=True)
+                model.io.save(is_exit=True)
                 trainer.clear_tensorboard()
             except KeyboardInterrupt:
                 logger.info("Saving model weights has been cancelled!")
@@ -360,12 +360,12 @@ class Train():  # pylint:disable=too-few-public-methods
             if save_iteration or self._save_now:
                 logger.debug("Saving (save_iterations: %s, save_now: %s) Iteration: "
                              "(iteration: %s)", save_iteration, self._save_now, iteration)
-                model.save(is_exit=False)
+                model.io.save(is_exit=False)
                 self._save_now = False
                 update_preview_images = True
 
         logger.debug("Training cycle complete")
-        model.save(is_exit=True)
+        model.io.save(is_exit=True)
         trainer.clear_tensorboard()
         self._stop = True
 

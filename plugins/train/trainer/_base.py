@@ -146,7 +146,7 @@ class TrainerBase():
         logger.debug("Enabling TensorBoard Logging")
 
         logger.debug("Setting up TensorBoard Logging")
-        log_dir = os.path.join(str(self._model.model_dir),
+        log_dir = os.path.join(str(self._model.io.model_dir),
                                f"{self._model.name}_logs",
                                f"session_{self._model.state.session_id}")
         tensorboard = tf.keras.callbacks.TensorBoard(log_dir=log_dir,
@@ -226,7 +226,7 @@ class TrainerBase():
         loss = self._collate_and_store_loss(loss[1:])
         self._print_loss(loss)
         if do_snapshot:
-            self._model.snapshot()
+            self._model.io.snapshot()
         self._update_viewers(viewer, timelapse_kwargs)
 
     def _log_tensorboard(self, loss: list[float]) -> None:
@@ -806,7 +806,7 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
         """
         logger.debug("Setting up time-lapse")
         if not output:
-            output = get_folder(os.path.join(str(self._model.model_dir),
+            output = get_folder(os.path.join(str(self._model.io.model_dir),
                                              f"{self._model.name}_timelapse"))
         self._output_file = output
         logger.debug("Time-lapse output set to '%s'", self._output_file)
