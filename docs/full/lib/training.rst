@@ -32,6 +32,13 @@ training.generator module
    :undoc-members:
    :show-inheritance:
 
+training.lr_finder module
+=========================
+
+.. automodule:: lib.training.lr_finder
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 training.preview_cv module
 ==========================
@@ -40,7 +47,6 @@ training.preview_cv module
    :members:
    :undoc-members:
    :show-inheritance:
-
 
 training.preview_tk module
 ==========================
