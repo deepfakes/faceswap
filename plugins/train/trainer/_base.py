@@ -20,7 +20,7 @@ from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
     errors_impl as tf_errors)
 
 from lib.image import hex_to_rgb
-from lib.training import Feeder
+from lib.training import Feeder, LearningRateFinder
 from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.train._config import Config
 
@@ -82,11 +82,15 @@ class TrainerBase():
         self._model = model
         self._config = self._get_config(configfile)
 
+        self._feeder = Feeder(images, model, batch_size, self._config)
+
+        self._exit_early = self._handle_lr_finder()
+        if self._exit_early:
+            return
+
         self._model.state.add_session_batchsize(batch_size)
         self._images = images
         self._sides = sorted(key for key in self._images.keys())
-
-        self._feeder = Feeder(images, model, batch_size, self._config)
 
         self._tensorboard = self._set_tensorboard()
         self._samples = _Samples(self._model,
@@ -104,6 +108,11 @@ class TrainerBase():
                                      self._feeder,
                                      self._images)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def exit_early(self) -> bool:
+        """ True if the trainer should exit early, without perfoming any training steps """
+        return self._exit_early
 
     def _get_config(self, configfile: str | None) -> dict[str, ConfigValueType]:
         """ Get the saved training config options. Override any global settings with the setting
@@ -129,6 +138,34 @@ class TrainerBase():
                              key, val, new_val)
                 config[key] = new_val
         return config
+
+    def _handle_lr_finder(self) -> bool:
+        """ Handle the learning rate finder.
+
+        If this is a new model, then find the optimal learning rate and return ``True`` if user has
+        just requested the graph, otherwise return ``False`` to continue training
+
+        If it as existing model, set the learning rate to the value found by the learing rate
+        finder and return ``False`` to continue training
+
+        Returns
+        -------
+        bool
+            ``True`` if the learning rate finder options dictate that training should not continue
+            after finding the optimal leaning rate
+        """
+        if not self._model.command_line_arguments.use_lr_finder:
+            return False
+
+        if self._model.state.iterations == 0 and self._model.state.session_id == 1:
+            lrf = LearningRateFinder(self._model, self._config, self._feeder)
+            success = lrf.find()
+            return self._config["lr_finder_mode"] == "graph_and_exit" or not success
+
+        learning_rate = self._model.state.sessions[1]["config"]["learning_rate"]
+        logger.info("Setting learning rate from Learning Rate Finder to %s",
+                    f"{learning_rate:.1e}")
+        return False
 
     def _set_tensorboard(self) -> tf.keras.callbacks.TensorBoard:
         """ Set up Tensorboard callback for logging loss.

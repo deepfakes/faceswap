@@ -189,6 +189,7 @@ class IO():
         save substantial amount of time.
         """
         logger.debug("Backing up and saving models")
+        print("")  # Insert a new line to avoid spamming the same row as loss output
         save_averages = self._get_save_averages()
         if save_averages and self._should_backup(save_averages):
             self._backup.backup_model(self.filename)

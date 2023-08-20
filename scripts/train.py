@@ -258,6 +258,9 @@ class Train():  # pylint:disable=too-few-public-methods
             logger.info("Loading data, this may take a while...")
             model = self._load_model()
             trainer = self._load_trainer(model)
+            if trainer.exit_early:
+                self._stop = True
+                return
             self._run_training_cycle(model, trainer)
         except KeyboardInterrupt:
             try:

@@ -1060,6 +1060,25 @@ class TrainArgs(FaceSwapArgs):
                    "GPUs. A copy of the model and all variables are loaded onto each GPU with "
                    "batches distributed to each GPU at each iteration.")))
         argument_list.append(dict(
+            opts=("-nl", "--no-logs"),
+            action="store_true",
+            dest="no_logs",
+            default=False,
+            group=_("training"),
+            help=_("Disables TensorBoard logging. NB: Disabling logs means that you will not be "
+                   "able to use the graph or analysis for this session in the GUI.")))
+        argument_list.append(dict(
+            opts=("-r", "--use-lr-finder"),
+            action="store_true",
+            dest="use_lr_finder",
+            default=False,
+            group=_("training"),
+            help=_("Use the Learning Rate Finder to discover the optimal learning rate for "
+                   "training. For new models, this will calculate the optimal learning rate for "
+                   "the model. For existing models this will use the optimal learning rate that "
+                   "was discovered when initializing the model. Setting this option will ignore "
+                   "the manually configured learning rate (configurable in train settings).")))
+        argument_list.append(dict(
             opts=("-s", "--save-interval"),
             action=Slider,
             min_max=(10, 1000),
@@ -1127,14 +1146,6 @@ class TrainArgs(FaceSwapArgs):
             group=_("preview"),
             help=_("Writes the training result to a file. The image will be stored in the root "
                    "of your FaceSwap folder.")))
-        argument_list.append(dict(
-            opts=("-nl", "--no-logs"),
-            action="store_true",
-            dest="no_logs",
-            default=False,
-            group=_("training"),
-            help=_("Disables TensorBoard logging. NB: Disabling logs means that you will not be "
-                   "able to use the graph or analysis for this session in the GUI.")))
         argument_list.append(dict(
             opts=("-wl", "--warp-to-landmarks"),
             action="store_true",
