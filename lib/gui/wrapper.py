@@ -115,7 +115,9 @@ class ProcessWrapper():
         print("Loading...")
 
         self._statusbar.message.set(f"Executing - {self._command}.py")
-        mode = "indeterminate" if self._command in ("effmpeg", "train") else "determinate"
+        mode: T.Literal["indeterminate",
+                        "determinate"] = ("indeterminate" if self._command in ("effmpeg", "train")
+                                          else "determinate")
         self._statusbar.start(mode)
 
         args = self._build_args(category)
@@ -236,6 +238,7 @@ class FaceswapControl():
             "tqdm": re.compile(r"(?P<dsc>.*?)(?P<pct>\d+%).*?(?P<itm>\S+/\S+)\W\["
                                r"(?P<tme>[\d+:]+<.*),\W(?P<rte>.*)[a-zA-Z/]*\]"),
             "ffmpeg": re.compile(r"([a-zA-Z]+)=\s*(-?[\d|N/A]\S+)")}
+        self._first_loss_seen = False
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -269,6 +272,24 @@ class FaceswapControl():
         self._thread_stderr()
         logger.debug("Executed Faceswap")
 
+    def _process_training_determinate_function(self, output: str) -> bool:
+        """ Process an stdout/stderr message to check for determinate TQDM output when training
+
+        Parameters
+        ----------
+        output: str
+            The stdout/stderr string to test
+
+        Returns
+        -------
+        bool
+            ``True`` if a determinate TQDM line was parsed when training otherwise ``False``
+        """
+        if self._command == "train" and not self._first_loss_seen and self._capture_tqdm(output):
+            self._statusbar.set_mode("determinate")
+            return True
+        return False
+
     def _process_progress_stdout(self, output: str) -> bool:
         """ Process stdout for any faceswap processes that update the status/progress bar(s)
 
@@ -282,6 +303,9 @@ class FaceswapControl():
         bool
             ``True`` if all actions have been completed on the output line otherwise ``False``
         """
+        if self._process_training_determinate_function(output):
+            return True
+
         if self._command == "train" and self._capture_loss(output):
             return True
 
@@ -306,7 +330,9 @@ class FaceswapControl():
         if self._command != "train" or not tk_vars.is_training.get():
             return
 
-        if "[saved models]" not in output.strip().lower():
+        t_output = output.strip().lower()
+        if "[saved model]" not in t_output or t_output.endswith("[saved model]"):
+            # Not a saved model line or saving the model for a reason other than standard saving
             return
 
         logger.debug("Trigger GUI Training update")
@@ -346,6 +372,7 @@ class FaceswapControl():
 
         returncode = self._process.poll()
         assert returncode is not None
+        self._first_loss_seen = False
         message = self._set_final_status(returncode)
         self._wrapper.terminate(message)
         logger.debug("Terminated stdout reader. returncode: %s", returncode)
@@ -369,8 +396,7 @@ class FaceswapControl():
             if output:
                 if self._command != "train" and self._capture_tqdm(output):
                     continue
-                if self._command == "train" and output.startswith("Reading training images"):
-                    print(output.strip(), file=sys.stdout)
+                if self._process_training_determinate_function(output):
                     continue
                 if os.name == "nt" and "Call to CreateProcess failed. Error code: 2" in output:
                     # Suppress ptxas errors on Tensorflow for Windows
@@ -438,6 +464,11 @@ class FaceswapControl():
         elapsed = self._calculate_elapsed()
         message = (f"Elapsed: {elapsed} | "
                    f"Session Iterations: {self._train_stats['iterations']}  {message}")
+
+        if not self._first_loss_seen:
+            self._statusbar.set_mode("indeterminate")
+            self._first_loss_seen = True
+
         self._statusbar.progress_update(message, 0, False)
         logger.trace("Succesfully captured loss: %s", message)  # type:ignore[attr-defined]
         return True

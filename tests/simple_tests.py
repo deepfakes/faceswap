@@ -211,8 +211,7 @@ def main():
                        pathjoin(vid_base, "model"),
                        pathjoin(vid_base, "faces"),
                        iterations=1,
-                       batchsize=1,
-                       extra_args="-wl"))
+                       batchsize=1))
 
     if was_trained:
         run_test(

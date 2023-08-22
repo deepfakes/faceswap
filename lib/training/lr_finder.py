@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """ Learning Rate Finder for faceswap.py. """
 from __future__ import annotations
-from enum import Enum
 import logging
 import os
-from datetime import datetime
 import shutil
-import time
 import typing as T
+from datetime import datetime
+from enum import Enum
 
 import tensorflow as tf
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
+from tqdm import tqdm
 
 if T.TYPE_CHECKING:
     from lib.config import ConfigValueType
@@ -78,24 +79,6 @@ class LearningRateFinder:  # pylint:disable=too-few-public-methods
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _display_progress(self, batch_number: int) -> None:
-        """ Display the current progress of the Learning Rate Finder
-
-        Parameters
-        ----------
-        batch_number: int
-            The currently processing batch number
-        """
-        timestamp = time.strftime("%H:%M:%S")
-        best_idx = self._metrics["losses"].index(self._loss["best"])
-        best_lr = self._metrics["learning_rates"][best_idx] / self._strength
-        output = (
-            f"[{timestamp}] Learning Rate Finder [#{batch_number:04d}/{self._iterations:04d}] "
-            f"Current Learning Rate: {self._metrics['learning_rates'][-1]:.1e} | "
-            f"Best Learning Rate: {best_lr:.1e}")
-
-        print(f"\r{output}", end="")
-
     def _on_batch_end(self, iteration: int, loss: float) -> None:
         """ Learning rate actions to perform at the end of a batch
 
@@ -106,36 +89,53 @@ class LearningRateFinder:  # pylint:disable=too-few-public-methods
         loss: float
             The loss value for the current batch
         """
-        batch_number = iteration + 1
-
         learning_rate = K.get_value(self._model.model.optimizer.lr)
         self._metrics["learning_rates"].append(learning_rate)
 
         self._loss["avg"] = (self._beta * self._loss["avg"]) + ((1 - self._beta) * loss)
-        smoothed = self._loss["avg"] / (1 - (self._beta ** batch_number))
+        smoothed = self._loss["avg"] / (1 - (self._beta ** iteration))
         self._metrics["losses"].append(smoothed)
 
         stop_loss = self._stop_factor * self._loss["best"]
 
-        if batch_number > 1 and smoothed > stop_loss:
+        if iteration > 1 and smoothed > stop_loss:
             self._model.model.stop_training = True
             return
 
-        if batch_number == 1 or smoothed < self._loss["best"]:
+        if iteration == 1 or smoothed < self._loss["best"]:
             self._loss["best"] = smoothed
 
-        self._display_progress(batch_number)
         learning_rate *= self._lr_multiplier
 
         K.set_value(self._model.model.optimizer.lr, learning_rate)
 
+    def _update_description(self, progress_bar: tqdm) -> None:
+        """ Update the description of the progress bar for the current iteration
+
+        Parameters
+        ----------
+        progress_bar: :class:`tqdm.tqdm`
+            The learning rate finder progress bar to update
+        """
+        current = self._metrics['learning_rates'][-1]
+        best_idx = self._metrics["losses"].index(self._loss["best"])
+        best = self._metrics["learning_rates"][best_idx] / self._strength
+        progress_bar.set_description(f"Current: {current:.1e}  Best: {best:.1e}")
+
     def _train(self) -> None:
         """ Train the model for the given number of iterations to find the optimal
-        learning rate """
-        for idx in range(self._iterations):
+        learning rate and show progress"""
+        logger.info("Finding optimal learning rate...")
+        pbar = tqdm(range(1, self._iterations + 1),
+                    desc="Current: N/A      Best: N/A    ",
+                    leave=False)
+        for idx in pbar:
             model_inputs, model_targets = self._feeder.get_batch()
             loss: list[float] = self._model.model.train_on_batch(model_inputs, y=model_targets)
+            if np.isnan(loss[0]):
+                break
             self._on_batch_end(idx, loss[0])
+            self._update_description(pbar)
 
     def find(self) -> bool:
         """ Find the optimal learning rate
