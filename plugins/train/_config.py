@@ -276,6 +276,53 @@ class Config(FaceswapConfig):
 
         self.add_item(
             section=section,
+            title="lr_finder_iterations",
+            datatype=int,
+            default=1000,
+            min_max=(100, 10000),
+            rounding=100,
+            fixed=True,
+            group=_("Learning Rate Finder"),
+            info=_(
+                "The number of iterations to process to find the optimal learning rate. Higher "
+                "values will take longer, but will be more accurate."))
+        self.add_item(
+            section=section,
+            title="lr_finder_mode",
+            datatype=str,
+            default="set",
+            fixed=True,
+            gui_radio=True,
+            choices=["set", "graph_and_set", "graph_and_exit"],
+            group=_("Learning Rate Finder"),
+            info=_(
+                "The operation mode for the learning rate finder. Only applicable to new models. "
+                "For existing models this will always default to 'set'."
+                "\n\tset - Train with the discovered optimal learning rate."
+                "\n\tgraph_and_set - Output a graph in the training folder showing the discovered "
+                "learning rates and train with the optimal learning rate."
+                "\n\tgraph_and_exit - Output a graph in the training folder with the discovered "
+                "learning rates and exit."))
+        self.add_item(
+            section=section,
+            title="lr_finder_strength",
+            datatype=str,
+            default="default",
+            fixed=True,
+            gui_radio=True,
+            choices=["default", "aggressive", "extreme"],
+            group=_("Learning Rate Finder"),
+            info=_(
+                "How aggressively to set the Learning Rate. More aggressive can learn faster, but "
+                "is more likely to lead to exploding gradients."
+                "\n\tdefault - The default optimal learning rate. A safe choice for nearly all "
+                "use cases."
+                "\n\taggressive - Set's a higher learning rate than the default. May learn faster "
+                "but with a higher chance of exploding gradients."
+                "\n\textreme - The highest optimal learning rate. A much higher risk of exploding "
+                "gradients."))
+        self.add_item(
+            section=section,
             title="autoclip",
             datatype=bool,
             default=False,

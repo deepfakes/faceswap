@@ -88,7 +88,12 @@ class IO():
         self._backup = Backup(self._model_dir, self._plugin.name)
 
     @property
-    def _filename(self) -> str:
+    def model_dir(self) -> str:
+        """ str: The full path to the model folder """
+        return self._model_dir
+
+    @property
+    def filename(self) -> str:
         """str: The filename for this model."""
         return os.path.join(self._model_dir, f"{self._plugin.name}.h5")
 
@@ -97,7 +102,7 @@ class IO():
         """ bool: ``True`` if a model of the type being loaded exists within the model folder
         location otherwise ``False``.
         """
-        return os.path.isfile(self._filename)
+        return os.path.isfile(self.filename)
 
     @property
     def history(self) -> list[list[float]]:
@@ -119,7 +124,7 @@ class IO():
                      self._plugin.name, plugins, test, retval)
         return retval
 
-    def _load(self) -> tf.keras.models.Model:
+    def load(self) -> tf.keras.models.Model:
         """ Loads the model from disk
 
         If the predict function is to be called and the model cannot be found in the model folder
@@ -133,16 +138,16 @@ class IO():
         :class:`tensorflow.keras.models.Model`
             The saved model loaded from disk
         """
-        logger.debug("Loading model: %s", self._filename)
+        logger.debug("Loading model: %s", self.filename)
         if self._is_predict and not self.model_exists:
             logger.error("Model could not be found in folder '%s'. Exiting", self._model_dir)
             sys.exit(1)
 
         try:
-            model = kmodels.load_model(self._filename, compile=False)
+            model = kmodels.load_model(self.filename, compile=False)
         except RuntimeError as err:
             if "unable to get link info" in str(err).lower():
-                msg = (f"Unable to load the model from '{self._filename}'. This may be a "
+                msg = (f"Unable to load the model from '{self.filename}'. This may be a "
                        "temporary error but most likely means that your model has corrupted.\n"
                        "You can try to load the model again but if the problem persists you "
                        "should use the Restore Tool to restore your model from backup.\n"
@@ -151,7 +156,7 @@ class IO():
             raise err
         except KeyError as err:
             if "unable to open object" in str(err).lower():
-                msg = (f"Unable to load the model from '{self._filename}'. This may be a "
+                msg = (f"Unable to load the model from '{self.filename}'. This may be a "
                        "temporary error but most likely means that your model has corrupted.\n"
                        "You can try to load the model again but if the problem persists you "
                        "should use the Restore Tool to restore your model from backup.\n"
@@ -159,10 +164,12 @@ class IO():
                 raise FaceswapError(msg) from err
             raise err
 
-        logger.info("Loaded model from disk: '%s'", self._filename)
+        logger.info("Loaded model from disk: '%s'", self.filename)
         return model
 
-    def save(self, is_exit: bool = False, force_save_optimizer: bool = False) -> None:
+    def save(self,
+             is_exit: bool = False,
+             force_save_optimizer: bool = False) -> None:
         """ Backup and save the model and state file.
 
         Parameters
@@ -170,7 +177,6 @@ class IO():
         is_exit: bool, optional
             ``True`` if the save request has come from an exit process request otherwise ``False``.
             Default: ``False``
-
         force_save_optimizer: bool, optional
             ``True`` to force saving the optimizer weights with the model, otherwise ``False``.
             Default:``False``
@@ -186,27 +192,26 @@ class IO():
         print("")  # Insert a new line to avoid spamming the same row as loss output
         save_averages = self._get_save_averages()
         if save_averages and self._should_backup(save_averages):
-            self._backup.backup_model(self._filename)
-            # pylint:disable=protected-access
-            self._backup.backup_model(self._plugin.state._filename)
+            self._backup.backup_model(self.filename)
+            self._backup.backup_model(self._plugin.state.filename)
 
         include_optimizer = (force_save_optimizer or
                              self._save_optimizer == "always" or
                              (self._save_optimizer == "exit" and is_exit))
 
         try:
-            self._plugin.model.save(self._filename, include_optimizer=include_optimizer)
+            self._plugin.model.save(self.filename, include_optimizer=include_optimizer)
         except ValueError as err:
             if include_optimizer and "name already exists" in str(err):
                 logger.warning("Due to a bug in older versions of Tensorflow, optimizer state "
                                "cannot be saved for this model.")
-                self._plugin.model.save(self._filename, include_optimizer=False)
+                self._plugin.model.save(self.filename, include_optimizer=False)
             else:
                 raise
 
         self._plugin.state.save()
 
-        msg = "[Saved optimizer state for Snapshot]" if force_save_optimizer else "[Saved models]"
+        msg = "[Saved optimizer state for Snapshot]" if force_save_optimizer else "[Saved model]"
         if save_averages:
             lossmsg = [f"face_{side}: {avg:.5f}"
                        for side, avg in zip(("a", "b"), save_averages)]

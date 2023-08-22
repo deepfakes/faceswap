@@ -16,11 +16,6 @@ from collections import OrderedDict
 import numpy as np
 import tensorflow as tf
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras import backend as K  # pylint:disable=import-error
-from tensorflow.keras.layers import Input  # pylint:disable=import-error
-from tensorflow.keras.models import load_model, Model as KModel  # noqa:E501  # pylint:disable=import-error
-
 from lib.serializer import get_serializer
 from lib.model.nn_blocks import set_config as set_nnblock_config
 from lib.utils import FaceswapError
@@ -32,6 +27,10 @@ from .settings import Loss, Optimizer, Settings
 if T.TYPE_CHECKING:
     import argparse
     from lib.config import ConfigValueType
+
+keras = tf.keras
+K = tf.keras.backend
+
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG: dict[str, ConfigValueType] = {}
@@ -133,9 +132,9 @@ class ModelBase():
         return self.config.get("coverage", 62.5) / 100
 
     @property
-    def model_dir(self) -> str:
-        """str: The full path to the model folder location. """
-        return self._io._model_dir  # pylint:disable=protected-access
+    def io(self) -> IO:  # pylint:disable=invalid-name
+        """ :class:`~plugins.train.model.io.IO`: Input/Output operations for the model """
+        return self._io
 
     @property
     def config(self) -> dict:
@@ -229,12 +228,12 @@ class ModelBase():
         if len(multiple_models) == 1:
             msg = (f"You have requested to train with the '{self.name}' plugin, but a model file "
                    f"for the '{multiple_models[0]}' plugin already exists in the folder "
-                   f"'{self.model_dir}'.\nPlease select a different model folder.")
+                   f"'{self.io.model_dir}'.\nPlease select a different model folder.")
         else:
             ptypes = "', '".join(multiple_models)
             msg = (f"There are multiple plugin types ('{ptypes}') stored in the model folder '"
-                   f"{self.model_dir}'. This is not supported.\nPlease split the model files into "
-                   "their own folders before proceeding")
+                   f"{self.io.model_dir}'. This is not supported.\nPlease split the model files "
+                   "into their own folders before proceeding")
         raise FaceswapError(msg)
 
     def build(self) -> None:
@@ -253,7 +252,7 @@ class ModelBase():
         is_summary = hasattr(self._args, "summary") and self._args.summary
         with self._settings.strategy_scope():
             if self._io.model_exists:
-                model = self._io._load()  # pylint:disable=protected-access
+                model = self.io.load()
                 if self._is_predict:
                     inference = _Inference(model, self._args.swap_model)
                     self._model = inference.model
@@ -281,10 +280,10 @@ class ModelBase():
         if legacy_mapping is None:
             return
 
-        if not all(os.path.isfile(os.path.join(self.model_dir, fname))
+        if not all(os.path.isfile(os.path.join(self.io.model_dir, fname))
                    for fname in legacy_mapping):
             return
-        archive_dir = f"{self.model_dir}_TF1_Archived"
+        archive_dir = f"{self.io.model_dir}_TF1_Archived"
         if os.path.exists(archive_dir):
             raise FaceswapError("We need to update your model files for use with Tensorflow 2.x, "
                                 "but the archive folder already exists. Please remove the "
@@ -293,12 +292,13 @@ class ModelBase():
         logger.info("Updating legacy models for Tensorflow 2.x")
         logger.info("Your Tensorflow 1.x models will be archived in the following location: '%s'",
                     archive_dir)
-        os.rename(self.model_dir, archive_dir)
-        os.mkdir(self.model_dir)
+        os.rename(self.io.model_dir, archive_dir)
+        os.mkdir(self.io.model_dir)
         new_model = self.build_model(self._get_inputs())
         for model_name, layer_name in legacy_mapping.items():
-            old_model: tf.keras.models.Model = load_model(os.path.join(archive_dir, model_name),
-                                                          compile=False)
+            old_model: tf.keras.models.Model = keras.models.load_model(
+                os.path.join(archive_dir, model_name),
+                compile=False)
             layer = [layer for layer in new_model.layers if layer.name == layer_name]
             if not layer:
                 logger.warning("Skipping legacy weights from '%s'...", model_name)
@@ -306,7 +306,7 @@ class ModelBase():
             klayer: tf.keras.layers.Layer = layer[0]
             logger.info("Updating legacy weights from '%s'...", model_name)
             klayer.set_weights(old_model.get_weights())
-        filename = self._io._filename  # pylint:disable=protected-access
+        filename = self._io.filename
         logger.info("Saving Tensorflow 2.x model to '%s'", filename)
         new_model.save(filename)
         # Penalized Loss and Learn Mask used to be disabled automatically if a mask wasn't
@@ -337,7 +337,7 @@ class ModelBase():
         """
         logger.debug("Getting inputs")
         input_shapes = [self.input_shape, self.input_shape]
-        inputs = [Input(shape=shape, name=f"face_in_{side}")
+        inputs = [keras.layers.Input(shape=shape, name=f"face_in_{side}")
                   for side, shape in zip(("a", "b"), input_shapes)]
         logger.debug("inputs: %s", inputs)
         return inputs
@@ -373,26 +373,6 @@ class ModelBase():
                 continue
             model.summary(line_length=100, print_fn=print_fn)
         parent.summary(line_length=100, print_fn=print_fn)
-
-    def save(self, is_exit: bool = False) -> None:
-        """ Save the model to disk.
-
-        Saves the serialized model, with weights, to the folder location specified when
-        initializing the plugin. If loss has dropped on both sides of the model, then
-        a backup is taken.
-
-        Parameters
-        ----------
-        is_exit: bool, optional
-            ``True`` if the save request has come from an exit process request otherwise ``False``
-            Default: ``False``
-        """
-        self._io.save(is_exit=is_exit)
-
-    def snapshot(self) -> None:
-        """ Creates a snapshot of the model folder to the models parent folder, with the number
-        of iterations completed appended to the end of the model name. """
-        self._io.snapshot()
 
     def _compile_model(self) -> None:
         """ Compile the model to include the Optimizer and Loss Function(s). """
@@ -483,6 +463,11 @@ class State():
         logger.debug("Initialized %s:", self.__class__.__name__)
 
     @property
+    def filename(self) -> str:
+        """ str: Full path to the state filename """
+        return self._filename
+
+    @property
     def loss_names(self) -> list[str]:
         """ list: The loss names for the current session """
         return self._sessions[self._session_id]["loss_names"]
@@ -506,6 +491,12 @@ class State():
     def session_id(self) -> int:
         """ int: The current training session id. """
         return self._session_id
+
+    @property
+    def sessions(self) -> dict[int, dict[str, T.Any]]:
+        """ dict[int, dict[str, Any]]: The session information for each session in the state
+        file """
+        return {int(k): v for k, v in self._sessions.items()}
 
     @property
     def mixed_precision_layers(self) -> list[str]:
@@ -553,6 +544,21 @@ class State():
                                             "batchsize": 0,
                                             "iterations": 0,
                                             "config": config_changeable_items}
+
+    def update_session_config(self, key: str, value: T.Any) -> None:
+        """ Update a configuration item of the currently loaded session.
+
+        Parameters
+        ----------
+        key: str
+            The configuration item to update for the current session
+        value: any
+            The value to update to
+        """
+        old_val = self.current_session["config"][key]
+        assert isinstance(value, type(old_val))
+        logger.debug("Updating configuration item '%s' from '%s' to '%s'", key, old_val, value)
+        self.current_session["config"][key] = value
 
     def add_session_loss_names(self, loss_names: list[str]) -> None:
         """ Add the session loss names to the sessions dictionary.
@@ -869,7 +875,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
                 logger.debug("Compiling layer '%s': layer inputs: %s", layer.name, layer_inputs)
                 model = layer(layer_inputs)
             compiled_layers[layer.name] = model
-            retval = KModel(model_inputs, model, name=f"{saved_model.name}_inference")
+            retval = keras.models.Model(model_inputs, model, name=f"{saved_model.name}_inference")
         logger.debug("Compiled inference model '%s': %s", retval.name, retval)
         return retval
 

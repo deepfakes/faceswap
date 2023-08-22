@@ -46,7 +46,7 @@ _LWPARAMS = [losses.DSSIMObjective(),
              k_losses.mean_absolute_error,
              k_losses.mean_squared_error,
              losses.MSSIMLoss()]
-_LWIDS = ["DSSIMObjective", "FocalFrequencyLosse", "GeneralizedLoss", "GMSDLoss", "GradientLoss",
+_LWIDS = ["DSSIMObjective", "FocalFrequencyLoss", "GeneralizedLoss", "GMSDLoss", "GradientLoss",
           "LaplacianPyramidLoss", "LInfNorm", "LDRFlipLoss", "logcosh", "mae", "mse", "MS-SSIM"]
 _LWIDS = [f"{loss}[{get_backend().upper()}]" for loss in _LWIDS]
 

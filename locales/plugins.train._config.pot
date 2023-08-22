@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-06-25 13:39+0100\n"
+"POT-Creation-Date: 2023-08-20 14:54+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -228,7 +228,7 @@ msgstr ""
 
 #: plugins/train/_config.py:198 plugins/train/_config.py:223
 #: plugins/train/_config.py:238 plugins/train/_config.py:256
-#: plugins/train/_config.py:290
+#: plugins/train/_config.py:337
 msgid "optimizer"
 msgstr ""
 
@@ -294,7 +294,41 @@ msgid ""
 "optimizer weights will NOT be saved."
 msgstr ""
 
-#: plugins/train/_config.py:283
+#: plugins/train/_config.py:285 plugins/train/_config.py:297
+#: plugins/train/_config.py:314
+msgid "Learning Rate Finder"
+msgstr ""
+
+#: plugins/train/_config.py:287
+msgid ""
+"The number of iterations to process to find the optimal learning rate. "
+"Higher values will take longer, but will be more accurate."
+msgstr ""
+
+#: plugins/train/_config.py:299
+msgid ""
+"The operation mode for the learning rate finder. Only applicable to new "
+"models. For existing models this will always default to 'set'.\n"
+"\tset - Train with the discovered optimal learning rate.\n"
+"\tgraph_and_set - Output a graph in the training folder showing the "
+"discovered learning rates and train with the optimal learning rate.\n"
+"\tgraph_and_exit - Output a graph in the training folder with the discovered "
+"learning rates and exit."
+msgstr ""
+
+#: plugins/train/_config.py:316
+msgid ""
+"How aggressively to set the Learning Rate. More aggressive can learn faster, "
+"but is more likely to lead to exploding gradients.\n"
+"\tdefault - The default optimal learning rate. A safe choice for nearly all "
+"use cases.\n"
+"\taggressive - Set's a higher learning rate than the default. May learn "
+"faster but with a higher chance of exploding gradients.\n"
+"\textreme - The highest optimal learning rate. A much higher risk of "
+"exploding gradients."
+msgstr ""
+
+#: plugins/train/_config.py:330
 msgid ""
 "Apply AutoClipping to the gradients. AutoClip analyzes the gradient weights "
 "and adjusts the normalization value dynamically to fit the data. Can help "
@@ -303,12 +337,12 @@ msgid ""
 "arxiv.org/abs/2007.14469"
 msgstr ""
 
-#: plugins/train/_config.py:296 plugins/train/_config.py:308
-#: plugins/train/_config.py:322 plugins/train/_config.py:339
+#: plugins/train/_config.py:343 plugins/train/_config.py:355
+#: plugins/train/_config.py:369 plugins/train/_config.py:386
 msgid "network"
 msgstr ""
 
-#: plugins/train/_config.py:298
+#: plugins/train/_config.py:345
 msgid ""
 "Use reflection padding rather than zero padding with convolutions. Each "
 "convolution must pad the image boundaries to maintain the proper sizing. "
@@ -317,7 +351,7 @@ msgid ""
 "\t http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt"
 msgstr ""
 
-#: plugins/train/_config.py:311
+#: plugins/train/_config.py:358
 msgid ""
 "Enable the Tensorflow GPU 'allow_growth' configuration option. This option "
 "prevents Tensorflow from allocating all of the GPU VRAM at launch but can "
@@ -326,7 +360,7 @@ msgid ""
 "when commencing training."
 msgstr ""
 
-#: plugins/train/_config.py:324
+#: plugins/train/_config.py:371
 msgid ""
 "NVIDIA GPUs can run operations in float16 faster than in float32. Mixed "
 "precision allows you to use a mix of float16 with float32, to get the "
@@ -342,7 +376,7 @@ msgid ""
 "the most benefit."
 msgstr ""
 
-#: plugins/train/_config.py:341
+#: plugins/train/_config.py:388
 msgid ""
 "If a 'NaN' is generated in the model, this means that the model has "
 "corrupted and the model is likely to start deteriorating from this point on. "
@@ -351,11 +385,11 @@ msgid ""
 "rescue your model."
 msgstr ""
 
-#: plugins/train/_config.py:354
+#: plugins/train/_config.py:401
 msgid "convert"
 msgstr ""
 
-#: plugins/train/_config.py:356
+#: plugins/train/_config.py:403
 msgid ""
 "[GPU Only]. The number of faces to feed through the model at once when "
 "running the Convert process.\n"
@@ -365,27 +399,27 @@ msgid ""
 "size."
 msgstr ""
 
-#: plugins/train/_config.py:375
+#: plugins/train/_config.py:422
 msgid ""
 "Loss configuration options\n"
 "Loss is the mechanism by which a Neural Network judges how well it thinks "
 "that it is recreating a face."
 msgstr ""
 
-#: plugins/train/_config.py:382 plugins/train/_config.py:394
-#: plugins/train/_config.py:407 plugins/train/_config.py:427
-#: plugins/train/_config.py:439 plugins/train/_config.py:459
-#: plugins/train/_config.py:471 plugins/train/_config.py:491
-#: plugins/train/_config.py:507 plugins/train/_config.py:523
-#: plugins/train/_config.py:540
+#: plugins/train/_config.py:429 plugins/train/_config.py:441
+#: plugins/train/_config.py:454 plugins/train/_config.py:474
+#: plugins/train/_config.py:486 plugins/train/_config.py:506
+#: plugins/train/_config.py:518 plugins/train/_config.py:538
+#: plugins/train/_config.py:554 plugins/train/_config.py:570
+#: plugins/train/_config.py:587
 msgid "loss"
 msgstr ""
 
-#: plugins/train/_config.py:386
+#: plugins/train/_config.py:433
 msgid "The loss function to use."
 msgstr ""
 
-#: plugins/train/_config.py:398
+#: plugins/train/_config.py:445
 msgid ""
 "The second loss function to use. If using a structural based loss (such as "
 "SSIM, MS-SSIM or GMSD) it is common to add an L1 regularization(MAE) or L2 "
@@ -393,7 +427,7 @@ msgid ""
 "function with the loss_weight_2 option."
 msgstr ""
 
-#: plugins/train/_config.py:413
+#: plugins/train/_config.py:460
 msgid ""
 "The amount of weight to apply to the second loss function.\n"
 "\n"
@@ -411,13 +445,13 @@ msgid ""
 "\t 0 - Disables the second loss function altogether."
 msgstr ""
 
-#: plugins/train/_config.py:431
+#: plugins/train/_config.py:478
 msgid ""
 "The third loss function to use. You can adjust the weighting of this loss "
 "function with the loss_weight_3 option."
 msgstr ""
 
-#: plugins/train/_config.py:445
+#: plugins/train/_config.py:492
 msgid ""
 "The amount of weight to apply to the third loss function.\n"
 "\n"
@@ -435,13 +469,13 @@ msgid ""
 "\t 0 - Disables the third loss function altogether."
 msgstr ""
 
-#: plugins/train/_config.py:463
+#: plugins/train/_config.py:510
 msgid ""
 "The fourth loss function to use. You can adjust the weighting of this loss "
 "function with the loss_weight_3 option."
 msgstr ""
 
-#: plugins/train/_config.py:477
+#: plugins/train/_config.py:524
 msgid ""
 "The amount of weight to apply to the fourth loss function.\n"
 "\n"
@@ -459,7 +493,7 @@ msgid ""
 "\t 0 - Disables the fourth loss function altogether."
 msgstr ""
 
-#: plugins/train/_config.py:496
+#: plugins/train/_config.py:543
 msgid ""
 "The loss function to use when learning a mask.\n"
 "\t MAE - Mean absolute error will guide reconstructions of each pixel "
@@ -471,7 +505,7 @@ msgid ""
 "susceptible to outliers and typically produces slightly blurrier results."
 msgstr ""
 
-#: plugins/train/_config.py:513
+#: plugins/train/_config.py:560
 msgid ""
 "The amount of priority to give to the eyes.\n"
 "\n"
@@ -484,7 +518,7 @@ msgid ""
 "NB: Penalized Mask Loss must be enable to use this option."
 msgstr ""
 
-#: plugins/train/_config.py:529
+#: plugins/train/_config.py:576
 msgid ""
 "The amount of priority to give to the mouth.\n"
 "\n"
@@ -497,7 +531,7 @@ msgid ""
 "NB: Penalized Mask Loss must be enable to use this option."
 msgstr ""
 
-#: plugins/train/_config.py:542
+#: plugins/train/_config.py:589
 msgid ""
 "Image loss function is weighted by mask presence. For areas of the image "
 "without the facial mask, reconstruction errors will be ignored while the "
@@ -505,12 +539,12 @@ msgid ""
 "attention on the core face area."
 msgstr ""
 
-#: plugins/train/_config.py:553 plugins/train/_config.py:595
-#: plugins/train/_config.py:609 plugins/train/_config.py:618
+#: plugins/train/_config.py:600 plugins/train/_config.py:642
+#: plugins/train/_config.py:656 plugins/train/_config.py:665
 msgid "mask"
 msgstr ""
 
-#: plugins/train/_config.py:556
+#: plugins/train/_config.py:603
 msgid ""
 "The mask to be used for training. If you have selected 'Learn Mask' or "
 "'Penalized Mask Loss' you must select a value other than 'none'. The "
@@ -548,7 +582,7 @@ msgid ""
 "performance."
 msgstr ""
 
-#: plugins/train/_config.py:597
+#: plugins/train/_config.py:644
 msgid ""
 "Apply gaussian blur to the mask input. This has the effect of smoothing the "
 "edges of the mask, which can help with poorly calculated masks and give less "
@@ -558,13 +592,13 @@ msgid ""
 "number."
 msgstr ""
 
-#: plugins/train/_config.py:611
+#: plugins/train/_config.py:658
 msgid ""
 "Sets pixels that are near white to white and near black to black. Set to 0 "
 "for off."
 msgstr ""
 
-#: plugins/train/_config.py:620
+#: plugins/train/_config.py:667
 msgid ""
 "Dedicate a portion of the model to learning how to duplicate the input mask. "
 "Increases VRAM usage in exchange for learning a quick ability to try to "

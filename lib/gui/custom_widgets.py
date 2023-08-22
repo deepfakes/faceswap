@@ -5,6 +5,7 @@ import logging
 import platform
 import re
 import sys
+import typing as T
 import tkinter as tk
 from tkinter import ttk, TclError
 
@@ -101,7 +102,7 @@ class RightClickMenu(tk.Menu):  # pylint: disable=too-many-ancestors
     def _create_menu(self):
         """ Create the menu based on :attr:`_labels` and :attr:`_actions`. """
         for idx, (label, action) in enumerate(zip(self._labels, self._actions)):
-            kwargs = dict(label=label, command=action)
+            kwargs = {"label": label, "command": action}
             if isinstance(self._hotkeys, (list, tuple)) and self._hotkeys[idx]:
                 kwargs["accelerator"] = self._hotkeys[idx]
             self.add_command(**kwargs)
@@ -428,12 +429,13 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         frame otherwise ``False``. Default: ``False``
     """
 
-    def __init__(self, parent, hide_status=False):
+    def __init__(self, parent: ttk.Frame, hide_status: bool = False) -> None:
         super().__init__(parent)
         self._frame = ttk.Frame(self)
         self._message = tk.StringVar()
         self._pbar_message = tk.StringVar()
         self._pbar_position = tk.IntVar()
+        self._mode: T.Literal["indeterminate", "determinate"] = "determinate"
 
         self._message.set("Ready")
 
@@ -443,12 +445,12 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         self._frame.pack(padx=10, pady=2, fill=tk.X, expand=False)
 
     @property
-    def message(self):
+    def message(self) -> tk.StringVar:
         """:class:`tkinter.StringVar`: The variable to hold the status bar message on the left
         hand side of the status bar. """
         return self._message
 
-    def _status(self, hide_status):
+    def _status(self, hide_status: bool) -> None:
         """ Place Status label into left of the status bar.
 
         Parameters
@@ -472,8 +474,14 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
                               anchor=tk.W)
         lblstatus.pack(side=tk.LEFT, anchor=tk.W, fill=tk.X, expand=True)
 
-    def _progress_bar(self):
-        """ Place progress bar into right of the status bar. """
+    def _progress_bar(self) -> ttk.Progressbar:
+        """ Place progress bar into right of the status bar.
+
+        Returns
+        -------
+        :class:`tkinter.ttk.Progressbar`
+            The progress bar object
+        """
         progressframe = ttk.Frame(self._frame)
         progressframe.pack(side=tk.RIGHT, anchor=tk.E, fill=tk.X)
 
@@ -484,12 +492,12 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
                                length=200,
                                variable=self._pbar_position,
                                maximum=100,
-                               mode="determinate")
+                               mode=self._mode)
         pbar.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
         pbar.pack_forget()
         return pbar
 
-    def start(self, mode):
+    def start(self, mode: T.Literal["indeterminate", "determinate"]) -> None:
         """ Set progress bar mode and display,
 
         Parameters
@@ -500,16 +508,24 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         self._set_mode(mode)
         self._pbar.pack()
 
-    def stop(self):
+    def stop(self) -> None:
         """ Reset progress bar and hide """
         self._pbar_message.set("")
         self._pbar_position.set(0)
-        self._set_mode("determinate")
+        self._mode = "determinate"
+        self._set_mode(self._mode)
         self._pbar.pack_forget()
 
-    def _set_mode(self, mode):
-        """ Set the progress bar mode """
-        self._pbar.config(mode=mode)
+    def _set_mode(self, mode: T.Literal["indeterminate", "determinate"]) -> None:
+        """ Set the progress bar mode
+
+        Parameters
+        ----------
+        mode: ["indeterminate", "determinate"]
+            The mode that the progress bar should be executed in
+        """
+        self._mode = mode
+        self._pbar.config(mode=self._mode)
         if mode == "indeterminate":
             self._pbar.config(maximum=100)
             self._pbar.start()
@@ -517,7 +533,23 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
             self._pbar.stop()
             self._pbar.config(maximum=100)
 
-    def progress_update(self, message, position, update_position=True):
+    def set_mode(self, mode: T.Literal["indeterminate", "determinate"]) -> None:
+        """ Set the mode of a currently displayed progress bar and reset position to 0.
+
+        If the given mode is the same as the currently configured mode, returns without performing
+        any action.
+
+        Parameters
+        ----------
+        mode: ["indeterminate", "determinate"]
+            The mode that the progress bar should be set to
+        """
+        if mode == self._mode:
+            return
+        self.stop()
+        self.start(mode)
+
+    def progress_update(self, message: str, position: int, update_position: bool = True) -> None:
         """ Update the GUIs progress bar and position.
 
         Parameters

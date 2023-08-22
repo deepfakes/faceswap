@@ -24,8 +24,6 @@ from .utils import get_config, get_images, LongRunningTask
 if T.TYPE_CHECKING:
     from matplotlib.lines import Line2D
 
-matplotlib.use("TkAgg")
-
 logger: logging.Logger = logging.getLogger(__name__)
 
 
@@ -44,6 +42,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
     def __init__(self, parent: ttk.Frame, data, ylabel: str) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(parent)
+        matplotlib.use("TkAgg")  # Can't be at module level as breaks Github CI
         style.use("ggplot")
 
         self._calcs = data
