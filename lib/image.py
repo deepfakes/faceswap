@@ -295,16 +295,16 @@ def read_image(filename, raise_error=False, with_metadata=False):
     success = True
     image = None
     try:
-        if not with_metadata:
-            retval = cv2.imread(filename)
-            if retval is None:
-                raise ValueError("Image is None")
-        else:
-            with open(filename, "rb") as infile:
-                raw_file = infile.read()
-                metadata = png_read_meta(raw_file)
+        with open(filename, "rb") as infile:
+            raw_file = infile.read()
             image = cv2.imdecode(np.frombuffer(raw_file, dtype="uint8"), cv2.IMREAD_UNCHANGED)
-            retval = (image, metadata)
+            if image is None:
+                raise ValueError("Image is None")
+            if with_metadata:
+                metadata = png_read_meta(raw_file)
+                retval = (image, metadata)
+            else:
+                retval = image
     except TypeError as err:
         success = False
         msg = "Error while reading image (TypeError): '{}'".format(filename)
