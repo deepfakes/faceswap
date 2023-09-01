@@ -297,7 +297,7 @@ def read_image(filename, raise_error=False, with_metadata=False):
     try:
         with open(filename, "rb") as infile:
             raw_file = infile.read()
-            image = cv2.imdecode(np.frombuffer(raw_file, dtype="uint8"), cv2.IMREAD_UNCHANGED)
+            image = cv2.imdecode(np.frombuffer(raw_file, dtype="uint8"), cv2.IMREAD_COLOR)
             if image is None:
                 raise ValueError("Image is None")
             if with_metadata:
