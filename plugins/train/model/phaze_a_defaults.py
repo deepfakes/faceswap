@@ -65,7 +65,7 @@ _DEFAULTS = {
             "Resolution (in pixels) of the output image to generate.\n"
             "BE AWARE Larger resolution will dramatically increase VRAM requirements."),
         "datatype": int,
-        "rounding": 64,
+        "rounding": 16,
         "min_max": (64, 2048),
         "group": "general",
         "fixed": True},

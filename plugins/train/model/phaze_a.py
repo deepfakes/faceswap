@@ -163,8 +163,8 @@ class Model(ModelBase):
     """
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        if self.config["output_size"] % 64 != 0:
-            raise FaceswapError("Phaze-A output shape must be a multiple of 64")
+        if self.config["output_size"] % 16 != 0:
+            raise FaceswapError("Phaze-A output shape must be a multiple of 16")
 
         self._validate_encoder_architecture()
         self.config["freeze_layers"] = self._select_freeze_layers()
