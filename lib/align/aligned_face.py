@@ -314,11 +314,20 @@ class PoseEstimate():
         """
         points = landmarks[[6, 7, 8, 9, 10, 17, 21, 22, 26, 31, 32, 33, 34,
                             35, 36, 39, 42, 45, 48, 50, 51, 52, 54, 56, 57, 58]]
-        _, rotation, translation = cv2.solvePnP(_MEAN_FACE_3D,
-                                                points,
-                                                self._camera_matrix,
-                                                self._distortion_coefficients,
-                                                flags=cv2.SOLVEPNP_ITERATIVE)
+        
+        try:
+            _, rotation, translation = cv2.solvePnP(_MEAN_FACE_3D,
+                                                    points,
+                                                    self._camera_matrix,
+                                                    self._distortion_coefficients,
+                                                    flags=cv2.SOLVEPNP_ITERATIVE)
+        except:
+            print("mean", _MEAN_FACE_3D)
+            print("lms", np.nan_to_num(landmarks))
+            print("pts", points)
+            print("mtrx", self._camera_matrix)
+            print("dst", self._distortion_coefficients)
+            raise
         logger.trace("points: %s, rotation: %s, translation: %s",  # type: ignore
                      points, rotation, translation)
         return rotation, translation
@@ -521,8 +530,8 @@ class AlignedFace():
         """ :class:`lib.align.PoseEstimate`: The estimated pose in 3D space. """
         with self._cache.lock("pose"):
             if self._cache.pose is None:
-                lms = cv2.transform(np.expand_dims(self._frame_landmarks, axis=1),
-                                    self._matrices["legacy"]).squeeze()
+                lms = np.nan_to_num(cv2.transform(np.expand_dims(self._frame_landmarks, axis=1),
+                                    self._matrices["legacy"]).squeeze())
                 self._cache.pose = PoseEstimate(lms)
         return self._cache.pose
 
