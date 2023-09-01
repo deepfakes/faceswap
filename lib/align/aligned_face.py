@@ -314,20 +314,11 @@ class PoseEstimate():
         """
         points = landmarks[[6, 7, 8, 9, 10, 17, 21, 22, 26, 31, 32, 33, 34,
                             35, 36, 39, 42, 45, 48, 50, 51, 52, 54, 56, 57, 58]]
-        
-        try:
-            _, rotation, translation = cv2.solvePnP(_MEAN_FACE_3D,
-                                                    points,
-                                                    self._camera_matrix,
-                                                    self._distortion_coefficients,
-                                                    flags=cv2.SOLVEPNP_ITERATIVE)
-        except:
-            print("mean", _MEAN_FACE_3D)
-            print("lms", np.nan_to_num(landmarks))
-            print("pts", points)
-            print("mtrx", self._camera_matrix)
-            print("dst", self._distortion_coefficients)
-            raise
+        _, rotation, translation = cv2.solvePnP(_MEAN_FACE_3D,
+                                                points,
+                                                self._camera_matrix,
+                                                self._distortion_coefficients,
+                                                flags=cv2.SOLVEPNP_ITERATIVE)
         logger.trace("points: %s, rotation: %s, translation: %s",  # type: ignore
                      points, rotation, translation)
         return rotation, translation
