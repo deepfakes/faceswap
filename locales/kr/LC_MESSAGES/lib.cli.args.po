@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-11-20 01:34+0000\n"
-"PO-Revision-Date: 2022-11-26 16:11+0900\n"
+"POT-Creation-Date: 2023-09-08 22:10+0100\n"
+"PO-Revision-Date: 2023-09-08 22:14+0100\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -16,14 +16,14 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Poedit 3.2\n"
+"X-Generator: Poedit 3.3.2\n"
 
-#: lib/cli/args.py:193 lib/cli/args.py:203 lib/cli/args.py:211
-#: lib/cli/args.py:221
+#: lib/cli/args.py:192 lib/cli/args.py:202 lib/cli/args.py:210
+#: lib/cli/args.py:220
 msgid "Global Options"
 msgstr "전역 옵션들"
 
-#: lib/cli/args.py:194
+#: lib/cli/args.py:193
 msgid ""
 "R|Exclude GPUs from use by Faceswap. Select the number(s) which correspond "
 "to any GPU(s) that you do not wish to be made available to Faceswap. "
@@ -35,12 +35,12 @@ msgstr ""
 "여금 CPU mode를 강제로 사용하게 합니다.\n"
 "L|{}"
 
-#: lib/cli/args.py:204
+#: lib/cli/args.py:203
 msgid ""
 "Optionally overide the saved config with the path to a custom config file."
 msgstr "선택적으로 저장된 설정을 경로와 함께 개인 설정 파일에 덮어씌웁니다."
 
-#: lib/cli/args.py:212
+#: lib/cli/args.py:211
 msgid ""
 "Log level. Stick with INFO or VERBOSE unless you need to file an error "
 "report. Be careful with TRACE as it will generate a lot of data"
@@ -48,16 +48,16 @@ msgstr ""
 "로그 레벨. 오류 리포트가 필요하지 않다면 INFO와 VERBOSE를 사용하세요. 단, 굉"
 "장히 많은 데이터를 생성할 수 있는 TRACE는 조심하세요"
 
-#: lib/cli/args.py:222
+#: lib/cli/args.py:221
 msgid "Path to store the logfile. Leave blank to store in the faceswap folder"
 msgstr "로그파일을 저장할 경로. faceswap 폴더에 저장하고 싶으면 비워두세요"
 
-#: lib/cli/args.py:320 lib/cli/args.py:329 lib/cli/args.py:337
-#: lib/cli/args.py:386 lib/cli/args.py:677 lib/cli/args.py:686
+#: lib/cli/args.py:319 lib/cli/args.py:328 lib/cli/args.py:336
+#: lib/cli/args.py:385 lib/cli/args.py:676 lib/cli/args.py:685
 msgid "Data"
 msgstr "데이터"
 
-#: lib/cli/args.py:321
+#: lib/cli/args.py:320
 msgid ""
 "Input directory or video. Either a directory containing the image files you "
 "wish to process or path to a video file. NB: This should be the source video/"
@@ -66,11 +66,11 @@ msgstr ""
 "폴더나 비디오를 입력하세요. 당신이 사용하고 싶은 이미지 파일들을 가진 폴더 또"
 "는 비디오 파일의 경로여야 합니다. NB: 이 폴더는 원본 비디오여야 합니다."
 
-#: lib/cli/args.py:330
+#: lib/cli/args.py:329
 msgid "Output directory. This is where the converted files will be saved."
 msgstr "출력 폴더. 변환된 파일들이 저장될 곳입니다."
 
-#: lib/cli/args.py:338
+#: lib/cli/args.py:337
 msgid ""
 "Optional path to an alignments file. Leave blank if the alignments file is "
 "at the default location."
@@ -78,7 +78,7 @@ msgstr ""
 "(선택적) alignments 파일의 경로. 비워두면 alignments 파일이 기본 위치에 저장"
 "됩니다."
 
-#: lib/cli/args.py:361
+#: lib/cli/args.py:360
 msgid ""
 "Extract faces from image or video sources.\n"
 "Extraction plugins can be configured in the 'Settings' Menu"
@@ -86,7 +86,7 @@ msgstr ""
 "얼굴들을 이미지 또는 비디오에서 추출합니다.\n"
 "추출 플러그인은 '설정' 메뉴에서 설정할 수 있습니다"
 
-#: lib/cli/args.py:387
+#: lib/cli/args.py:386
 msgid ""
 "R|If selected then the input_dir should be a parent folder containing "
 "multiple videos and/or folders of images you wish to extract from. The faces "
@@ -96,14 +96,14 @@ msgstr ""
 "또는 이미지들을 가진 부모 폴더가 되야 합니다. 얼굴들은 output_dir에 분리된 하"
 "위 폴더에 저장됩니다."
 
-#: lib/cli/args.py:396 lib/cli/args.py:412 lib/cli/args.py:424
-#: lib/cli/args.py:463 lib/cli/args.py:481 lib/cli/args.py:493
-#: lib/cli/args.py:502 lib/cli/args.py:511 lib/cli/args.py:696
-#: lib/cli/args.py:723 lib/cli/args.py:761
+#: lib/cli/args.py:395 lib/cli/args.py:411 lib/cli/args.py:423
+#: lib/cli/args.py:462 lib/cli/args.py:480 lib/cli/args.py:492
+#: lib/cli/args.py:501 lib/cli/args.py:510 lib/cli/args.py:695
+#: lib/cli/args.py:722 lib/cli/args.py:760
 msgid "Plugins"
 msgstr "플러그인들"
 
-#: lib/cli/args.py:397
+#: lib/cli/args.py:396
 msgid ""
 "R|Detector to use. Some of these have configurable settings in '/config/"
 "extract.ini' or 'Settings > Configure Extract 'Plugins':\n"
@@ -126,7 +126,7 @@ msgstr ""
 "보다 더 많은 얼굴들을 감지할 수 있고 과 더 적은 false positives를 돌려주지만 "
 "자원을 굉장히 많이 사용합니다."
 
-#: lib/cli/args.py:413
+#: lib/cli/args.py:412
 msgid ""
 "R|Aligner to use.\n"
 "L|cv2-dnn: A CPU only landmark detector. Faster, less resource intensive, "
@@ -138,7 +138,7 @@ msgstr ""
 "합니다. GPU를 사용하지 않고 시간이 중요할 때에만 사용하세요.\n"
 "L|fan: 가장 좋은 aligner. GPU에선 빠르고 CPU에선 느립니다."
 
-#: lib/cli/args.py:425
+#: lib/cli/args.py:424
 msgid ""
 "R|Additional Masker(s) to use. The masks generated here will all take up GPU "
 "RAM. You can select none, one or multiple masks, but the extraction may take "
@@ -199,7 +199,7 @@ msgstr ""
 "로 뻗어 있습ㄴ다.\n"
 "(예: '-M unet-dfl vgg-clear', '--masker vgg-obstructed')"
 
-#: lib/cli/args.py:464
+#: lib/cli/args.py:463
 msgid ""
 "R|Performing normalization can help the aligner better align faces with "
 "difficult lighting conditions at an extraction speed cost. Different methods "
@@ -220,7 +220,7 @@ msgstr ""
 "L|hist: RGB 채널의 히스토그램을 동일하게 합니다.\n"
 "L|mean: 얼굴 색상을 평균으로 정규화합니다."
 
-#: lib/cli/args.py:482
+#: lib/cli/args.py:481
 msgid ""
 "The number of times to re-feed the detected face into the aligner. Each time "
 "the face is re-fed into the aligner the bounding box is adjusted by a small "
@@ -235,7 +235,7 @@ msgstr ""
 "다. 얼굴이 aligner에 다시 공급되는 횟수가 많을수록 micro-jitter 적게 발생하지"
 "만 추출에 더 오랜 시간이 걸립니다."
 
-#: lib/cli/args.py:494
+#: lib/cli/args.py:493
 msgid ""
 "Re-feed the initially found aligned face through the aligner. Can help "
 "produce better alignments for faces that are rotated beyond 45 degrees in "
@@ -245,7 +245,7 @@ msgstr ""
 "회전하거나 극단적인 각도에 있는 얼굴을 더 잘 정렬할 수 있습니다. 추출 속도가 "
 "느려집니다."
 
-#: lib/cli/args.py:503
+#: lib/cli/args.py:502
 msgid ""
 "If a face isn't found, rotate the images to try to find a face. Can find "
 "more faces at the cost of extraction speed. Pass in a single number to use "
@@ -256,7 +256,7 @@ msgstr ""
 "면서 더 많은 얼굴을 찾을 수 있습니다. 단일 숫자를 입력하여 해당 크기의 증분"
 "을 360까지 사용하거나 숫자 목록을 입력하여 확인할 각도를 정확하게 열거합니다."
 
-#: lib/cli/args.py:512
+#: lib/cli/args.py:511
 msgid ""
 "Obtain and store face identity encodings from VGGFace2. Slows down extract a "
 "little, but will save time if using 'sort by face'"
@@ -264,13 +264,13 @@ msgstr ""
 "VGGFace2에서 얼굴 식별 인코딩을 가져와 저장합니다. 추출 속도를 약간 늦추지만 "
 "'얼굴별로 정렬'을 사용하면 시간을 절약할 수 있습니다."
 
-#: lib/cli/args.py:522 lib/cli/args.py:532 lib/cli/args.py:544
-#: lib/cli/args.py:557 lib/cli/args.py:798 lib/cli/args.py:812
-#: lib/cli/args.py:825 lib/cli/args.py:839
+#: lib/cli/args.py:521 lib/cli/args.py:531 lib/cli/args.py:543
+#: lib/cli/args.py:556 lib/cli/args.py:797 lib/cli/args.py:812
+#: lib/cli/args.py:822 lib/cli/args.py:835 lib/cli/args.py:849
 msgid "Face Processing"
 msgstr "얼굴 처리"
 
-#: lib/cli/args.py:523
+#: lib/cli/args.py:522
 msgid ""
 "Filters out faces detected below this size. Length, in pixels across the "
 "diagonal of the bounding box. Set to 0 for off"
@@ -278,7 +278,7 @@ msgstr ""
 "이 크기 미만으로 탐지된 얼굴을 필터링합니다. 길이, 경계 상자의 대각선에 걸친 "
 "픽셀 단위입니다. 0으로 설정하면 꺼집니다"
 
-#: lib/cli/args.py:533
+#: lib/cli/args.py:532
 msgid ""
 "Optionally filter out people who you do not wish to extract by passing in "
 "images of those people. Should be a small variety of images at different "
@@ -290,7 +290,7 @@ msgstr ""
 "지들 또는 공백으로 구분된 여러 이미지 파일이 들어 있는 폴더를 선택할 수 있습"
 "니다."
 
-#: lib/cli/args.py:545
+#: lib/cli/args.py:544
 msgid ""
 "Optionally select people you wish to extract by passing in images of that "
 "person. Should be a small variety of images at different angles and in "
@@ -301,7 +301,7 @@ msgstr ""
 "와 조건이 다른 작은 다양한 이미지여야 합니다. 추출할 때 필요한 이미지들 또는 "
 "공백으로 구분된 여러 이미지 파일이 들어 있는 폴더를 선택할 수 있습니다."
 
-#: lib/cli/args.py:558
+#: lib/cli/args.py:557
 msgid ""
 "For use with the optional nfilter/filter files. Threshold for positive face "
 "recognition. Higher values are stricter."
@@ -309,12 +309,12 @@ msgstr ""
 "옵션인 nfilter/filter 파일과 함께 사용합니다. 긍정적인 얼굴 인식을 위한 임계"
 "값. 값이 높을수록 엄격합니다."
 
-#: lib/cli/args.py:567 lib/cli/args.py:579 lib/cli/args.py:591
-#: lib/cli/args.py:603
+#: lib/cli/args.py:566 lib/cli/args.py:578 lib/cli/args.py:590
+#: lib/cli/args.py:602
 msgid "output"
 msgstr "출력"
 
-#: lib/cli/args.py:568
+#: lib/cli/args.py:567
 msgid ""
 "The output size of extracted faces. Make sure that the model you intend to "
 "train supports your required size. This will only need to be changed for hi-"
@@ -323,7 +323,7 @@ msgstr ""
 "추출된 얼굴의 출력 크기입니다. 훈련하려는 모델이 필요한 크기를 지원하는지 꼭 "
 "확인하세요. 이것은 고해상도 모델에 대해서만 변경하면 됩니다."
 
-#: lib/cli/args.py:580
+#: lib/cli/args.py:579
 msgid ""
 "Extract every 'nth' frame. This option will skip frames when extracting "
 "faces. For example a value of 1 will extract faces from every frame, a value "
@@ -333,7 +333,7 @@ msgstr ""
 "설정합니다. 예를 들어, 값이 1이면 모든 프레임에서 얼굴이 추출되고, 값이 10이"
 "면 모든 10번째 프레임에서 얼굴이 추출됩니다."
 
-#: lib/cli/args.py:592
+#: lib/cli/args.py:591
 msgid ""
 "Automatically save the alignments file after a set amount of frames. By "
 "default the alignments file is only saved at the end of the extraction "
@@ -348,42 +348,42 @@ msgstr ""
 "을 쓸 때 스크립트가 손상될 수 있으므로 스크립트를 중단하지 마십시오. 해제하려"
 "면 0으로 설정"
 
-#: lib/cli/args.py:604
+#: lib/cli/args.py:603
 msgid "Draw landmarks on the ouput faces for debugging purposes."
 msgstr "디버깅을 위해 출력 얼굴에 특징점을 그립니다."
 
-#: lib/cli/args.py:610 lib/cli/args.py:619 lib/cli/args.py:627
-#: lib/cli/args.py:634 lib/cli/args.py:852 lib/cli/args.py:863
-#: lib/cli/args.py:871 lib/cli/args.py:890 lib/cli/args.py:896
+#: lib/cli/args.py:609 lib/cli/args.py:618 lib/cli/args.py:626
+#: lib/cli/args.py:633 lib/cli/args.py:862 lib/cli/args.py:873
+#: lib/cli/args.py:881 lib/cli/args.py:900 lib/cli/args.py:906
 msgid "settings"
 msgstr "설정"
 
-#: lib/cli/args.py:611
+#: lib/cli/args.py:610
 msgid ""
 "Don't run extraction in parallel. Will run each part of the extraction "
-"process separately (one after the other) rather than all at the smae time. "
+"process separately (one after the other) rather than all at the same time. "
 "Useful if VRAM is at a premium."
 msgstr ""
 "추출을 병렬로 실행하지 마십시오. 추출 프로세스의 각 부분을 동시에 모두 실행하"
 "는 것이 아니라 개별적으로(하나씩) 실행합니다. VRAM이 프리미엄인 경우 유용합니"
 "다."
 
-#: lib/cli/args.py:620
+#: lib/cli/args.py:619
 msgid ""
 "Skips frames that have already been extracted and exist in the alignments "
 "file"
 msgstr "이미 추출되었거나 alignments 파일에 존재하는 프레임들을 스킵합니다"
 
-#: lib/cli/args.py:628
+#: lib/cli/args.py:627
 msgid "Skip frames that already have detected faces in the alignments file"
 msgstr "이미 얼굴을 탐지하여 alignments 파일에 존재하는 프레임들을 스킵합니다"
 
-#: lib/cli/args.py:635
+#: lib/cli/args.py:634
 msgid "Skip saving the detected faces to disk. Just create an alignments file"
 msgstr ""
 "탐지된 얼굴을 디스크에 저장하지 않습니다. 그저 alignments 파일을 만듭니다"
 
-#: lib/cli/args.py:657
+#: lib/cli/args.py:656
 msgid ""
 "Swap the original faces in a source video/images to your final faces.\n"
 "Conversion plugins can be configured in the 'Settings' Menu"
@@ -391,7 +391,7 @@ msgstr ""
 "원본 비디오/이미지의 원래 얼굴을 최종 얼굴으로 바꿉니다.\n"
 "변환 플러그인은 '설정' 메뉴에서 구성할 수 있습니다"
 
-#: lib/cli/args.py:678
+#: lib/cli/args.py:677
 msgid ""
 "Only required if converting from images to video. Provide The original video "
 "that the source frames were extracted from (for extracting the fps and "
@@ -400,14 +400,14 @@ msgstr ""
 "이미지에서 비디오로 변환하는 경우에만 필요합니다. 소스 프레임이 추출된 원본 "
 "비디오(fps 및 오디오 추출용)를 입력하세요."
 
-#: lib/cli/args.py:687
+#: lib/cli/args.py:686
 msgid ""
 "Model directory. The directory containing the trained model you wish to use "
 "for conversion."
 msgstr ""
 "모델 폴더. 당신이 변환에 사용하고자 하는 훈련된 모델을 가진 폴더입니다."
 
-#: lib/cli/args.py:697
+#: lib/cli/args.py:696
 msgid ""
 "R|Performs color adjustment to the swapped face. Some of these options have "
 "configurable settings in '/config/convert.ini' or 'Settings > Configure "
@@ -443,7 +443,7 @@ msgstr ""
 "공하지 않습니다.\n"
 "L|none: 색상 조정을 수행하지 않습니다."
 
-#: lib/cli/args.py:724
+#: lib/cli/args.py:723
 msgid ""
 "R|Masker to use. NB: The mask you require must exist within the alignments "
 "file. You can add additional masks with the Mask Tool.\n"
@@ -507,7 +507,7 @@ msgstr ""
 "L|predicted: 교육 중에 'Learn Mask(마스크 학습)' 옵션이 활성화된 경우에는 교"
 "육을 받은 모델이 만든 마스크가 사용됩니다."
 
-#: lib/cli/args.py:762
+#: lib/cli/args.py:761
 msgid ""
 "R|The plugin to use to output the converted images. The writers are "
 "configurable in '/config/convert.ini' or 'Settings > Configure Convert "
@@ -531,11 +531,11 @@ msgstr ""
 "L|pillow: [images] opencv보다 느리지만 더 많은 옵션이 있고 더 많은 형식을 지"
 "원합니다."
 
-#: lib/cli/args.py:781 lib/cli/args.py:788 lib/cli/args.py:882
+#: lib/cli/args.py:780 lib/cli/args.py:787 lib/cli/args.py:892
 msgid "Frame Processing"
 msgstr "프레임 처리"
 
-#: lib/cli/args.py:782
+#: lib/cli/args.py:781
 #, python-format
 msgid ""
 "Scale the final output frames by this amount. 100%% will output the frames "
@@ -544,7 +544,7 @@ msgstr ""
 "최종 출력 프레임의 크기를 이 양만큼 조정합니다. 100%%는 원본의 차원에서 프레"
 "임을 출력합니다. 50%%는 절반 크기에서, 200%%는 두 배 크기에서"
 
-#: lib/cli/args.py:789
+#: lib/cli/args.py:788
 msgid ""
 "Frame ranges to apply transfer to e.g. For frames 10 to 50 and 90 to 100 use "
 "--frame-ranges 10-50 90-100. Frames falling outside of the selected range "
@@ -556,7 +556,7 @@ msgstr ""
 "으면 선택한 범위를 벗어나는 프레임이 삭제됩니다. NB: 이미지에서 변환하는 경"
 "우 파일 이름은 프레임 번호로 끝나야 합니다!"
 
-#: lib/cli/args.py:799
+#: lib/cli/args.py:798
 msgid ""
 "If you have not cleansed your alignments file, then you can filter out faces "
 "by defining a folder here that contains the faces extracted from your input "
@@ -572,6 +572,14 @@ msgstr ""
 
 #: lib/cli/args.py:813
 msgid ""
+"Scale the swapped face by this percentage. Positive values will enlarge the "
+"face, Negative values will shrink the face."
+msgstr ""
+"이 백분율로 교체된 면의 크기를 조정합니다. 양수 값은 얼굴을 확대하고, 음수 값"
+"은 얼굴을 축소합니다."
+
+#: lib/cli/args.py:823
+msgid ""
 "Optionally filter out people who you do not wish to process by passing in an "
 "image of that person. Should be a front portrait with a single person in the "
 "image. Multiple images can be added space separated. NB: Using face filter "
@@ -583,7 +591,7 @@ msgstr ""
 "분하여 추가할 수 있습니다. 주의: 얼굴 필터를 사용하면 추출 속도가 현저히 감소"
 "하므로 정확성을 보장할 수 없습니다."
 
-#: lib/cli/args.py:826
+#: lib/cli/args.py:836
 msgid ""
 "Optionally select people you wish to process by passing in an image of that "
 "person. Should be a front portrait with a single person in the image. "
@@ -596,7 +604,7 @@ msgstr ""
 "가할 수 있습니다. 주의: 얼굴 필터를 사용하면 추출 속도가 현저히 감소하므로 정"
 "확성을 보장할 수 없습니다."
 
-#: lib/cli/args.py:840
+#: lib/cli/args.py:850
 msgid ""
 "For use with the optional nfilter/filter files. Threshold for positive face "
 "recognition. Lower values are stricter. NB: Using face filter will "
@@ -607,7 +615,7 @@ msgstr ""
 "값. 낮은 값이 더 엄격합니다. 주의: 얼굴 필터를 사용하면 추출 속도가 현저히 감"
 "소하므로 정확성을 보장할 수 없습니다."
 
-#: lib/cli/args.py:853
+#: lib/cli/args.py:863
 msgid ""
 "The maximum number of parallel processes for performing conversion. "
 "Converting images is system RAM heavy so it is possible to run out of memory "
@@ -623,7 +631,7 @@ msgstr ""
 "를 사용하려고 시도하지 않습니다. 단일 프로세스가 활성화된 경우 이 설정은 무시"
 "됩니다."
 
-#: lib/cli/args.py:864
+#: lib/cli/args.py:874
 msgid ""
 "[LEGACY] This only needs to be selected if a legacy model is being loaded or "
 "if there are multiple models in the model folder"
@@ -631,7 +639,7 @@ msgstr ""
 "[LEGACY] 이것은 레거시 모델을 로드 중이거나 모델 폴더에 여러 모델이 있는 경우"
 "에만 선택되어야 합니다"
 
-#: lib/cli/args.py:872
+#: lib/cli/args.py:882
 msgid ""
 "Enable On-The-Fly Conversion. NOT recommended. You should generate a clean "
 "alignments file for your destination video. However, if you wish you can "
@@ -645,7 +653,7 @@ msgstr ""
 "하고 표준 이하의 결과로 이어질 것입니다. alignments 파일이 발견되면 이 옵션"
 "은 무시됩니다."
 
-#: lib/cli/args.py:883
+#: lib/cli/args.py:893
 msgid ""
 "When used with --frame-ranges outputs the unchanged frames that are not "
 "processed instead of discarding them."
@@ -653,15 +661,15 @@ msgstr ""
 "사용시 --frame-ranges 인자를 사용하면 변경되지 않은 프레임을 버리지 않은 결과"
 "가 출력됩니다."
 
-#: lib/cli/args.py:891
+#: lib/cli/args.py:901
 msgid "Swap the model. Instead converting from of A -> B, converts B -> A"
 msgstr "모델을 바꿉니다. A -> B에서 변환하는 대신 B -> A로 변환"
 
-#: lib/cli/args.py:897
+#: lib/cli/args.py:907
 msgid "Disable multiprocessing. Slower but less resource intensive."
 msgstr "멀티프로세싱을 쓰지 않습니다. 느리지만 자원을 덜 소모합니다."
 
-#: lib/cli/args.py:913
+#: lib/cli/args.py:923
 msgid ""
 "Train a model on extracted original (A) and swap (B) faces.\n"
 "Training models can take a long time. Anything from 24hrs to over a week\n"
@@ -672,11 +680,11 @@ msgstr ""
 "간이 필요합니다.\n"
 "모델 플러그인은 '설정' 메뉴에서 구성할 수 있습니다"
 
-#: lib/cli/args.py:932 lib/cli/args.py:941
+#: lib/cli/args.py:942 lib/cli/args.py:951
 msgid "faces"
 msgstr "얼굴들"
 
-#: lib/cli/args.py:933
+#: lib/cli/args.py:943
 msgid ""
 "Input directory. A directory containing training images for face A. This is "
 "the original face, i.e. the face that you want to remove and replace with "
@@ -685,7 +693,7 @@ msgstr ""
 "입력 디렉토리. 얼굴 A에 대한 훈련 이미지가 포함된 디렉토리입니다. 이것은 원"
 "래 얼굴, 즉 제거하고 B 얼굴로 대체하려는 얼굴입니다."
 
-#: lib/cli/args.py:942
+#: lib/cli/args.py:952
 msgid ""
 "Input directory. A directory containing training images for face B. This is "
 "the swap face, i.e. the face that you want to place onto the head of person "
@@ -694,12 +702,12 @@ msgstr ""
 "입력 디렉터리. 얼굴 B에 대한 훈련 이미지를 포함하는 디렉토리. 이것은 대체 얼"
 "굴, 즉 사람 A의 얼굴 앞에 배치하려는 얼굴이다."
 
-#: lib/cli/args.py:950 lib/cli/args.py:962 lib/cli/args.py:978
-#: lib/cli/args.py:1003 lib/cli/args.py:1013
+#: lib/cli/args.py:960 lib/cli/args.py:972 lib/cli/args.py:988
+#: lib/cli/args.py:1013 lib/cli/args.py:1023
 msgid "model"
 msgstr "모델"
 
-#: lib/cli/args.py:951
+#: lib/cli/args.py:961
 msgid ""
 "Model directory. This is where the training data will be stored. You should "
 "always specify a new folder for new models. If starting a new model, select "
@@ -712,7 +720,7 @@ msgstr ""
 "성될 폴더)를 선택합니다. 기존 모델을 계속 학습하는 경우 기존 모델의 위치를 지"
 "정합니다."
 
-#: lib/cli/args.py:963
+#: lib/cli/args.py:973
 msgid ""
 "R|Load the weights from a pre-existing model into a newly created model. For "
 "most models this will load weights from the Encoder of the given model into "
@@ -733,7 +741,7 @@ msgstr ""
 "중치 동결'이 필요합니다.\n"
 "주의: 가중치는 훈련하려는 플러그인 모델에서만 로드할 수 있습니다."
 
-#: lib/cli/args.py:979
+#: lib/cli/args.py:989
 msgid ""
 "R|Select which trainer to use. Trainers can be configured from the Settings "
 "menu or the config folder.\n"
@@ -775,7 +783,7 @@ msgstr ""
 "양의 VRAM이 있는 GPU가 필요합니다). 세부 사항에는 좋지만 색상 차이에 더 취약"
 "합니다."
 
-#: lib/cli/args.py:1004
+#: lib/cli/args.py:1014
 msgid ""
 "Output a summary of the model and exit. If a model folder is provided then a "
 "summary of the saved model is displayed. Otherwise a summary of the model "
@@ -786,7 +794,7 @@ msgstr ""
 "시됩니다. 그렇지 않으면 선택한 플러그인 및 구성 설정에 의해 생성되는 모델 요"
 "약이 표시됩니다."
 
-#: lib/cli/args.py:1014
+#: lib/cli/args.py:1024
 msgid ""
 "Freeze the weights of the model. Freezing weights means that some of the "
 "parameters in the model will no longer continue to learn, but those that are "
@@ -799,12 +807,12 @@ msgstr ""
 "이렇게 하면 인코더가 고정되지만 일부 모델에는 다른 레이어를 고정하기 위한 구"
 "성 옵션이 있을 수 있습니다."
 
-#: lib/cli/args.py:1027 lib/cli/args.py:1039 lib/cli/args.py:1050
-#: lib/cli/args.py:1061 lib/cli/args.py:1144
+#: lib/cli/args.py:1037 lib/cli/args.py:1049 lib/cli/args.py:1063
+#: lib/cli/args.py:1078 lib/cli/args.py:1086
 msgid "training"
 msgstr "훈련"
 
-#: lib/cli/args.py:1028
+#: lib/cli/args.py:1038
 msgid ""
 "Batch size. This is the number of images processed through the model for "
 "each side per iteration. NB: As the model is fed 2 sides at a time, the "
@@ -816,7 +824,7 @@ msgstr ""
 "여기에서 설정한 수의 두 배입니다. 더 큰 배치에는 더 많은 GPU RAM이 필요합니"
 "다."
 
-#: lib/cli/args.py:1040
+#: lib/cli/args.py:1050
 msgid ""
 "Length of training in iterations. This is only really used for automation. "
 "There is no 'correct' number of iterations a model should be trained for. "
@@ -829,15 +837,7 @@ msgstr ""
 "다. 그러나 설정된 반복 횟수에서 모델이 자동으로 중지되도록 하려면 여기에서 해"
 "당 값을 설정할 수 있습니다."
 
-#: lib/cli/args.py:1051
-msgid ""
-"[Deprecated - Use '-D, --distribution-strategy' instead] Use the Tensorflow "
-"Mirrored Distrubution Strategy to train on multiple GPUs."
-msgstr ""
-"[Deprecated - 대신 '-D, --distribution-strategy' 사용] Tensorflow 미러 분산 "
-"전략을 사용하여 여러 GPU에서 훈련합니다."
-
-#: lib/cli/args.py:1062
+#: lib/cli/args.py:1064
 msgid ""
 "R|Select the distribution stategy to use.\n"
 "L|default: Use Tensorflow's default distribution strategy.\n"
@@ -858,15 +858,36 @@ msgstr ""
 "L|mirrored: 여러 로컬 GPU에서 동기화 분산 훈련을 지원합니다. 모델의 복사본과 "
 "모든 변수는 각 반복에서 각 GPU에 배포된 배치들와 함께 각 GPU에 로드됩니다."
 
-#: lib/cli/args.py:1079 lib/cli/args.py:1089
+#: lib/cli/args.py:1079
+msgid ""
+"Disables TensorBoard logging. NB: Disabling logs means that you will not be "
+"able to use the graph or analysis for this session in the GUI."
+msgstr ""
+"텐서보드 로깅을 비활성화합니다. 주의: 로그를 비활성화하면 GUI에서 이 세션에 "
+"대한 그래프 또는 분석을 사용할 수 없습니다."
+
+#: lib/cli/args.py:1087
+msgid ""
+"Use the Learning Rate Finder to discover the optimal learning rate for "
+"training. For new models, this will calculate the optimal learning rate for "
+"the model. For existing models this will use the optimal learning rate that "
+"was discovered when initializing the model. Setting this option will ignore "
+"the manually configured learning rate (configurable in train settings)."
+msgstr ""
+"학습률 찾기를 사용하여 훈련을 위한 최적의 학습률을 찾아보세요. 새 모델의 경"
+"우 모델에 대한 최적의 학습률을 계산합니다. 기존 모델의 경우 모델을 초기화할 "
+"때 발견된 최적의 학습률을 사용합니다. 이 옵션을 설정하면 수동으로 구성된 학습"
+"률(기차 설정에서 구성 가능)이 무시됩니다."
+
+#: lib/cli/args.py:1100 lib/cli/args.py:1110
 msgid "Saving"
 msgstr "저장"
 
-#: lib/cli/args.py:1080
+#: lib/cli/args.py:1101
 msgid "Sets the number of iterations between each model save."
 msgstr "각 모델 저장 사이의 반복 횟수를 설정합니다."
 
-#: lib/cli/args.py:1090
+#: lib/cli/args.py:1111
 msgid ""
 "Sets the number of iterations before saving a backup snapshot of the model "
 "in it's current state. Set to 0 for off."
@@ -874,11 +895,11 @@ msgstr ""
 "현재 상태에서 모델의 백업 스냅샷을 저장하기 전에 반복할 횟수를 설정합니다. 0"
 "으로 설정하면 꺼집니다."
 
-#: lib/cli/args.py:1097 lib/cli/args.py:1108 lib/cli/args.py:1119
+#: lib/cli/args.py:1118 lib/cli/args.py:1129 lib/cli/args.py:1140
 msgid "timelapse"
 msgstr "타임랩스"
 
-#: lib/cli/args.py:1098
+#: lib/cli/args.py:1119
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -891,7 +912,7 @@ msgstr ""
 "랩스를 만드는 데 사용할 'A' 얼굴의 입력 폴더여야 합니다. 또한 사용자는 --"
 "timelapse-output 및 --timelapse-input-B 매개 변수를 제공해야 합니다."
 
-#: lib/cli/args.py:1109
+#: lib/cli/args.py:1130
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -904,7 +925,7 @@ msgstr ""
 "다. 타임 랩스를 만드는 데 사용할 'B' 얼굴의 입력 폴더여야 합니다. 또한 사용자"
 "는 --timelapse-output 및 --timelapse-input-A 매개 변수를 제공해야 합니다."
 
-#: lib/cli/args.py:1120
+#: lib/cli/args.py:1141
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. If "
@@ -916,35 +937,27 @@ msgstr ""
 "다. 입력 폴더가 제공되었지만 출력 폴더가 없는 경우 모델 폴더에 /timelapse/로 "
 "기본 설정됩니다"
 
-#: lib/cli/args.py:1129 lib/cli/args.py:1136
+#: lib/cli/args.py:1150 lib/cli/args.py:1157
 msgid "preview"
 msgstr "미리보기"
 
-#: lib/cli/args.py:1130
+#: lib/cli/args.py:1151
 msgid "Show training preview output. in a separate window."
 msgstr "훈련 미리보기 결과를 각기 다른 창에서 보여줍니다."
 
-#: lib/cli/args.py:1137
+#: lib/cli/args.py:1158
 msgid ""
 "Writes the training result to a file. The image will be stored in the root "
 "of your FaceSwap folder."
 msgstr ""
 "훈련 결과를 파일에 씁니다. 이미지는 Faceswap 폴더의 최상위 폴더에 저장됩니다."
 
-#: lib/cli/args.py:1145
-msgid ""
-"Disables TensorBoard logging. NB: Disabling logs means that you will not be "
-"able to use the graph or analysis for this session in the GUI."
-msgstr ""
-"텐서보드 로깅을 비활성화합니다. 주의: 로그를 비활성화하면 GUI에서 이 세션에 "
-"대한 그래프 또는 분석을 사용할 수 없습니다."
-
-#: lib/cli/args.py:1152 lib/cli/args.py:1161 lib/cli/args.py:1170
-#: lib/cli/args.py:1179
+#: lib/cli/args.py:1165 lib/cli/args.py:1174 lib/cli/args.py:1183
+#: lib/cli/args.py:1192
 msgid "augmentation"
 msgstr "보정"
 
-#: lib/cli/args.py:1153
+#: lib/cli/args.py:1166
 msgid ""
 "Warps training faces to closely matched Landmarks from the opposite face-set "
 "rather than randomly warping the face. This is the 'dfaker' way of doing "
@@ -953,7 +966,7 @@ msgstr ""
 "무작위로 얼굴을 변환하지 않고 반대쪽 얼굴 세트에서 특징점과 밀접하게 일치하도"
 "록 훈련 얼굴을 변환해줍니다. 이것은 변환하는 'dfaker' 방식이다."
 
-#: lib/cli/args.py:1162
+#: lib/cli/args.py:1175
 msgid ""
 "To effectively learn, a random set of images are flipped horizontally. "
 "Sometimes it is desirable for this not to occur. Generally this should be "
@@ -963,7 +976,7 @@ msgstr ""
 "런 일이 일어나지 않는 것이 바람직합니다. 일반적으로 'fit training' 중을 제외"
 "하고는 이 작업을 중단해야 합니다."
 
-#: lib/cli/args.py:1171
+#: lib/cli/args.py:1184
 msgid ""
 "Color augmentation helps make the model less susceptible to color "
 "differences between the A and B sets, at an increased training time cost. "
@@ -973,7 +986,7 @@ msgstr ""
 "이 되며, 훈련 시간 비용이 증가합니다. 색상 보저를 사용하지 않으려면 이 옵션"
 "을 사용합니다."
 
-#: lib/cli/args.py:1180
+#: lib/cli/args.py:1193
 msgid ""
 "Warping is integral to training the Neural Network. This option should only "
 "be enabled towards the very end of training to try to bring out more detail. "
@@ -985,6 +998,13 @@ msgstr ""
 "면 됩니다. 처음부터 이 옵션을 활성화하면 모델이 죽을 수있고 끔찍한 결과를 초"
 "래할 수 있습니다."
 
-#: lib/cli/args.py:1205
+#: lib/cli/args.py:1218
 msgid "Output to Shell console instead of GUI console"
 msgstr "결과를 GUI 콘솔이 아닌 쉘 콘솔에 출력합니다"
+
+#~ msgid ""
+#~ "[Deprecated - Use '-D, --distribution-strategy' instead] Use the "
+#~ "Tensorflow Mirrored Distrubution Strategy to train on multiple GPUs."
+#~ msgstr ""
+#~ "[Deprecated - 대신 '-D, --distribution-strategy' 사용] Tensorflow 미러 분"
+#~ "산 전략을 사용하여 여러 GPU에서 훈련합니다."

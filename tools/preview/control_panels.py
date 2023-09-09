@@ -270,8 +270,9 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         self._options = {
             "color": app._patch.converter.cli_arguments.color_adjustment.replace("-", "_"),
-            "mask_type": app._patch.converter.cli_arguments.mask_type.replace("-", "_")}
-        defaults = {opt: self._format_to_display(val)
+            "mask_type": app._patch.converter.cli_arguments.mask_type.replace("-", "_"),
+            "face_scale": app._patch.converter.cli_arguments.face_scale}
+        defaults = {opt: self._format_to_display(val) if opt != "face_scale" else val
                     for opt, val in self._options.items()}
         self._busy_bar = self._build_frame(defaults,
                                            app._samples.generate,
@@ -282,9 +283,11 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     @property
     def convert_args(self) -> dict[str, T.Any]:
         """ dict: Currently selected Command line arguments from the :class:`ActionFrame`. """
-        return {opt if opt != "color" else "color_adjustment":
-                self._format_from_display(self._tk_vars[opt].get())
-                for opt in self._options}
+        retval = {opt if opt != "color" else "color_adjustment":
+                  self._format_from_display(self._tk_vars[opt].get())
+                  for opt in self._options if opt != "face_scale"}
+        retval["face_scale"] = self._tk_vars["face_scale"].get()
+        return retval
 
     @property
     def busy_progress_bar(self) -> BusyProgressBar:
@@ -407,17 +410,27 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         """
         cp_options: list[ControlPanelOption] = []
         for opt in self._options:
-            if opt == "mask_type":
-                choices = self._create_mask_choices(defaults, available_masks, has_predicted_mask)
+            if opt == "face_scale":
+                cp_option = ControlPanelOption(title=opt,
+                                               dtype=float,
+                                               default=0.0,
+                                               rounding=2,
+                                               min_max=(-10., 10.),
+                                               group="Command Line Choices")
             else:
-                choices = PluginLoader.get_available_convert_plugins(opt, True)
-            cp_option = ControlPanelOption(title=opt,
-                                           dtype=str,
-                                           default=defaults[opt],
-                                           initial_value=defaults[opt],
-                                           choices=choices,
-                                           group="Command Line Choices",
-                                           is_radio=False)
+                if opt == "mask_type":
+                    choices = self._create_mask_choices(defaults,
+                                                        available_masks,
+                                                        has_predicted_mask)
+                else:
+                    choices = PluginLoader.get_available_convert_plugins(opt, True)
+                cp_option = ControlPanelOption(title=opt,
+                                               dtype=str,
+                                               default=defaults[opt],
+                                               initial_value=defaults[opt],
+                                               choices=choices,
+                                               group="Command Line Choices",
+                                               is_radio=False)
             self._tk_vars[opt] = cp_option.tk_var
             cp_options.append(cp_option)
         return cp_options

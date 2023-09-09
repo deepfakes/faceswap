@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-08-20 14:52+0100\n"
+"POT-Creation-Date: 2023-09-08 22:10+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -188,8 +188,8 @@ msgid ""
 msgstr ""
 
 #: lib/cli/args.py:521 lib/cli/args.py:531 lib/cli/args.py:543
-#: lib/cli/args.py:556 lib/cli/args.py:797 lib/cli/args.py:811
-#: lib/cli/args.py:824 lib/cli/args.py:838
+#: lib/cli/args.py:556 lib/cli/args.py:797 lib/cli/args.py:812
+#: lib/cli/args.py:822 lib/cli/args.py:835 lib/cli/args.py:849
 msgid "Face Processing"
 msgstr ""
 
@@ -255,8 +255,8 @@ msgid "Draw landmarks on the ouput faces for debugging purposes."
 msgstr ""
 
 #: lib/cli/args.py:609 lib/cli/args.py:618 lib/cli/args.py:626
-#: lib/cli/args.py:633 lib/cli/args.py:851 lib/cli/args.py:862
-#: lib/cli/args.py:870 lib/cli/args.py:889 lib/cli/args.py:895
+#: lib/cli/args.py:633 lib/cli/args.py:862 lib/cli/args.py:873
+#: lib/cli/args.py:881 lib/cli/args.py:900 lib/cli/args.py:906
 msgid "settings"
 msgstr ""
 
@@ -373,7 +373,7 @@ msgid ""
 "more formats."
 msgstr ""
 
-#: lib/cli/args.py:780 lib/cli/args.py:787 lib/cli/args.py:881
+#: lib/cli/args.py:780 lib/cli/args.py:787 lib/cli/args.py:892
 msgid "Frame Processing"
 msgstr ""
 
@@ -402,7 +402,13 @@ msgid ""
 "alignments file."
 msgstr ""
 
-#: lib/cli/args.py:812
+#: lib/cli/args.py:813
+msgid ""
+"Scale the swapped face by this percentage. Positive values will enlarge the "
+"face, Negative values will shrink the face."
+msgstr ""
+
+#: lib/cli/args.py:823
 msgid ""
 "Optionally filter out people who you do not wish to process by passing in an "
 "image of that person. Should be a front portrait with a single person in the "
@@ -411,7 +417,7 @@ msgid ""
 "guaranteed."
 msgstr ""
 
-#: lib/cli/args.py:825
+#: lib/cli/args.py:836
 msgid ""
 "Optionally select people you wish to process by passing in an image of that "
 "person. Should be a front portrait with a single person in the image. "
@@ -420,7 +426,7 @@ msgid ""
 "guaranteed."
 msgstr ""
 
-#: lib/cli/args.py:839
+#: lib/cli/args.py:850
 msgid ""
 "For use with the optional nfilter/filter files. Threshold for positive face "
 "recognition. Lower values are stricter. NB: Using face filter will "
@@ -428,7 +434,7 @@ msgid ""
 "guaranteed."
 msgstr ""
 
-#: lib/cli/args.py:852
+#: lib/cli/args.py:863
 msgid ""
 "The maximum number of parallel processes for performing conversion. "
 "Converting images is system RAM heavy so it is possible to run out of memory "
@@ -438,13 +444,13 @@ msgid ""
 "your system. If singleprocess is enabled this setting will be ignored."
 msgstr ""
 
-#: lib/cli/args.py:863
+#: lib/cli/args.py:874
 msgid ""
 "[LEGACY] This only needs to be selected if a legacy model is being loaded or "
 "if there are multiple models in the model folder"
 msgstr ""
 
-#: lib/cli/args.py:871
+#: lib/cli/args.py:882
 msgid ""
 "Enable On-The-Fly Conversion. NOT recommended. You should generate a clean "
 "alignments file for your destination video. However, if you wish you can "
@@ -453,51 +459,51 @@ msgid ""
 "alignments file is found, this option will be ignored."
 msgstr ""
 
-#: lib/cli/args.py:882
+#: lib/cli/args.py:893
 msgid ""
 "When used with --frame-ranges outputs the unchanged frames that are not "
 "processed instead of discarding them."
 msgstr ""
 
-#: lib/cli/args.py:890
+#: lib/cli/args.py:901
 msgid "Swap the model. Instead converting from of A -> B, converts B -> A"
 msgstr ""
 
-#: lib/cli/args.py:896
+#: lib/cli/args.py:907
 msgid "Disable multiprocessing. Slower but less resource intensive."
 msgstr ""
 
-#: lib/cli/args.py:912
+#: lib/cli/args.py:923
 msgid ""
 "Train a model on extracted original (A) and swap (B) faces.\n"
 "Training models can take a long time. Anything from 24hrs to over a week\n"
 "Model plugins can be configured in the 'Settings' Menu"
 msgstr ""
 
-#: lib/cli/args.py:931 lib/cli/args.py:940
+#: lib/cli/args.py:942 lib/cli/args.py:951
 msgid "faces"
 msgstr ""
 
-#: lib/cli/args.py:932
+#: lib/cli/args.py:943
 msgid ""
 "Input directory. A directory containing training images for face A. This is "
 "the original face, i.e. the face that you want to remove and replace with "
 "face B."
 msgstr ""
 
-#: lib/cli/args.py:941
+#: lib/cli/args.py:952
 msgid ""
 "Input directory. A directory containing training images for face B. This is "
 "the swap face, i.e. the face that you want to place onto the head of person "
 "A."
 msgstr ""
 
-#: lib/cli/args.py:949 lib/cli/args.py:961 lib/cli/args.py:977
-#: lib/cli/args.py:1002 lib/cli/args.py:1012
+#: lib/cli/args.py:960 lib/cli/args.py:972 lib/cli/args.py:988
+#: lib/cli/args.py:1013 lib/cli/args.py:1023
 msgid "model"
 msgstr ""
 
-#: lib/cli/args.py:950
+#: lib/cli/args.py:961
 msgid ""
 "Model directory. This is where the training data will be stored. You should "
 "always specify a new folder for new models. If starting a new model, select "
@@ -506,7 +512,7 @@ msgid ""
 "the existing model."
 msgstr ""
 
-#: lib/cli/args.py:962
+#: lib/cli/args.py:973
 msgid ""
 "R|Load the weights from a pre-existing model into a newly created model. For "
 "most models this will load weights from the Encoder of the given model into "
@@ -520,7 +526,7 @@ msgid ""
 "to train."
 msgstr ""
 
-#: lib/cli/args.py:978
+#: lib/cli/args.py:989
 msgid ""
 "R|Select which trainer to use. Trainers can be configured from the Settings "
 "menu or the config folder.\n"
@@ -543,7 +549,7 @@ msgid ""
 "susceptible to color differences."
 msgstr ""
 
-#: lib/cli/args.py:1003
+#: lib/cli/args.py:1014
 msgid ""
 "Output a summary of the model and exit. If a model folder is provided then a "
 "summary of the saved model is displayed. Otherwise a summary of the model "
@@ -551,7 +557,7 @@ msgid ""
 "displayed."
 msgstr ""
 
-#: lib/cli/args.py:1013
+#: lib/cli/args.py:1024
 msgid ""
 "Freeze the weights of the model. Freezing weights means that some of the "
 "parameters in the model will no longer continue to learn, but those that are "
@@ -560,12 +566,12 @@ msgid ""
 "layers."
 msgstr ""
 
-#: lib/cli/args.py:1026 lib/cli/args.py:1038 lib/cli/args.py:1052
-#: lib/cli/args.py:1067 lib/cli/args.py:1075
+#: lib/cli/args.py:1037 lib/cli/args.py:1049 lib/cli/args.py:1063
+#: lib/cli/args.py:1078 lib/cli/args.py:1086
 msgid "training"
 msgstr ""
 
-#: lib/cli/args.py:1027
+#: lib/cli/args.py:1038
 msgid ""
 "Batch size. This is the number of images processed through the model for "
 "each side per iteration. NB: As the model is fed 2 sides at a time, the "
@@ -573,7 +579,7 @@ msgid ""
 "number that you set here. Larger batches require more GPU RAM."
 msgstr ""
 
-#: lib/cli/args.py:1039
+#: lib/cli/args.py:1050
 msgid ""
 "Length of training in iterations. This is only really used for automation. "
 "There is no 'correct' number of iterations a model should be trained for. "
@@ -582,7 +588,7 @@ msgid ""
 "can set that value here."
 msgstr ""
 
-#: lib/cli/args.py:1053
+#: lib/cli/args.py:1064
 msgid ""
 "R|Select the distribution stategy to use.\n"
 "L|default: Use Tensorflow's default distribution strategy.\n"
@@ -595,13 +601,13 @@ msgid ""
 "batches distributed to each GPU at each iteration."
 msgstr ""
 
-#: lib/cli/args.py:1068
+#: lib/cli/args.py:1079
 msgid ""
 "Disables TensorBoard logging. NB: Disabling logs means that you will not be "
 "able to use the graph or analysis for this session in the GUI."
 msgstr ""
 
-#: lib/cli/args.py:1076
+#: lib/cli/args.py:1087
 msgid ""
 "Use the Learning Rate Finder to discover the optimal learning rate for "
 "training. For new models, this will calculate the optimal learning rate for "
@@ -610,25 +616,25 @@ msgid ""
 "the manually configured learning rate (configurable in train settings)."
 msgstr ""
 
-#: lib/cli/args.py:1089 lib/cli/args.py:1099
+#: lib/cli/args.py:1100 lib/cli/args.py:1110
 msgid "Saving"
 msgstr ""
 
-#: lib/cli/args.py:1090
+#: lib/cli/args.py:1101
 msgid "Sets the number of iterations between each model save."
 msgstr ""
 
-#: lib/cli/args.py:1100
+#: lib/cli/args.py:1111
 msgid ""
 "Sets the number of iterations before saving a backup snapshot of the model "
 "in it's current state. Set to 0 for off."
 msgstr ""
 
-#: lib/cli/args.py:1107 lib/cli/args.py:1118 lib/cli/args.py:1129
+#: lib/cli/args.py:1118 lib/cli/args.py:1129 lib/cli/args.py:1140
 msgid "timelapse"
 msgstr ""
 
-#: lib/cli/args.py:1108
+#: lib/cli/args.py:1119
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -637,7 +643,7 @@ msgid ""
 "timelapse-input-B parameter."
 msgstr ""
 
-#: lib/cli/args.py:1119
+#: lib/cli/args.py:1130
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -646,7 +652,7 @@ msgid ""
 "timelapse-input-A parameter."
 msgstr ""
 
-#: lib/cli/args.py:1130
+#: lib/cli/args.py:1141
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. If "
@@ -654,47 +660,47 @@ msgid ""
 "model folder /timelapse/"
 msgstr ""
 
-#: lib/cli/args.py:1139 lib/cli/args.py:1146
+#: lib/cli/args.py:1150 lib/cli/args.py:1157
 msgid "preview"
 msgstr ""
 
-#: lib/cli/args.py:1140
+#: lib/cli/args.py:1151
 msgid "Show training preview output. in a separate window."
 msgstr ""
 
-#: lib/cli/args.py:1147
+#: lib/cli/args.py:1158
 msgid ""
 "Writes the training result to a file. The image will be stored in the root "
 "of your FaceSwap folder."
 msgstr ""
 
-#: lib/cli/args.py:1154 lib/cli/args.py:1163 lib/cli/args.py:1172
-#: lib/cli/args.py:1181
+#: lib/cli/args.py:1165 lib/cli/args.py:1174 lib/cli/args.py:1183
+#: lib/cli/args.py:1192
 msgid "augmentation"
 msgstr ""
 
-#: lib/cli/args.py:1155
+#: lib/cli/args.py:1166
 msgid ""
 "Warps training faces to closely matched Landmarks from the opposite face-set "
 "rather than randomly warping the face. This is the 'dfaker' way of doing "
 "warping."
 msgstr ""
 
-#: lib/cli/args.py:1164
+#: lib/cli/args.py:1175
 msgid ""
 "To effectively learn, a random set of images are flipped horizontally. "
 "Sometimes it is desirable for this not to occur. Generally this should be "
 "left off except for during 'fit training'."
 msgstr ""
 
-#: lib/cli/args.py:1173
+#: lib/cli/args.py:1184
 msgid ""
 "Color augmentation helps make the model less susceptible to color "
 "differences between the A and B sets, at an increased training time cost. "
 "Enable this option to disable color augmentation."
 msgstr ""
 
-#: lib/cli/args.py:1182
+#: lib/cli/args.py:1193
 msgid ""
 "Warping is integral to training the Neural Network. This option should only "
 "be enabled towards the very end of training to try to bring out more detail. "
@@ -702,6 +708,6 @@ msgid ""
 "likely to kill a model and lead to terrible results."
 msgstr ""
 
-#: lib/cli/args.py:1207
+#: lib/cli/args.py:1218
 msgid "Output to Shell console instead of GUI console"
 msgstr ""

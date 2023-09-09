@@ -790,6 +790,17 @@ class ConvertArgs(ExtractConvertArgs):
                    "will be discarded unless '-k' (--keep-unchanged) is selected. NB: If you are "
                    "converting from images, then the filenames must end with the frame-number!")))
         argument_list.append(dict(
+            opts=("-S", "--face-scale"),
+            action=Slider,
+            min_max=(-10.0, 10.0),
+            rounding=2,
+            dest="face_scale",
+            type=float,
+            default=0.0,
+            group=_("Face Processing"),
+            help=_("Scale the swapped face by this percentage. Positive values will enlarge the "
+                   "face, Negative values will shrink the face.")))
+        argument_list.append(dict(
             opts=("-a", "--input-aligned-dir"),
             action=DirFullPaths,
             dest="input_aligned_dir",

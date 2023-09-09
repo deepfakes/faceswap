@@ -94,6 +94,7 @@ class Converter():
         self._configfile = configfile
 
         self._scale = arguments.output_scale / 100
+        self._face_scale = 1.0 - self._args.face_scale / 100.
         self._adjustments = Adjustments()
 
         self._load_plugins()
@@ -117,6 +118,7 @@ class Converter():
             Pre-loaded :class:`lib.config.FaceswapConfig`. used over any configuration on disk.
         """
         logger.debug("Reinitializing converter")
+        self._face_scale = 1.0 - self._args.face_scale / 100.
         self._adjustments = Adjustments()
         self._load_plugins(config=config, disable_logging=True)
         logger.debug("Reinitialized converter")
@@ -289,8 +291,15 @@ class Converter():
                                                   predicted_mask)
 
             # Warp face with the mask
+            if self._face_scale == 1.0:
+                mat = reference_face.adjusted_matrix
+            else:
+                mat = reference_face.adjusted_matrix * self._face_scale
+                patch_center = (new_face.shape[1] / 2, new_face.shape[0] / 2)
+                mat[..., 2] += (1 - self._face_scale) * np.array(patch_center)
+
             cv2.warpAffine(new_face,
-                           reference_face.adjusted_matrix,
+                           mat,
                            frame_size,
                            placeholder,
                            flags=cv2.WARP_INVERSE_MAP | interpolator,
