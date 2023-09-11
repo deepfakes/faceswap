@@ -767,6 +767,10 @@ class ConvertArgs(ExtractConvertArgs):
                    "\nL|gif: [animated image] Create an animated gif."
                    "\nL|opencv: [images] The fastest image writer, but less options and formats "
                    "than other plugins."
+                   "\nL|patch: [images] Outputs the raw swapped face patch, along with the "
+                   "transformation matrix required to re-insert the face back into the original "
+                   "frame. Use this option if you wish to post-process and composite the final "
+                   "face within external tools."
                    "\nL|pillow: [images] Slower than opencv, but has more options and supports "
                    "more formats.")))
         argument_list.append(dict(
