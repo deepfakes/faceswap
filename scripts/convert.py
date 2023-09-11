@@ -564,7 +564,7 @@ class DiskIO():
             return False
         idx = int(indices[0])
         skipframe = not any(map(lambda b: b[0] <= idx <= b[1], self._frame_ranges))
-        logger.trace("idx: %s, skipframe: %s", idx, skipframe)  # type: ignore
+        logger.trace("idx: %s, skipframe: %s", idx, skipframe)  # type: ignore[attr-defined]
         return skipframe
 
     def _get_detected_faces(self, filename: str, image: np.ndarray) -> list[DetectedFace]:
@@ -682,7 +682,7 @@ class DiskIO():
             if self._queues["save"].shutdown.is_set():
                 logger.debug("Save Queue: Stop signal received. Terminating")
                 break
-            item = self._queues["save"].get()
+            item: tuple[str, np.ndarray | bytes] | T.Literal["EOF"] = self._queues["save"].get()
             if item == "EOF":
                 logger.debug("EOF Received")
                 break
