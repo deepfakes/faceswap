@@ -558,7 +558,8 @@ def update_existing_metadata(filename, metadata):
 
 def encode_image(image: np.ndarray,
                  extension: str,
-                 metadata: PNGHeaderDict | None = None) -> bytes:
+                 encoding_args: tuple[int, ...] | None = None,
+                 metadata: PNGHeaderDict | dict[str, T.Any] | None = None) -> bytes:
     """ Encode an image.
 
     Parameters
@@ -567,6 +568,8 @@ def encode_image(image: np.ndarray,
         The image to be encoded in `BGR` channel order.
     extension: str
         A compatible `cv2` image file extension that the final image is to be saved to.
+    encoding_args: tuple[int, ...], optional
+        Any encoding arguments to pass to cv2's imencode function
     metadata: dict, optional
         Metadata for the image. If provided, and the extension is png, this information will be
         written to the PNG itxt header. Default:``None``
@@ -584,7 +587,8 @@ def encode_image(image: np.ndarray,
     """
     if metadata and extension.lower() != ".png":
         raise ValueError("Metadata is only supported for .png images")
-    retval = cv2.imencode(extension, image)[1]
+    args = tuple() if encoding_args is None else encoding_args
+    retval = cv2.imencode(extension, image, args)[1]
     if metadata:
         retval = png_write_meta(retval.tobytes(), metadata)
     return retval
