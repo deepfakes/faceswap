@@ -78,7 +78,7 @@ class Converter():
                  coverage_ratio: float,
                  centering: CenteringType,
                  draw_transparent: bool,
-                 pre_encode: Callable[[np.ndarray], list[bytes]] | None,
+                 pre_encode: Callable | None,
                  arguments: Namespace,
                  configfile: str | None = None) -> None:
         logger.debug("Initializing %s: (output_size: %s,  coverage_ratio: %s, centering: %s, "
@@ -254,7 +254,12 @@ class Converter():
         if self._writer_pre_encode is None:
             retval: np.ndarray | list[bytes] = patched_face
         else:
-            retval = self._writer_pre_encode(patched_face)
+            kwargs: dict[str, T.Any] = {}
+            if self.cli_arguments.writer == "patch":
+                kwargs["matrices"] = np.array([face.matrix
+                                               for face in predicted.reference_faces],
+                                              dtype="float32")
+            retval = self._writer_pre_encode(patched_face, **kwargs)
         logger.trace("Patched image: '%s'",  # type: ignore[attr-defined]
                      predicted.inbound.filename)
         return retval
