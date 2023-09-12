@@ -77,6 +77,17 @@ _DEFAULTS = {
         "datatype": bool,
         "group": "file_naming",
     },
+    "face_index_location": {
+        "default": "before",
+        "info": "For frames that contain multiple faces, where the face index should appear in "
+                "the filename:"
+                "\n\t before: places the face index before the frame number."
+                "\n\t after: places the face index after the frame number.",
+        "datatype": str,
+        "choices": ["before", "after"],
+        "group": "file_naming",
+        "gui_radio": True,
+    },
     "empty_frames": {
         "default": "skip",
         "info": "How to handle the output of frames without faces:"
