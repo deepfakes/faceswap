@@ -36,7 +36,7 @@ class Writer(Output):
                  **kwargs) -> None:
         logger.debug("total_count: %s, frame_ranges: %s", total_count, frame_ranges)
         super().__init__(output_folder, **kwargs)
-        self.frame_order: list[int] = self._set_frame_order(total_count, frame_ranges)
+        self._frame_order: list[int] = self._set_frame_order(total_count, frame_ranges)
         # Fix dims on 1st received frame
         self._output_dimensions: tuple[int, int] | None = None
         # Need to know dimensions of first frame, so set writer then
@@ -49,33 +49,6 @@ class Writer(Output):
         kwargs = {key: int(val) for key, val in self.config.items()}
         logger.debug(kwargs)
         return kwargs
-
-    @staticmethod
-    def _set_frame_order(total_count: int,
-                         frame_ranges: list[tuple[int, int]] | None) -> list[int]:
-        """ Obtain the full list of frames to be converted in order.
-
-        Parameters
-        ----------
-        total_count: int
-            The total number of frames to be converted
-        frame_ranges: list or ``None``
-            List of tuples for starting and end values of each frame range to be converted or
-            ``None`` if all frames are to be converted
-
-        Returns
-        -------
-        list
-            Full list of all frame indices to be converted
-        """
-        if frame_ranges is None:
-            retval = list(range(1, total_count + 1))
-        else:
-            retval = []
-            for rng in frame_ranges:
-                retval.extend(list(range(rng[0], rng[1] + 1)))
-        logger.debug("frame_order: %s", retval)
-        return retval
 
     def _get_writer(self) -> im_format.Format.Writer:
         """ Obtain the GIF writer with the requested GIF encoding options.
@@ -159,11 +132,11 @@ class Writer(Output):
         """ Writes any consecutive frames to the GIF container that are ready to be output
         from the cache. """
         assert self._writer is not None
-        while self.frame_order:
-            if self.frame_order[0] not in self.cache:
+        while self._frame_order:
+            if self._frame_order[0] not in self.cache:
                 logger.trace("Next frame not ready. Continuing")  # type: ignore
                 break
-            save_no = self.frame_order.pop(0)
+            save_no = self._frame_order.pop(0)
             save_image = self.cache.pop(save_no)
             logger.trace("Rendering from cache. Frame no: %s", save_no)  # type: ignore
             self._writer.append_data(save_image[:, :, ::-1])

@@ -46,7 +46,7 @@ class Writer(Output):
         self._source_video: str = source_video
         self._output_filename: str = self._get_output_filename()
         self._frame_ranges: list[tuple[int, int]] | None = frame_ranges
-        self.frame_order: list[int] = self._set_frame_order(total_count)
+        self._frame_order: list[int] = self._set_frame_order(total_count, frame_ranges)
         self._output_dimensions: str | None = None  # Fix dims on 1st received frame
         # Need to know dimensions of first frame, so set writer then
         self._writer: Generator[None, np.ndarray, None] | None = None
@@ -174,28 +174,6 @@ class Writer(Output):
         logger.info("Outputting to: '%s'", retval)
         return retval
 
-    def _set_frame_order(self, total_count: int) -> list[int]:
-        """ Obtain the full list of frames to be converted in order.
-
-        Parameters
-        ----------
-        total_count: int
-            The total number of frames to be converted
-
-        Returns
-        -------
-        list
-            Full list of all frame indices to be converted
-        """
-        if self._frame_ranges is None:
-            retval = list(range(1, total_count + 1))
-        else:
-            retval = []
-            for rng in self._frame_ranges:
-                retval.extend(list(range(rng[0], rng[1] + 1)))
-        logger.debug("frame_order: %s", retval)
-        return retval
-
     def _get_writer(self, frame_dims: tuple[int, int]) -> Generator[None, np.ndarray, None]:
         """ Add the requested encoding options and return the writer.
 
@@ -268,11 +246,11 @@ class Writer(Output):
         """ Writes any consecutive frames to the video container that are ready to be output
         from the cache. """
         assert self._writer is not None
-        while self.frame_order:
-            if self.frame_order[0] not in self.cache:
+        while self._frame_order:
+            if self._frame_order[0] not in self.cache:
                 logger.trace("Next frame not ready. Continuing")  # type:ignore[attr-defined]
                 break
-            save_no = self.frame_order.pop(0)
+            save_no = self._frame_order.pop(0)
             save_image = self.cache.pop(save_no)
             logger.trace("Rendering from cache. Frame no: %s",  # type:ignore[attr-defined]
                          save_no)

@@ -68,6 +68,36 @@ class Output():
         retval = hasattr(self, "frame_order")
         return retval
 
+    @classmethod
+    def _set_frame_order(cls,
+                         total_count: int,
+                         frame_ranges: list[tuple[int, int]] | None) -> list[int]:
+        """ Obtain the full list of frames to be converted in order.
+
+        Used for FFMPEG and Gif writers to ensure correct frame order
+
+        Parameters
+        ----------
+        total_count: int
+            The total number of frames to be converted
+        frame_ranges: list or ``None``
+            List of tuples for starting and end values of each frame range to be converted or
+            ``None`` if all frames are to be converted
+
+        Returns
+        -------
+        list
+            Full list of all frame indices to be converted
+        """
+        if frame_ranges is None:
+            retval = list(range(1, total_count + 1))
+        else:
+            retval = []
+            for rng in frame_ranges:
+                retval.extend(list(range(rng[0], rng[1] + 1)))
+        logger.debug("frame_order: %s", retval)
+        return retval
+
     def output_filename(self, filename: str, separate_mask: bool = False) -> list[str]:
         """ Obtain the full path for the output file, including the correct extension, for the
         given input filename.
@@ -136,7 +166,7 @@ class Output():
         """
         raise NotImplementedError
 
-    def pre_encode(self, image: np.ndarray) -> T.Any:  # pylint: disable=unused-argument
+    def pre_encode(self, image: np.ndarray, **kwargs) -> T.Any:  # pylint: disable=unused-argument
         """ Some writer plugins support the pre-encoding of images prior to saving out. As
         patching is done in multiple threads, but writing is done in a single thread, it can
         speed up the process to do any pre-encoding as part of the converter process.
