@@ -73,9 +73,9 @@ jobs:
         run: |
           FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
       - name: Install requirements
-        run: pip install -r ./requirements/requirements.txt
+        run: pip install -r ./requirements/requirements_codecov.txt
       - name: Run tests and collect coverage
-        run: pytest --cov=api.calculator --cov-report=xml
+        run: pytest --cov=tests --cov-report=xml
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@v3      
 
@@ -122,9 +122,9 @@ jobs:
         run: |
           FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
       - name: Install requirements
-        run: pip install -r ./requirements/requirements.txt
+        run: pip install -r ./requirements/requirements_codecov.txt
       - name: Run tests and collect coverage
-        run: pytest --cov=api.calculator --cov-report=xml
+        run: pytest --cov=tests --cov-report=xml
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@v3      
 
@@ -172,8 +172,8 @@ jobs:
       - name: End to End Tests
         run: python tests/simple_tests.py
       - name: Install requirements
-        run: pip install -r ./requirements/requirements.txt
+        run: pip install -r ./requirements/requirements_codecov.txt
       - name: Run tests and collect coverage
-        run: pytest --cov=api.calculator --cov-report=xml
+        run: pytest --cov=tests --cov-report=xml
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@v3
