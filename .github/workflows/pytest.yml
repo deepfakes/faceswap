@@ -72,12 +72,12 @@ jobs:
         if: matrix.backend != 'rocm' && matrix.backend != 'nvidia' && matrix.backend != 'directml' && matrix.os != 'macos-latest'
         run: |
           FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
-      
-      # Add Codecov integration here
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - name: Install requirements
+        run: pip install -r requirements.txt
+      - name: Run tests and collect coverage
+        run: pytest --cov=api.calculator --cov-report=xml
+      - name: Upload coverage reports to Codecov with GitHub Action
+        uses: codecov/codecov-action@v3      
 
   build_linux:
     name: "pip (ubuntu-latest, ${{ matrix.backend }})"
@@ -121,12 +121,12 @@ jobs:
       - name: End to End Tests
         run: |
           FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
-      
-      # Add Codecov integration here
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}          
+      - name: Install requirements
+        run: pip install -r requirements.txt
+      - name: Run tests and collect coverage
+        run: pytest --cov=api.calculator --cov-report=xml
+      - name: Upload coverage reports to Codecov with GitHub Action
+        uses: codecov/codecov-action@v3      
 
   build_windows:
     name: "pip (windows-latest, ${{ matrix.backend }})"
@@ -171,9 +171,9 @@ jobs:
         run: py.test -v tests
       - name: End to End Tests
         run: python tests/simple_tests.py
-
-      # Add Codecov integration here
-      - name: Upload coverage reports to Codecov
+      - name: Install requirements
+        run: pip install -r requirements.txt
+      - name: Run tests and collect coverage
+        run: pytest --cov=api.calculator --cov-report=xml
+      - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@v3
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
