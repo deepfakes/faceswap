@@ -74,10 +74,10 @@ jobs:
           FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
       
       # Add Codecov integration here
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      # - name: Upload coverage reports to Codecov
+      #   uses: codecov/codecov-action@v3
+      #   env:
+      #     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   build_linux:
     name: "pip (ubuntu-latest, ${{ matrix.backend }})"
@@ -123,10 +123,10 @@ jobs:
           FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
       
       # Add Codecov integration here
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}          
+      # - name: Upload coverage reports to Codecov
+      #   uses: codecov/codecov-action@v3
+      #   env:
+      #     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}          
 
   build_windows:
     name: "pip (windows-latest, ${{ matrix.backend }})"
@@ -173,7 +173,7 @@ jobs:
         run: python tests/simple_tests.py
 
       # Add Codecov integration here
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      # - name: Upload coverage reports to Codecov
+      #   uses: codecov/codecov-action@v3
+      #   env:
+      #     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
