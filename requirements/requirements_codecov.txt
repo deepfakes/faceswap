@@ -1,0 +1,6 @@
+Flask==2.3.3
+flatbuffers==2.0
+pytest==7.1.2
+pytest-asyncio==0.21.0
+pytest-cov==4.1.0
+pytest-timeout==2.1.0
