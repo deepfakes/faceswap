@@ -218,6 +218,31 @@ class Converter():
                 out_queue.put((item.inbound.filename, image))
         logger.debug("Completed convert process")
 
+    def _get_warp_matrix(self, matrix: np.ndarray, size: int) -> np.ndarray:
+        """ Obtain the final scaled warp transformation matrix based on face scaling from the
+        original transformation matrix
+
+        Parameters
+        ----------
+        matrix: :class:`numpy.ndarray`
+            The transformation for patching the swapped face back onto the output frame
+        size: int
+            The size of the face patch, in pixels
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The final transformation matrix with any scaling applied
+        """
+        if self._face_scale == 1.0:
+            mat = matrix
+        else:
+            mat = matrix * self._face_scale
+            patch_center = (size / 2, size / 2)
+            mat[..., 2] += (1 - self._face_scale) * np.array(patch_center)
+
+        return mat
+
     def _patch_image(self, predicted: ConvertItem) -> np.ndarray | list[bytes]:
         """ Patch a swapped face onto a frame.
 
@@ -256,7 +281,9 @@ class Converter():
         else:
             kwargs: dict[str, T.Any] = {}
             if self.cli_arguments.writer == "patch":
-                kwargs["matrices"] = np.array([face.matrix
+                kwargs["canvas_size"] = (background.shape[1], background.shape[0])
+                kwargs["matrices"] = np.array([self._get_warp_matrix(face.adjusted_matrix,
+                                                                     patched_face.shape[1])
                                                for face in predicted.reference_faces],
                                               dtype="float32")
             retval = self._writer_pre_encode(patched_face, **kwargs)
@@ -279,13 +306,7 @@ class Converter():
             The frame to affine the face onto
         """
         # Warp face with the mask
-        if self._face_scale == 1.0:
-            mat = reference.adjusted_matrix
-        else:
-            mat = reference.adjusted_matrix * self._face_scale
-            patch_center = (face.shape[1] / 2, face.shape[0] / 2)
-            mat[..., 2] += (1 - self._face_scale) * np.array(patch_center)
-
+        mat = self._get_warp_matrix(reference.adjusted_matrix, face.shape[0])
         cv2.warpAffine(face,
                        mat,
                        (frame.shape[1], frame.shape[0]),
@@ -318,13 +339,13 @@ class Converter():
         logger.trace("Getting: (filename: '%s', faces: %s)",  # type: ignore[attr-defined]
                      predicted.inbound.filename, len(predicted.swapped_faces))
 
+        placeholder = np.zeros((frame_size[1], frame_size[0], 4), dtype="float32")
         if self._full_frame_output:
-            placeholder = np.zeros((frame_size[1], frame_size[0], 4), dtype="float32")
             background = predicted.inbound.image / np.array(255.0, dtype="float32")
             placeholder[:, :, :3] = background
         else:
             faces = []  # Collect the faces into final array
-            background = np.array([])  # Not used
+            background = placeholder  # Used for obtaining original frame dimensions
 
         for new_face, detected_face, reference_face in zip(predicted.swapped_faces,
                                                            predicted.inbound.detected_faces,
