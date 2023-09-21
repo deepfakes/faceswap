@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 # TODO more extensions via config
 # TODO change warp affine border type for single vs multi-faces
+# TODO bit-depth validation
 
 
 class Writer(Output):
@@ -152,6 +153,25 @@ class Writer(Output):
         logger.trace("matrix: %s, inverse: %s", mat, retval)  # type:ignore[attr-defined]
         return retval
 
+    def _adjust_to_origin(self, matrices: np.ndarray, canvas_size: tuple[int, int]) -> None:
+        """ Adjust the transformation matrix to use the correct target coordinates system. The
+        matrix adjustment is done in place, so this does not return a value
+
+        Parameters
+        ----------
+        matrices: :class:`numpy.ndarray`
+            The transformation matrices to be adjusted
+        canvas_size: tuple[int, int]
+            The size of the canvas (height, width) that the transformation matrix applies to.
+        """
+        origin = self.config["origin"].split("-")
+        if origin[0] == "bottom":
+            matrices[..., 1, 1] *= -1.
+            matrices[..., 1, 2] = canvas_size[1] - matrices[..., 1, 2] - 1.
+        if origin[1] == "right":
+            matrices[..., 0, 1] *= -1.
+            matrices[..., 0, 2] = canvas_size[0] - matrices[..., 0, 2] - 1.
+
     def pre_encode(self, image: np.ndarray, **kwargs) -> list[list[bytes]]:
         """ Pre_encode the image in lib/convert.py threads as it is a LOT quicker.
 
@@ -159,6 +179,8 @@ class Writer(Output):
         ----------
         image: :class:`numpy.ndarray`
             A 3 or 4 channel BGR swapped face batch as float32
+        canvas_size: tuple[int, int]
+            The size of the canvas (x, y) that the transformation matrix applies to.
         matrices: :class:`numpy.ndarray`, optional
             The transformation matrices for extracting the face patches from the original frame.
             Must be provided if an image is provided, otherwise ``None`` to insert a dummy matrix
@@ -172,12 +194,14 @@ class Writer(Output):
          """
         logger.trace("Pre-encoding image")  # type:ignore[attr-defined]
         retval = []
+        canvas_size: tuple[int, int] = kwargs.get("canvas_size", (1, 1))
         matrices: np.ndarray = kwargs.get("matrices", np.array([]))
 
         if not np.any(image) and self.config["empty_frames"] == "blank":
             image = np.zeros((1, self._patch_size, self._patch_size, 4), dtype=np.float32)
 
         matrices = self._get_inverse_matrices(matrices)
+        self._adjust_to_origin(matrices, canvas_size)
         patches = (image * self._multiplier).astype(self._dtype)
 
         for patch, matrix in zip(patches, matrices):

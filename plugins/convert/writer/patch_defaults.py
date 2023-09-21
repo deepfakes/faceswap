@@ -88,8 +88,27 @@ _DEFAULTS = {
         "group": "file_naming",
         "gui_radio": True,
     },
+    "origin": {
+        "default": "bottom-left",
+        "info": "The origin (0, 0) location of the software that patches will be imported into. "
+                "This impacts the transformation matrix that is supplied with the image patch. "
+                "Setting the correct origin here will make importing into the external tool "
+                "simpler."
+                "\n\t top-left: The origin (0, 0) of the external canvas is at the top left "
+                "corner."
+                "\n\t bottom-left: The origin (0, 0) of the external canvas is at the bottom "
+                "left corner."
+                "\n\t top-right: The origin (0, 0) of the external canvas is at the top right "
+                "corner."
+                "\n\t bottom-right: The origin (0, 0) of the external canvas is at the bottom "
+                "right corner.",
+        "datatype": str,
+        "choices": ["top-left", "bottom-left", "top-right", "bottom-right"],
+        "group": "output",
+        "gui_radio": True
+    },
     "empty_frames": {
-        "default": "skip",
+        "default": "blank",
         "info": "How to handle the output of frames without faces:"
                 "\n\t skip: skips any frames that do not have a face within it. This will lead to "
                 "gaps within the final image sequence."
@@ -102,7 +121,7 @@ _DEFAULTS = {
         "gui_radio": True,
     },
     "json_output": {
-        "default": True,
+        "default": False,
         "info": "The transformation matrix, and other associated metadata, is output within the "
                 "face images EXIF fields. Some external tools can read this data, others cannot."
                 "enable this option to output a json file which contains this same metadata "
@@ -126,14 +145,16 @@ _DEFAULTS = {
         "datatype": int,
         "rounding": 1,
         "min_max": (0, 9),
-        "group": "output"
+        "group": "format",
     },
     "bit_depth": {
-        "default": 16,
-        "info": "The bit-depth for the output images.",
+        "default": "16",
+        "info": "The bit-depth for the output images:"
+                "\n\t 8: 8-bit unsigned - Supported by all formats."
+                "\n\t 16: 16-bit unsigned - Supported by all formats.",
         "datatype": str,
         "choices": ["8", "16"],
-        "group": "output",
+        "group": "format",
         "gui_radio": True,
     },
 }
