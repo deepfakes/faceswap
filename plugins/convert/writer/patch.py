@@ -10,14 +10,12 @@ import os
 import cv2
 import numpy as np
 
-from lib.image import encode_image, png_read_meta
+from lib.image import encode_image, png_read_meta, tiff_read_meta
 from ._base import Output
 
 logger = logging.getLogger(__name__)
 
-# TODO more extensions via config
 # TODO change warp affine border type for single vs multi-faces
-# TODO bit-depth validation
 
 
 class Writer(Output):
@@ -37,13 +35,16 @@ class Writer(Output):
         logger.debug("patch_size: %s", patch_size)
         super().__init__(output_folder, **kwargs)
         self._patch_size = patch_size
-        self._extension = ".png"
-        self.config["format"] = "png"
+        self._extension = {"png": ".png", "tiff": ".tif"}[self.config["format"]]
         self._separate_mask = self.config["separate_mask"]
-        self._args = self._get_save_args()
 
-        self._dtype = np.uint8 if int(self.config["bit_depth"]) == 8 else np.uint16
-        self._multiplier = 255.if int(self.config["bit_depth"]) == 8 else 65535
+        if self._extension == ".png" and self.config["bit_depth"] not in ("8", "16"):
+            logger.warning("Patch Writer: Bit Depth '%s' is unsupported for format '%s'. "
+                           "Updating to '16'", self.config["bit_depth"], self.config["format"])
+            self.config["bit_depth"] = "16"
+        self._dtype = {"8": np.uint8, "16": np.uint16, "32": np.float32}[self.config["bit_depth"]]
+        self._multiplier = {"8": 255., "16": 65535., "32": 1.}[self.config["bit_depth"]]
+        self._args = self._get_save_args()
         self._matrices: dict[str, dict[str, list[list[float]]]] = {}
 
     def _get_save_args(self) -> tuple[int, ...]:
@@ -55,8 +56,13 @@ class Writer(Output):
             The OpenCV specific arguments for the selected file format
          """
         args: tuple[int, ...] = tuple()
-        if self.config["png_compress_level"] > -1:
+        if self._extension == ".png" and self.config["png_compress_level"] > -1:
             args = (cv2.IMWRITE_PNG_COMPRESSION, self.config["png_compress_level"])
+        if self._extension == ".tif" and self.config["bit_depth"] != "32":
+            tiff_methods = {"none": 1, "lzw": 5, "deflate": 8}
+            method = self.config["tiff_compression_method"]
+            method = "none" if method is None else method
+            args = (cv2.IMWRITE_TIFF_COMPRESSION, tiff_methods[method])
         logger.debug(args)
         return args
 
@@ -115,6 +121,7 @@ class Writer(Output):
         """
         logger.trace("Outputting: (filename: '%s')", filename)  # type:ignore[attr-defined]
 
+        read_func = png_read_meta if self._extension == ".png" else tiff_read_meta
         for idx, face in enumerate(image):
             new_filename = self._get_new_filename(filename, idx)
             filenames = self.output_filename(new_filename, self._separate_mask)
@@ -126,7 +133,7 @@ class Writer(Output):
                     logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
                 if not self.config["json_output"]:
                     continue
-                mat = png_read_meta(img)
+                mat = read_func(img)
                 self._matrices[os.path.splitext(os.path.basename(fname))[0]] = mat
 
     @classmethod
@@ -206,7 +213,8 @@ class Writer(Output):
 
         for patch, matrix in zip(patches, matrices):
             this_face = []
-            mat = {"transform_matrix": matrix.tolist()}
+            mat = json.dumps({"transform_matrix": matrix.tolist()},
+                             ensure_ascii=True).encode("ascii")
             if self._separate_mask:
                 mask = patch[..., -1]
                 face = patch[..., :3]

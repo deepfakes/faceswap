@@ -138,6 +138,29 @@ _DEFAULTS = {
         "datatype": bool,
         "group": "output",
     },
+    "bit_depth": {
+        "default": "16",
+        "info": "The bit-depth for the output images:"
+                "\n\t 8: 8-bit unsigned - Supported by all formats."
+                "\n\t 16: 16-bit unsigned - Supported by all formats."
+                "\n\t 32: 32-bit float - Supported by Tiff only.",
+        "datatype": str,
+        "choices": ["8", "16", "32"],
+        "group": "format",
+        "gui_radio": True,
+    },
+    "format": {
+        "default": "png",
+        "info": "File format to save as."
+                "\n\t png: PNG file format. Transformation matrix is written to the custom iTxt "
+                "header field 'faceswap'"
+                "\n\t tiff: TIFF file format. Transformation matrix is written to the "
+                "'image_description' header field",
+        "datatype": str,
+        "choices": ["png", "tiff"],
+        "group": "format",
+        "gui_radio": True
+    },
     "png_compress_level": {
         "default": 3,
         "info": "ZLIB compression level, 1 gives best speed, 9 gives best compression, 0 gives no "
@@ -147,14 +170,13 @@ _DEFAULTS = {
         "min_max": (0, 9),
         "group": "format",
     },
-    "bit_depth": {
-        "default": "16",
-        "info": "The bit-depth for the output images:"
-                "\n\t 8: 8-bit unsigned - Supported by all formats."
-                "\n\t 16: 16-bit unsigned - Supported by all formats.",
+    "tiff_compression_method": {
+        "default": "lzw",
+        "info": "The compression method to use for Tiff files. Note: For 32bit output, SGILOG "
+                "compression will always be used regardless of what is selected here.",
         "datatype": str,
-        "choices": ["8", "16"],
+        "choices": ["none", "lzw", "deflate"],
         "group": "format",
-        "gui_radio": True,
+        "gui_radio": True
     },
 }
