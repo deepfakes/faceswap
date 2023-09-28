@@ -291,7 +291,11 @@ class Converter():
                      predicted.inbound.filename)
         return retval
 
-    def _warp_to_frame(self, reference: AlignedFace, face: np.ndarray, frame: np.ndarray) -> None:
+    def _warp_to_frame(self,
+                       reference: AlignedFace,
+                       face: np.ndarray,
+                       frame: np.ndarray,
+                       multiple_faces: bool) -> None:
         """ Perform affine transformation to place a face patch onto the given frame.
 
         Affine is done in place on the `frame` array, so this function does not return a value
@@ -304,15 +308,19 @@ class Converter():
             The swapped face patch
         frame: :class:`numpy.ndarray`
             The frame to affine the face onto
+        multiple_faces: bool
+            Controls the border mode to use. Uses BORDER_CONSTANT if there is only 1 face in
+            the image, otherwise uses the inferior BORDER_TRANSPARENT
         """
         # Warp face with the mask
         mat = self._get_warp_matrix(reference.adjusted_matrix, face.shape[0])
+        border = cv2.BORDER_TRANSPARENT if multiple_faces else cv2.BORDER_CONSTANT
         cv2.warpAffine(face,
                        mat,
                        (frame.shape[1], frame.shape[0]),
                        frame,
                        flags=cv2.WARP_INVERSE_MAP | reference.interpolators[1],
-                       borderMode=cv2.BORDER_TRANSPARENT)
+                       borderMode=border)
 
     def _get_new_image(self,
                        predicted: ConvertItem,
@@ -358,7 +366,9 @@ class Converter():
                                                   predicted_mask)
 
             if self._full_frame_output:
-                self._warp_to_frame(reference_face, new_face, placeholder)
+                self._warp_to_frame(reference_face,
+                                    new_face, placeholder,
+                                    len(predicted.swapped_faces) > 1)
             else:
                 faces.append(new_face)
 
