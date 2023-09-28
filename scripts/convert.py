@@ -95,8 +95,9 @@ class Convert():  # pylint:disable=too-few-public-methods
         self._opts = OptionalActions(self._args, self._images.file_list, self._alignments)
 
         self._add_queues()
-        self._disk_io = DiskIO(self._alignments, self._images, arguments)
-        self._predictor = Predict(self._disk_io.load_queue, self._queue_size, arguments)
+        self._predictor = Predict(self._queue_size, arguments)
+        self._disk_io = DiskIO(self._alignments, self._images, self._predictor, arguments)
+        self._predictor.launch(self._disk_io.load_queue)
         self._validate()
         get_folder(self._args.output_dir)
 
@@ -280,15 +281,20 @@ class DiskIO():
         The alignments for the input video
     images: :class:`lib.image.ImagesLoader`
         The input images
+    predictor: :class:`Predict`
+        The object for generating predictions from the model
     arguments: :class:`argparse.Namespace`
         The arguments that were passed to the convert process as generated from Faceswap's command
         line arguments
     """
 
     def __init__(self,
-                 alignments: Alignments, images: ImagesLoader, arguments: Namespace) -> None:
-        logger.debug("Initializing %s: (alignments: %s, images: %s, arguments: %s)",
-                     self.__class__.__name__, alignments, images, arguments)
+                 alignments: Alignments,
+                 images: ImagesLoader,
+                 predictor: Predict,
+                 arguments: Namespace) -> None:
+        logger.debug("Initializing %s: (alignments: %s, images: %s, predictor: %s, arguments: %s)",
+                     self.__class__.__name__, alignments, images, predictor, arguments)
         self._alignments = alignments
         self._images = images
         self._args = arguments
@@ -298,7 +304,7 @@ class DiskIO():
         # For frame skipping
         self._imageidxre = re.compile(r"(\d+)(?!.*\d\.)(?=\.\w+$)")
         self._frame_ranges = self._get_frame_ranges()
-        self._writer = self._get_writer()
+        self._writer = self._get_writer(predictor)
 
         # Extractor for on the fly detection
         self._extractor = self._load_extractor()
@@ -320,13 +326,12 @@ class DiskIO():
         return self._writer.config.get("draw_transparent", False)
 
     @property
-    def pre_encode(self) -> Callable[[np.ndarray], list[bytes]] | None:
+    def pre_encode(self) -> Callable[[np.ndarray, T.Any], list[bytes]] | None:
         """ python function: Selected writer's pre-encode function, if it has one,
         otherwise ``None`` """
         dummy = np.zeros((20, 20, 3), dtype="uint8")
         test = self._writer.pre_encode(dummy)
-        retval: Callable[[np.ndarray],
-                         list[bytes]] | None = None if test is None else self._writer.pre_encode
+        retval: Callable | None = None if test is None else self._writer.pre_encode
         logger.debug("Writer pre_encode function: %s", retval)
         return retval
 
@@ -359,8 +364,13 @@ class DiskIO():
         return retval
 
     # Initialization
-    def _get_writer(self) -> Output:
+    def _get_writer(self, predictor: Predict) -> Output:
         """ Load the selected writer plugin.
+
+        Parameters
+        ----------
+        predictor: :class:`Predict`
+            The object for generating predictions from the model
 
         Returns
         -------
@@ -375,6 +385,8 @@ class DiskIO():
                 args.append(self._args.input_dir)
             else:
                 args.append(self._args.reference_video)
+        if self._args.writer == "patch":
+            args.append(predictor.output_size)
         logger.debug("Writer args: %s", args)
         configfile = self._args.configfile if hasattr(self._args, "configfile") else None
         return PluginLoader.get_converter("writer", self._args.writer)(*args,
@@ -564,7 +576,7 @@ class DiskIO():
             return False
         idx = int(indices[0])
         skipframe = not any(map(lambda b: b[0] <= idx <= b[1], self._frame_ranges))
-        logger.trace("idx: %s, skipframe: %s", idx, skipframe)  # type: ignore
+        logger.trace("idx: %s, skipframe: %s", idx, skipframe)  # type: ignore[attr-defined]
         return skipframe
 
     def _get_detected_faces(self, filename: str, image: np.ndarray) -> list[DetectedFace]:
@@ -682,7 +694,7 @@ class DiskIO():
             if self._queues["save"].shutdown.is_set():
                 logger.debug("Save Queue: Stop signal received. Terminating")
                 break
-            item = self._queues["save"].get()
+            item: tuple[str, np.ndarray | bytes] | T.Literal["EOF"] = self._queues["save"].get()
             if item == "EOF":
                 logger.debug("EOF Received")
                 break
@@ -702,19 +714,17 @@ class Predict():
 
     Parameters
     ----------
-    in_queue: :class:`~lib.queue_manager.EventQueue`
-        The queue that contains images and detected faces for feeding the model
     queue_size: int
         The maximum size of the input queue
     arguments: :class:`argparse.Namespace`
         The arguments that were passed to the convert process as generated from Faceswap's command
         line arguments
     """
-    def __init__(self, in_queue: EventQueue, queue_size: int, arguments: Namespace) -> None:
-        logger.debug("Initializing %s: (args: %s, queue_size: %s, in_queue: %s)",
-                     self.__class__.__name__, arguments, queue_size, in_queue)
+    def __init__(self, queue_size: int, arguments: Namespace) -> None:
+        logger.debug("Initializing %s: (args: %s, queue_size: %s)",
+                     self.__class__.__name__, arguments, queue_size)
         self._args = arguments
-        self._in_queue = in_queue
+        self._in_queue: EventQueue | None = None
         self._out_queue = queue_manager.get_queue("patch")
         self._serializer = get_serializer("json")
         self._faces_count = 0
@@ -726,18 +736,20 @@ class Predict():
         self._coverage_ratio = self._model.coverage_ratio
         self._centering = self._model.config["centering"]
 
-        self._thread = self._launch_predictor()
+        self._thread: MultiThread | None = None
         logger.debug("Initialized %s: (out_queue: %s)", self.__class__.__name__, self._out_queue)
 
     @property
     def thread(self) -> MultiThread:
         """ :class:`~lib.multithreading.MultiThread`: The thread that is running the prediction
         function from the Faceswap model. """
+        assert self._thread is not None
         return self._thread
 
     @property
     def in_queue(self) -> EventQueue:
         """ :class:`~lib.queue_manager.EventQueue`: The input queue to the predictor. """
+        assert self._in_queue is not None
         return self._in_queue
 
     @property
@@ -870,19 +882,19 @@ class Predict():
         logger.debug("Trainer from state file: '%s'", trainer)
         return trainer
 
-    def _launch_predictor(self) -> MultiThread:
+    def launch(self, load_queue: EventQueue) -> None:
         """ Launch the prediction process in a background thread.
 
         Starts the prediction thread and returns the thread.
 
-        Returns
-        -------
-        :class:`~lib.multithreading.MultiThread`
-            The started Faceswap model prediction thread.
+        Parameters
+        ----------
+        load_queue: :class:`~lib.queue_manager.EventQueue`
+            The queue that contains images and detected faces for feeding the model
         """
-        thread = MultiThread(self._predict_faces, thread_count=1)
-        thread.start()
-        return thread
+        self._in_queue = load_queue
+        self._thread = MultiThread(self._predict_faces, thread_count=1)
+        self._thread.start()
 
     def _predict_faces(self) -> None:
         """ Run Prediction on the Faceswap model in a background thread.
@@ -893,6 +905,7 @@ class Predict():
         faces_seen = 0
         consecutive_no_faces = 0
         batch: list[ConvertItem] = []
+        assert self._in_queue is not None
         while True:
             item: T.Literal["EOF"] | ConvertItem = self._in_queue.get()
             if item == "EOF":

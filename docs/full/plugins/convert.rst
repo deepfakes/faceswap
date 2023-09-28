@@ -53,6 +53,14 @@ writer.opencv module
    :undoc-members:
    :show-inheritance:
 
+writer.patch module
+--------------------
+
+.. automodule:: plugins.convert.writer.patch
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 writer.pillow module
 --------------------
 

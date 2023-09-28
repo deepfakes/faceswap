@@ -78,7 +78,7 @@ class Writer(Output):
         except Exception as err:  # pylint: disable=broad-except
             logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
 
-    def pre_encode(self, image: np.ndarray) -> list[BytesIO]:
+    def pre_encode(self, image: np.ndarray, **kwargs) -> list[BytesIO]:
         """ Pre_encode the image in lib/convert.py threads as it is a LOT quicker
 
         Parameters
