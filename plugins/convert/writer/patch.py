@@ -15,8 +15,6 @@ from ._base import Output
 
 logger = logging.getLogger(__name__)
 
-# TODO change warp affine border type for single vs multi-faces
-
 
 class Writer(Output):
     """ Face patch writer for outputting swapped face patches and transformation matrices
@@ -34,7 +32,6 @@ class Writer(Output):
     def __init__(self, output_folder: str, patch_size: int, **kwargs) -> None:
         logger.debug("patch_size: %s", patch_size)
         super().__init__(output_folder, **kwargs)
-        self._patch_size = patch_size
         self._extension = {"png": ".png", "tiff": ".tif"}[self.config["format"]]
         self._separate_mask = self.config["separate_mask"]
 
@@ -42,8 +39,21 @@ class Writer(Output):
             logger.warning("Patch Writer: Bit Depth '%s' is unsupported for format '%s'. "
                            "Updating to '16'", self.config["bit_depth"], self.config["format"])
             self.config["bit_depth"] = "16"
+
         self._dtype = {"8": np.uint8, "16": np.uint16, "32": np.float32}[self.config["bit_depth"]]
         self._multiplier = {"8": 255., "16": 65535., "32": 1.}[self.config["bit_depth"]]
+
+        self._dummy_patch = np.zeros((1, patch_size, patch_size, 4), dtype=np.float32)
+
+        tl_box = np.array([[0, 0], [128, 0], [128, 128], [0, 128]], dtype=np.float32)
+        self._patch_corner = {"top-left": tl_box[0],
+                              "top-right": tl_box[1],
+                              "bottom-right": tl_box[2],
+                              "bottom-left": tl_box[3]}[self.config["origin"]].copy()
+        self._box = tl_box
+        if self.config["origin"] in ("top-right", "bottom-left"):
+            self._box[[1, 3], :] = self._box[[3, 1], :]  # keep clockwise from 0,0
+
         self._args = self._get_save_args()
         self._matrices: dict[str, dict[str, list[list[float]]]] = {}
 
@@ -169,15 +179,41 @@ class Writer(Output):
         matrices: :class:`numpy.ndarray`
             The transformation matrices to be adjusted
         canvas_size: tuple[int, int]
-            The size of the canvas (height, width) that the transformation matrix applies to.
+            The size of the canvas width, height) that the transformation matrix applies to.
         """
-        origin = self.config["origin"].split("-")
-        if origin[0] == "bottom":
-            matrices[..., 1, 1] *= -1.
-            matrices[..., 1, 2] = canvas_size[1] - matrices[..., 1, 2] - 1.
-        if origin[1] == "right":
-            matrices[..., 0, 1] *= -1.
-            matrices[..., 0, 2] = canvas_size[0] - matrices[..., 0, 2] - 1.
+        if self.config["origin"] == "top-left":
+            return
+
+        for mat in matrices:
+            og_cnr = cv2.transform(self._patch_corner[None, None], mat[:2, ...]).squeeze()
+            x_shift, y_shift = og_cnr
+            if self.config["origin"].split("-")[-1] == "right":
+                x_shift = canvas_size[0] - x_shift
+            if self.config["origin"].split("-")[0] == "bottom":
+                y_shift = canvas_size[1] - y_shift
+            mat[:2, 2] = [x_shift, y_shift]
+
+        if self.config["origin"] in ("top-right", "bottom-left"):
+            matrices[..., :2, :2] *= [[[1, -1], [-1, 1]]]  # switch shear
+
+    def _get_roi(self, matrices: np.ndarray) -> np.ndarray:
+        """ Obtain the (x, y) ROI points of the patch in the original frame. Points are returned
+        in clockwise order from the origin location
+
+        Parameters
+        ----------
+        matrices: :class:`numpy.ndarray`
+            The transformation matrices for the current frame
+
+        Returns
+        -------
+        np.ndarray
+            The ROI of the patches in original frame co-ordinates in clockwise order from the
+            origin point
+        """
+        retval = [cv2.transform(np.expand_dims(self._box, axis=1), mat[:2, ...]).squeeze()
+                  for mat in matrices]
+        return np.array(retval, dtype=np.float32)
 
     def pre_encode(self, image: np.ndarray, **kwargs) -> list[list[bytes]]:
         """ Pre_encode the image in lib/convert.py threads as it is a LOT quicker.
@@ -205,15 +241,16 @@ class Writer(Output):
         matrices: np.ndarray = kwargs.get("matrices", np.array([]))
 
         if not np.any(image) and self.config["empty_frames"] == "blank":
-            image = np.zeros((1, self._patch_size, self._patch_size, 4), dtype=np.float32)
+            image = self._dummy_patch
 
         matrices = self._get_inverse_matrices(matrices)
         self._adjust_to_origin(matrices, canvas_size)
+        rois = self._get_roi(matrices)
         patches = (image * self._multiplier).astype(self._dtype)
 
-        for patch, matrix in zip(patches, matrices):
+        for patch, matrix, roi in zip(patches, matrices, rois):
             this_face = []
-            mat = json.dumps({"transform_matrix": matrix.tolist()},
+            mat = json.dumps({"transform_matrix": matrix.tolist(), "roi": roi.tolist()},
                              ensure_ascii=True).encode("ascii")
             if self._separate_mask:
                 mask = patch[..., -1]
