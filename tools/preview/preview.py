@@ -295,9 +295,8 @@ class Samples():
         self._filelist = self._get_filelist()
         self._indices = self._get_indices()
 
-        self._predictor = Predict(queue_manager.get_queue("preview_predict_in"),
-                                  self._sample_size,
-                                  arguments)
+        self._predictor = Predict(self._sample_size, arguments)
+        self._predictor.launch(queue_manager.get_queue("preview_predict_in"))
         self._app._display.set_centering(self._predictor.centering)
         self.generate()
 
