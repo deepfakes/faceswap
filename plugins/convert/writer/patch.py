@@ -45,7 +45,8 @@ class Writer(Output):
 
         self._dummy_patch = np.zeros((1, patch_size, patch_size, 4), dtype=np.float32)
 
-        tl_box = np.array([[0, 0], [128, 0], [128, 128], [0, 128]], dtype=np.float32)
+        tl_box = np.array([[0, 0], [patch_size, 0], [patch_size, patch_size], [0, patch_size]],
+                          dtype=np.float32)
         self._patch_corner = {"top-left": tl_box[0],
                               "top-right": tl_box[1],
                               "bottom-right": tl_box[2],
