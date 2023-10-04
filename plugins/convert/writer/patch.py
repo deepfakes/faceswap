@@ -277,5 +277,5 @@ class Writer(Output):
             return
         fname = os.path.join(self.output_folder, "matrices.json")
         with open(fname, "w", encoding="utf-8") as ofile:
-            json.dump(self._matrices, ofile, indent=2)
+            json.dump(self._matrices, ofile, indent=2, sort_keys=True)
         logger.info("Patch matrices written to: '%s'", fname)
