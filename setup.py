@@ -20,7 +20,7 @@ from pkg_resources import parse_requirements
 from lib.logger import log_setup
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-backend_type: T.TypeAlias = T.Literal['nvidia', 'apple_silicon', 'directml', 'cpu', 'rocm']
+backend_type: T.TypeAlias = T.Literal['nvidia', 'apple_silicon', 'directml', 'cpu', 'rocm', "all"]
 
 _INSTALL_FAILED = False
 # Packages that are explicitly required for setup.py
@@ -34,7 +34,9 @@ _BACKEND_SPECIFIC_CONDA: dict[backend_type, list[str]] = {
     "nvidia": ["cudatoolkit", "cudnn", "zlib-wapi"],
     "apple_silicon": ["libblas"]}
 # Packages that should only be installed through pip
-_FORCE_PIP: dict[backend_type, list[str]] = {"nvidia": ["tensorflow"]}
+_FORCE_PIP: dict[backend_type, list[str]] = {
+    "nvidia": ["tensorflow"],
+    "all": ["imageio-ffmpeg"]}  # 17/11/23 Conda forge uses incorrect ffmpeg, so fallback to pip
 # Revisions of tensorflow GPU and cuda/cudnn requirements. These relate specifically to the
 # Tensorflow builds available from pypi
 _TENSORFLOW_REQUIREMENTS = {">=2.10.0,<2.11.0": [">=11.0,<12.0", ">=8.0,<9.0"]}
@@ -46,7 +48,7 @@ _TENSORFLOW_ROCM_REQUIREMENTS = {">=2.10.0,<2.11.0": ((5, 2, 0), (5, 4, 0))}
 _CONDA_MAPPING: dict[str, tuple[str, str]] = {
     "fastcluster": ("fastcluster", "conda-forge"),
     "ffmpy": ("ffmpy", "conda-forge"),
-    "imageio-ffmpeg": ("imageio-ffmpeg", "conda-forge"),
+    # "imageio-ffmpeg": ("imageio-ffmpeg", "conda-forge"),
     "nvidia-ml-py": ("nvidia-ml-py", "conda-forge"),
     "tensorflow-deps": ("tensorflow-deps", "apple"),
     "libblas": ("libblas", "conda-forge"),
@@ -1063,7 +1065,7 @@ class Install():  # pylint:disable=too-few-public-methods
                 mapping = _CONDA_MAPPING.get(pkg, (pkg, ""))
                 channel = "" if mapping[1] is None else mapping[1]
                 pkg = mapping[0]
-                pip_only = pkg in _FORCE_PIP.get(self._env.backend, [])
+                pip_only = pkg in _FORCE_PIP.get(self._env.backend, []) or pkg in _FORCE_PIP["all"]
             pkg = self._format_package(pkg, version) if version else pkg
             if self._env.is_conda and not pip_only:
                 if self._from_conda(pkg, channel=channel, conda_only=conda_only):
