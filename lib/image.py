@@ -697,8 +697,9 @@ def tiff_read_meta(image: bytes) -> dict[str, T.Any]:
 
     num_tags = struct.unpack("<H", image[ptr: ptr + 2])[0]
     ptr += 2
-    ifd = image[ptr: ptr + num_tags * 12:]
-    next_ifd = struct.unpack("<I", image[ptr + num_tags * 12:4])[0]
+    ifd_end = ptr + num_tags * 12
+    ifd = image[ptr: ifd_end]
+    next_ifd = struct.unpack("<I", image[ifd_end:ifd_end + 4])[0]
     assert next_ifd == 0, "Multi-page TIFF files not supported"
 
     dtypes = {2: "1s", 3: "1H", 4: "1I", 7: '1B'}
