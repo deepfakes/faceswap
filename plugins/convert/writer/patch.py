@@ -95,6 +95,8 @@ class Writer(Output):
         """
         face_idx = str(face_index).rjust(2, "0")
         fname, ext = os.path.splitext(filename)
+        fname = os.path.basename(fname)
+
         split_fname = fname.rsplit("_", 1)
         if split_fname[-1].isdigit():
             i_frame_no = (int(split_fname[-1]) +
