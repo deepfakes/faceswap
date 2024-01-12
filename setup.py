@@ -36,7 +36,9 @@ _BACKEND_SPECIFIC_CONDA: dict[backend_type, list[str]] = {
 # Packages that should only be installed through pip
 _FORCE_PIP: dict[backend_type, list[str]] = {
     "nvidia": ["tensorflow"],
-    "all": ["imageio-ffmpeg"]}  # 17/11/23 Conda forge uses incorrect ffmpeg, so fallback to pip
+    "all": [
+        "tensorflow-cpu",  # conda-forge leads to flatbuffer errors because of mixed sources
+        "imageio-ffmpeg"]}  # 17/11/23 Conda forge uses incorrect ffmpeg, so fallback to pip
 # Revisions of tensorflow GPU and cuda/cudnn requirements. These relate specifically to the
 # Tensorflow builds available from pypi
 _TENSORFLOW_REQUIREMENTS = {">=2.10.0,<2.11.0": [">=11.2,<11.3", ">=8.1,<8.2"]}
@@ -54,7 +56,8 @@ _CONDA_MAPPING: dict[str, tuple[str, str]] = {
     "nvidia-ml-py": ("nvidia-ml-py", "conda-forge"),
     "tensorflow-deps": ("tensorflow-deps", "apple"),
     "libblas": ("libblas", "conda-forge"),
-    "zlib-wapi": ("zlib-wapi", "conda-forge")}
+    "zlib-wapi": ("zlib-wapi", "conda-forge"),
+    "xorg-libxft": ("xorg-libxft", "conda-forge")}
 
 # Force output to utf-8
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type:ignore[attr-defined]
@@ -579,6 +582,8 @@ class Packages():
                 # Ref: https://github.com/ContinuumIO/anaconda-issues/issues/6833
                 newpkg = (f"{pkg[0]}=*=xft_*", pkg[1])  # Swap out package for explicit XFT version
                 self._conda_missing_packages.append(newpkg)
+                # We also need to bring in xorg-libxft incase libXft does not exist on host system
+                self._conda_missing_packages.append(_CONDA_MAPPING["xorg-libxft"])
                 continue
 
             if key not in self._conda_installed_packages:
