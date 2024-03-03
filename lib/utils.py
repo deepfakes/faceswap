@@ -29,7 +29,7 @@ _image_extensions = [  # pylint:disable=invalid-name
 _video_extensions = [  # pylint:disable=invalid-name
     ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
     ".ts", ".vob"]
-_TF_VERS: tuple[int, int] | None = None
+_TORCH_VERS: tuple[int, int] | None = None
 ValidBackends = T.Literal["nvidia", "cpu", "apple_silicon", "directml", "rocm"]
 
 
@@ -162,26 +162,26 @@ def set_backend(backend: str) -> None:
     _FS_BACKEND = backend
 
 
-def get_tf_version() -> tuple[int, int]:
-    """ Obtain the major. minor version of currently installed Tensorflow.
+def get_torch_version() -> tuple[int, int]:
+    """ Obtain the major. minor version of currently installed PyTorch.
 
     Returns
     -------
     tuple[int, int]
-        A tuple of the form (major, minor) representing the version of TensorFlow that is installed
+        A tuple of the form (major, minor) representing the version of PyTorch that is installed
 
     Example
     -------
-    >>> from lib.utils import get_tf_version
-    >>> get_tf_version()
-    (2, 10)
+    >>> from lib.utils import get_torch_version
+    >>> get_torch_version()
+    (2, 2)
     """
-    global _TF_VERS  # pylint:disable=global-statement
-    if _TF_VERS is None:
-        import tensorflow as tf  # pylint:disable=import-outside-toplevel
-        split = tf.__version__.split(".")[:2]
-        _TF_VERS = (int(split[0]), int(split[1]))
-    return _TF_VERS
+    global _TORCH_VERS  # pylint:disable=global-statement
+    if _TORCH_VERS is None:
+        import torch  # pylint:disable=import-outside-toplevel
+        split = torch.__version__.split(".")[:2]
+        _TORCH_VERS = (int(split[0]), int(split[1]))
+    return _TORCH_VERS
 
 
 def get_folder(path: str, make_folder: bool = True) -> str:
