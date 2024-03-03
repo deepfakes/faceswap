@@ -23,8 +23,7 @@ from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
-
-from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module # noqa
+from torch.cuda import OutOfMemoryError
 
 from lib.align import DetectedFace
 from lib.utils import FaceswapError
@@ -280,15 +279,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
             self._rotate_batch(batch, angle)
             try:
                 pred = self.predict(batch.feed)
-                if angle == 0:
-                    batch.prediction = pred
-                else:
-                    batch.prediction = np.array([b if b.any() else p
-                                                 for b, p in zip(batch.prediction, pred)])
-                logger.trace("angle: %s, filenames: %s, "  # type:ignore[attr-defined]
-                             "prediction: %s",
-                             angle, batch.filename, pred)
-            except tf_errors.ResourceExhaustedError as err:
+            except OutOfMemoryError as err:
                 msg = ("You do not have enough GPU memory available to run detection at the "
                        "selected batch size. You can try a number of things:"
                        "\n1) Close any other application that is using your GPU (web browsers are "
@@ -298,6 +289,15 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                        "CLI: Edit the file faceswap/config/extract.ini)."
                        "\n3) Enable 'Single Process' mode.")
                 raise FaceswapError(msg) from err
+
+            if angle == 0:
+                batch.prediction = pred
+            else:
+                batch.prediction = np.array([b if b.any() else p
+                                                for b, p in zip(batch.prediction, pred)])
+            logger.trace("angle: %s, filenames: %s, "  # type:ignore[attr-defined]
+                            "prediction: %s",
+                            angle, batch.filename, pred)
 
             if angle != 0 and any(face.any() for face in batch.prediction):
                 logger.verbose("found face(s) by rotating image %s "  # type:ignore[attr-defined]

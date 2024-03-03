@@ -19,7 +19,7 @@ import pytest_mock
 from lib import utils
 from lib.utils import (
     _Backend, camel_case_split, convert_to_secs, DebugTimes, deprecation_warning, FaceswapError,
-    full_path_split, get_backend, get_dpi, get_folder, get_image_paths, get_tf_version, GetModel,
+    full_path_split, get_backend, get_dpi, get_folder, get_image_paths, get_torch_version, GetModel,
     safe_shutdown, set_backend, set_system_verbosity)
 
 from lib.logger import log_setup
@@ -205,10 +205,10 @@ def test_camel_case_split(text: str, result: list[str]) -> None:
 
 
 # General utils
-def test_get_tf_version() -> None:
-    """ Test the :func:`~lib.utils.get_tf_version` function version returns correctly in range """
-    tf_version = get_tf_version()
-    assert (2, 10) <= tf_version < (2, 11)
+def test_get_torch_version() -> None:
+    """ Test the :func:`~lib.utils.get_torch_version` function version returns correctly in range """
+    tf_version = get_torch_version()
+    assert (2, 1) <= tf_version < (2, 3)
 
 
 def test_get_dpi() -> None:

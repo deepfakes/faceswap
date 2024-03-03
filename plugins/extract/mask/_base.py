@@ -20,8 +20,7 @@ from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
-
-from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module  # noqa
+from torch.cuda import OutOfMemoryError
 
 from lib.align import AlignedFace, transform_image
 from lib.utils import FaceswapError
@@ -204,18 +203,17 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         """ Just return the masker's predict function """
         assert isinstance(batch, MaskerBatch)
         assert self.name is not None
-        try:
-            # slightly hacky workaround to deal with landmarks based masks:
-            if self.name.lower() in ("components", "extended"):
-                feed = np.empty(2, dtype="object")
-                feed[0] = batch.feed
-                feed[1] = batch.feed_faces
-            else:
-                feed = batch.feed
+        # slightly hacky workaround to deal with landmarks based masks:
+        if self.name.lower() in ("components", "extended"):
+            feed = np.empty(2, dtype="object")
+            feed[0] = batch.feed
+            feed[1] = batch.feed_faces
+        else:
+            feed = batch.feed
 
+        try:
             batch.prediction = self.predict(feed)
-            return batch
-        except tf_errors.ResourceExhaustedError as err:
+        except OutOfMemoryError as err:
             msg = ("You do not have enough GPU memory available to run detection at the "
                    "selected batch size. You can try a number of things:"
                    "\n1) Close any other application that is using your GPU (web browsers are "
@@ -224,7 +222,9 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                    "editing the plugin settings (GUI: Settings > Configure extract settings, "
                    "CLI: Edit the file faceswap/config/extract.ini)."
                    "\n3) Enable 'Single Process' mode.")
-            raise FaceswapError(msg) from err
+            raise FaceswapError(msg) from err            
+
+        return batch
 
     def finalize(self, batch: BatchType) -> Generator[ExtractMedia, None, None]:
         """ Finalize the output from Masker

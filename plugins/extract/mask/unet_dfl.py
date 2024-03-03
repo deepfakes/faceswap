@@ -31,9 +31,8 @@ class Mask(Masker):
         self.model: KSession
         self.name = "U-Net"
         self.input_size = 256
-        self.vram = 3424
-        self.vram_warnings = 256
-        self.vram_per_batch = 80
+        self.vram = 320  # 276 in testing
+        self.vram_per_batch = 256  # ~215 in testing
         self.batchsize = self.config["batch-size"]
         self._storage_centering = "legacy"
 
@@ -42,7 +41,6 @@ class Mask(Masker):
         self.model = KSession(self.name,
                               self.model_path,
                               model_kwargs={},
-                              allow_growth=self.config["allow_growth"],
                               exclude_gpus=self._exclude_gpus)
         self.model.load_model()
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),

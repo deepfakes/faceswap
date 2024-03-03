@@ -9,11 +9,10 @@ import typing as T
 from dataclasses import dataclass, field
 
 import numpy as np
-from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module  # noqa
 
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
-from lib.utils import GetModel, FaceswapError
+from lib.utils import GetModel
 from ._config import Config
 from .pipeline import ExtractMedia
 
@@ -109,7 +108,7 @@ class Extractor():
     model_filename: str
         The name of the model file to be loaded
     exclude_gpus: list, optional
-        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
+        A list of indices correlating to connected GPUs that PyTorch should not use. Pass
         ``None`` to not exclude any GPUs. Default: ``None``
     configfile: str, optional
         Path to a custom configuration ``ini`` file. Default: Use system configfile
@@ -135,9 +134,6 @@ class Extractor():
     vram: int
         Approximate VRAM used by the model at :attr:`input_size`. Used to calculate the
         :attr:`batchsize`. Be conservative to avoid OOM.
-    vram_warnings: int
-        Approximate VRAM used by the model at :attr:`input_size` that will still run, but generates
-        warnings. Used to calculate the :attr:`batchsize`. Be conservative to avoid OOM.
     vram_per_batch: int
         Approximate additional VRAM used by the model for each additional batch. Used to calculate
         the :attr:`batchsize`. Be conservative to avoid OOM.
@@ -174,7 +170,6 @@ class Extractor():
         self.input_size = 0
         self.color_format: T.Literal["BGR", "RGB", "GRAY"] = "BGR"
         self.vram = 0
-        self.vram_warnings = 0  # Will run at this with warnings
         self.vram_per_batch = 0
 
         # << THE FOLLOWING ARE SET IN self.initialize METHOD >> #
@@ -470,20 +465,7 @@ class Extractor():
                          kwargs["out_queue"],
                          [f"predict_{name}", f"post_{name}"])
         self._compile_threads()
-        try:
-            self.init_model()
-        except tf_errors.UnknownError as err:
-            if "failed to get convolution algorithm" in str(err).lower():
-                msg = ("Tensorflow raised an unknown error. This is most likely caused by a "
-                       "failure to launch cuDNN which can occur for some GPU/Tensorflow "
-                       "combinations. You should enable `allow_growth` to attempt to resolve this "
-                       "issue:"
-                       "\nGUI: Go to Settings > Extract Plugins > Global and enable the "
-                       "`allow_growth` option."
-                       "\nCLI: Go to `faceswap/config/extract.ini` and change the `allow_growth "
-                       "option to `True`.")
-                raise FaceswapError(msg) from err
-            raise err
+        self.init_model()
         self._is_initialized = True
         logger.info("Initialized %s (%s) with batchsize of %s",
                     self.name, self._plugin_type.title(), self.batchsize)
@@ -598,20 +580,7 @@ class Extractor():
                 break
             if not batch.filename:  # Batch not populated. Possible during re-aligns
                 continue
-            try:
-                batch = function(batch)
-            except tf_errors.UnknownError as err:
-                if "failed to get convolution algorithm" in str(err).lower():
-                    msg = ("Tensorflow raised an unknown error. This is most likely caused by a "
-                           "failure to launch cuDNN which can occur for some GPU/Tensorflow "
-                           "combinations. You should enable `allow_growth` to attempt to resolve "
-                           "this issue:"
-                           "\nGUI: Go to Settings > Extract Plugins > Global and enable the "
-                           "`allow_growth` option."
-                           "\nCLI: Go to `faceswap/config/extract.ini` and change the "
-                           "`allow_growth option to `True`.")
-                    raise FaceswapError(msg) from err
-                raise err
+            batch = function(batch)
             if function.__name__ == "_process_output":
                 # Process output items to individual items from batch
                 for item in self.finalize(batch):

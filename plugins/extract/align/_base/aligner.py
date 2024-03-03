@@ -21,8 +21,7 @@ from time import sleep
 
 import cv2
 import numpy as np
-
-from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module # noqa
+from torch.cuda import OutOfMemoryError
 
 from lib.utils import FaceswapError
 from plugins.extract._base import BatchType, Extractor, ExtractMedia, ExtractorBatch
@@ -534,6 +533,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             preds = [self.predict(feed) for feed in batch.refeeds]
             try:
                 batch.prediction = np.array(preds)
+                logger.trace("Aligner out: %s", batch.prediction.shape)
             except ValueError as err:
                 # If refeed batches are different sizes, Numpy will error, so we need to explicitly
                 # set the dtype to 'object' rather than let it infer
@@ -549,8 +549,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                 else:
                     raise
 
-            return batch
-        except tf_errors.ResourceExhaustedError as err:
+        except OutOfMemoryError as err:
             msg = ("You do not have enough GPU memory available to run detection at the "
                    "selected batch size. You can try a number of things:"
                    "\n1) Close any other application that is using your GPU (web browsers are "
@@ -561,6 +560,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                    "\n3) Enable 'Single Process' mode.")
             raise FaceswapError(msg) from err
 
+        return batch
+        
     def _process_refeeds(self, batch: AlignerBatch) -> list[AlignerBatch]:
         """ Process the output for each selected re-feed
 

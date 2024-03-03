@@ -22,7 +22,7 @@ import typing as T
 from dataclasses import dataclass, field
 
 import numpy as np
-from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module  # noqa
+from torch.cuda import OutOfMemoryError
 
 from lib.align import AlignedFace, DetectedFace
 from lib.image import read_image_meta
@@ -205,11 +205,10 @@ class Identity(Extractor):  # pylint:disable=abstract-method
     def _predict(self, batch: BatchType) -> RecogBatch:
         """ Just return the recognition's predict function """
         assert isinstance(batch, RecogBatch)
+        # slightly hacky workaround to deal with landmarks based masks:
         try:
-            # slightly hacky workaround to deal with landmarks based masks:
             batch.prediction = self.predict(batch.feed)
-            return batch
-        except tf_errors.ResourceExhaustedError as err:
+        except OutOfMemoryError as err:
             msg = ("You do not have enough GPU memory available to run recognition at the "
                    "selected batch size. You can try a number of things:"
                    "\n1) Close any other application that is using your GPU (web browsers are "
@@ -218,7 +217,9 @@ class Identity(Extractor):  # pylint:disable=abstract-method
                    "editing the plugin settings (GUI: Settings > Configure extract settings, "
                    "CLI: Edit the file faceswap/config/extract.ini)."
                    "\n3) Enable 'Single Process' mode.")
-            raise FaceswapError(msg) from err
+            raise FaceswapError(msg) from err        
+        
+        return batch
 
     def finalize(self, batch: BatchType) -> Generator[ExtractMedia, None, None]:
         """ Finalize the output from Masker

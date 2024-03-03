@@ -12,6 +12,7 @@ from multiprocessing import Process
 
 import numpy as np
 from tqdm import tqdm
+import torch
 from lib.align.alignments import PNGHeaderDict
 
 from lib.image import encode_image, generate_thumbnail, ImagesLoader, ImagesSaver, read_image_meta
@@ -740,7 +741,8 @@ class _Extract():  # pylint:disable=too-few-public-methods
                     detected_faces[extract_media.filename] = extract_media
 
             if not is_final:
-                logger.debug("Reloading images")
+                logger.debug("Reloading images and resetting PyTorch memory cache")
+                torch.cuda.empty_cache()
                 self._loader.reload(detected_faces)
         if saver is not None:
             saver.close()

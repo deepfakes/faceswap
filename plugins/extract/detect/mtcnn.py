@@ -7,14 +7,13 @@ import typing as T
 import cv2
 import numpy as np
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras.layers import Conv2D, Dense, Flatten, Input, MaxPool2D, Permute, PReLU  # noqa:E501  # pylint:disable=import-error
+from keras.layers import Conv2D, Dense, Flatten, Input, MaxPooling2D, Permute, PReLU
 
 from lib.model.session import KSession
 from ._base import BatchType, Detector
 
 if T.TYPE_CHECKING:
-    from tensorflow import Tensor
+    from torch import Tensor
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +26,8 @@ class Detect(Detector):
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.name = "MTCNN"
         self.input_size = 640
-        self.vram = 320 if not self.config["cpu"] else 0
-        self.vram_warnings = 64 if not self.config["cpu"] else 0  # Will run at this with warnings
-        self.vram_per_batch = 32 if not self.config["cpu"] else 0
+        self.vram = 128 if not self.config["cpu"] else 0  # 66 in testing
+        self.vram_per_batch = 64 if not self.config["cpu"] else 0  # ~50 in testing
         self.batchsize = self.config["batch-size"]
         self.kwargs = self._validate_kwargs()
         self.color_format = "RGB"
@@ -63,7 +61,6 @@ class Detect(Detector):
         """ Initialize MTCNN Model. """
         assert isinstance(self.model_path, list)
         self.model = MTCNN(self.model_path,
-                           self.config["allow_growth"],
                            self._exclude_gpus,
                            self.config["cpu"],
                            **self.kwargs)  # type:ignore
@@ -145,10 +142,6 @@ class PNet(KSession):
     ----------
     model_path: str
         The path to the keras model file
-    allow_growth: bool, optional
-        Enable the Tensorflow GPU allow_growth configuration option. This option prevents
-        Tensorflow from allocating all of the GPU VRAM, but can lead to higher fragmentation and
-        slower performance. Default: ``False``
     exclude_gpus: list, optional
         A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
         ``None`` to not exclude any GPUs. Default: ``None``
@@ -163,7 +156,6 @@ class PNet(KSession):
     """
     def __init__(self,
                  model_path: str,
-                 allow_growth: bool,
                  exclude_gpus: list[int] | None,
                  cpu_mode: bool,
                  input_size: int,
@@ -172,7 +164,6 @@ class PNet(KSession):
                  threshold: float) -> None:
         super().__init__("MTCNN-PNet",
                          model_path,
-                         allow_growth=allow_growth,
                          exclude_gpus=exclude_gpus,
                          cpu_mode=cpu_mode)
 
@@ -193,7 +184,7 @@ class PNet(KSession):
         input_ = Input(shape=(None, None, 3))
         var_x = Conv2D(10, (3, 3), strides=1, padding='valid', name='conv1')(input_)
         var_x = PReLU(shared_axes=[1, 2], name='PReLU1')(var_x)
-        var_x = MaxPool2D(pool_size=2)(var_x)
+        var_x = MaxPooling2D(pool_size=2)(var_x)
         var_x = Conv2D(16, (3, 3), strides=1, padding='valid', name='conv2')(var_x)
         var_x = PReLU(shared_axes=[1, 2], name='PReLU2')(var_x)
         var_x = Conv2D(32, (3, 3), strides=1, padding='valid', name='conv3')(var_x)
@@ -326,10 +317,6 @@ class RNet(KSession):
     ----------
     model_path: str
         The path to the keras model file
-    allow_growth: bool, optional
-        Enable the Tensorflow GPU allow_growth configuration option. This option prevents
-        Tensorflow from allocating all of the GPU VRAM, but can lead to higher fragmentation and
-        slower performance. Default: ``False``
     exclude_gpus: list, optional
         A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
         ``None`` to not exclude any GPUs. Default: ``None``
@@ -343,14 +330,12 @@ class RNet(KSession):
     """
     def __init__(self,
                  model_path: str,
-                 allow_growth: bool,
                  exclude_gpus: list[int] | None,
                  cpu_mode: bool,
                  input_size: int,
                  threshold: float) -> None:
         super().__init__("MTCNN-RNet",
                          model_path,
-                         allow_growth=allow_growth,
                          exclude_gpus=exclude_gpus,
                          cpu_mode=cpu_mode)
         self.define_model(self.model_definition)
@@ -365,11 +350,11 @@ class RNet(KSession):
         input_ = Input(shape=(24, 24, 3))
         var_x = Conv2D(28, (3, 3), strides=1, padding='valid', name='conv1')(input_)
         var_x = PReLU(shared_axes=[1, 2], name='prelu1')(var_x)
-        var_x = MaxPool2D(pool_size=3, strides=2, padding='same')(var_x)
+        var_x = MaxPooling2D(pool_size=3, strides=2, padding='same')(var_x)
 
         var_x = Conv2D(48, (3, 3), strides=1, padding='valid', name='conv2')(var_x)
         var_x = PReLU(shared_axes=[1, 2], name='prelu2')(var_x)
-        var_x = MaxPool2D(pool_size=3, strides=2)(var_x)
+        var_x = MaxPooling2D(pool_size=3, strides=2)(var_x)
 
         var_x = Conv2D(64, (2, 2), strides=1, padding='valid', name='conv3')(var_x)
         var_x = PReLU(shared_axes=[1, 2], name='prelu3')(var_x)
@@ -457,10 +442,6 @@ class ONet(KSession):
     ----------
     model_path: str
         The path to the keras model file
-    allow_growth: bool, optional
-        Enable the Tensorflow GPU allow_growth configuration option. This option prevents
-        Tensorflow from allocating all of the GPU VRAM, but can lead to higher fragmentation and
-        slower performance. Default: ``False``
     exclude_gpus: list, optional
         A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
         ``None`` to not exclude any GPUs. Default: ``None``
@@ -473,14 +454,12 @@ class ONet(KSession):
     """
     def __init__(self,
                  model_path: str,
-                 allow_growth: bool,
                  exclude_gpus: list[int] | None,
                  cpu_mode: bool,
                  input_size: int,
                  threshold: float) -> None:
         super().__init__("MTCNN-ONet",
                          model_path,
-                         allow_growth=allow_growth,
                          exclude_gpus=exclude_gpus,
                          cpu_mode=cpu_mode)
         self.define_model(self.model_definition)
@@ -495,13 +474,13 @@ class ONet(KSession):
         input_ = Input(shape=(48, 48, 3))
         var_x = Conv2D(32, (3, 3), strides=1, padding='valid', name='conv1')(input_)
         var_x = PReLU(shared_axes=[1, 2], name='prelu1')(var_x)
-        var_x = MaxPool2D(pool_size=3, strides=2, padding='same')(var_x)
+        var_x = MaxPooling2D(pool_size=3, strides=2, padding='same')(var_x)
         var_x = Conv2D(64, (3, 3), strides=1, padding='valid', name='conv2')(var_x)
         var_x = PReLU(shared_axes=[1, 2], name='prelu2')(var_x)
-        var_x = MaxPool2D(pool_size=3, strides=2)(var_x)
+        var_x = MaxPooling2D(pool_size=3, strides=2)(var_x)
         var_x = Conv2D(64, (3, 3), strides=1, padding='valid', name='conv3')(var_x)
         var_x = PReLU(shared_axes=[1, 2], name='prelu3')(var_x)
-        var_x = MaxPool2D(pool_size=2)(var_x)
+        var_x = MaxPooling2D(pool_size=2)(var_x)
         var_x = Conv2D(128, (2, 2), strides=1, padding='valid', name='conv4')(var_x)
         var_x = PReLU(shared_axes=[1, 2], name='prelu4')(var_x)
         var_x = Permute((3, 2, 1))(var_x)
@@ -603,10 +582,6 @@ class MTCNN():  # pylint: disable=too-few-public-methods
     ----------
     model_path: list
         List of paths to the 3 MTCNN subnet weights
-    allow_growth: bool, optional
-        Enable the Tensorflow GPU allow_growth configuration option. This option prevents
-        Tensorflow from allocating all of the GPU VRAM, but can lead to higher fragmentation and
-        slower performance. Default: ``False``
     exclude_gpus: list, optional
         A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
         ``None`` to not exclude any GPUs. Default: ``None``
@@ -624,21 +599,19 @@ class MTCNN():  # pylint: disable=too-few-public-methods
     """
     def __init__(self,
                  model_path: list[str],
-                 allow_growth: bool,
                  exclude_gpus: list[int] | None,
                  cpu_mode: bool,
                  input_size: int = 640,
                  minsize: int = 20,
                  threshold: list[float] | None = None,
                  factor: float = 0.709) -> None:
-        logger.debug("Initializing: %s: (model_path: '%s', allow_growth: %s, exclude_gpus: %s, "
+        logger.debug("Initializing: %s: (model_path: '%s', exclude_gpus: %s, "
                      "input_size: %s, minsize: %s, threshold: %s, factor: %s)",
-                     self.__class__.__name__, model_path, allow_growth, exclude_gpus,
-                     input_size, minsize, threshold, factor)
+                     self.__class__.__name__, model_path, exclude_gpus, input_size, minsize,
+                     threshold, factor)
 
         threshold = [0.6, 0.7, 0.7] if threshold is None else threshold
         self._pnet = PNet(model_path[0],
-                          allow_growth,
                           exclude_gpus,
                           cpu_mode,
                           input_size,
@@ -646,13 +619,11 @@ class MTCNN():  # pylint: disable=too-few-public-methods
                           factor,
                           threshold[0])
         self._rnet = RNet(model_path[1],
-                          allow_growth,
                           exclude_gpus,
                           cpu_mode,
                           input_size,
                           threshold[1])
         self._onet = ONet(model_path[2],
-                          allow_growth,
                           exclude_gpus,
                           cpu_mode,
                           input_size,

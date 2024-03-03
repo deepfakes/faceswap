@@ -29,9 +29,8 @@ class Align(Aligner):
         self.name = "FAN"
         self.input_size = 256
         self.color_format = "RGB"
-        self.vram = 2240
-        self.vram_warnings = 512  # Will run at this with warnings
-        self.vram_per_batch = 64
+        self.vram = 896  # 810 in testing
+        self.vram_per_batch = 768  # ~720 in testing
         self.realign_centering = "head"
         self.batchsize: int = self.config["batch-size"]
         self.reference_scale = 200. / 195.
@@ -42,7 +41,6 @@ class Align(Aligner):
         assert isinstance(self.model_path, str)
         self.model = KSession(self.name,
                               self.model_path,
-                              allow_growth=self.config["allow_growth"],
                               exclude_gpus=self._exclude_gpus)
         self.model.load_model()
         # Feed a placeholder so Aligner is primed for Manual tool
@@ -224,7 +222,6 @@ class Align(Aligner):
         # TODO Remove lazy transpose and change points from predict to use the correct
         # order
         retval = self.model.predict(feed)[-1].transpose(0, 3, 1, 2)
-        logger.trace(retval.shape)  # type:ignore[attr-defined]
         return retval
 
     def process_output(self, batch: BatchType) -> None:

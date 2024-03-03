@@ -6,8 +6,7 @@ import typing as T
 
 import numpy as np
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras.layers import (  # pylint:disable=import-error
+from keras.layers import (
     Add, Conv2D, Conv2DTranspose, Cropping2D, Dropout, Input, Lambda, MaxPooling2D,
     ZeroPadding2D)
 
@@ -15,7 +14,7 @@ from lib.model.session import KSession
 from ._base import BatchType, Masker, MaskerBatch
 
 if T.TYPE_CHECKING:
-    from tensorflow import Tensor
+    from torch import Tensor
 
 logger = logging.getLogger(__name__)
 
@@ -29,15 +28,13 @@ class Mask(Masker):
         self.model: KSession
         self.name = "VGG Clear"
         self.input_size = 300
-        self.vram = 2944
-        self.vram_warnings = 1088  # at BS 1. OOMs at higher batch sizes
-        self.vram_per_batch = 400
+        self.vram = 1344  # 1308 in testing
+        self.vram_per_batch = 448  # ~402 in testing
         self.batchsize = self.config["batch-size"]
 
     def init_model(self) -> None:
         assert isinstance(self.model_path, str)
         self.model = VGGClear(self.model_path,
-                              allow_growth=self.config["allow_growth"],
                               exclude_gpus=self._exclude_gpus)
         self.model.append_softmax_activation(layer_index=-1)
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
@@ -73,10 +70,6 @@ class VGGClear(KSession):
     ----------
     model_path: str
         The path to the keras model file
-    allow_growth: bool
-        Enable the Tensorflow GPU allow_growth configuration option. This option prevents
-        Tensorflow from allocating all of the GPU VRAM, but can lead to higher fragmentation and
-        slower performance
     exclude_gpus: list
         A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
         ``None`` to not exclude any GPUs
@@ -93,11 +86,9 @@ class VGGClear(KSession):
     """
     def __init__(self,
                  model_path: str,
-                 allow_growth: bool,
                  exclude_gpus: list[int] | None):
         super().__init__("VGG Obstructed",
                          model_path,
-                         allow_growth=allow_growth,
                          exclude_gpus=exclude_gpus)
         self.define_model(self._model_definition)
         self.load_model_weights()

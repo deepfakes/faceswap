@@ -10,9 +10,8 @@ import typing as T
 
 import numpy as np
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras import backend as K  # pylint:disable=import-error
-from tensorflow.keras.layers import (  # pylint:disable=import-error
+import keras.backend as K
+from keras.layers import (  # pylint:disable=import-error
     Activation, Add, BatchNormalization, Concatenate, Conv2D, GlobalAveragePooling2D, Input,
     MaxPooling2D, Multiply, Reshape, UpSampling2D, ZeroPadding2D)
 
@@ -21,7 +20,7 @@ from plugins.extract._base import _get_config
 from ._base import BatchType, Masker, MaskerBatch
 
 if T.TYPE_CHECKING:
-    from tensorflow import Tensor
+    from torch import Tensor
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +38,8 @@ class Mask(Masker):
         self.name = "BiSeNet - Face Parsing"
         self.input_size = 512
         self.color_format = "RGB"
-        self.vram = 2304 if not self.config["cpu"] else 0
-        self.vram_warnings = 256 if not self.config["cpu"] else 0
-        self.vram_per_batch = 64 if not self.config["cpu"] else 0
+        self.vram = 384 if not self.config["cpu"] else 0  # 378 in testing
+        self.vram_per_batch = 384 if not self.config["cpu"] else 0  # ~328 in testing
         self.batchsize = self.config["batch-size"]
 
         self._segment_indices = self._get_segment_indices()
@@ -108,7 +106,6 @@ class Mask(Masker):
         assert isinstance(self.model_path, str)
         lbls = 5 if self._is_faceswap else 19
         self.model = BiSeNet(self.model_path,
-                             self.config["allow_growth"],
                              self._exclude_gpus,
                              self.input_size,
                              lbls,
@@ -299,7 +296,7 @@ class ResNet18():  # pylint:disable=too-few-public-methods
         res = ConvBn(filters, strides=1, padding=1, activation=False, prefix=prefix)(res)
 
         shortcut = inputs
-        filts = (K.int_shape(shortcut)[self._feature_index], K.int_shape(res)[self._feature_index])
+        filts = (shortcut.shape[self._feature_index], res.shape[self._feature_index])
         if strides != 1 or filts[0] != filts[1]:  # Downsample
             name = f"{prefix}.downsample."
             shortcut = Conv2D(filters, 1,
@@ -400,7 +397,7 @@ class AttentionRefinementModule():  # pylint:disable=too-few-public-methods
         prefix = f"cp.arm{feats}"
         feat = ConvBn(self._filters, prefix=f"{prefix}.conv", start_idx=-1, padding=-1)(inputs)
         atten = GlobalAveragePooling2D(name=f"{prefix}.avgpool")(feat)
-        atten = Reshape((1, 1, K.int_shape(atten)[-1]))(atten)
+        atten = Reshape((1, 1, atten.shape[-1]))(atten)
         atten = Conv2D(self._filters, 1, use_bias=False, name=f"{prefix}.conv_atten")(atten)
         atten = BatchNormalization(epsilon=1e-5, name=f"{prefix}.bn_atten")(atten)
         atten = Activation("sigmoid", name=f"{prefix}.sigmoid")(atten)
@@ -429,10 +426,10 @@ class ContextPath():  # pylint:disable=too-few-public-methods
         feat8, feat16, feat32 = self._resnet(inputs)
 
         avg = GlobalAveragePooling2D(name="cp.avgpool")(feat32)
-        avg = Reshape((1, 1, K.int_shape(avg)[-1]))(avg)
+        avg = Reshape((1, 1, avg.shape[-1]))(avg)
         avg = ConvBn(128, kernel_size=1, padding=0, prefix="cp.conv_avg", start_idx=-1)(avg)
 
-        avg_up = UpSampling2D(size=K.int_shape(feat32)[1:3], name="cp.upsample")(avg)
+        avg_up = UpSampling2D(size=feat32.shape[1:3], name="cp.upsample")(avg)
 
         feat32 = AttentionRefinementModule(128)(feat32, 32)
         feat32 = Add(name="cp.add")([feat32, avg_up])
@@ -480,7 +477,7 @@ class FeatureFusionModule():  # pylint:disable=too-few-public-methods
                       start_idx=-1)(feat)
 
         atten = GlobalAveragePooling2D(name="ffm.avgpool")(feat)
-        atten = Reshape((1, 1, K.int_shape(atten)[-1]))(atten)
+        atten = Reshape((1, 1, atten.shape[-1]))(atten)
         atten = Conv2D(self._filters // 4, 1, use_bias=False, name="ffm.conv1")(atten)
         atten = Activation("relu", name="ffm.relu")(atten)
         atten = Conv2D(self._filters, 1, use_bias=False, name="ffm.conv2")(atten)
@@ -537,10 +534,6 @@ class BiSeNet(KSession):
     ----------
     model_path: str
         The path to the keras model file
-    allow_growth: bool
-        Enable the Tensorflow GPU allow_growth configuration option. This option prevents
-        Tensorflow from allocating all of the GPU VRAM, but can lead to higher fragmentation and
-        slower performance
     exclude_gpus: list
         A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
         ``None`` to not exclude any GPUs
@@ -553,14 +546,12 @@ class BiSeNet(KSession):
     """
     def __init__(self,
                  model_path: str,
-                 allow_growth: bool,
                  exclude_gpus: list[int] | None,
                  input_size: int,
                  num_classes: int,
                  cpu_mode: bool) -> None:
         super().__init__("BiSeNet Face Parsing",
                          model_path,
-                         allow_growth=allow_growth,
                          exclude_gpus=exclude_gpus,
                          cpu_mode=cpu_mode)
         self._input_size = input_size
@@ -587,10 +578,10 @@ class BiSeNet(KSession):
         feat_out16 = BiSeNetOutput(64, self._num_classes, label="16")(features[1])
         feat_out32 = BiSeNetOutput(64, self._num_classes, label="32")(features[2])
 
-        height, width = K.int_shape(input_)[1:3]
-        f_h, f_w = K.int_shape(feat_out)[1:3]
-        f_h16, f_w16 = K.int_shape(feat_out16)[1:3]
-        f_h32, f_w32 = K.int_shape(feat_out32)[1:3]
+        height, width = input_.shape[1:3]
+        f_h, f_w = feat_out.shape[1:3]
+        f_h16, f_w16 = feat_out16.shape[1:3]
+        f_h32, f_w32 = feat_out32.shape[1:3]
 
         feat_out = UpSampling2D(size=(height // f_h, width // f_w),
                                 interpolation="bilinear")(feat_out)

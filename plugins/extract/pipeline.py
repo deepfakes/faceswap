@@ -692,12 +692,64 @@ class Extractor():
         plugin.start()
         logger.debug("Launched %s plugin", phase)
 
+    def _set_plugins_batchsize(self, gpu_plugins: list[str], vram_free: int) -> None:
+        """ Set the batch size for the current phase so that it will fit in available VRAM.
+
+        Do not update plugins which have a vram_per_batch of 0 (CPU plugins) due to
+        zero division error.
+
+        Reduces the batchsize of the plugin which has a batch size > 1 and the largest VRAM
+        requirements. The final reduction is the plugin which has a batch size > 1 and the
+        smallest VRAM requirements that would fit the pipeline inside VRAM
+
+        Parameters
+        ----------
+        gpu_plugins: list[str]
+            The name of the plugins that use the GPU for the current phase
+        vram_free: int
+            The amount of available VRAM, in MBs
+        """
+        logger.debug("GPU plugins: %s, Available vram: %s", gpu_plugins, vram_free)
+        plugins = [self._active_plugins[idx]
+                   for idx, plugin in enumerate(self._current_phase)
+                   if plugin in gpu_plugins]
+        base_vram = sum(p.vram for p in plugins)
+        vram_free = vram_free - base_vram
+        logger.debug("Base vram: %s, remaining vram: %s", base_vram, vram_free)
+
+        to_allocate = [(p.batchsize, p.vram_per_batch) for p in plugins]
+        excess = sum(a[0] * a[1] for a in to_allocate) - vram_free
+        logger.debug("Plugins to allocate: %s, excess vram: %s", to_allocate, excess)
+
+        while excess > 0:
+            chosen = next(p for p in to_allocate
+                          if p[0] > 1 and p[1] == max(p[1] for p in to_allocate if p[0] > 1))
+
+            if excess - chosen[1] <= 0:
+                chosen = next(p for p in to_allocate
+                              if p[0] > 1 and p[1] == min(p[1] for p in to_allocate
+                                                          if p[0] > 1 and p[1] >= excess))
+
+            excess -= chosen[1]
+            logger.debug("Reducing batch size for item %s. Remaining %s", chosen, excess)
+            to_allocate[to_allocate.index(chosen)] = (chosen[0] - 1, chosen[1])
+
+        msg = []
+        for plugin, alloc in zip(plugins, to_allocate):
+            if plugin.batchsize != alloc[0]:
+                logger.debug("Updating batchsize for plugin %s from %s to %s",
+                            plugin.name, plugin.batchsize, alloc[0])
+                plugin.batchsize = alloc[0]
+                msg.append(f"{plugin.__class__.__name__}: {plugin.batchsize}")
+
+        logger.info("Reset batch sizes due to available VRAM: %s", ", ".join(msg))
+
+
     def _set_extractor_batchsize(self) -> None:
         """
         Sets the batch size of the requested plugins based on their vram, their
         vram_per_batch_requirements and the number of plugins being loaded in the current phase.
-        Only adjusts if the the configured batch size requires more vram than is available. Nvidia
-        only.
+        Only adjusts if the the configured batch size requires more vram than is available.
         """
         backend = get_backend()
         if backend not in ("nvidia", "directml", "rocm"):
@@ -709,62 +761,20 @@ class Extractor():
 
         batch_required = sum(plugin.vram_per_batch * plugin.batchsize
                              for plugin in self._active_plugins)
+
         gpu_plugins = [p for p in self._current_phase if self._vram_per_phase[p] > 0]
+
         scaling = self._parallel_scaling.get(len(gpu_plugins), self._scaling_fallback)
         plugins_required = sum(self._vram_per_phase[p] for p in gpu_plugins) * scaling
-        if plugins_required + batch_required <= T.cast(int, self._vram_stats["vram_free"]):
+
+        vram_free = T.cast(int, self._vram_stats["vram_free"])
+        total_required = plugins_required + batch_required
+        if total_required <= vram_free:
             logger.debug("Plugin requirements within threshold: (plugins_required: %sMB, "
                          "vram_free: %sMB)", plugins_required, self._vram_stats["vram_free"])
             return
-        # Hacky split across plugins that use vram
-        available_vram = (T.cast(int, self._vram_stats["vram_free"])
-                          - plugins_required) // len(gpu_plugins)
-        self._set_plugin_batchsize(gpu_plugins, available_vram)
 
-    def _set_plugin_batchsize(self, gpu_plugins: list[str], available_vram: float) -> None:
-        """ Set the batch size for the given plugin based on given available vram.
-        Do not update plugins which have a vram_per_batch of 0 (CPU plugins) due to
-        zero division error.
-        """
-        plugins = [self._active_plugins[idx]
-                   for idx, plugin in enumerate(self._current_phase)
-                   if plugin in gpu_plugins]
-        vram_per_batch = [plugin.vram_per_batch for plugin in plugins]
-        ratios = [vram / sum(vram_per_batch) for vram in vram_per_batch]
-        requested_batchsizes = [plugin.batchsize for plugin in plugins]
-        batchsizes = [min(requested, max(1, int((available_vram * ratio) / plugin.vram_per_batch)))
-                      for ratio, plugin, requested in zip(ratios, plugins, requested_batchsizes)]
-        remaining = available_vram - sum(batchsize * plugin.vram_per_batch
-                                         for batchsize, plugin in zip(batchsizes, plugins))
-        sorted_indices = [i[0] for i in sorted(enumerate(plugins),
-                                               key=lambda x: x[1].vram_per_batch, reverse=True)]
-
-        logger.debug("requested_batchsizes: %s, batchsizes: %s, remaining vram: %s",
-                     requested_batchsizes, batchsizes, remaining)
-
-        while remaining > min(plugin.vram_per_batch
-                              for plugin in plugins) and requested_batchsizes != batchsizes:
-            for idx in sorted_indices:
-                plugin = plugins[idx]
-                if plugin.vram_per_batch > remaining:
-                    logger.debug("Not enough VRAM to increase batch size of %s. Required: %sMB, "
-                                 "Available: %sMB", plugin, plugin.vram_per_batch, remaining)
-                    continue
-                if plugin.batchsize == batchsizes[idx]:
-                    logger.debug("Threshold reached for %s. Batch size: %s",
-                                 plugin, plugin.batchsize)
-                    continue
-                logger.debug("Incrementing batch size of %s to %s", plugin, batchsizes[idx] + 1)
-                batchsizes[idx] += 1
-                remaining -= plugin.vram_per_batch
-                logger.debug("Remaining VRAM to allocate: %sMB", remaining)
-
-        if batchsizes != requested_batchsizes:
-            text = ", ".join([f"{plugin.__class__.__name__}: {batchsize}"
-                              for plugin, batchsize in zip(plugins, batchsizes)])
-            for plugin, batchsize in zip(plugins, batchsizes):
-                plugin.batchsize = batchsize
-            logger.info("Reset batch sizes due to available VRAM: %s", text)
+        self._set_plugins_batchsize(gpu_plugins, vram_free)
 
     def _join_threads(self):
         """ Join threads for current pass """

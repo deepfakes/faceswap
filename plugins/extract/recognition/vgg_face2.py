@@ -8,13 +8,17 @@ import typing as T
 import numpy as np
 import psutil
 from fastcluster import linkage, linkage_vector
+from keras.layers import (Activation, add, AveragePooling2D, BatchNormalization, Conv2D, Dense,
+                          Flatten, Input, MaxPooling2D)
+from keras.regularizers import L2
 
-from lib.model.layers import L2_normalize
+from lib.model.layers import L2Normalize
 from lib.model.session import KSession
 from lib.utils import FaceswapError
 from ._base import BatchType, RecogBatch, Identity
 
 if T.TYPE_CHECKING:
+    import torch
     from collections.abc import Generator
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -47,9 +51,8 @@ class Recognition(Identity):
         self.input_size = 224
         self.color_format = "BGR"
 
-        self.vram = 2468 if not self.config["cpu"] else 0
-        self.vram_warnings = 192 if not self.config["cpu"] else 0
-        self.vram_per_batch = 32 if not self.config["cpu"] else 0
+        self.vram = 384 if not self.config["cpu"] else 0  # 334 in testing
+        self.vram_per_batch = 192 if not self.config["cpu"] else 0  # ~155 in testing
         self.batchsize = self.config["batch-size"]
 
         # Average image provided in https://github.com/ox-vgg/vgg_face2
@@ -60,14 +63,13 @@ class Recognition(Identity):
     def init_model(self) -> None:
         """ Initialize VGG Face 2 Model. """
         assert isinstance(self.model_path, str)
-        model_kwargs = {"custom_objects": {"L2_normalize": L2_normalize}}
-        self.model = KSession(self.name,
+        self.model = VGGFace2(self.input_size,
                               self.model_path,
-                              model_kwargs=model_kwargs,
-                              allow_growth=self.config["allow_growth"],
                               exclude_gpus=self._exclude_gpus,
                               cpu_mode=self.config["cpu"])
-        self.model.load_model()
+        placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
+                               dtype="float32")
+        self.model.predict(placeholder)
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
@@ -97,6 +99,274 @@ class Recognition(Identity):
     def process_output(self, batch: BatchType) -> None:
         """ No output processing for  vgg_face2 """
         return
+
+
+class ResNet50:
+    """ ResNet50 imported for VGG-Face2 adapted from
+    https://github.com/WeidiXie/Keras-VGGFace2-ResNet50
+
+    Parameters
+    ----------
+    input_shape, Tuple[int, int, int] | None, optional
+        The input shape for the model. Default: ``None``
+    use_truncated: bool, optional
+        ``True`` to use a truncated version of resnet. Default ``False``
+    weight_decay: float
+        L2 Regularizer weight decay. Default: 1e-4
+    trainable: bool, optional
+        ``True`` if the block should be trainable. Default: ``True``
+    """
+    def __init__(self,
+                 input_shape: tuple[int, int, int] | None = None,
+                 use_truncated: bool = False,
+                 weight_decay: float = 1e-4,
+                 trainable: bool = True) -> None:
+        logger.debug("Initializing %s: input_shape: %s, use_truncated: %s, weight_decay: %s, "
+                     "trainable: %s", self.__class__.__name__, input_shape, use_truncated,
+                     weight_decay, trainable)
+
+        self._input_shape = (None, None, 3) if input_shape is None else input_shape
+        self._weight_decay = weight_decay
+        self._trainable = trainable
+
+        self._kernel_initializer = "orthogonal"
+        self._use_bias = False
+        self._bn_axis = 3
+        self._block_suffix = {0: "_reduce", 1: "", 2: "_increase"}
+
+        self._identity_calls = [2, 3, 5, 2]
+        self._filters = [(64, 64, 256), (128, 128, 512), (256, 256, 1024), (512, 512, 2048)]
+        if use_truncated:
+            self._identity_calls = self._identity_calls[:-1]
+            self._filters = self._filters[:-1]
+
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _identity_block(self,
+                        inputs: torch.Tensor,
+                        kernel_size: int,
+                        filters: tuple[int, int, int],
+                        stage: int,
+                        block: int) -> torch.Tensor:
+        """ The identity block is the block that has no conv layer at shortcut.
+
+        Parameters
+        ----------
+        inputs: :class:`torch.Tensor`
+            Input tensor
+        kernel_size: int
+            The kernel size of middle conv layer of the block
+        filters: tuple[int, int, int[
+            The filterss of 3 conv layers in the main path
+        stage: int
+            The current stage label, used for generating layer names
+        block: int
+            The current block label, used for generating layer names
+
+        Returns
+        -------
+        :class:`torch.Tensor`
+            Output tensor for the block
+        """
+        assert len(filters) == 3
+        var_x = inputs
+
+        for idx, filts in enumerate(filters):
+            k_size = kernel_size if idx == 1 else 1
+            conv_name = f"conv{stage}_{block}_{k_size}x{k_size}{self._block_suffix[idx]}"
+            bn_name = f"{conv_name}_bn"
+
+            var_x = Conv2D(filts,
+                           k_size,
+                           padding="same" if idx == 1 else "valid",
+                           kernel_initializer=self._kernel_initializer,
+                           use_bias=self._use_bias,
+                           kernel_regularizer=L2(self._weight_decay),
+                           trainable=self._trainable,
+                           name=conv_name)(var_x)
+            var_x = BatchNormalization(axis=self._bn_axis, name=bn_name)(var_x)
+            if idx < 2:
+                var_x = Activation("relu")(var_x)
+
+        var_x = add([var_x, inputs])
+        var_x = Activation("relu")(var_x)
+        return var_x
+
+    def _conv_block(self,
+                    inputs: torch.Tensor,
+                    kernel_size: int,
+                    filters: tuple[int, int, int],
+                    stage: int,
+                    block: int,
+                    strides: tuple[int, int] = (2, 2)) -> torch.Tensor:
+        """ A block that has a conv layer at shortcut.
+
+        Parameters
+        ----------
+        inputs: :class:`torch.Tensor`
+            Input tensor
+        kernel_size: int
+            The kernel size of middle conv layer of the block
+        filters: tuple[int, int, int[
+            The filterss of 3 conv layers in the main path
+        stage: int
+            The current stage label, used for generating layer names
+        block: int
+            The current block label, used for generating layer names
+        strides: tuple[int, int], optional
+            The stride length for the first and last convolution. Default: (2, 2)
+
+        Returns
+        -------
+        :class:`torch.Tensor`
+            Output tensor for the block
+
+        Notes
+        -----
+        From stage 3, the first conv layer at main path is with `strides = (2,2)` and the shortcut
+        should have `strides = (2,2)` as well
+        """
+        assert len(filters) == 3
+        var_x = inputs
+
+        for idx, filts in enumerate(filters):
+            k_size = kernel_size if idx == 1 else 1
+            conv_name = f"conv{stage}_{block}_{k_size}x{k_size}{self._block_suffix[idx]}"
+            bn_name = f"{conv_name}_bn"
+
+            var_x = Conv2D(filts,
+                           k_size,
+                           strides=strides if idx == 0 else (1, 1),
+                           padding="same" if idx == 1 else "valid",
+                           kernel_initializer=self._kernel_initializer,
+                           use_bias=self._use_bias,
+                           kernel_regularizer=L2(self._weight_decay),
+                           trainable=self._trainable,
+                           name=conv_name)(var_x)
+            var_x = BatchNormalization(axis=self._bn_axis, name=bn_name)(var_x)
+            if idx < 2:
+                var_x = Activation("relu")(var_x)
+
+        conv_name = f"conv{stage}_{block}_1x1_proj"
+        bn_name = f"{conv_name}_bn"
+
+        shortcut = Conv2D(filters[-1],
+                          (1, 1),
+                          strides=strides,
+                          kernel_initializer=self._kernel_initializer,
+                          use_bias=self._use_bias,
+                          kernel_regularizer=L2(self._weight_decay),
+                          trainable=self._trainable,
+                          name=conv_name)(inputs)
+        shortcut = BatchNormalization(axis=self._bn_axis, name=bn_name)(shortcut)
+
+        var_x = add([var_x, shortcut])
+        var_x = Activation("relu")(var_x)
+        return var_x
+
+    def __call__(self, inputs: torch.Tensor) -> torch.Tensor:
+        """ Call the resnet50 Network
+
+        Parameters
+        ----------
+        inputs: :class:`torch.Tensor`
+            Input tensor
+
+        Returns
+        -------
+        :class:`torch.Tensor`
+            Output tensor from resnet50
+        """
+        var_x = Conv2D(64,
+                       (7, 7),
+                       strides=(2, 2),
+                       padding="same",
+                       use_bias=self._use_bias,
+                       kernel_initializer=self._kernel_initializer,
+                       kernel_regularizer=L2(self._weight_decay),
+                       trainable=self._trainable,
+                       name="conv1_7x7_s2")(inputs)
+
+        var_x = BatchNormalization(axis=self._bn_axis, name="conv1_7x7_s2_bn")(var_x)
+        var_x = Activation("relu")(var_x)
+        var_x = MaxPooling2D((3, 3), strides=(2, 2))(var_x)
+
+        for idx, (recursuions, filters) in enumerate(zip(self._identity_calls, self._filters)):
+            stage = idx + 2
+            strides = (1, 1) if stage == 2 else (2, 2)
+            var_x = self._conv_block(var_x, 3, filters, stage=stage, block=1, strides=strides)
+
+            for recursion in range(recursuions):
+                block = recursion + 2
+                var_x = self._identity_block(var_x, 3, filters, stage=stage, block=block)
+
+        return var_x
+
+
+class VGGFace2(KSession):
+    """ VGG-Face 2 model with resnet 50 backbone. Adapted from
+    https://github.com/WeidiXie/Keras-VGGFace2-ResNet50
+
+    Parameters
+    ----------
+    input_size, int
+        The input size for the model.
+    model_path: str
+        The path to the keras model file
+    exclude_gpus: list
+        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
+        ``None`` to not exclude any GPUs
+    cpu_mode: bool, optional
+        ``True`` run the model on CPU. Default: ``False``
+    num_class: int, optional
+        Number of classes to train the model on
+    weight_decay: float
+        L2 Regularizer weight decay. Default: 1e-4
+    """
+    def __init__(self,
+                 input_size: int,
+                 model_path: str,
+                 exclude_gpus: list[int] | None,
+                 cpu_mode: bool,
+                 num_classes: int = 8631,
+                 weight_decay: float = 1e-4) -> None:
+        logger.debug("Initializing %s: input_size: %s, model_path: %s, exclude_gpus: %s, "
+                     "num_classes: %s, weight_decay: %s, train: %s",
+                     self.__class__.__name__, input_size, model_path, exclude_gpus, cpu_mode,
+                     num_classes, weight_decay)
+        super().__init__("VGG Face 2",
+                         model_path,
+                         exclude_gpus=exclude_gpus,
+                         cpu_mode=cpu_mode)
+        self._input_shape = (input_size, input_size, 3)
+        self._weight_decay = weight_decay
+        self._num_classes = num_classes
+        self._resnet = ResNet50(input_shape=self._input_shape, weight_decay=self._weight_decay)
+
+        self.define_model(self._model_definition)
+        self.load_model_weights()
+
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _model_definition(self) -> tuple[torch.Tensor, list[torch.Tensor]]:
+        """ Run the vgg-face2 model on the input tensor
+
+        Returns
+        -------
+        :class:`torch.Tensor`
+            The input tensor to vgg-face2
+        list[`torch.Tensor`]
+            The output from vgg-face2
+        """
+        inputs = Input(self._input_shape)
+        var_x = self._resnet(inputs)
+
+        var_x = AveragePooling2D((7, 7), name="avg_pool")(var_x)
+        var_x = Flatten()(var_x)
+        var_x = Dense(512, activation="relu", name="dim_proj")(var_x)
+
+        var_x = L2Normalize(axis=1)(var_x)
+        return inputs, [var_x]
 
 
 class Cluster():  # pylint: disable=too-few-public-methods
