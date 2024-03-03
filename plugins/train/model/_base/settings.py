@@ -19,9 +19,8 @@ import typing as T
 from contextlib import nullcontext
 
 import tensorflow as tf
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras import losses as k_losses  # pylint:disable=import-error
-import tensorflow.keras.mixed_precision as mixedprecision  # noqa pylint:disable=import-error
+import keras
+from keras import backend as K, losses as k_losses, mixed_precision as mixedprecision
 
 from lib.model import losses, optimizers
 from lib.model.autoclip import AutoClipper
@@ -32,9 +31,6 @@ if T.TYPE_CHECKING:
     from contextlib import AbstractContextManager as ContextManager
     from argparse import Namespace
     from .model import State
-
-keras = tf.keras
-K = keras.backend
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -73,7 +69,7 @@ class Loss():
         logger.debug("Initializing %s: (color_order: %s)", self.__class__.__name__, color_order)
         self._config = config
         self._mask_channels = self._get_mask_channels()
-        self._inputs: list[tf.keras.layers.Layer] = []
+        self._inputs: list[keras.layers.Layer] = []
         self._names: list[str] = []
         self._funcs: dict[str, Callable] = {}
 
@@ -124,7 +120,7 @@ class Loss():
             return None
         return [K.int_shape(mask_input) for mask_input in self._mask_inputs]
 
-    def configure(self, model: tf.keras.models.Model) -> None:
+    def configure(self, model: keras.models.Model) -> None:
         """ Configure the loss functions for the given inputs and outputs.
 
         Parameters
@@ -315,7 +311,7 @@ class Optimizer():  # pylint:disable=too-few-public-methods
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
-    def optimizer(self) -> tf.keras.optimizers.Optimizer:
+    def optimizer(self) -> keras.optimizers.Optimizer:
         """ :class:`keras.optimizers.Optimizer`: The requested optimizer. """
         return self._optimizer(**self._kwargs)
 
@@ -355,8 +351,6 @@ class Settings():
         Faceswap's command line arguments
     mixed_precision: bool
         ``True`` if Mixed Precision training should be used otherwise ``False``
-    allow_growth: bool
-        ``True`` if the Tensorflow allow_growth parameter should be set otherwise ``False``
     is_predict: bool, optional
         ``True`` if the model is being loaded for inference, ``False`` if the model is being loaded
         for training. Default: ``False``
@@ -364,12 +358,10 @@ class Settings():
     def __init__(self,
                  arguments: Namespace,
                  mixed_precision: bool,
-                 allow_growth: bool,
                  is_predict: bool) -> None:
-        logger.debug("Initializing %s: (arguments: %s, mixed_precision: %s, allow_growth: %s, "
-                     "is_predict: %s)", self.__class__.__name__, arguments, mixed_precision,
-                     allow_growth, is_predict)
-        self._set_tf_settings(allow_growth, arguments.exclude_gpus)
+        logger.debug("Initializing %s: (arguments: %s, mixed_precision: %s, is_predict: %s)",
+                     self.__class__.__name__, arguments, mixed_precision, is_predict)
+        self._set_tf_settings(arguments.exclude_gpus)
 
         use_mixed_precision = not is_predict and mixed_precision
         self._use_mixed_precision = self._set_keras_mixed_precision(use_mixed_precision)
@@ -391,31 +383,27 @@ class Settings():
     @classmethod
     def loss_scale_optimizer(
             cls,
-            optimizer: tf.keras.optimizers.Optimizer) -> mixedprecision.LossScaleOptimizer:
+            optimizer: keras.optimizers.Optimizer) -> mixedprecision.LossScaleOptimizer:
         """ Optimize loss scaling for mixed precision training.
 
         Parameters
         ----------
-        optimizer: :class:`tf.keras.optimizers.Optimizer`
+        optimizer: :class:`keras.optimizers.Optimizer`
             The optimizer instance to wrap
 
         Returns
         --------
-        :class:`tf.keras.mixed_precision.loss_scale_optimizer.LossScaleOptimizer`
+        :class:`keras.mixed_precision.loss_scale_optimizer.LossScaleOptimizer`
             The original optimizer with loss scaling applied
         """
         return mixedprecision.LossScaleOptimizer(optimizer)  # pylint:disable=no-member
 
     @classmethod
-    def _set_tf_settings(cls, allow_growth: bool, exclude_devices: list[int]) -> None:
+    def _set_tf_settings(cls, exclude_devices: list[int]) -> None:
         """ Specify Devices to place operations on and Allow TensorFlow to manage VRAM growth.
-
-        Enables the Tensorflow allow_growth option if requested in the command line arguments
 
         Parameters
         ----------
-        allow_growth: bool
-            ``True`` if the Tensorflow allow_growth parameter should be set otherwise ``False``
         exclude_devices: list or ``None``
             List of GPU device indices that should not be made available to Tensorflow. Pass
             ``None`` if all devices should be made available
@@ -426,7 +414,7 @@ class Settings():
             tf.config.set_visible_devices([], "GPU")
             return
 
-        if not exclude_devices and not allow_growth:
+        if not exclude_devices:
             logger.debug("Not setting any specific Tensorflow settings")
             return
 
@@ -435,13 +423,6 @@ class Settings():
             gpus = [gpu for idx, gpu in enumerate(gpus) if idx not in exclude_devices]
             logger.debug("Filtering devices to: %s", gpus)
             tf.config.set_visible_devices(gpus, "GPU")
-
-        if allow_growth and backend == "nvidia":
-            logger.debug("Setting Tensorflow 'allow_growth' option")
-            for gpu in gpus:
-                logger.info("Setting allow growth for GPU: %s", gpu)
-                tf.config.experimental.set_memory_growth(gpu, True)
-            logger.debug("Set Tensorflow 'allow_growth' option")
 
     @classmethod
     def _set_keras_mixed_precision(cls, use_mixed_precision: bool) -> bool:
@@ -544,7 +525,7 @@ class Settings():
         gpus = tf.config.get_visible_devices("GPU")
         if len(gpus) == 1:
             # TODO Remove these monkey patches when Strategy supports mixed-precision
-            from keras.mixed_precision import loss_scale_optimizer  # noqa pylint:disable=import-outside-toplevel
+            from keras.mixed_precision import loss_scale_optimizer  # pylint:disable=import-outside-toplevel
 
             # Force a return of True on Loss Scale Optimizer Stategy check
             loss_scale_optimizer.strategy_supports_loss_scaling = lambda: True
@@ -621,10 +602,10 @@ class Settings():
             config["dtype"] = policy
 
     def get_mixed_precision_layers(self,
-                                   build_func: Callable[[list[tf.keras.layers.Layer]],
-                                                        tf.keras.models.Model],
-                                   inputs: list[tf.keras.layers.Layer]
-                                   ) -> tuple[tf.keras.models.Model, list[str]]:
+                                   build_func: Callable[[list[keras.layers.Layer]],
+                                                        keras.models.Model],
+                                   inputs: list[keras.layers.Layer]
+                                   ) -> tuple[keras.models.Model, list[str]]:
         """ Get and store the mixed precision layers from a full precision enabled model.
 
         Parameters
@@ -636,7 +617,7 @@ class Settings():
 
         Returns
         -------
-        model: :class:`tensorflow.keras.model`
+        model: :class:`keras.model`
             The built model in fp32
         list
             The list of layer names within the full precision model that can be switched
@@ -649,7 +630,7 @@ class Settings():
             model = build_func(inputs)
             layers = self._get_mixed_precision_layers(model.get_config()["layers"])
 
-        tf.keras.backend.clear_session()
+        keras.backend.clear_session()
         self._set_keras_mixed_precision(False)
 
         config = model.get_config()
@@ -659,8 +640,8 @@ class Settings():
         return new_model, layers
 
     def check_model_precision(self,
-                              model: tf.keras.models.Model,
-                              state: "State") -> tf.keras.models.Model:
+                              model: keras.models.Model,
+                              state: "State") -> keras.models.Model:
         """ Check the model's precision.
 
         If this is a new model, then

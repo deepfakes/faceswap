@@ -6,11 +6,10 @@ import logging
 import typing as T
 
 import numpy as np
-import tensorflow as tf
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras.layers import Activation  # pylint:disable=import-error
-from tensorflow.keras.models import load_model as k_load_model, Model  # noqa:E501  # pylint:disable=import-error
+from keras.layers import Activation
+from keras.models import Model
+from keras.saving import load_model  as k_load_model
 
 from lib.utils import get_backend
 
@@ -29,11 +28,6 @@ class KSession():
 
     This is an early implementation of this class, and should be expanded out over time.
 
-    Notes
-    -----
-    The documentation refers to :mod:`keras`. This is a pseudonym for either :mod:`keras` or
-    :mod:`tensorflow.keras` depending on the backend in use.
-
     Parameters
     ----------
     name: str
@@ -42,10 +36,6 @@ class KSession():
         The path to the keras model file
     model_kwargs: dict, optional
         Any kwargs that need to be passed to :func:`keras.models.load_models()`. Default: ``None``
-    allow_growth: bool, optional
-        Enable the Tensorflow GPU allow_growth configuration option. This option prevents
-        Tensorflow from allocating all of the GPU VRAM, but can lead to higher fragmentation and
-        slower performance. Default: ``False``
     exclude_gpus: list, optional
         A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
         ``None`` to not exclude any GPUs. Default: ``None``
@@ -56,17 +46,14 @@ class KSession():
                  name: str,
                  model_path: str,
                  model_kwargs: dict | None = None,
-                 allow_growth: bool = False,
                  exclude_gpus: list[int] | None = None,
                  cpu_mode: bool = False) -> None:
-        logger.trace("Initializing: %s (name: %s, model_path: %s, "  # type:ignore
-                     "model_kwargs: %s,  allow_growth: %s, exclude_gpus: %s, cpu_mode: %s)",
-                     self.__class__.__name__, name, model_path, model_kwargs, allow_growth,
-                     exclude_gpus, cpu_mode)
+        logger.trace("Initializing: %s (name: %s, model_path: %s, model_kwargs: %s, "
+                     "exclude_gpus: %s, cpu_mode: %s)", self.__class__.__name__, name, model_path,
+                     model_kwargs, exclude_gpus, cpu_mode)
         self._name = name
         self._backend = get_backend()
-        self._context = self._set_session(allow_growth,
-                                          [] if exclude_gpus is None else exclude_gpus,
+        self._context = self._set_session([] if exclude_gpus is None else exclude_gpus,
                                           cpu_mode)
         self._model_path = model_path
         self._model_kwargs = {} if not model_kwargs else model_kwargs
@@ -99,22 +86,16 @@ class KSession():
             return self._model.predict(feed, verbose=0, batch_size=batch_size)
 
     def _set_session(self,
-                     allow_growth: bool,
                      exclude_gpus: list,
                      cpu_mode: bool) -> T.ContextManager:
         """ Sets the backend session options.
 
         For CPU backends, this hides any GPUs from Tensorflow.
 
-        For Nvidia backends, this hides any GPUs that Tensorflow should not use and applies
-        any allow growth settings
+        For Nvidia backends, this hides any GPUs that Tensorflow should not use
 
         Parameters
         ----------
-        allow_growth: bool
-            Enable the Tensorflow GPU allow_growth configuration option. This option prevents
-            Tensorflow from allocating all of the GPU VRAM, but can lead to higher fragmentation
-            and slower performance
         exclude_gpus: list
             A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
             ``None`` to not exclude any GPUs
@@ -122,6 +103,8 @@ class KSession():
             ``True`` run the model on CPU. Default: ``False``
         """
         retval = nullcontext()
+        # TODO devices
+        return retval
         if self._backend == "cpu":
             logger.verbose("Hiding GPUs from Tensorflow")  # type:ignore
             tf.config.set_visible_devices([], "GPU")
@@ -132,11 +115,6 @@ class KSession():
             gpus = [gpu for idx, gpu in enumerate(gpus) if idx not in exclude_gpus]
             logger.debug("Filtering devices to: %s", gpus)
             tf.config.set_visible_devices(gpus, "GPU")
-
-        if allow_growth and self._backend == "nvidia":
-            for gpu in gpus:
-                logger.info("Setting allow growth for GPU: %s", gpu)
-                tf.config.experimental.set_memory_growth(gpu, True)
 
         if cpu_mode:
             retval = tf.device("/device:cpu:0")

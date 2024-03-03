@@ -349,19 +349,6 @@ class Config(FaceswapConfig):
                 "\n\t http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt"))
         self.add_item(
             section=section,
-            title="allow_growth",
-            datatype=bool,
-            default=False,
-            group=_("network"),
-            fixed=False,
-            info=_(
-                "Enable the Tensorflow GPU 'allow_growth' configuration option. "
-                "This option prevents Tensorflow from allocating all of the GPU VRAM at launch "
-                "but can lead to higher VRAM fragmentation and slower performance. Should only "
-                "be enabled if you are receiving errors regarding 'cuDNN fails to initialize' "
-                "when commencing training."))
-        self.add_item(
-            section=section,
             title="mixed_precision",
             datatype=bool,
             default=False,
