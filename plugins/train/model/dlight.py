@@ -9,11 +9,10 @@
     """
 import logging
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras.layers import (  # pylint:disable=import-error
+from keras.layers import (
     AveragePooling2D, BatchNormalization, Concatenate, Dense, Dropout, Flatten, Input, Reshape,
     LeakyReLU, UpSampling2D)
-from tensorflow.keras.models import Model as KModel  # pylint:disable=import-error
+from keras.models import Model as KModel
 
 from lib.model.nn_blocks import (Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock,
                                  Upscale2xBlock)

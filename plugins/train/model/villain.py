@@ -3,10 +3,9 @@
     Based on the original https://www.reddit.com/r/deepfakes/ code sample + contributions
     Adapted from a model by VillainGuy (https://github.com/VillainGuy) """
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras.initializers import RandomNormal  # pylint:disable=import-error
-from tensorflow.keras.layers import add, Dense, Flatten, Input, LeakyReLU, Reshape  # noqa:E501  # pylint:disable=import-error
-from tensorflow.keras.models import Model as KModel  # pylint:disable=import-error
+from keras.initializers import RandomNormal
+from keras.layers import add, Dense, Flatten, Input, LeakyReLU, Reshape
+from keras.models import Model as KModel
 
 from lib.model.layers import PixelShuffler
 from lib.model.nn_blocks import (Conv2DOutput, Conv2DBlock, ResidualBlock, SeparableConv2DBlock,

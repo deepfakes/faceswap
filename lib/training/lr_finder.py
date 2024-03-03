@@ -8,6 +8,8 @@ import typing as T
 from datetime import datetime
 from enum import Enum
 
+import keras.backend as K
+
 import tensorflow as tf
 import matplotlib
 import matplotlib.pyplot as plt
@@ -18,9 +20,6 @@ if T.TYPE_CHECKING:
     from lib.config import ConfigValueType
     from lib.training import Feeder
     from plugins.train.model._base import ModelBase
-
-keras = tf.keras
-K = keras.backend
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +36,7 @@ class LearningRateFinder:  # pylint:disable=too-few-public-methods
 
     Parameters
     ----------
-    model: :class:`tensorflow.keras.models.Model`
+    model: :class:`keras.models.Model`
         The keras model to find the optimal learning rate for
     config: dict
         The configuration options for the model

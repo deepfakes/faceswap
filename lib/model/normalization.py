@@ -5,11 +5,10 @@ import sys
 
 import tensorflow as tf
 
-# Fix intellisense/linting for tf.keras' thoroughly broken import system
+import keras
+from keras import layers, backend as K
+
 from tensorflow.python.keras.utils.conv_utils import normalize_data_format  # noqa:E501 # pylint:disable=no-name-in-module
-keras = tf.keras
-layers = keras.layers
-K = keras.backend
 
 
 class AdaInstanceNormalization(layers.Layer):  # type:ignore[name-defined]

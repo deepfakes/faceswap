@@ -7,8 +7,7 @@ import typing as T
 import numpy as np
 import tensorflow as tf
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras import backend as K  # pylint:disable=import-error
+import keras.backend as K
 
 from lib.keras_utils import ColorSpaceConvert, frobenius_norm, replicate_pad
 

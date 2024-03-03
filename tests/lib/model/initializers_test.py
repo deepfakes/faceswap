@@ -7,8 +7,8 @@ Adapted from Keras tests.
 import pytest
 import numpy as np
 
-from tensorflow.keras import backend as K  # pylint:disable=import-error
-from tensorflow.keras import initializers as k_initializers  # noqa:E501  # pylint:disable=import-error
+from keras import backend as K
+from keras import initializers as k_initializers
 
 from lib.model import initializers
 from lib.utils import get_backend

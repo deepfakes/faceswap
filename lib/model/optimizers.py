@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
-""" Custom Optimizers for TensorFlow 2.x/tf.keras """
+""" Custom Optimizers for TensorFlow 2.x/keras """
 
 import inspect
 import sys
 
+import keras
+from keras.optimizers import Adam, Nadam, RMSprop   # noqa:E501,F401  pylint:disable=import-error,unused-import
 import tensorflow as tf
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras.optimizers import Adam, Nadam, RMSprop  # noqa:E501,F401  pylint:disable=import-error,unused-import
-keras = tf.keras
-
-
-class AdaBelief(tf.keras.optimizers.Optimizer):
+class AdaBelief(keras.optimizers.Optimizer):
     """ Implementation of the AdaBelief Optimizer
 
-    Inherits from: tf.keras.optimizers.Optimizer.
+    Inherits from: keras.optimizers.Optimizer.
 
     AdaBelief Optimizer is not a placement of the heuristic warmup, the settings should be kept if
     warmup has already been employed and tuned in the baseline method. You can enable warmup by
@@ -26,7 +23,7 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
 
     Parameters
     ----------
-    learning_rate: `Tensor`, float or :class: `tf.keras.optimizers.schedules.LearningRateSchedule`
+    learning_rate: `Tensor`, float or :class: `keras.optimizers.schedules.LearningRateSchedule`
         The learning rate.
     beta_1: float
         The exponential decay rate for the 1st moment estimates.
@@ -34,7 +31,7 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
         The exponential decay rate for the 2nd moment estimates.
     epsilon: float
         A small constant for numerical stability.
-    weight_decay: `Tensor`, float or :class: `tf.keras.optimizers.schedules.LearningRateSchedule`
+    weight_decay: `Tensor`, float or :class: `keras.optimizers.schedules.LearningRateSchedule`
         Weight decay for each parameter.
     rectify: bool
         Whether to enable rectification as in RectifiedAdam
@@ -66,8 +63,8 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
     Example of serialization:
 
     >>> optimizer = AdaBelief(learning_rate=lr_scheduler, weight_decay=wd_scheduler)
-    >>> config = tf.keras.optimizers.serialize(optimizer)
-    >>> new_optimizer = tf.keras.optimizers.deserialize(config,
+    >>> config = keras.optimizers.serialize(optimizer)
+    >>> new_optimizer = keras.optimizers.deserialize(config,
     ...                                                 custom_objects=dict(AdaBelief=AdaBelief))
 
     Example of warm up:
@@ -139,7 +136,7 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
         self._set_hyper("total_steps", int(total_steps))
         self._set_hyper("warmup_proportion", warmup_proportion)
         self._set_hyper("min_lr", min_lr)
-        self.epsilon = epsilon or tf.keras.backend.epsilon()
+        self.epsilon = epsilon or keras.backend.epsilon()
         self.amsgrad = amsgrad
         self.rectify = rectify
         self._has_weight_decay = weight_decay != 0.0
@@ -192,7 +189,7 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
             The weight decay variable
         """
         wd_t = self._get_hyper("weight_decay", var_dtype)
-        if isinstance(wd_t, tf.keras.optimizers.schedules.LearningRateSchedule):
+        if isinstance(wd_t, keras.optimizers.schedules.LearningRateSchedule):
             wd_t = tf.cast(wd_t(self.iterations), var_dtype)
         return wd_t
 

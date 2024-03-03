@@ -6,11 +6,11 @@ import logging
 import typing as T
 
 import numpy as np
+import keras
+import keras.backend as K
 import tensorflow as tf
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
 from tensorflow.python.keras.engine import compile_utils  # pylint:disable=no-name-in-module
-from tensorflow.keras import backend as K  # pylint:disable=import-error
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
@@ -543,7 +543,7 @@ class LInfNorm():  # pylint:disable=too-few-public-methods
         return loss
 
 
-class LossWrapper(tf.keras.losses.Loss):
+class LossWrapper(keras.losses.Loss):
     """ A wrapper class for multiple keras losses to enable multiple masked weighted loss
     functions on a single output.
 
@@ -579,7 +579,7 @@ class LossWrapper(tf.keras.losses.Loss):
 
         Parameters
         ----------
-        function: :class:`tf.keras.losses.Loss`
+        function: :class:`keras.losses.Loss`
             The loss function to add to the loss chain
         weight: float, optional
             The weighting to apply to the loss function. Default: `1.0`

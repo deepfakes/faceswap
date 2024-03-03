@@ -8,6 +8,8 @@ import typing as T
 from dataclasses import dataclass
 
 import numpy as np
+import keras
+from keras import applications as kapp, backend as K, layers as kl
 import tensorflow as tf
 
 from lib.model.nn_blocks import (
@@ -16,16 +18,11 @@ from lib.model.nn_blocks import (
 from lib.model.normalization import (
     AdaInstanceNormalization, GroupNormalization, InstanceNormalization, RMSNormalization)
 from lib.model.networks import ViT, TypeModelsViT
-from lib.utils import get_tf_version, FaceswapError
+from lib.utils import get_torch_version, FaceswapError
 
 from ._base import ModelBase, get_all_sub_models
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-K = tf.keras.backend
-kapp = tf.keras.applications
-kl = tf.keras.layers
-keras = tf.keras
 
 
 @dataclass
@@ -192,7 +189,7 @@ class Model(ModelBase):
             self._compile_model()
             self._output_summary()
 
-    def _update_dropouts(self, model: tf.keras.models.Model) -> tf.keras.models.Model:
+    def _update_dropouts(self, model: keras.models.Model) -> keras.models.Model:
         """ Update the saved model with new dropout rates.
 
         Keras, annoyingly, does not actually change the dropout of the underlying layer, so we need
@@ -312,14 +309,14 @@ class Model(ModelBase):
             raise FaceswapError(f"'{arch}' is not a valid choice for encoder architecture. Choose "
                                 f"one of {list(_MODEL_MAPPING.keys())}.")
 
-        tf_ver = get_tf_version()
+        tf_ver = get_torch_version()
         tf_min = model.tf_min
         if tf_ver < tf_min:
             raise FaceswapError(f"{arch}' is not compatible with your version of Tensorflow. The "
                                 f"minimum version required is {tf_min} whilst you have version "
                                 f"{tf_ver} installed.")
 
-    def build_model(self, inputs: list[tf.Tensor]) -> tf.keras.models.Model:
+    def build_model(self, inputs: list[tf.Tensor]) -> keras.models.Model:
         """ Create the model's structure.
 
         Parameters
@@ -344,7 +341,7 @@ class Model(ModelBase):
         autoencoder = keras.models.Model(inputs, outputs, name=self.model_name)
         return autoencoder
 
-    def _build_encoders(self, inputs: list[tf.Tensor]) -> dict[str, tf.keras.models.Model]:
+    def _build_encoders(self, inputs: list[tf.Tensor]) -> dict[str, keras.models.Model]:
         """ Build the encoders for Phaze-A
 
         Parameters
@@ -365,7 +362,7 @@ class Model(ModelBase):
 
     def _build_fully_connected(
             self,
-            inputs: dict[str, tf.keras.models.Model]) -> dict[str, list[tf.keras.models.Model]]:
+            inputs: dict[str, keras.models.Model]) -> dict[str, list[keras.models.Model]]:
         """ Build the fully connected layers for Phaze-A
 
         Parameters
@@ -410,8 +407,8 @@ class Model(ModelBase):
 
     def _build_g_blocks(
                 self,
-                inputs: dict[str, list[tf.keras.models.Model]]
-            ) -> dict[str, list[tf.keras.models.Model] | tf.keras.models.Model]:
+                inputs: dict[str, list[keras.models.Model]]
+            ) -> dict[str, list[keras.models.Model] | keras.models.Model]:
         """ Build the g-block layers for Phaze-A.
 
         If a g-block has not been selected for this model, then the original `inters` models are
@@ -444,8 +441,8 @@ class Model(ModelBase):
         return retval
 
     def _build_decoders(self,
-                        inputs: dict[str, list[tf.keras.models.Model] | tf.keras.models.Model]
-                        ) -> dict[str, tf.keras.models.Model]:
+                        inputs: dict[str, list[keras.models.Model] | keras.models.Model]
+                        ) -> dict[str, keras.models.Model]:
         """ Build the encoders for Phaze-A
 
         Parameters
@@ -526,7 +523,7 @@ def _get_upscale_layer(method: T.Literal["resize_images", "subpixel", "upscale_d
                        filters: int,
                        activation: str | None = None,
                        upsamples: int | None = None,
-                       interpolation: str | None = None) -> tf.keras.layers.Layer:
+                       interpolation: str | None = None) -> keras.layers.Layer:
     """ Obtain an instance of the requested upscale method.
 
     Parameters
@@ -689,7 +686,7 @@ class Encoder():  # pylint:disable=too-few-public-methods
             kwargs["include_preprocessing"] = False
         return model, kwargs
 
-    def __call__(self) -> tf.keras.models.Model:
+    def __call__(self) -> keras.models.Model:
         """ Create the Phaze-A Encoder Model.
 
         Returns
@@ -736,7 +733,7 @@ class Encoder():  # pylint:disable=too-few-public-methods
 
         return keras.models.Model(input_, var_x, name="encoder")
 
-    def _get_encoder_model(self) -> tf.keras.models.Model:
+    def _get_encoder_model(self) -> keras.models.Model:
         """ Return the model defined by the selected architecture.
 
         Returns
@@ -938,7 +935,7 @@ class FullyConnected():  # pylint:disable=too-few-public-methods
             var_x = kl.LeakyReLU(alpha=0.1)(var_x)
         return var_x
 
-    def __call__(self) -> tf.keras.models.Model:
+    def __call__(self) -> keras.models.Model:
         """ Call the intermediate layer.
 
         Returns
@@ -1262,7 +1259,7 @@ class GBlock():  # pylint:disable=too-few-public-methods
 
         return var_x
 
-    def __call__(self) -> tf.keras.models.Model:
+    def __call__(self) -> keras.models.Model:
         """ G-Block Network.
 
         Returns
@@ -1307,7 +1304,7 @@ class Decoder():  # pylint:disable=too-few-public-methods
         self._config = config
         logger.debug("Initialized: %s", self.__class__.__name__,)
 
-    def __call__(self) -> tf.keras.models.Model:
+    def __call__(self) -> keras.models.Model:
         """ Decoder Network.
 
         Returns

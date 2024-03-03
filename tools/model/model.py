@@ -7,8 +7,9 @@ import sys
 import typing as T
 
 import numpy as np
+import keras
 import tensorflow as tf
-from tensorflow import keras
+
 
 from lib.model.backup_restore import Backup
 

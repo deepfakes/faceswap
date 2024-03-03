@@ -10,8 +10,7 @@ import numpy as np
 
 from numpy.testing import assert_allclose
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras import Input, Model, backend as K  # pylint:disable=import-error
+from keras import Input, Model, backend as K
 
 from lib.model import layers
 from lib.utils import get_backend
@@ -122,7 +121,7 @@ def test_k_resize_images(dummy):  # pylint:disable=unused-argument
 @pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
 def test_l2_normalize(dummy):  # pylint:disable=unused-argument
     """ L2 Normalize layer test """
-    layer_test(layers.L2_normalize, kwargs={"axis": 1}, input_shape=(2, 4, 4, 1024))
+    layer_test(layers.L2Normalize, kwargs={"axis": 1}, input_shape=(2, 4, 4, 1024))
 
 
 @pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])

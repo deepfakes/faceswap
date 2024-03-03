@@ -15,6 +15,7 @@ import typing as T
 import cv2
 import numpy as np
 
+import keras
 import tensorflow as tf
 from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
     errors_impl as tf_errors)
@@ -167,14 +168,14 @@ class TrainerBase():
                     f"{learning_rate:.1e}")
         return False
 
-    def _set_tensorboard(self) -> tf.keras.callbacks.TensorBoard:
+    def _set_tensorboard(self) -> keras.callbacks.TensorBoard:
         """ Set up Tensorboard callback for logging loss.
 
         Bypassed if command line option "no-logs" has been selected.
 
         Returns
         -------
-        :class:`tf.keras.callbacks.TensorBoard`
+        :class:`keras.callbacks.TensorBoard`
             Tensorboard object for the the current training session.
         """
         if self._model.state.current_session["no_logs"]:
@@ -186,14 +187,14 @@ class TrainerBase():
         log_dir = os.path.join(str(self._model.io.model_dir),
                                f"{self._model.name}_logs",
                                f"session_{self._model.state.session_id}")
-        tensorboard = tf.keras.callbacks.TensorBoard(log_dir=log_dir,
-                                                     histogram_freq=0,  # Must be 0 or hangs
-                                                     write_graph=True,
-                                                     write_images=False,
-                                                     update_freq="batch",
-                                                     profile_batch=0,
-                                                     embeddings_freq=0,
-                                                     embeddings_metadata=None)
+        tensorboard = keras.callbacks.TensorBoard(log_dir=log_dir,
+                                                  histogram_freq=0,  # Must be 0 or hangs
+                                                  write_graph=True,
+                                                  write_images=False,
+                                                  update_freq="batch",
+                                                  profile_batch=0,
+                                                  embeddings_freq=0,
+                                                  embeddings_metadata=None)
         tensorboard.set_model(self._model.model)
         tensorboard.on_train_begin(0)
         logger.verbose("Enabled TensorBoard Logging")  # type: ignore

@@ -5,7 +5,7 @@ import typing as T
 
 import numpy as np
 
-import tensorflow.keras.backend as K  # pylint:disable=import-error
+import keras.backend as K
 
 if T.TYPE_CHECKING:
     from tensorflow import Tensor

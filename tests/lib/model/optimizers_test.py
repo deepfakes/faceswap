@@ -7,10 +7,10 @@ import pytest
 
 import numpy as np
 from numpy.testing import assert_allclose
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras import optimizers as k_optimizers  # pylint:disable=import-error
-from tensorflow.keras.layers import Dense, Activation  # pylint:disable=import-error
-from tensorflow.keras.models import Sequential  # pylint:disable=import-error
+
+from keras import optimizers as k_optimizers
+from keras.layers import Dense, Activation
+from keras.models import Sequential
 
 from lib.model import optimizers
 from lib.utils import get_backend

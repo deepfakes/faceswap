@@ -11,14 +11,12 @@ import sys
 
 from dataclasses import dataclass
 
+import keras
+from keras import layers, backend as K
 import tensorflow as tf
 
 from lib.model.layers import QuickGELU
 from lib.utils import GetModel
-
-keras = tf.keras
-layers = tf.keras.layers
-K = tf.keras.backend
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +235,7 @@ class Transformer():  # pylint:disable=too-few-public-methods
         return var_x
 
 
-class EmbeddingLayer(tf.keras.layers.Layer):
+class EmbeddingLayer(layers.Layer):
     """ Parent class for trainable embedding variables
 
     Parameters
@@ -391,7 +389,7 @@ class VisualTransformer():  # pylint:disable=too-few-public-methods
         self._name = name
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def __call__(self) -> tf.keras.models.Model:
+    def __call__(self) -> keras.models.Model:
         """ Builds and returns the Visual Transformer model.
 
         Returns
@@ -703,12 +701,12 @@ class ModifiedResNet():  # pylint:disable=too-few-public-methods
                                 name=f"{name}.{i}")(retval)
         return retval
 
-    def __call__(self) -> tf.keras.models.Model:
+    def __call__(self) -> keras.models.Model:
         """ Implements the forward pass of the ModifiedResNet model.
 
         Returns
         -------
-        :class:`tensorflow.keras.models.Model`
+        :class:`keras.models.Model`
             The modified resnet model.
         """
         inputs = layers.Input((self._input_resolution, self._input_resolution, 3))
@@ -780,7 +778,7 @@ class ViT():  # pylint:disable=too-few-public-methods
                         width: int,
                         embed_dim: int,
                         resolution: int,
-                        patch_size: int) -> tf.keras.models.Model:
+                        patch_size: int) -> keras.models.Model:
         """ Obtain the network for the vision layets
 
         Parameters
@@ -799,7 +797,7 @@ class ViT():  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        :class:`tensorflow.keras.models.Model`
+        :class:`keras.models.Model`
             The :class:`ModifiedResNet` or :class:`VisualTransformer` vision model to use
         """
         if isinstance(layer_config, (tuple, list)):
@@ -819,15 +817,15 @@ class ViT():  # pylint:disable=too-few-public-methods
                                  patch_size=patch_size,
                                  name="visual")
 
-    def __call__(self) -> tf.keras.Model:
+    def __call__(self) -> keras.Model:
         """ Get the configured ViT model
 
         Returns
         -------
-        :class:`tensorflow.keras.models.Model`
+        :class:`keras.models.Model`
             The requested Visual Transformer model
         """
-        net: tf.keras.models.Model = self._net()
+        net: keras.models.Model = self._net()
         if self._load_weights and not self._git_id:
             logger.warning("Trained weights are not available for '%s'", self._name)
             return net
@@ -841,6 +839,6 @@ class ViT():  # pylint:disable=too-few-public-methods
 
 # Update layers into Keras custom objects
 for name_, obj in inspect.getmembers(sys.modules[__name__]):
-    if (inspect.isclass(obj) and issubclass(obj, tf.keras.layers.Layer)
+    if (inspect.isclass(obj) and issubclass(obj, layers.Layer)
             and obj.__module__ == __name__):
         keras.utils.get_custom_objects().update({name_: obj})

@@ -4,7 +4,7 @@
     Based on the original https://www.reddit.com/r/deepfakes/
     code sample + contributions """
 
-from tensorflow.keras.models import Model as KModel  # pylint:disable=import-error
+from keras.models import Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
 from .original import Model as OriginalModel, Dense, Flatten, Input, Reshape

@@ -3,9 +3,8 @@
     Based on https://github.com/iperov/DeepFaceLab
 """
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras.layers import Dense, Flatten, Input, Reshape  # noqa:E501  # pylint:disable=import-error
-from tensorflow.keras.models import Model as KModel  # pylint:disable=import-error
+from keras.layers import Dense, Flatten, Input, Reshape
+from keras.models import Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
 from .original import Model as OriginalModel

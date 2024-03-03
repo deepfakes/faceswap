@@ -15,6 +15,7 @@ import os
 import sys
 import typing as T
 
+from keras import layers, models as kmodels
 import tensorflow as tf
 
 from lib.model.backup_restore import Backup
@@ -23,18 +24,17 @@ from lib.utils import FaceswapError
 if T.TYPE_CHECKING:
     from .model import ModelBase
 
-kmodels = tf.keras.models
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 def get_all_sub_models(
-        model: tf.keras.models.Model,
-        models: list[tf.keras.models.Model] | None = None) -> list[tf.keras.models.Model]:
+        model: kmodels.Model,
+        models: list[kmodels.Model] | None = None) -> list[kmodels.Model]:
     """ For a given model, return all sub-models that occur (recursively) as children.
 
     Parameters
     ----------
-    model: :class:`tensorflow.keras.models.Model`
+    model: :class:`keras.models.Model`
         A Keras model to scan for sub models
     models: `None`
         Do not provide this parameter. It is used for recursion
@@ -42,7 +42,7 @@ def get_all_sub_models(
     Returns
     -------
     list
-        A list of all :class:`tensorflow.keras.models.Model` objects found within the given model.
+        A list of all :class:`keras.models.Model` objects found within the given model.
         The provided model will always be returned in the first position
     """
     if models is None:
@@ -124,7 +124,7 @@ class IO():
                      self._plugin.name, plugins, test, retval)
         return retval
 
-    def load(self) -> tf.keras.models.Model:
+    def load(self) -> kmodels.Model:
         """ Loads the model from disk
 
         If the predict function is to be called and the model cannot be found in the model folder
@@ -135,7 +135,7 @@ class IO():
 
         Returns
         -------
-        :class:`tensorflow.keras.models.Model`
+        :class:`keras.models.Model`
             The saved model loaded from disk
         """
         logger.debug("Loading model: %s", self.filename)
@@ -404,7 +404,7 @@ class Weights():
                            "different settings than you have set for your current model.",
                            skipped_ops)
 
-    def _get_weights_model(self) -> list[tf.keras.models.Model]:
+    def _get_weights_model(self) -> list[kmodels.Model]:
         """ Obtain a list of all sub-models contained within the weights model.
 
         Returns
@@ -428,14 +428,14 @@ class Weights():
         return retval
 
     def _load_layer_weights(self,
-                            layer: tf.keras.layers.Layer,
-                            sub_weights: tf.keras.layers.Layer,
+                            layer: layers.Layer,
+                            sub_weights: layers.Layer,
                             model_name: str) -> T.Literal[-1, 0, 1]:
         """ Load the weights for a single layer.
 
         Parameters
         ----------
-        layer: :class:`tensorflow.keras.layers.Layer`
+        layer: :class:`keras.layers.Layer`
             The layer to set the weights for
         sub_weights: list
             The list of layers in the weights model to load weights from

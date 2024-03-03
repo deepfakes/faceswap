@@ -4,10 +4,9 @@
 import logging
 import sys
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras.initializers import RandomNormal  # pylint:disable=import-error
-from tensorflow.keras.layers import Input, LeakyReLU  # pylint:disable=import-error
-from tensorflow.keras.models import Model as KModel  # pylint:disable=import-error
+from keras.initializers import RandomNormal
+from keras.layers import Input, LeakyReLU
+from keras.models import Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, UpscaleBlock, ResidualBlock
 from .original import Model as OriginalModel

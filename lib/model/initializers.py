@@ -5,12 +5,12 @@ import logging
 import sys
 import inspect
 
+import keras
+import keras.backend as K
+
 import numpy as np
 import tensorflow as tf
 
-# Fix intellisense/linting for tf.keras' thoroughly broken import system
-keras = tf.keras
-K = keras.backend
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name

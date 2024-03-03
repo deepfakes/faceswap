@@ -7,8 +7,7 @@ Adapted from Keras tests.
 import pytest
 import numpy as np
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras import backend as K, losses as k_losses  # noqa:E501  # pylint:disable=import-error
+from keras import backend as K, losses as k_losses
 
 
 from lib.model import losses

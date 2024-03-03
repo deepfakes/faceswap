@@ -4,12 +4,10 @@ from __future__ import annotations
 import logging
 import typing as T
 
-import tensorflow as tf
+from keras import layers
+from keras.models import Model
 
-# Fix intellisense/linting for tf.keras' thoroughly broken import system
-keras = tf.keras
-layers = keras.layers
-Model = keras.models.Model
+import tensorflow as tf
 
 if T.TYPE_CHECKING:
     from tensorflow import Tensor
@@ -108,7 +106,7 @@ class AlexNet(_net):  # pylint:disable=too-few-public-methods
                               name=name)(var_x)
         return var_x
 
-    def __call__(self) -> tf.keras.models.Model:
+    def __call__(self) -> Model:
         """ Create the AlexNet Model
 
         Returns
@@ -189,7 +187,7 @@ class SqueezeNet(_net):  # pylint:disable=too-few-public-methods
                                 name=f"{name}.expand3x3")(squeezed)
         return layers.Concatenate(axis=-1, name=name)([expand1, expand3])
 
-    def __call__(self) -> tf.keras.models.Model:
+    def __call__(self) -> Model:
         """ Create the SqueezeNet Model
 
         Returns

@@ -5,12 +5,13 @@ from dataclasses import dataclass, field
 import logging
 import typing as T
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
+import keras
+from keras import applications as kapp
+from keras.layers import Dropout, Conv2D, Input, Layer, Resizing
+from keras.models import Model
+import keras.backend as K
+
 import tensorflow as tf
-from tensorflow.keras import applications as kapp  # pylint:disable=import-error
-from tensorflow.keras.layers import Dropout, Conv2D, Input, Layer, Resizing  # noqa,pylint:disable=no-name-in-module,import-error
-from tensorflow.keras.models import Model  # pylint:disable=no-name-in-module,import-error
-import tensorflow.keras.backend as K  # pylint:disable=no-name-in-module,import-error
 
 import numpy as np
 
@@ -130,7 +131,7 @@ class _LPIPSTrunkNet():  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        :class:`tensorflow.keras.models.Model`
+        :class:`keras.models.Model`
             The trunk net with normalized feature output layers
         """
         if self._net.net is None:
@@ -216,7 +217,7 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        :class:`tensorflow.keras.models.Model`
+        :class:`keras.models.Model`
             The compiled Linear Net model
         """
         inputs = []
@@ -306,10 +307,10 @@ class LPIPSLoss():  # pylint:disable=too-few-public-methods
                                           dtype="float32")[None, None, None, :])
 
         # Loss needs to be done as fp32. We could cast at output, but better to update the model
-        switch_mixed_precision = tf.keras.mixed_precision.global_policy().name == "mixed_float16"
+        switch_mixed_precision = keras.mixed_precision.global_policy().name == "mixed_float16"
         if switch_mixed_precision:
             logger.debug("Temporarily disabling mixed precision")
-            tf.keras.mixed_precision.set_global_policy("float32")
+            keras.mixed_precision.set_global_policy("float32")
 
         self._trunk_net = _LPIPSTrunkNet(trunk_network, trunk_eval_mode, trunk_pretrained)()
         self._linear_net = _LPIPSLinearNet(trunk_network,
@@ -319,7 +320,7 @@ class LPIPSLoss():  # pylint:disable=too-few-public-methods
                                            linear_use_dropout)()
         if switch_mixed_precision:
             logger.debug("Re-enabling mixed precision")
-            tf.keras.mixed_precision.set_global_policy("mixed_float16")
+            keras.mixed_precision.set_global_policy("mixed_float16")
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def _process_diffs(self, inputs: list[tf.Tensor]) -> list[tf.Tensor]:

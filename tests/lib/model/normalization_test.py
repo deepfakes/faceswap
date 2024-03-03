@@ -8,7 +8,7 @@ from itertools import product
 import numpy as np
 import pytest
 
-from tensorflow.keras import regularizers, models, layers  # noqa:E501  # pylint:disable=import-error
+from keras import regularizers, models, layers
 
 from lib.model import normalization
 from lib.utils import get_backend
