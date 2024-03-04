@@ -7,11 +7,8 @@ import typing as T
 from keras import layers
 from keras.models import Model
 
-import tensorflow as tf
-
 if T.TYPE_CHECKING:
-    from tensorflow import Tensor
-
+    import torch
 
 logger = logging.getLogger(__name__)
 
@@ -61,19 +58,19 @@ class AlexNet(_net):  # pylint:disable=too-few-public-methods
 
     @classmethod
     def _conv_block(cls,
-                    inputs: Tensor,
+                    inputs: torch.Tensor,
                     padding: int,
                     filters: int,
                     kernel_size: int,
                     strides: int,
                     block_idx: int,
-                    max_pool: bool) -> Tensor:
+                    max_pool: bool) -> torch.Tensor:
         """
         The Convolutional block for AlexNet
 
         Parameters
         ----------
-        inputs: :class:`tf.Tensor`
+        inputs: :class:`torch.Tensor`
             The input tensor to the block
         padding: int
             The amount of zero paddin to apply prior to convolution
@@ -90,7 +87,7 @@ class AlexNet(_net):  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The output of the Convolutional block
         """
         name = f"features.{block_idx}"
@@ -153,15 +150,15 @@ class SqueezeNet(_net):  # pylint:disable=too-few-public-methods
 
     @classmethod
     def _fire(cls,
-              inputs: Tensor,
+              inputs: torch.Tensor,
               squeeze_planes: int,
               expand_planes: int,
-              block_idx: int) -> Tensor:
+              block_idx: int) -> torch.Tensor:
         """ The fire block for SqueezeNet.
 
         Parameters
         ----------
-        inputs: :class:`tf.Tensor`
+        inputs: :class:`torch.Tensor`
             The input to the fire block
         squeeze_planes: int
             The number of filters for the squeeze convolution
@@ -172,7 +169,7 @@ class SqueezeNet(_net):  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The output of the SqueezeNet fire block
         """
         name = f"features.{block_idx}"

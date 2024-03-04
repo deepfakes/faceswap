@@ -11,8 +11,6 @@ from keras.layers import Dropout, Conv2D, Input, Layer, Resizing
 from keras.models import Model
 import keras.backend as K
 
-import tensorflow as tf
-
 import numpy as np
 
 from lib.model.networks import AlexNet, SqueezeNet
@@ -20,6 +18,7 @@ from lib.utils import GetModel
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
+    import torch
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +88,7 @@ class _LPIPSTrunkNet():  # pylint:disable=too-few-public-methods
                              outputs=[f"block{i + 1}_conv{2 if i < 2 else 3}" for i in range(5)])}
 
     @classmethod
-    def _normalize_output(cls, inputs: tf.Tensor, epsilon: float = 1e-10) -> tf.Tensor:
+    def _normalize_output(cls, inputs: torch.Tensor, epsilon: float = 1e-10) -> torch.Tensor:
         """ Normalize the output tensors from the trunk network.
 
         Parameters
@@ -190,7 +189,7 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):  # pylint:disable=too-few-public-methods
             "vgg16": NetInfo(model_id=20,
                              model_name="vgg16_lpips_v1.h5")}
 
-    def _linear_block(self, net_output_layer: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
+    def _linear_block(self, net_output_layer: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """ Build a linear block for a trunk network output.
 
         Parameters
@@ -323,7 +322,7 @@ class LPIPSLoss():  # pylint:disable=too-few-public-methods
             keras.mixed_precision.set_global_policy("mixed_float16")
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _process_diffs(self, inputs: list[tf.Tensor]) -> list[tf.Tensor]:
+    def _process_diffs(self, inputs: list[torch.Tensor]) -> list[torch.Tensor]:
         """ Perform processing on the Trunk Network outputs.
 
         If :attr:`use_ldip` is enabled, process the diff values through the linear network,
@@ -343,7 +342,7 @@ class LPIPSLoss():  # pylint:disable=too-few-public-methods
             return self._linear_net(inputs)
         return [K.sum(x, axis=-1) for x in inputs]
 
-    def _process_output(self, inputs: tf.Tensor, output_dims: tuple) -> tf.Tensor:
+    def _process_output(self, inputs: torch.Tensor, output_dims: tuple) -> torch.Tensor:
         """ Process an individual output based on whether :attr:`is_spatial` has been selected.
 
         When spatial output is selected, all outputs are sized to the shape of the original True
@@ -366,7 +365,7 @@ class LPIPSLoss():  # pylint:disable=too-few-public-methods
             return Resizing(*output_dims, interpolation="bilinear")(inputs)
         return K.mean(inputs, axis=(1, 2), keepdims=True)
 
-    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Perform the LPIPS Loss Function.
 
         Parameters

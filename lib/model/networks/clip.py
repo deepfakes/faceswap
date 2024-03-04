@@ -13,7 +13,8 @@ from dataclasses import dataclass
 
 import keras
 from keras import layers, backend as K
-import tensorflow as tf
+from keras.saving import get_custom_objects
+import torch
 
 from lib.model.layers import QuickGELU
 from lib.utils import GetModel
@@ -97,7 +98,7 @@ class Transformer():  # pylint:disable=too-few-public-methods
         The number of layers in the Transformer.
     heads: int
         The number of attention heads.
-    attn_mask: tf.Tensor, optional
+    attn_mask: torch.Tensor, optional
         The attention mask, by default None.
     name: str, optional
         The name of the Transformer model, by default "transformer".
@@ -114,7 +115,7 @@ class Transformer():  # pylint:disable=too-few-public-methods
                  width: int,
                  num_layers: int,
                  heads: int,
-                 attn_mask: tf.Tensor = None,
+                 attn_mask: torch.Tensor = None,
                  name: str = "transformer") -> None:
         logger.debug("Initializing: %s (width: %s, num_layers: %s, heads: %s, attn_mask: %s, "
                      "name: %s)",
@@ -149,7 +150,7 @@ class Transformer():  # pylint:disable=too-few-public-methods
         return name
 
     @classmethod
-    def _mlp(cls, inputs: tf.Tensor, key_dim: int, name: str) -> tf.Tensor:
+    def _mlp(cls, inputs: torch.Tensor, key_dim: int, name: str) -> torch.Tensor:
         """" Multilayer Perecptron for Block Ateention
 
         Parameters
@@ -173,16 +174,16 @@ class Transformer():  # pylint:disable=too-few-public-methods
         return var_x
 
     def residual_attention_block(self,
-                                 inputs: tf.Tensor,
+                                 inputs: torch.Tensor,
                                  key_dim: int,
                                  num_heads: int,
-                                 attn_mask: tf.Tensor,
-                                 name: str = "ResidualAttentionBlock") -> tf.Tensor:
+                                 attn_mask: torch.Tensor,
+                                 name: str = "ResidualAttentionBlock") -> torch.Tensor:
         """ Call the residual attention block
 
         Parameters
         ----------
-        inputs: :class:`tf.Tensor`
+        inputs: :class:`torch.Tensor`
             The input Tensor
         key_dim: int
             key dimension per head for MultiHeadAttention
@@ -195,7 +196,7 @@ class Transformer():  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The return Tensor
         """
         name = self._get_name(name)
@@ -211,17 +212,17 @@ class Transformer():  # pylint:disable=too-few-public-methods
         var_x = layers.Add()([var_y, self._mlp(var_x, key_dim, name)])
         return var_x
 
-    def __call__(self, inputs: tf.Tensor) -> tf.Tensor:
+    def __call__(self, inputs: torch.Tensor) -> torch.Tensor:
         """ Call the Transformer layers
 
         Parameters
         ----------
-        inputs: :class:`tf.Tensor`
+        inputs: :class:`torch.Tensor`
             The input Tensor
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The return Tensor
         """
         logger.debug("Calling %s with input: %s", self.__class__.__name__, inputs.shape)
@@ -259,7 +260,7 @@ class EmbeddingLayer(layers.Layer):
         super().__init__(name=name, dtype=dtype, *args, **kwargs)
         self._input_shape = input_shape
         self._scale = scale
-        self._var: tf.Variable
+        self._var: torch.Tensor
 
     def build(self, input_shape: tuple[int, ...]) -> None:
         """ Add the weights
@@ -291,7 +292,7 @@ class EmbeddingLayer(layers.Layer):
 
 class ClassEmbedding(EmbeddingLayer):
     """ Trainable Class Embedding layer """
-    def call(self, inputs: tf.Tensor, *args, **kwargs) -> tf.Tensor:
+    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         """ Get the Class Embedding layer
 
         Parameters
@@ -309,7 +310,7 @@ class ClassEmbedding(EmbeddingLayer):
 
 class PositionalEmbedding(EmbeddingLayer):
     """ Trainable Positional Embedding layer """
-    def call(self, inputs: tf.Tensor, *args, **kwargs) -> tf.Tensor:
+    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         """ Get the Positional Embedding layer
 
         Parameters
@@ -327,7 +328,7 @@ class PositionalEmbedding(EmbeddingLayer):
 
 class Projection(EmbeddingLayer):
     """ Trainable Projection Embedding Layer """
-    def call(self, inputs: tf.Tensor, *args, **kwargs) -> tf.Tensor:
+    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         """ Get the Projection layer
 
         Parameters
@@ -398,7 +399,7 @@ class VisualTransformer():  # pylint:disable=too-few-public-methods
             The Visual Transformer model.
         """
         inputs = layers.Input([self._input_resolution, self._input_resolution, 3])
-        var_x: tf.Tensor = layers.Conv2D(self._width,  # shape = [*, grid, grid, width]
+        var_x: torch.Tensor = layers.Conv2D(self._width,  # shape = [*, grid, grid, width]
                                          self._patch_size,
                                          strides=self._patch_size,
                                          use_bias=False,
@@ -465,7 +466,7 @@ class Bottleneck():  # pylint:disable=too-few-public-methods
         self._name = name
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _downsample(self, inputs: tf.Tensor) -> tf.Tensor:
+    def _downsample(self, inputs: torch.Tensor) -> torch.Tensor:
         """ Perform downsample if required
 
         Parameters
@@ -491,7 +492,7 @@ class Bottleneck():  # pylint:disable=too-few-public-methods
         out = layers.BatchNormalization(name=f"{name}.1", epsilon=1e-5)(out)
         return out
 
-    def __call__(self, inputs: tf.Tensor) -> tf.Tensor:
+    def __call__(self, inputs: torch.Tensor) -> torch.Tensor:
         """ Performs the forward pass for a Bottleneck block.
 
         All conv layers have stride 1. an avgpool is performed after the second convolution when
@@ -566,7 +567,7 @@ class AttentionPool2d():  # pylint:disable=too-few-public-methods
         self._name = name
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def __call__(self, inputs: tf.Tensor) -> tf.Tensor:
+    def __call__(self, inputs: torch.Tensor) -> torch.Tensor:
         """Performs the attention pooling operation on the input tensor.
 
         Parameters
@@ -578,7 +579,7 @@ class AttentionPool2d():  # pylint:disable=too-few-public-methods
         -------
         :class:`tensorflow.Tensor`:: The result of the attention pooling operation
         """
-        var_x: tf.Tensor
+        var_x: torch.Tensor
         var_x = layers.Reshape((-1, inputs.shape[-1]))(inputs)  # NHWC -> N(HW)C
         var_x = layers.Concatenate(axis=1)([K.mean(var_x, axis=1,  # N(HW)C -> N(HW+1)C
                                                    keepdims=True), var_x])
@@ -636,7 +637,7 @@ class ModifiedResNet():  # pylint:disable=too-few-public-methods
         self._output_dim = output_dim
         self._name = name
 
-    def _stem(self, inputs: tf.Tensor) -> tf.Tensor:
+    def _stem(self, inputs: torch.Tensor) -> torch.Tensor:
         """ Applies the stem operation to the input tensor, which consists of 3 convolutional
             layers with BatchNormalization and ReLU activation, followed by an average pooling
             layer.
@@ -667,11 +668,11 @@ class ModifiedResNet():  # pylint:disable=too-few-public-methods
         return var_x
 
     def _bottleneck(self,
-                    inputs: tf.Tensor,
+                    inputs: torch.Tensor,
                     planes: int,
                     blocks: int,
                     stride: int = 1,
-                    name: str = "layer") -> tf.Tensor:
+                    name: str = "layer") -> torch.Tensor:
         """ A private method that creates a sequential layer of Bottleneck blocks for the
         ModifiedResNet model.
 
@@ -693,7 +694,7 @@ class ModifiedResNet():  # pylint:disable=too-few-public-methods
         :class:`tensorflow.Tensor`
             Sequential block of bottlenecks
         """
-        retval: tf.Tensor
+        retval: torch.Tensor
         retval = Bottleneck(planes, planes, stride, name=f"{name}.0")(inputs)
         for i in range(1, blocks):
             retval = Bottleneck(planes * Bottleneck.expansion,
@@ -841,4 +842,4 @@ class ViT():  # pylint:disable=too-few-public-methods
 for name_, obj in inspect.getmembers(sys.modules[__name__]):
     if (inspect.isclass(obj) and issubclass(obj, layers.Layer)
             and obj.__module__ == __name__):
-        keras.utils.get_custom_objects().update({name_: obj})
+        get_custom_objects().update({name_: obj})

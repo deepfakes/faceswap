@@ -6,10 +6,10 @@ import sys
 import inspect
 
 import keras
+from keras.saving import get_custom_objects
 import keras.backend as K
 
 import numpy as np
-import tensorflow as tf
 
 
 
@@ -307,4 +307,4 @@ class ConvolutionAware(keras.initializers.Initializer):  # type:ignore[name-defi
 # Update initializers into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
-        keras.utils.get_custom_objects().update({name: obj})
+        get_custom_objects().update({name: obj})

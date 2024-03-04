@@ -18,9 +18,11 @@ import typing as T
 
 from contextlib import nullcontext
 
-import tensorflow as tf
+import torch
 import keras
-from keras import backend as K, losses as k_losses, mixed_precision as mixedprecision
+from keras import backend as K, losses as k_losses
+from keras.dtype_policies.dtype_policy import DTypePolicy, set_dtype_policy
+from keras.optimizers import LossScaleOptimizer
 
 from lib.model import losses, optimizers
 from lib.model.autoclip import AutoClipper
@@ -50,7 +52,7 @@ class LossClass:
     kwargs: dict
         Any keyword arguments to supply to the loss function at initialization.
     """
-    function: Callable[[tf.Tensor, tf.Tensor], tf.Tensor] | T.Any = k_losses.mae
+    function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | T.Any = k_losses.MeanSquaredError
     init: bool = True
     kwargs: dict[str, T.Any] = field(default_factory=dict)
 
@@ -79,7 +81,7 @@ class Loss():
                            "gmsd": LossClass(function=losses.GMSDLoss),
                            "l_inf_norm": LossClass(function=losses.LInfNorm),
                            "laploss": LossClass(function=losses.LaplacianPyramidLoss),
-                           "logcosh": LossClass(function=k_losses.logcosh, init=False),
+                           "logcosh": LossClass(function=k_losses.LogCosh),
                            "lpips_alex": LossClass(function=losses.LPIPSLoss,
                                                    kwargs={"trunk_network": "alex"}),
                            "lpips_squeeze": LossClass(function=losses.LPIPSLoss,
@@ -87,8 +89,8 @@ class Loss():
                            "lpips_vgg16": LossClass(function=losses.LPIPSLoss,
                                                     kwargs={"trunk_network": "vgg16"}),
                            "ms_ssim": LossClass(function=losses.MSSIMLoss),
-                           "mae": LossClass(function=k_losses.mean_absolute_error, init=False),
-                           "mse": LossClass(function=k_losses.mean_squared_error, init=False),
+                           "mae": LossClass(function=k_losses.MeanAbsoluteError),
+                           "mse": LossClass(function=k_losses.MeanSquaredError),
                            "pixel_gradient_diff": LossClass(function=losses.GradientLoss),
                            "ssim": LossClass(function=losses.DSSIMObjective),
                            "smooth_loss": LossClass(function=losses.GeneralizedLoss)}
@@ -133,7 +135,7 @@ class Loss():
         self._set_loss_functions(model.output_names)
         self._names.insert(0, "total")
 
-    def _set_loss_names(self, outputs: list[tf.Tensor]) -> None:
+    def _set_loss_names(self, outputs: list[torch.Tensor]) -> None:
         """ Name the losses based on model output.
 
         This is used for correct naming in the state file, for display purposes only.
@@ -156,7 +158,7 @@ class Loss():
         split_outputs = [outputs[:len(outputs) // 2], outputs[len(outputs) // 2:]]
         for side, side_output in zip(("a", "b"), split_outputs):
             output_names = [output.name for output in side_output]
-            output_shapes = [K.int_shape(output)[1:] for output in side_output]
+            output_shapes = [output.shape[1:] for output in side_output]
             output_types = ["mask" if shape[-1] == 1 else "face" for shape in output_shapes]
             logger.debug("side: %s, output names: %s, output_shapes: %s, output_types: %s",
                          side, output_names, output_shapes, output_types)
@@ -165,7 +167,7 @@ class Loss():
                 self._names.append(f"{name}_{side}{suffix}")
         logger.debug(self._names)
 
-    def _get_function(self, name: str) -> Callable[[tf.Tensor, tf.Tensor], tf.Tensor]:
+    def _get_function(self, name: str) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
         """ Obtain the requested Loss function
 
         Parameters
@@ -364,15 +366,20 @@ class Settings():
         self._set_tf_settings(arguments.exclude_gpus)
 
         use_mixed_precision = not is_predict and mixed_precision
-        self._use_mixed_precision = self._set_keras_mixed_precision(use_mixed_precision)
-        if self._use_mixed_precision:
+        self._use_mixed_precision = use_mixed_precision
+        if use_mixed_precision:
             logger.info("Enabling Mixed Precision Training.")
+
+        self._set_keras_mixed_precision(use_mixed_precision)
 
         if hasattr(arguments, "distribution_strategy"):
             strategy = arguments.distribution_strategy
         else:
             strategy = "default"
-        self._strategy = self._get_strategy(strategy)
+        
+        # TODO
+        #self._strategy = self._get_strategy(strategy)
+        self._strategy = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -383,7 +390,7 @@ class Settings():
     @classmethod
     def loss_scale_optimizer(
             cls,
-            optimizer: keras.optimizers.Optimizer) -> mixedprecision.LossScaleOptimizer:
+            optimizer: keras.optimizers.Optimizer) -> LossScaleOptimizer:
         """ Optimize loss scaling for mixed precision training.
 
         Parameters
@@ -393,10 +400,10 @@ class Settings():
 
         Returns
         --------
-        :class:`keras.mixed_precision.loss_scale_optimizer.LossScaleOptimizer`
+        :class:`keras.optimizers.LossScaleOptimizer`
             The original optimizer with loss scaling applied
         """
-        return mixedprecision.LossScaleOptimizer(optimizer)  # pylint:disable=no-member
+        return LossScaleOptimizer(optimizer)
 
     @classmethod
     def _set_tf_settings(cls, exclude_devices: list[int]) -> None:
@@ -425,36 +432,22 @@ class Settings():
             tf.config.set_visible_devices(gpus, "GPU")
 
     @classmethod
-    def _set_keras_mixed_precision(cls, use_mixed_precision: bool) -> bool:
-        """ Enable the Keras experimental Mixed Precision API.
-
-        Enables the Keras experimental Mixed Precision API if requested in the user configuration
-        file.
+    def _set_keras_mixed_precision(cls, enable: bool) -> None:
+        """ Enable or disable Keras Mixed Precision.
 
         Parameters
         ----------
-        use_mixed_precision: bool
-            ``True`` if experimental mixed precision support should be enabled for Nvidia GPUs
-            otherwise ``False``.
+        enable: bool
+            ``True`` to enable mixed precision. ``False`` to disable.
 
-        Returns
-        -------
-        bool
-            ``True`` if mixed precision has been enabled otherwise ``False``
+        Enables or disables the Keras Mixed Precision API if requested in the user configuration
+        file.
         """
-        logger.debug("use_mixed_precision: %s", use_mixed_precision)
-        if not use_mixed_precision:
-            policy = mixedprecision.Policy('float32')  # pylint:disable=no-member
-            mixedprecision.set_global_policy(policy)  # pylint:disable=no-member
-            logger.debug("Disabling mixed precision. (Compute dtype: %s, variable_dtype: %s)",
-                         policy.compute_dtype, policy.variable_dtype)
-            return False
-
-        policy = mixedprecision.Policy('mixed_float16')  # pylint:disable=no-member
-        mixedprecision.set_global_policy(policy)  # pylint:disable=no-member
-        logger.debug("Enabled mixed precision. (Compute dtype: %s, variable_dtype: %s)",
+        policy = DTypePolicy("mixed_float16" if enable else "float32")
+        set_dtype_policy(policy)
+        logger.debug("%s mixed precision. (Compute dtype: %s, variable_dtype: %s)",
+                     "Enabling" if enable else "Disabling",
                      policy.compute_dtype, policy.variable_dtype)
-        return True
 
     def _get_strategy(self,
                       strategy: T.Literal["default", "central-storage", "mirrored"]

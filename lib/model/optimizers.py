@@ -5,8 +5,8 @@ import inspect
 import sys
 
 import keras
-from keras.optimizers import Adam, Nadam, RMSprop   # noqa:E501,F401  pylint:disable=import-error,unused-import
-import tensorflow as tf
+from keras.saving import get_custom_objects
+from keras.optimizers import Adam, Nadam, RMSprop   # noqa:E501,F401  pylint:disable=unused-import
 
 class AdaBelief(keras.optimizers.Optimizer):
     """ Implementation of the AdaBelief Optimizer
@@ -393,4 +393,4 @@ class AdaBelief(keras.optimizers.Optimizer):
 # Update layers into Keras custom objects
 for _name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
-        keras.utils.get_custom_objects().update({_name: obj})
+        get_custom_objects().update({_name: obj})

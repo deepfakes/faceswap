@@ -16,9 +16,7 @@ import cv2
 import numpy as np
 
 import keras
-import tensorflow as tf
-from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
-    errors_impl as tf_errors)
+from torch.cuda import OutOfMemoryError
 
 from lib.image import hex_to_rgb
 from lib.training import Feeder, LearningRateFinder
@@ -249,7 +247,7 @@ class TrainerBase():
 
         try:
             loss: list[float] = self._model.model.train_on_batch(model_inputs, y=model_targets)
-        except tf_errors.ResourceExhaustedError as err:
+        except OutOfMemoryError as err:
             msg = ("You do not have enough GPU memory available to train the selected model at "
                    "the selected settings. You can try a number of things:"
                    "\n1) Close any other application that is using your GPU (web browsers are "
@@ -261,8 +259,9 @@ class TrainerBase():
                    "(in config) if it has one.")
             raise FaceswapError(msg) from err
         self._log_tensorboard(loss)
-        loss = self._collate_and_store_loss(loss[1:])
-        self._print_loss(loss)
+        #loss = self._collate_and_store_loss(loss[1:])  # TODO
+        #self._print_loss(loss)  # TODO
+        print(loss)
         if do_snapshot:
             self._model.io.snapshot()
         self._update_viewers(viewer, timelapse_kwargs)

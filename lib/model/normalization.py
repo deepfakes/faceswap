@@ -3,12 +3,9 @@
 import inspect
 import sys
 
-import tensorflow as tf
-
 import keras
 from keras import layers, backend as K
-
-from tensorflow.python.keras.utils.conv_utils import normalize_data_format  # noqa:E501 # pylint:disable=no-name-in-module
+from keras.saving import get_custom_objects
 
 
 class AdaInstanceNormalization(layers.Layer):  # type:ignore[name-defined]
@@ -175,7 +172,7 @@ class GroupNormalization(layers.Layer):  # type:ignore[name-defined]
         self.beta_regularizer = keras.regularizers.get(beta_regularizer)
         self.epsilon = epsilon
         self.group = group
-        self.data_format = normalize_data_format(data_format)
+        self.data_format = "channels_last" if data_format is None else data_format
 
         self.supports_masking = True
 
@@ -645,4 +642,4 @@ class RMSNormalization(layers.Layer):  # type:ignore[name-defined]
 # Update normalization into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
-        keras.utils.get_custom_objects().update({name: obj})
+        get_custom_objects().update({name: obj})

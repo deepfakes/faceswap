@@ -143,12 +143,6 @@ def test_reflection_padding_2d(dummy):  # pylint:disable=unused-argument
 
 
 @pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
-def test_subpixel_upscaling(dummy):  # pylint:disable=unused-argument
-    """ Sub Pixel up-scaling layer test """
-    layer_test(layers.SubPixelUpscaling, input_shape=(2, 4, 4, 1024))
-
-
-@pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
 def test_swish(dummy):  # pylint:disable=unused-argument
     """ Sub Pixel up-scaling layer test """
     layer_test(layers.Swish, input_shape=(2, 4, 4, 1024))

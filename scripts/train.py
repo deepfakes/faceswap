@@ -363,7 +363,7 @@ class Train():  # pylint:disable=too-few-public-methods
             if save_iteration or self._save_now:
                 logger.debug("Saving (save_iterations: %s, save_now: %s) Iteration: "
                              "(iteration: %s)", save_iteration, self._save_now, iteration)
-                model.io.save(is_exit=False)
+                #model.io.save(is_exit=False)
                 self._save_now = False
                 update_preview_images = True
 

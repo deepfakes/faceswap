@@ -1,6 +1,6 @@
 """ Auto clipper for clipping gradients. """
 import numpy as np
-import tensorflow as tf
+import torch
 
 
 class AutoClipper():  # pylint:disable=too-few-public-methods
@@ -25,7 +25,7 @@ class AutoClipper():  # pylint:disable=too-few-public-methods
         self._index = tf.Variable(0, trainable=False)
         self._history_size = history_size
 
-    def _percentile(self, grad_history: tf.Tensor) -> tf.Tensor:
+    def _percentile(self, grad_history: torch.Tensor) -> torch.Tensor:
         """ Compute the clip percentile of the gradient history
 
         Parameters
@@ -69,7 +69,7 @@ class AutoClipper():  # pylint:disable=too-few-public-methods
 
             return gathered_hist
 
-    def __call__(self, grads_and_vars: list[tf.Tensor]) -> list[tf.Tensor]:
+    def __call__(self, grads_and_vars: list[torch.Tensor]) -> list[torch.Tensor]:
         """ Call the AutoClip function.
 
         Parameters
@@ -86,7 +86,7 @@ class AutoClipper():  # pylint:disable=too-few-public-methods
         return [(tf.clip_by_norm(g, clip_value), v) for g, v in grads_and_vars]
 
     @classmethod
-    def _get_grad_norm(cls, gradients: tf.Tensor) -> tf.Tensor:
+    def _get_grad_norm(cls, gradients: torch.Tensor) -> torch.Tensor:
         """ Obtain the L2 Norm for the gradients
 
         Parameters

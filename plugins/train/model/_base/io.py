@@ -16,7 +16,6 @@ import sys
 import typing as T
 
 from keras import layers, models as kmodels
-import tensorflow as tf
 
 from lib.model.backup_restore import Backup
 from lib.utils import FaceswapError

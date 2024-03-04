@@ -6,11 +6,10 @@ import logging
 import typing as T
 
 import numpy as np
-import keras
 import keras.backend as K
-import tensorflow as tf
-
-from tensorflow.python.keras.engine import compile_utils  # pylint:disable=no-name-in-module
+from keras.losses import Loss
+from keras import ops
+import torch
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
@@ -65,17 +64,17 @@ class FocalFrequencyLoss():  # pylint:disable=too-few-public-methods
         self._batch_matrix = batch_matrix
         self._dims: tuple[int, int] = (0, 0)
 
-    def _get_patches(self, inputs: tf.Tensor) -> tf.Tensor:
+    def _get_patches(self, inputs: torch.Tensor) -> torch.Tensor:
         """ Crop the incoming batch of images into patches as defined by :attr:`_patch_factor.
 
         Parameters
         ----------
-        inputs: :class:`tf.Tensor`
+        inputs: :class:`torch.Tensor`
             A batch of images to be converted into patches
 
         Returns
         -------
-        :class`tf.Tensor``
+        :class`torch.Tensor``
             The incoming batch converted into patches
         """
         rows, cols = self._dims
@@ -93,17 +92,17 @@ class FocalFrequencyLoss():  # pylint:disable=too-few-public-methods
         retval = K.stack(patch_list, axis=1)
         return retval
 
-    def _tensor_to_frequency_spectrum(self, patch: tf.Tensor) -> tf.Tensor:
+    def _tensor_to_frequency_spectrum(self, patch: torch.Tensor) -> torch.Tensor:
         """ Perform FFT to create the orthonomalized DFT frequencies.
 
         Parameters
         ----------
-        inputs: :class:`tf.Tensor`
+        inputs: :class:`torch.Tensor`
             The incoming batch of patches to convert to the frequency spectrum
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The DFT frequencies split into real and imaginary numbers as float32
         """
         # TODO fix this for when self._patch_factor != 1.
@@ -122,19 +121,19 @@ class FocalFrequencyLoss():  # pylint:disable=too-few-public-methods
 
         return freq
 
-    def _get_weight_matrix(self, freq_true: tf.Tensor, freq_pred: tf.Tensor) -> tf.Tensor:
+    def _get_weight_matrix(self, freq_true: torch.Tensor, freq_pred: torch.Tensor) -> torch.Tensor:
         """ Calculate a continuous, dynamic weight matrix based on current Euclidean distance.
 
         Parameters
         ----------
-        freq_true: :class:`tf.Tensor`
+        freq_true: :class:`torch.Tensor`
             The real and imaginary DFT frequencies for the true batch of images
-        freq_pred: :class:`tf.Tensor`
+        freq_pred: :class:`torch.Tensor`
             The real and imaginary DFT frequencies for the predicted batch of images
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The weights matrix for prioritizing hard frequencies
         """
         weights = K.square(freq_pred - freq_true)
@@ -156,20 +155,20 @@ class FocalFrequencyLoss():  # pylint:disable=too-few-public-methods
 
     @classmethod
     def _calculate_loss(cls,
-                        freq_true: tf.Tensor,
-                        freq_pred: tf.Tensor,
-                        weight_matrix: tf.Tensor) -> tf.Tensor:
+                        freq_true: torch.Tensor,
+                        freq_pred: torch.Tensor,
+                        weight_matrix: torch.Tensor) -> torch.Tensor:
         """ Perform the loss calculation on the DFT spectrum applying the weights matrix.
 
         Parameters
         ----------
-        freq_true: :class:`tf.Tensor`
+        freq_true: :class:`torch.Tensor`
             The real and imaginary DFT frequencies for the true batch of images
-        freq_pred: :class:`tf.Tensor`
+        freq_pred: :class:`torch.Tensor`
             The real and imaginary DFT frequencies for the predicted batch of images
 
         Returns
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The final loss matrix
         """
 
@@ -180,19 +179,19 @@ class FocalFrequencyLoss():  # pylint:disable=too-few-public-methods
 
         return loss
 
-    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Call the Focal Frequency Loss Function.
 
         Parameters
         ----------
-        y_true: :class:`tf.Tensor`
+        y_true: :class:`torch.Tensor`
             The ground truth batch of images
-        y_pred: :class:`tf.Tensor`
+        y_pred: :class:`torch.Tensor`
             The predicted batch of images
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The loss for this batch of images
         """
         if not all(self._dims):
@@ -241,19 +240,19 @@ class GeneralizedLoss():  # pylint:disable=too-few-public-methods
         self._alpha = alpha
         self._beta = beta
 
-    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Call the Generalized Loss Function
 
         Parameters
         ----------
-        y_true: :class:`tf.Tensor`
+        y_true: :class:`torch.Tensor`
             The ground truth value
-        y_pred: :class:`tf.Tensor`
+        y_pred: :class:`torch.Tensor`
             The predicted value
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The loss value from the results of function(y_pred - y_true)
         """
         diff = y_pred - y_true
@@ -282,19 +281,19 @@ class GradientLoss():  # pylint:disable=too-few-public-methods
         self._tv_weight = 1.0
         self._tv2_weight = 1.0
 
-    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Call the gradient loss function.
 
         Parameters
         ----------
-        y_true: :class:`tf.Tensor`
+        y_true: :class:`torch.Tensor`
             The ground truth value
-        y_pred: :class:`tf.Tensor`
+        y_pred: :class:`torch.Tensor`
             The predicted value
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The loss value
         """
         loss = 0.0
@@ -313,7 +312,7 @@ class GradientLoss():  # pylint:disable=too-few-public-methods
         return loss
 
     @classmethod
-    def _diff_x(cls, img: tf.Tensor) -> tf.Tensor:
+    def _diff_x(cls, img: torch.Tensor) -> torch.Tensor:
         """ X Difference """
         x_left = img[:, :, 1:2, :] - img[:, :, 0:1, :]
         x_inner = img[:, :, 2:, :] - img[:, :, :-2, :]
@@ -322,7 +321,7 @@ class GradientLoss():  # pylint:disable=too-few-public-methods
         return x_out * 0.5
 
     @classmethod
-    def _diff_y(cls, img: tf.Tensor) -> tf.Tensor:
+    def _diff_y(cls, img: torch.Tensor) -> torch.Tensor:
         """ Y Difference """
         y_top = img[:, 1:2, :, :] - img[:, 0:1, :, :]
         y_inner = img[:, 2:, :, :] - img[:, :-2, :, :]
@@ -331,7 +330,7 @@ class GradientLoss():  # pylint:disable=too-few-public-methods
         return y_out * 0.5
 
     @classmethod
-    def _diff_xx(cls, img: tf.Tensor) -> tf.Tensor:
+    def _diff_xx(cls, img: torch.Tensor) -> torch.Tensor:
         """ X-X Difference """
         x_left = img[:, :, 1:2, :] + img[:, :, 0:1, :]
         x_inner = img[:, :, 2:, :] + img[:, :, :-2, :]
@@ -340,7 +339,7 @@ class GradientLoss():  # pylint:disable=too-few-public-methods
         return x_out - 2.0 * img
 
     @classmethod
-    def _diff_yy(cls, img: tf.Tensor) -> tf.Tensor:
+    def _diff_yy(cls, img: torch.Tensor) -> torch.Tensor:
         """ Y-Y Difference """
         y_top = img[:, 1:2, :, :] + img[:, 0:1, :, :]
         y_inner = img[:, 2:, :, :] + img[:, :-2, :, :]
@@ -349,7 +348,7 @@ class GradientLoss():  # pylint:disable=too-few-public-methods
         return y_out - 2.0 * img
 
     @classmethod
-    def _diff_xy(cls, img: tf.Tensor) -> tf.Tensor:
+    def _diff_xy(cls, img: torch.Tensor) -> torch.Tensor:
         """ X-Y Difference """
         # xout1
         # Left
@@ -420,7 +419,7 @@ class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
         self._gaussian_kernel = self._get_gaussian_kernel(gaussian_size, gaussian_sigma)
 
     @classmethod
-    def _get_gaussian_kernel(cls, size: int, sigma: float) -> tf.Tensor:
+    def _get_gaussian_kernel(cls, size: int, sigma: float) -> torch.Tensor:
         """ Obtain the base gaussian kernel for the Laplacian Pyramid.
 
         Parameters
@@ -432,7 +431,7 @@ class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The base single channel Gaussian kernel
         """
         assert size % 2 == 1, ("kernel size must be uneven")
@@ -444,17 +443,17 @@ class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
         kernel = np.reshape(kernel, (size, size, 1, 1))
         return K.constant(kernel)
 
-    def _conv_gaussian(self, inputs: tf.Tensor) -> tf.Tensor:
+    def _conv_gaussian(self, inputs: torch.Tensor) -> torch.Tensor:
         """ Perform Gaussian convolution on a batch of images.
 
         Parameters
         ----------
-        inputs: :class:`tf.Tensor`
+        inputs: :class:`torch.Tensor`
             The input batch of images to perform Gaussian convolution on.
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The convolved images
         """
         channels = K.int_shape(inputs)[-1]
@@ -472,12 +471,12 @@ class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
         retval = K.conv2d(padded_inputs, gauss, strides=1, padding="valid")
         return retval
 
-    def _get_laplacian_pyramid(self, inputs: tf.Tensor) -> list[tf.Tensor]:
+    def _get_laplacian_pyramid(self, inputs: torch.Tensor) -> list[torch.Tensor]:
         """ Obtain the Laplacian Pyramid.
 
         Parameters
         ----------
-        inputs: :class:`tf.Tensor`
+        inputs: :class:`torch.Tensor`
             The input batch of images to run through the Laplacian Pyramid
 
         Returns
@@ -495,19 +494,19 @@ class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
         pyramid.append(current)
         return pyramid
 
-    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Calculate the Laplacian Pyramid Loss.
 
         Parameters
         ----------
-        y_true: :class:`tf.Tensor`
+        y_true: :class:`torch.Tensor`
             The ground truth value
-        y_pred: :class:`tf.Tensor`
+        y_pred: :class:`torch.Tensor`
             The predicted value
 
         Returns
         -------
-        :class: `tf.Tensor`
+        :class: `torch.Tensor`
             The loss value
         """
         pyramid_true = self._get_laplacian_pyramid(y_true)
@@ -522,19 +521,19 @@ class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
 
 class LInfNorm():  # pylint:disable=too-few-public-methods
     """ Calculate the L-inf norm as a loss function. """
-    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Call the L-inf norm loss function.
 
         Parameters
         ----------
-        y_true: :class:`tf.Tensor`
+        y_true: :class:`torch.Tensor`
             The ground truth value
-        y_pred: :class:`tf.Tensor`
+        y_pred: :class:`torch.Tensor`
             The predicted value
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The loss value
         """
         diff = K.abs(y_true - y_pred)
@@ -543,7 +542,7 @@ class LInfNorm():  # pylint:disable=too-few-public-methods
         return loss
 
 
-class LossWrapper(keras.losses.Loss):
+class LossWrapper(Loss):
     """ A wrapper class for multiple keras losses to enable multiple masked weighted loss
     functions on a single output.
 
@@ -566,7 +565,7 @@ class LossWrapper(keras.losses.Loss):
     def __init__(self) -> None:
         logger.debug("Initializing: %s", self.__class__.__name__)
         super().__init__(name="LossWrapper")
-        self._loss_functions: list[compile_utils.LossesContainer] = []
+        self._loss_functions: list[Loss] = []
         self._loss_weights: list[float] = []
         self._mask_channels: list[int] = []
         logger.debug("Initialized: %s", self.__class__.__name__)
@@ -590,11 +589,11 @@ class LossWrapper(keras.losses.Loss):
         logger.debug("Adding loss: (function: %s, weight: %s, mask_channel: %s)",
                      function, weight, mask_channel)
         # Loss must be compiled inside LossContainer for keras to handle distibuted strategies
-        self._loss_functions.append(compile_utils.LossesContainer(function))
+        self._loss_functions.append(function)
         self._loss_weights.append(weight)
         self._mask_channels.append(mask_channel)
 
-    def call(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def call(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Call the sub loss functions for the loss wrapper.
 
         Loss is returned as the weighted sum of the chosen losses.
@@ -627,10 +626,10 @@ class LossWrapper(keras.losses.Loss):
 
     @classmethod
     def _apply_mask(cls,
-                    y_true: tf.Tensor,
-                    y_pred: tf.Tensor,
+                    y_true: torch.Tensor,
+                    y_pred: torch.Tensor,
                     mask_channel: int,
-                    mask_prop: float = 1.0) -> tuple[tf.Tensor, tf.Tensor]:
+                    mask_prop: float = 1.0) -> tuple[torch.Tensor, torch.Tensor]:
         """ Apply the mask to the input y_true and y_pred. If a mask is not required then
         return the unmasked inputs.
 
@@ -647,9 +646,9 @@ class LossWrapper(keras.losses.Loss):
 
         Returns
         -------
-        tf.Tensor
+        torch.Tensor
             The ground truth batch of images, with the required mask applied
-        tf.Tensor
+        torch.Tensor
             The predicted batch of images with the required mask applied
         """
         if mask_channel == -1:
@@ -658,7 +657,7 @@ class LossWrapper(keras.losses.Loss):
 
         logger.debug("Applying mask from channel %s", mask_channel)
 
-        mask = K.tile(K.expand_dims(y_true[..., mask_channel], axis=-1), (1, 1, 1, 3))
+        mask = ops.tile(ops.expand_dims(y_true[..., mask_channel], axis=-1), (1, 1, 1, 3))
         mask_as_k_inv_prop = 1 - mask_prop
         mask = (mask * mask_prop) + mask_as_k_inv_prop
 

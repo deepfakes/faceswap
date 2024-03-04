@@ -9,10 +9,10 @@ import zlib
 from dataclasses import dataclass, field
 
 import numpy as np
-import tensorflow as tf
-from tensorflow.core.util import event_pb2  # pylint:disable=no-name-in-module
-from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
-    errors_impl as tf_errors)
+#import tensorflow as tf
+#from tensorflow.core.util import event_pb2  # pylint:disable=no-name-in-module
+#from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
+#    errors_impl as tf_errors)
 
 from lib.serializer import get_serializer
 

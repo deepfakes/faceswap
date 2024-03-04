@@ -5,7 +5,7 @@ import logging
 import typing as T
 
 import numpy as np
-import tensorflow as tf
+import torch
 
 import keras.backend as K
 
@@ -56,12 +56,12 @@ class DSSIMObjective():  # pylint:disable=too-few-public-methods
         self._c1 = (k_1 * max_value) ** 2
         self._c2 = ((k_2 * max_value) ** 2) * compensation
 
-    def _get_kernel(self) -> tf.Tensor:
+    def _get_kernel(self) -> torch.Tensor:
         """ Obtain the base kernel for performing depthwise convolution.
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The gaussian kernel based on selected size and sigma
         """
         coords = np.arange(self._filter_size, dtype="float32")
@@ -76,38 +76,38 @@ class DSSIMObjective():  # pylint:disable=too-few-public-methods
         return kernel
 
     @classmethod
-    def _depthwise_conv2d(cls, image: tf.Tensor, kernel: tf.Tensor) -> tf.Tensor:
+    def _depthwise_conv2d(cls, image: torch.Tensor, kernel: torch.Tensor) -> torch.Tensor:
         """ Perform a standardized depthwise convolution.
 
         Parameters
         ----------
-        image: :class:`tf.Tensor`
+        image: :class:`torch.Tensor`
             Batch of images, channels last, to perform depthwise convolution
-        kernel: :class:`tf.Tensor`
+        kernel: :class:`torch.Tensor`
             convolution kernel
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The output from the convolution
         """
         return K.depthwise_conv2d(image, kernel, strides=(1, 1), padding="valid")
 
-    def _get_ssim(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
+    def _get_ssim(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """ Obtain the structural similarity between a batch of true and predicted images.
 
         Parameters
         ----------
-        y_true: :class:`tf.Tensor`
+        y_true: :class:`torch.Tensor`
             The input batch of ground truth images
-        y_pred: :class:`tf.Tensor`
+        y_pred: :class:`torch.Tensor`
             The input batch of predicted images
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The SSIM for the given images
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The Contrast for the given images
         """
         channels = K.int_shape(y_true)[-1]
@@ -133,19 +133,19 @@ class DSSIMObjective():  # pylint:disable=too-few-public-methods
 
         return ssim, contrast
 
-    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Call the DSSIM  or MS-DSSIM Loss Function.
 
         Parameters
         ----------
-        y_true: :class:`tf.Tensor`
+        y_true: :class:`torch.Tensor`
             The input batch of ground truth images
-        y_pred: :class:`tf.Tensor`
+        y_pred: :class:`torch.Tensor`
             The input batch of predicted images
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The DSSIM or MS-DSSIM for the given images
         """
         ssim = self._get_ssim(y_true, y_pred)[0]
@@ -163,19 +163,19 @@ class GMSDLoss():  # pylint:disable=too-few-public-methods
     http://www4.comp.polyu.edu.hk/~cslzhang/IQA/GMSD/GMSD.htm
     https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf
     """
-    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Return the Gradient Magnitude Similarity Deviation Loss.
 
         Parameters
         ----------
-        y_true: :class:`tf.Tensor`
+        y_true: :class:`torch.Tensor`
             The ground truth value
-        y_pred: :class:`tf.Tensor`
+        y_pred: :class:`torch.Tensor`
             The predicted value
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The loss value
         """
         true_edge = self._scharr_edges(y_true, True)
@@ -189,12 +189,12 @@ class GMSDLoss():  # pylint:disable=too-few-public-methods
         return gmsd
 
     @classmethod
-    def _scharr_edges(cls, image: tf.Tensor, magnitude: bool) -> tf.Tensor:
+    def _scharr_edges(cls, image: torch.Tensor, magnitude: bool) -> torch.Tensor:
         """ Returns a tensor holding modified Scharr edge maps.
 
         Parameters
         ----------
-        image: :class:`tf.Tensor`
+        image: :class:`torch.Tensor`
             Image tensor with shape [batch_size, h, w, d] and type float32. The image(s) must be
             2x2 or larger.
         magnitude: bool
@@ -202,7 +202,7 @@ class GMSDLoss():  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             Tensor holding edge maps for each channel. Returns a tensor with shape `[batch_size, h,
             w, d, 2]` where the last two dimensions hold `[[dy[0], dx[0]], [dy[1], dx[1]], ...,
             [dy[d-1], dx[d-1]]]` calculated using the Scharr filter.
@@ -344,7 +344,7 @@ class LDRFLIPLoss():  # pylint:disable=too-few-public-methods
         self._feature_detector = _FeatureDetection(pixels_per_degree)
         logger.debug("Initialized: %s ", self.__class__.__name__)
 
-    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Call the LDR Flip Loss Function
 
         Parameters
@@ -376,7 +376,7 @@ class LDRFLIPLoss():  # pylint:disable=too-few-public-methods
         loss = K.pow(delta_e_color, 1 - delta_e_features)
         return loss
 
-    def _color_pipeline(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def _color_pipeline(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Perform the color processing part of the FLIP loss function
 
         Parameters
@@ -409,7 +409,7 @@ class LDRFLIPLoss():  # pylint:disable=too-few-public-methods
                      self._computed_distance_exponent)
         return self._redistribute_errors(power_delta, cmax)
 
-    def _process_features(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def _process_features(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Perform the color processing part of the FLIP loss function
 
         Parameters
@@ -439,7 +439,7 @@ class LDRFLIPLoss():  # pylint:disable=too-few-public-methods
         return K.pow(((1 / np.sqrt(2)) * delta), self._feature_exponent)
 
     @classmethod
-    def _hunt_adjustment(cls, image: tf.Tensor) -> tf.Tensor:
+    def _hunt_adjustment(cls, image: torch.Tensor) -> torch.Tensor:
         """ Apply Hunt-adjustment to an image in L*a*b* color space
 
         Parameters
@@ -517,7 +517,7 @@ class _SpatialFilters():  # pylint:disable=too-few-public-methods
         self._spatial_filters, self._radius = self._generate_spatial_filters()
         self._ycxcz2rgb = ColorSpaceConvert(from_space="ycxcz", to_space="rgb")
 
-    def _generate_spatial_filters(self) -> tuple[tf.Tensor, int]:
+    def _generate_spatial_filters(self) -> tuple[torch.Tensor, int]:
         """ Generates spatial contrast sensitivity filters with width depending on the number of
         pixels per degree of visual angle of the observer for channels "A", "RG" and "BY"
 
@@ -562,7 +562,7 @@ class _SpatialFilters():  # pylint:disable=too-few-public-methods
         return domain, radius
 
     @classmethod
-    def _generate_weights(cls, channel: dict[str, float], domain: np.ndarray) -> tf.Tensor:
+    def _generate_weights(cls, channel: dict[str, float], domain: np.ndarray) -> torch.Tensor:
         """ TODO docstring """
         a_1, b_1, a_2, b_2 = channel["a1"], channel["b1"], channel["a2"], channel["b2"]
         grad = (a_1 * np.sqrt(np.pi / b_1) * np.exp(-np.pi ** 2 * domain / b_1) +
@@ -571,7 +571,7 @@ class _SpatialFilters():  # pylint:disable=too-few-public-methods
         grad = np.reshape(grad, (*grad.shape, 1))
         return grad
 
-    def __call__(self, image: tf.Tensor) -> tf.Tensor:
+    def __call__(self, image: torch.Tensor) -> torch.Tensor:
         """ Call the spacial filtering.
 
         Parameters
@@ -613,7 +613,7 @@ class _FeatureDetection():  # pylint:disable=too-few-public-methods
         self._gradient = np.exp(-(self._grid[0] ** 2 + self._grid[1] ** 2)
                                 / (2 * (self._std ** 2)))
 
-    def __call__(self, image: tf.Tensor, feature_type: str) -> tf.Tensor:
+    def __call__(self, image: torch.Tensor, feature_type: str) -> torch.Tensor:
         """ Run the feature detection
 
         Parameters
@@ -695,19 +695,19 @@ class MSSIMLoss():  # pylint:disable=too-few-public-methods
         self.max_value = max_value
         self.power_factors = power_factors
 
-    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Call the MS-SSIM Loss Function.
 
         Parameters
         ----------
-        y_true: :class:`tf.Tensor`
+        y_true: :class:`torch.Tensor`
             The ground truth value
-        y_pred: :class:`tf.Tensor`
+        y_pred: :class:`torch.Tensor`
             The predicted value
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`torch.Tensor`
             The MS-SSIM Loss value
         """
         im_size = K.int_shape(y_true)[1]

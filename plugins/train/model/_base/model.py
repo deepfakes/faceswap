@@ -16,7 +16,6 @@ from collections import OrderedDict
 import numpy as np
 import keras
 import keras.backend as K
-import tensorflow as tf
 
 from lib.serializer import get_serializer
 from lib.model.nn_blocks import set_config as set_nnblock_config
@@ -161,14 +160,14 @@ class ModelBase():
     @property
     def input_shapes(self) -> list[tuple[None, int, int, int]]:
         """ list: A flattened list corresponding to all of the inputs to the model. """
-        shapes = [T.cast(tuple[None, int, int, int], K.int_shape(inputs))
+        shapes = [T.cast(tuple[None, int, int, int], inputs.shape)
                   for inputs in self.model.inputs]
         return shapes
 
     @property
     def output_shapes(self) -> list[tuple[None, int, int, int]]:
         """ list: A flattened list corresponding to all of the outputs of the model. """
-        shapes = [T.cast(tuple[None, int, int, int], K.int_shape(output))
+        shapes = [T.cast(tuple[None, int, int, int], output.shape)
                   for output in self.model.outputs]
         return shapes
 
@@ -261,10 +260,13 @@ class ModelBase():
                 inputs = self._get_inputs()
                 if not self._settings.use_mixed_precision and not is_summary:
                     # Store layer names which can be switched to mixed precision
-                    model, mp_layers = self._settings.get_mixed_precision_layers(self.build_model,
-                                                                                 inputs)
-                    self._state.add_mixed_precision_layers(mp_layers)
-                    self._model = model
+                    
+                    # TODO Re-enable mixed precision switching
+                    self._model = self.build_model(inputs)
+                    #model, mp_layers = self._settings.get_mixed_precision_layers(self.build_model,
+                    #                                                             inputs)
+                    #self._state.add_mixed_precision_layers(mp_layers)
+                    #self._model = model
                 else:
                     self._model = self.build_model(inputs)
             if not is_summary and not self._is_predict:
@@ -358,13 +360,28 @@ class ModelBase():
         """
         raise NotImplementedError
 
+    def _summary_to_log(self, summary: str, line_break: bool) -> None:
+        """ Function to output Keras model summary to log file at verbose log level
+        
+        Parameters
+        ----------
+        summary, str
+            The model summary output from keras
+        
+        line_breal: bool
+            Unused, but required by Keras for print_fn as of keras 3.0.5
+        """
+        for line in summary.splitlines():
+            logger.verbose(line)  #type:ignore[attr-defined]
+
     def _output_summary(self) -> None:
         """ Output the summary of the model and all sub-models to the verbose logger. """
         if hasattr(self._args, "summary") and self._args.summary:
             print_fn = None  # Print straight to stdout
         else:
             # print to logger
-            print_fn = lambda x: logger.verbose("%s", x)  #type:ignore[attr-defined]  # noqa[E731]  # pylint:disable=C3001
+            #print_fn = lambda x: logger.verbose("%s", x)  #type:ignore[attr-defined]  # noqa[E731]  # pylint:disable=C3001
+            print_fn = self._summary_to_log
         for idx, model in enumerate(get_all_sub_models(self.model)):
             if idx == 0:
                 parent = model

@@ -7,7 +7,7 @@ import typing as T
 from keras.layers import (
     Activation, Add, BatchNormalization, Concatenate, Conv2D as KConv2D, Conv2DTranspose,
     DepthwiseConv2D as KDepthwiseConv2d, LeakyReLU, PReLU, SeparableConv2D, UpSampling2D)
-from keras.initializers import he_uniform, VarianceScaling
+from keras.initializers import HeUniform, VarianceScaling
 
 from .initializers import ICNR, ConvolutionAware
 from .layers import PixelShuffler, ReflectionPadding2D, Swish, KResizeImages
@@ -68,14 +68,14 @@ def _get_name(name: str) -> str:
 #  << CONVOLUTIONS >>
 def _get_default_initializer(
         initializer: keras.initializers.Initializer) -> keras.initializers.Initializer:
-    """ Returns a default initializer of Convolutional Aware or he_uniform for convolutional
+    """ Returns a default initializer of Convolutional Aware or HeUniform for convolutional
     layers.
 
     Parameters
     ----------
     initializer: :class:`keras.initializers.Initializer` or None
         The initializer that has been passed into the model. If this value is ``None`` then a
-        default initializer will be set to 'he_uniform'. If Convolutional Aware initialization
+        default initializer will be set to 'HeUniform'. If Convolutional Aware initialization
         has been enabled, then any passed through initializer will be replaced with the
         Convolutional Aware initializer.
 
@@ -83,12 +83,12 @@ def _get_default_initializer(
     -------
     :class:`keras.initializers.Initializer`
         The kernel initializer to use for this convolutional layer. Either the original given
-        initializer, he_uniform or convolutional aware (if selected in config options)
+        initializer, HeUniform or convolutional aware (if selected in config options)
     """
     if _CONFIG["conv_aware_init"]:
         retval = ConvolutionAware()
     elif initializer is None:
-        retval = he_uniform()
+        retval = HeUniform()
     else:
         retval = initializer
         logger.debug("Using model supplied initializer: %s", retval)
@@ -102,7 +102,7 @@ class Conv2D(KConv2D):  # pylint:disable=too-few-public-methods, too-many-ancest
     Faceswap architecture.
 
     Parameters are the same, with the same defaults, as a standard :class:`keras.layers.Conv2D`
-    except where listed below. The default initializer is updated to `he_uniform` or `convolutional
+    except where listed below. The default initializer is updated to `HeUniform` or `convolutional
     aware` based on user configuration settings.
 
     Parameters
@@ -134,7 +134,7 @@ class DepthwiseConv2D(KDepthwiseConv2d):  # noqa,pylint:disable=too-few-public-m
 
     Parameters are the same, with the same defaults, as a standard
     :class:`keras.layers.DepthwiseConv2D` except where listed below. The default initializer is
-    updated to `he_uniform` or `convolutional aware` based on user configuration settings.
+    updated to `HeUniform` or `convolutional aware` based on user configuration settings.
 
     Parameters
     ----------
@@ -166,7 +166,7 @@ class Conv2DOutput():  # pylint:disable=too-few-public-methods
     architecture.
 
     Parameters are the same, with the same defaults, as a standard :class:`keras.layers.Conv2D`
-    except where listed below. The default initializer is updated to he_uniform or convolutional
+    except where listed below. The default initializer is updated to HeUniform or convolutional
     aware based on user config settings.
 
     Parameters
