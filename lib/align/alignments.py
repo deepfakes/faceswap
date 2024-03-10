@@ -542,6 +542,18 @@ class Alignments():
                                source_frame, face_idx)
                 del frame_data["faces"][face_idx]
 
+    def update_from_dict(self, data: dict[str, AlignmentDict]) -> None:
+        """ Replace all alignments with the contents of the given dictionary
+
+        Parameters
+        ----------
+        data: dict[str, AlignmentDict]
+            The alignments, in correctly formatted dictionary form, to be populated into this
+            :class:`Alignments`
+        """
+        logger.debug("Populating alignments with %s entries", len(data))
+        self._data = data
+
     # << GENERATORS >> #
     def yield_faces(self) -> Generator[tuple[str, list[AlignmentFileDict], int, str], None, None]:
         """ Generator to obtain all faces with meta information from :attr:`data`. The results

@@ -9,26 +9,26 @@ import typing as T
 from argparse import Namespace
 from multiprocessing import Process
 
-import cv2
 import numpy as np
 from tqdm import tqdm
 
-from lib.align import Alignments, AlignedFace, DetectedFace, update_legacy_png_header
+from lib.align import Alignments, DetectedFace, update_legacy_png_header
 from lib.image import FacesLoader, ImagesLoader, ImagesSaver, encode_image
 
 from lib.multithreading import MultiThread
-from lib.utils import get_folder, _video_extensions
+from lib.utils import _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
+from .output import Output
+
 if T.TYPE_CHECKING:
-    from lib.align.aligned_face import CenteringType
     from lib.align.alignments import AlignmentFileDict, PNGHeaderDict
     from lib.queue_manager import EventQueue
 
-logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
-class Mask():  # pylint:disable=too-few-public-methods
+class Mask:  # pylint:disable=too-few-public-methods
     """ This tool is part of the Faceswap Tools suite and should be called from
     ``python tools.py mask`` command.
 
@@ -130,7 +130,7 @@ class Mask():  # pylint:disable=too-few-public-methods
                 self._run_mask_process(arguments)
 
 
-class _Mask():  # pylint:disable=too-few-public-methods
+class _Mask:  # pylint:disable=too-few-public-methods
     """ This tool is part of the Faceswap Tools suite and should be called from
     ``python tools.py mask`` command.
 
@@ -147,20 +147,18 @@ class _Mask():  # pylint:disable=too-few-public-methods
         self._update_type = arguments.processing
         self._input_is_faces = arguments.input_type == "faces"
         self._mask_type = arguments.masker
-        self._output = {"opts": {"blur_kernel": arguments.blur_kernel,
-                                 "threshold": arguments.threshold},
-                        "type": arguments.output_type,
-                        "full_frame": arguments.full_frame,
-                        "suffix": self._get_output_suffix(arguments)}
+
+        loader = FacesLoader if self._input_is_faces else ImagesLoader
+        self._loader = loader(arguments.input)
+        self._alignments = self._get_alignments(arguments)
+
+        self._output = Output(arguments, self._alignments, self._loader.file_list)
+
         self._counts = {"face": 0, "skip": 0, "update": 0}
 
         self._check_input(arguments.input)
-        self._saver = self._set_saver(arguments)
-        loader = FacesLoader if self._input_is_faces else ImagesLoader
-        self._loader = loader(arguments.input)
         self._faces_saver: ImagesSaver | None = None
 
-        self._alignments = self._get_alignments(arguments)
         self._extractor = self._get_extractor(arguments.exclude_gpus)
         self._set_correct_mask_type()
         self._extractor_input_thread = self._feed_extractor()
@@ -183,32 +181,6 @@ class _Mask():  # pylint:disable=too-few-public-methods
                          mask_input)
             sys.exit(0)
         logger.debug("input '%s' is valid", mask_input)
-
-    def _set_saver(self, arguments: Namespace) -> ImagesSaver | None:
-        """ set the saver in a background thread
-
-        Parameters
-        ----------
-        arguments: :class:`argparse.Namespace`
-            The :mod:`argparse` arguments as passed in from :mod:`tools.py`
-
-        Returns
-        -------
-        ``None`` or :class:`lib.image.ImagesSaver`:
-            If output is requested, returns a :class:`lib.image.ImagesSaver` otherwise
-            returns ``None``
-        """
-        if not hasattr(arguments, "output") or arguments.output is None or not arguments.output:
-            if self._update_type == "output":
-                logger.error("Processing set as 'output' but no output folder provided.")
-                sys.exit(0)
-            logger.debug("No output provided. Not creating saver")
-            return None
-        output_dir = get_folder(arguments.output, make_folder=True)
-        logger.info("Saving preview masks to: '%s'", output_dir)
-        saver = ImagesSaver(output_dir)
-        logger.debug(saver)
-        return saver
 
     def _get_alignments(self, arguments: Namespace) -> Alignments | None:
         """ Obtain the alignments from either the given alignments location or the default
@@ -348,7 +320,10 @@ class _Mask():  # pylint:disable=too-few-public-methods
         detected_face = self._get_detected_face(alignment)
         if self._update_type == "output":
             detected_face.image = image
-            self._save(frame_name, face_index, detected_face)
+            self._output.save(frame_name,
+                              face_index,
+                              detected_face,
+                              frame_dims=metadata["source"]["source_frame_dims"])
             return None
 
         media = ExtractMedia(filename, image, detected_faces=[detected_face], is_aligned=True)
@@ -437,7 +412,7 @@ class _Mask():  # pylint:disable=too-few-public-methods
             if self._update_type == "output":
                 for idx, detected_face in enumerate(detected_faces):
                     detected_face.image = image
-                    self._save(frame, idx, detected_face)
+                    self._output.save(frame, idx, detected_face)
             else:
                 self._counts["update"] += len(detected_faces)
                 queue.put(ExtractMedia(filename, image, detected_faces=detected_faces))
@@ -469,24 +444,6 @@ class _Mask():  # pylint:disable=too-few-public-methods
             logger.debug("Mask pre-exists for face: '%s' - %s", frame, idx)
         return retval
 
-    def _get_output_suffix(self, arguments: Namespace) -> str:
-        """ The filename suffix, based on selected output options.
-
-        Parameters
-        ----------
-        arguments: :class:`argparse.Namespace`
-            The command line arguments for the mask tool
-
-        Returns
-        -------
-        str:
-            The suffix to be appended to the output filename
-        """
-        sfx = "mask_preview_"
-        sfx += "face_" if not arguments.full_frame or self._input_is_faces else "frame_"
-        sfx += f"{arguments.output_type}.png"
-        return sfx
-
     @classmethod
     def _get_detected_face(cls, alignment: AlignmentFileDict) -> DetectedFace:
         """ Convert an alignment dict item to a detected_face object
@@ -498,7 +455,7 @@ class _Mask():  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        :class:`lib.FacesDetect.detected_face`:
+        :class:`~lib.align.detected_face.DetectedFace`:
             The corresponding detected_face object for the alignment
         """
         detected_face = DetectedFace()
@@ -526,8 +483,7 @@ class _Mask():  # pylint:disable=too-few-public-methods
                 self._faces_saver.close()
 
         self._extractor_input_thread.join()
-        if self._saver is not None:
-            self._saver.close()
+        self._output.close()
 
         if self._counts["skip"] != 0:
             logger.warning("%s face(s) skipped due to not existing in the alignments file",
@@ -565,9 +521,9 @@ class _Mask():  # pylint:disable=too-few-public-methods
             self._faces_saver.save(extractor_output.filename,
                                    encode_image(extractor_output.image, ".png", metadata=metadata))
 
-            if self._saver is not None:
+            if self._output.should_save is not None:
                 face.image = extractor_output.image
-                self._save(frame_name, face_index, face)
+                self._output.save(frame_name, face_index, face)
 
     def _update_frames(self, extractor_output: ExtractMedia) -> None:
         """ Update alignments for the mask if the input type is a frames folder or video
@@ -583,97 +539,6 @@ class _Mask():  # pylint:disable=too-few-public-methods
         frame = os.path.basename(extractor_output.filename)
         for idx, face in enumerate(extractor_output.detected_faces):
             self._alignments.update_face(frame, idx, face.to_alignment())
-            if self._saver is not None:
+            if self._output.should_save:
                 face.image = extractor_output.image
-                self._save(frame, idx, face)
-
-    def _save(self, frame: str, idx: int, detected_face: DetectedFace) -> None:
-        """ Build the mask preview image and save
-
-        Parameters
-        ----------
-        frame: str
-            The frame name in the alignments file
-        idx: int
-            The index of the face for this frame in the alignments file
-        detected_face: `lib.FacesDetect.detected_face`
-            A detected_face object for a face
-        """
-        assert self._saver is not None
-        if self._mask_type == "bisenet-fp":
-            mask_types = [f"{self._mask_type}_{area}" for area in ("face", "head")]
-        else:
-            mask_types = [self._mask_type]
-
-        if detected_face.mask is None or not any(mask in detected_face.mask
-                                                 for mask in mask_types):
-            logger.warning("Mask type '%s' does not exist for frame '%s' index %s. Skipping",
-                           self._mask_type, frame, idx)
-            return
-
-        for mask_type in mask_types:
-            if mask_type not in detected_face.mask:
-                # If extracting bisenet mask, then skip versions which don't exist
-                continue
-            filename = os.path.join(
-                self._saver.location,
-                f"{os.path.splitext(frame)[0]}_{idx}_{mask_type}_{self._output['suffix']}")
-            image = self._create_image(detected_face, mask_type)
-            logger.trace("filename: '%s', image_shape: %s", filename, image.shape)  # type: ignore
-            self._saver.save(filename, image)
-
-    def _create_image(self, detected_face: DetectedFace, mask_type: str) -> np.ndarray:
-        """ Create a mask preview image for saving out to disk
-
-        Parameters
-        ----------
-        detected_face: `lib.FacesDetect.detected_face`
-            A detected_face object for a face
-        mask_type: str
-            The stored mask type name to create the image for
-
-        Returns
-        -------
-        :class:`numpy.ndarray`:
-            A preview image depending on the output type in one of the following forms:
-              - Containing 3 sub images: The original face, the masked face and the mask
-              - The mask only
-              - The masked face
-        """
-        mask = detected_face.mask[mask_type]
-        assert detected_face.image is not None
-        mask.set_blur_and_threshold(**self._output["opts"])
-        if not self._output["full_frame"] or self._input_is_faces:
-            if self._input_is_faces:
-                face = AlignedFace(detected_face.landmarks_xy,
-                                   image=detected_face.image,
-                                   centering=mask.stored_centering,
-                                   size=detected_face.image.shape[0],
-                                   is_aligned=True).face
-            else:
-                centering: CenteringType = ("legacy" if self._alignments is not None and
-                                            self._alignments.version == 1.0
-                                            else mask.stored_centering)
-                detected_face.load_aligned(detected_face.image, centering=centering, force=True)
-                face = detected_face.aligned.face
-            assert face is not None
-            imask = cv2.resize(detected_face.mask[mask_type].mask,
-                               (face.shape[1], face.shape[0]),
-                               interpolation=cv2.INTER_CUBIC)[..., None]
-        else:
-            face = np.array(detected_face.image)  # cv2 fails if this comes as imageio.core.Array
-            imask = mask.get_full_frame_mask(face.shape[1], face.shape[0])
-            imask = np.expand_dims(imask, -1)
-
-        height, width = face.shape[:2]
-        if self._output["type"] == "combined":
-            masked = (face.astype("float32") * imask.astype("float32") / 255.).astype("uint8")
-            imask = np.tile(imask, 3)
-            for img in (face, masked, imask):
-                cv2.rectangle(img, (0, 0), (width - 1, height - 1), (255, 255, 255), 1)
-                out_image = np.concatenate((face, masked, imask), axis=1)
-        elif self._output["type"] == "mask":
-            out_image = imask
-        elif self._output["type"] == "masked":
-            out_image = np.concatenate([face, imask], axis=-1)
-        return out_image
+                self._output.save(frame, idx, face)
