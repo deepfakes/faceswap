@@ -13,6 +13,8 @@ import numpy as np
 from tqdm import tqdm
 
 from lib.align import AlignedFace
+from lib.align.alignments import AlignmentDict
+
 from lib.image import ImagesSaver, read_image_meta_batch
 from lib.utils import get_folder
 from scripts.fsmedia import Alignments as ExtractAlignments
@@ -20,7 +22,6 @@ from scripts.fsmedia import Alignments as ExtractAlignments
 if T.TYPE_CHECKING:
     from lib.align import Alignments, DetectedFace
     from lib.align.aligned_face import CenteringType
-    from lib.align.alignments import AlignmentDict
 
 logger = logging.getLogger(__name__)
 
@@ -131,14 +132,15 @@ class Output:
             return alignments
         logger.debug("Generating alignments from faces")
 
-        data: AlignmentDict = {}
+        data = T.cast(dict[str, AlignmentDict], {})
         for _, meta in tqdm(read_image_meta_batch(file_list),
                             desc="Reading alignments from faces",
                             total=len(file_list),
                             leave=False):
             fname = meta["itxt"]["source"]["source_filename"]
             aln = meta["itxt"]["alignments"]
-            data.setdefault(fname, {}).setdefault("faces", []).append(aln)
+            data.setdefault(fname, {}).setdefault("faces",  # type:ignore[typeddict-item]
+                                                  []).append(aln)
 
         dummy_args = Namespace(alignments_path="/dummy/alignments.fsa")
         retval = ExtractAlignments(dummy_args, is_extract=True)
@@ -175,6 +177,7 @@ class Output:
         # Outputting to frames, but input is faces. Apply the face patches to an empty canvas
         retval = np.zeros((*frame_dims, 3), dtype="uint8")
         for detected_face in detected_faces:
+            assert detected_face.image is not None
             face = AlignedFace(detected_face.landmarks_xy,
                                image=detected_face.image,
                                centering="head",
@@ -266,7 +269,8 @@ class Output:
             assert len(detected_faces) == 1  # If outputting faces, we should only receive 1 face
             retval = self._get_background_face(detected_faces[0], mask_centering, mask_size)
 
-        logger.trace("Background image (size: %s, dtype: %s)", retval.shape, retval.dtype)
+        logger.trace("Background image (size: %s, dtype: %s)",  # type:ignore[attr-defined]
+                     retval.shape, retval.dtype)
         return retval
 
     def _get_mask(self,
@@ -299,7 +303,8 @@ class Output:
             else:
                 mask = mask_object.mask[..., 0]
             np.maximum(retval, mask, out=retval)
-        logger.trace("Final mask (shape: %s, dtype: %s)", retval.shape, retval.dtype)
+        logger.trace("Final mask (shape: %s, dtype: %s)",  # type:ignore[attr-defined]
+                     retval.shape, retval.dtype)
         return retval
 
     def _build_output_image(self, background: np.ndarray, mask: np.ndarray) -> np.ndarray:
@@ -359,7 +364,8 @@ class Output:
               - The masked face
         """
         assert detected_faces[0].image is not None
-        dims = frame_dims if self._input_is_faces else detected_faces[0].image.shape[:2]
+        dims = T.cast(tuple[int, int],
+                      frame_dims if self._input_is_faces else detected_faces[0].image.shape[:2])
         assert dims is not None and len(dims) == 2
 
         mask_centering = detected_faces[0].mask[mask_type].stored_centering
@@ -371,7 +377,8 @@ class Output:
                               dims if self._full_frame else (mask_size, mask_size))
         retval = self._build_output_image(background, mask)
 
-        logger.trace("Output image (shape: %s, dtype: %s)", retval.shape, retval.dtype)
+        logger.trace("Output image (shape: %s, dtype: %s)",  # type:ignore[attr-defined]
+                     retval.shape, retval.dtype)
         return retval
 
     def _handle_cache(self,
@@ -398,6 +405,7 @@ class Output:
         if not self._full_frame:
             return [(idx, detected_face)]
 
+        assert self._alignments is not None
         faces_in_frame = self._alignments.count_faces_in_frame(frame)
         if faces_in_frame == 1:
             return [(idx, detected_face)]
@@ -405,11 +413,11 @@ class Output:
         self._full_frame_cache.setdefault(frame, []).append((idx, detected_face))
 
         if len(self._full_frame_cache[frame]) != faces_in_frame:
-            logger.trace("Caching face for frame '%s'", frame)
+            logger.trace("Caching face for frame '%s'", frame)  # type:ignore[attr-defined]
             return []
 
         retval = self._full_frame_cache.pop(frame)
-        logger.trace("Processing '%s' from cache: %s", frame, retval)
+        logger.trace("Processing '%s' from cache: %s", frame, retval)  # type:ignore[attr-defined]
         return retval
 
     def _get_mask_types(self,
@@ -449,7 +457,7 @@ class Output:
             final_masks.update([m for m in detected_face.mask if m in mask_types])
 
         retval = list(final_masks)
-        logger.trace("Handling mask types: %s", retval)
+        logger.trace("Handling mask types: %s", retval)  # type:ignore[attr-defined]
         return retval
 
     def save(self,
