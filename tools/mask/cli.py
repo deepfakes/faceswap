@@ -120,26 +120,14 @@ class MaskArgs(FaceSwapArgs):
             "help": _(
                 "R|The Mask tool process to perform."
                 "\nL|all: Update the mask for all faces in the alignments file for the selected "
-                "'mask type'."
+                "'masker'."
                 "\nL|missing: Create a mask for all faces in the alignments file where a mask "
-                "does not previously exist for the selected 'mask type'."
-                "\nL|output: Don't update the masks, just output the selected 'mask type' for "
+                "does not previously exist for the selected 'masker'."
+                "\nL|output: Don't update the masks, just output the selected 'masker' for "
                 "review/editing in external tools to the given output folder."
                 "\nL|import: Import masks that have been edited outside of faceswap into the "
-                "alignments file. Note: 'custom' must be the selected 'mask type'.")})
-        argument_list.append({
-            "opts": ("-s", "--storage-size"),
-            "dest": "storage_size",
-            "action": Slider,
-            "type": int,
-            "group": _("process"),
-            "min_max": (64, 1024),
-            "default": 128,
-            "rounding": 64,
-            "help": _(
-                "The size, in pixels to internally store the mask at.\nThe default is 128 "
-                "which is fine for nearly all usecases. Larger sizes will result in larger "
-                "alignments files and longer processing.")})
+                "alignments file. Note: 'custom' must be the selected 'masker' and the masks must "
+                "be in the same format as the 'input-type' (frames or faces)")})
         argument_list.append({
             "opts": ("-m", "--mask-path"),
             "action": DirFullPaths,
@@ -165,8 +153,9 @@ class MaskArgs(FaceSwapArgs):
             "default": "face",
             "group": _("import"),
             "help": _(
-                "R|The centering to use when importing masks. Note: For any job other then "
-                "'import' this option is ignored as mask centering is handled internally."
+                "R|Import only. The centering to use when importing masks. Note: For any job "
+                "other than 'import' this option is ignored as mask centering is handled "
+                "internally."
                 "\nL|face: Centers the mask on the center of the face, adjusting for "
                 "pitch and yaw. Outside of requirements for full head masking/training, this "
                 "is likely to be the best choice."
@@ -177,6 +166,19 @@ class MaskArgs(FaceSwapArgs):
                 "\nL|legacy: The 'original' extraction technique. Centers the mask near the "
                 " of the nose with and crops closely to the face. Can result in the edges of "
                 "the mask appearing outside of the training area.")})
+        argument_list.append({
+            "opts": ("-s", "--storage-size"),
+            "dest": "storage_size",
+            "action": Slider,
+            "type": int,
+            "group": _("import"),
+            "min_max": (64, 1024),
+            "default": 128,
+            "rounding": 64,
+            "help": _(
+                "Import only. The size, in pixels to internally store the mask at.\nThe default "
+                "is 128 which is fine for nearly all usecases. Larger sizes will result in larger "
+                "alignments files and longer processing.")})
         argument_list.append({
             "opts": ("-o", "--output-folder"),
             "action": DirFullPaths,

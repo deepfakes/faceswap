@@ -46,9 +46,10 @@ class MaskGenerator:  # pylint:disable=too-few-public-methods
                  alignments: Alignments | None,
                  input_location: str,
                  exclude_gpus: list[int]) -> None:
-        logger.debug("Initializing %s (mask_type: %s, update_all: %s, input_is_faces: %s "
-                     "loader: %s, exclude_gpus: %s)", self.__class__.__name__,
-                     mask_type, update_all, input_is_faces, exclude_gpus, loader)
+        logger.debug("Initializing %s (mask_type: %s, update_all: %s, input_is_faces: %s, "
+                     "loader: %s, alignments: %s, input_location: %s, exclude_gpus: %s)",
+                     self.__class__.__name__, mask_type, update_all, input_is_faces, loader,
+                     alignments, input_location, exclude_gpus)
 
         self._update_all = update_all
         self._is_faces = input_is_faces
@@ -165,7 +166,7 @@ class MaskGenerator:  # pylint:disable=too-few-public-methods
                              media.filename)
                 continue
 
-            logger.trace("Passing to extractor: '%s'", media.filename)
+            logger.trace("Passing to extractor: '%s'", media.filename)  # type:ignore[attr-defined]
             extract_queue.put(media)
 
         logger.debug("Terminating loader thread")

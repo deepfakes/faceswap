@@ -38,6 +38,10 @@ class Mask:  # pylint:disable=too-few-public-methods
     """
     def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (arguments: %s", self.__class__.__name__, arguments)
+        if arguments.batch_mode and arguments.processing == "import":
+            logger.error("Batch mode is not supported for 'import' processing")
+            sys.exit(0)
+
         self._args = arguments
         self._input_locations = self._get_input_locations()
 
@@ -146,8 +150,18 @@ class _Mask:  # pylint:disable=too-few-public-methods
         self._loader = Loader(arguments.input, self._input_is_faces)
         self._alignments = self._get_alignments(arguments.alignments, arguments.input)
 
-        self._import = Import(arguments.mask_path) if self._update_type == "import" else None
         self._output = Output(arguments, self._alignments, self._loader.file_list)
+
+        self._import = None
+        if self._update_type == "import":
+            self._import = Import(arguments.mask_path,
+                                  arguments.centering,
+                                  arguments.storage_size,
+                                  self._input_is_faces,
+                                  self._loader,
+                                  self._alignments,
+                                  arguments.input,
+                                  arguments.masker)
 
         self._mask_gen: MaskGenerator | None = None
         if self._update_type in ("all", "missing"):
@@ -239,6 +253,9 @@ class _Mask:  # pylint:disable=too-few-public-methods
     def _generate_masks(self) -> None:
         """ Generate masks from a mask plugin """
         assert self._mask_gen is not None
+
+        logger.info("Generating masks")
+
         for media in self._mask_gen.process():
             if self._output.should_save:
                 self._save_output(media)
@@ -248,7 +265,21 @@ class _Mask:  # pylint:disable=too-few-public-methods
         assert self._import is not None
         logger.info("Importing masks")
 
-        exit(0)
+        for media in self._loader.load():
+            self._import.import_mask(media)
+            if self._output.should_save:
+                self._save_output(media)
+
+        if self._alignments is not None and self._import.update_count > 0:
+            self._alignments.backup()
+            self._alignments.save()
+
+        if self._import.skip_count > 0:
+            logger.warning("No masks were found for %s item(s), so these have not been imported",
+                           self._import.skip_count)
+
+        logger.info("Imported masks for %s faces of %s",
+                    self._import.update_count, self._import.update_count + self._import.skip_count)
 
     def _output_masks(self) -> None:
         """ Output masks to selected output folder """
