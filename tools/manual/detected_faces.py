@@ -795,7 +795,7 @@ class FaceUpdate():
     def landmarks_rotate(self,
                          frame_index: int,
                          face_index: int,
-                         angle: np.ndarray,
+                         angle: float,
                          center: np.ndarray) -> None:
         """ Rotate the landmarks on an Extract Box rotate for the
         :class:`~lib.align.DetectedFace` object at the given frame and face indices for the
@@ -807,7 +807,7 @@ class FaceUpdate():
             The frame that the face is being set for
         face_index: int
             The face index within the frame
-        angle: :class:`numpy.ndarray`
+        angle: float
             The angle, in radians to rotate the points by
         center: :class:`numpy.ndarray`
             The center point of the Landmark's Extract Box

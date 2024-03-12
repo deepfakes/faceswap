@@ -215,7 +215,7 @@ class FromFaces():  # pylint:disable=too-few-public-methods
             alignments_path = os.path.join(self._faces_dir, fname)
             dummy_args = Namespace(alignments_path=alignments_path)
             aln = Alignments(dummy_args, is_extract=True)
-            aln._data = alignments  # pylint:disable=protected-access
+            aln.update_from_dict(alignments)
             aln._io._version = version  # pylint:disable=protected-access
             aln._io.update_legacy()  # pylint:disable=protected-access
             aln.backup()
