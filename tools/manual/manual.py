@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """ The Manual Tool is a tkinter driven GUI app for editing alignments files with visual tools.
 This module is the main entry point into the Manual Tool. """
+from __future__ import annotations
+
 import logging
 import os
 import sys
+import typing as T
 import tkinter as tk
 from tkinter import ttk
 from time import sleep
@@ -23,7 +26,14 @@ from .faceviewer.frame import FacesFrame
 from .frameviewer.frame import DisplayFrame
 from .thumbnails import ThumbsCreator
 
+if T.TYPE_CHECKING:
+    from lib.align import DetectedFace
+    from lib.align.detected_face import Mask
+    from lib.queue_manager import EventQueue
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+TypeManualExtractor = T.Literal["FAN", "cv2-dnn", "mask"]
 
 
 class Manual(tk.Tk):
@@ -193,7 +203,7 @@ class Manual(tk.Tk):
 
         bottom = ttk.Frame(main, name="frame_bottom")
         main.add(bottom)
-        retval = dict(main=main, top=top, bottom=bottom)
+        retval = {"main": main, "top": top, "bottom": bottom}
         logger.debug("Created containers: %s", retval)
         return retval
 
@@ -406,11 +416,11 @@ class TkGlobals():
         self._frame_count = 0  # set by FrameLoader
         self._frame_display_dims = (int(round(896 * get_config().scaling_factor)),
                                     int(round(504 * get_config().scaling_factor)))
-        self._current_frame = dict(image=None,
-                                   scale=None,
-                                   interpolation=None,
-                                   display_dims=None,
-                                   filename=None)
+        self._current_frame = {"image": None,
+                               "scale": None,
+                               "interpolation": None,
+                               "display_dims": None,
+                               "filename": None}
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @classmethod
@@ -640,28 +650,38 @@ class Aligner():
         A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
         ``None`` to not exclude any GPUs.
     """
-    def __init__(self, tk_globals, exclude_gpus):
+    def __init__(self, tk_globals: TkGlobals, exclude_gpus: list[int] | None) -> None:
         logger.debug("Initializing: %s (tk_globals: %s, exclude_gpus: %s)",
                      self.__class__.__name__, tk_globals, exclude_gpus)
         self._globals = tk_globals
-        self._aligners = {"cv2-dnn": None, "FAN": None, "mask": None}
-        self._aligner = "FAN"
         self._exclude_gpus = exclude_gpus
-        self._detected_faces = None
-        self._frame_index = None
-        self._face_index = None
+
+        self._detected_faces: DetectedFaces | None = None
+        self._frame_index: int | None = None
+        self._face_index: int | None = None
+
+        self._aligners: dict[TypeManualExtractor, Extractor | None] = {"cv2-dnn": None,
+                                                                       "FAN": None,
+                                                                       "mask": None}
+        self._aligner: TypeManualExtractor = "FAN"
+
         self._init_thread = self._background_init_aligner()
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
-    def _in_queue(self):
+    def _in_queue(self) -> EventQueue:
         """ :class:`queue.Queue` - The input queue to the extraction pipeline. """
-        return self._aligners[self._aligner].input_queue
+        aligner = self._aligners[self._aligner]
+        assert aligner is not None
+        return aligner.input_queue
 
     @property
-    def _feed_face(self):
+    def _feed_face(self) -> ExtractMedia:
         """ :class:`plugins.extract.pipeline.ExtractMedia`: The current face for feeding into the
         aligner, formatted for the pipeline """
+        assert self._frame_index is not None
+        assert self._face_index is not None
+        assert self._detected_faces is not None
         face = self._detected_faces.current_faces[self._frame_index][self._face_index]
         return ExtractMedia(
             self._globals.current_frame["filename"],
@@ -669,22 +689,28 @@ class Aligner():
             detected_faces=[face])
 
     @property
-    def is_initialized(self):
+    def is_initialized(self) -> bool:
         """ bool: The Aligners are initialized in a background thread so that other tasks can be
         performed whilst we wait for initialization. ``True`` is returned if the aligner has
         completed initialization otherwise ``False``."""
         thread_is_alive = self._init_thread.is_alive()
         if thread_is_alive:
-            logger.trace("Aligner not yet initialized")
+            logger.trace("Aligner not yet initialized")  # type:ignore[attr-defined]
             self._init_thread.check_and_raise_error()
         else:
-            logger.trace("Aligner initialized")
+            logger.trace("Aligner initialized")  # type:ignore[attr-defined]
             self._init_thread.join()
         return not thread_is_alive
 
-    def _background_init_aligner(self):
+    def _background_init_aligner(self) -> MultiThread:
         """ Launch the aligner in a background thread so we can run other tasks whilst
-        waiting for initialization """
+        waiting for initialization
+
+        Returns
+        -------
+        :class:`lib.multithreading.MultiThread
+            The background aligner loader thread
+        """
         logger.debug("Launching aligner initialization thread")
         thread = MultiThread(self._init_aligner,
                              thread_count=1,
@@ -693,11 +719,11 @@ class Aligner():
         logger.debug("Launched aligner initialization thread")
         return thread
 
-    def _init_aligner(self):
+    def _init_aligner(self) -> None:
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
         # Make sure non-GPU aligner is allocated first
-        for model in ("mask", "cv2-dnn", "FAN"):
+        for model in T.get_args(TypeManualExtractor):
             logger.debug("Initializing aligner: %s", model)
             plugin = None if model == "mask" else model
             exclude_gpus = self._exclude_gpus if model == "FAN" else None
@@ -714,7 +740,7 @@ class Aligner():
             logger.debug("Initialized %s Extractor", model)
             self._aligners[model] = aligner
 
-    def link_faces(self, detected_faces):
+    def link_faces(self, detected_faces: DetectedFaces) -> None:
         """ As the Aligner has the potential to take the longest to initialize, it is kicked off
         as early as possible. At this time :class:`~tools.manual.detected_faces.DetectedFaces` is
         not yet available.
@@ -731,7 +757,8 @@ class Aligner():
         logger.debug("Linking detected_faces: %s", detected_faces)
         self._detected_faces = detected_faces
 
-    def get_landmarks(self, frame_index, face_index, aligner):
+    def get_landmarks(self, frame_index: int, face_index: int, aligner: TypeManualExtractor
+                      ) -> np.ndarray:
         """ Feed the detected face into the alignment pipeline and retrieve the landmarks.
 
         The face to feed into the aligner is generated from the given frame and face indices.
@@ -742,7 +769,7 @@ class Aligner():
             The frame index to extract the aligned face for
         face_index: int
             The face index within the current frame to extract the face for
-        aligner: ["FAN", "cv2-dnn"]
+        aligner: Literal["FAN", "cv2-dnn"]
             The aligner to use to extract the face
 
         Returns
@@ -750,22 +777,37 @@ class Aligner():
         :class:`numpy.ndarray`
             The 68 point landmark alignments
         """
-        logger.trace("frame_index: %s, face_index: %s, aligner: %s",
+        logger.trace("frame_index: %s, face_index: %s, aligner: %s",  # type:ignore[attr-defined]
                      frame_index, face_index, aligner)
         self._frame_index = frame_index
         self._face_index = face_index
         self._aligner = aligner
         self._in_queue.put(self._feed_face)
-        detected_face = next(self._aligners[aligner].detected_faces()).detected_faces[0]
-        logger.trace("landmarks: %s", detected_face.landmarks_xy)
+        extractor = self._aligners[aligner]
+        assert extractor is not None
+        detected_face = next(extractor.detected_faces()).detected_faces[0]
+        logger.trace("landmarks: %s", detected_face.landmarks_xy)  # type:ignore[attr-defined]
         return detected_face.landmarks_xy
 
-    def get_masks(self, frame_index, face_index):
+    def _remove_nn_masks(self, detected_face: DetectedFace) -> None:
+        """ Remove any non-landmarks based masks on a landmark edit
+
+        Parameters
+        ----------
+        detected_face:
+            The detected face object to remove masks from
+        """
+        del_masks = {m for m in detected_face.mask if m not in ("components", "extended")}
+        logger.info("Removing masks after landmark update: %s", del_masks)
+        for mask in del_masks:
+            del detected_face.mask[mask]
+
+    def get_masks(self, frame_index: int, face_index: int) -> dict[str, Mask]:
         """ Feed the aligned face into the mask pipeline and retrieve the updated masks.
 
         The face to feed into the aligner is generated from the given frame and face indices.
         This is to be called when a manual update is done on the landmarks, and new masks need
-        generating
+        generating.
 
         Parameters
         ----------
@@ -776,30 +818,34 @@ class Aligner():
 
         Returns
         -------
-        dict
+        dict[str, :class:`~lib.align.detected_face.Mask`]
             The updated masks
         """
-        logger.trace("frame_index: %s, face_index: %s", frame_index, face_index)
+        logger.trace("frame_index: %s, face_index: %s",  # type:ignore[attr-defined]
+                     frame_index, face_index)
         self._frame_index = frame_index
         self._face_index = face_index
         self._aligner = "mask"
         self._in_queue.put(self._feed_face)
+        assert self._aligners["mask"] is not None
         detected_face = next(self._aligners["mask"].detected_faces()).detected_faces[0]
+        self._remove_nn_masks(detected_face)
         logger.debug("mask: %s", detected_face.mask)
         return detected_face.mask
 
-    def set_normalization_method(self, method):
+    def set_normalization_method(self, method: T.Literal["none", "clahe", "hist", "mean"]) -> None:
         """ Change the normalization method for faces fed into the aligner.
         The normalization method is user adjustable from the GUI. When this method is triggered
         the method is updated for all aligner pipelines.
 
         Parameters
         ----------
-        method: str
+        method: Literal["none", "clahe", "hist", "mean"]
             The normalization method to use
         """
         logger.debug("Setting normalization method to: '%s'", method)
         for plugin, aligner in self._aligners.items():
+            assert aligner is not None
             if plugin == "mask":
                 continue
             logger.debug("Setting to: '%s'", method)
