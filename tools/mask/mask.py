@@ -149,6 +149,7 @@ class _Mask:  # pylint:disable=too-few-public-methods
 
         self._loader = Loader(arguments.input, self._input_is_faces)
         self._alignments = self._get_alignments(arguments.alignments, arguments.input)
+        self._loader.add_alignments(self._alignments)
 
         self._output = Output(arguments, self._alignments, self._loader.file_list)
 
@@ -231,7 +232,6 @@ class _Mask:  # pylint:disable=too-few-public-methods
             filename = "alignments"
 
         retval = Alignments(folder, filename=filename)
-        self._loader.add_alignments(retval)
         return retval
 
     def _save_output(self, media: ExtractMedia) -> None:
