@@ -6,9 +6,9 @@ import logging
 import typing as T
 
 import numpy as np
-import keras.backend as K
 from keras.losses import Loss
-from keras import ops
+from keras import ops, Variable
+
 import torch
 
 if T.TYPE_CHECKING:
@@ -17,7 +17,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class FocalFrequencyLoss():  # pylint:disable=too-few-public-methods
+class FocalFrequencyLoss(Loss):
     """ Focal Frequencey Loss Function.
 
     A channels last implementation.
@@ -56,6 +56,7 @@ class FocalFrequencyLoss():  # pylint:disable=too-few-public-methods
                  ave_spectrum: bool = False,
                  log_matrix: bool = False,
                  batch_matrix: bool = False) -> None:
+        super().__init__(name=self.__class__.__name__)
         self._alpha = alpha
         # TODO Fix bug where FFT will be incorrect if patch_factor > 1
         self._patch_factor = patch_factor
@@ -89,7 +90,7 @@ class FocalFrequencyLoss():  # pylint:disable=too-few-public-methods
                 col_to = (j + 1) * patch_cols
                 patch_list.append(inputs[:, row_from: row_to, col_from: col_to, :])
 
-        retval = K.stack(patch_list, axis=1)
+        retval = ops.stack(patch_list, axis=1)
         return retval
 
     def _tensor_to_frequency_spectrum(self, patch: torch.Tensor) -> torch.Tensor:
@@ -105,20 +106,10 @@ class FocalFrequencyLoss():  # pylint:disable=too-few-public-methods
         :class:`torch.Tensor`
             The DFT frequencies split into real and imaginary numbers as float32
         """
-        # TODO fix this for when self._patch_factor != 1.
-        rows, cols = self._dims
-        patch = K.permute_dimensions(patch, (0, 1, 4, 2, 3))  # move channels to first
-
-        patch = patch / np.sqrt(rows * cols)  # Orthonormalization
-
-        patch = K.cast(patch, "complex64")
-        freq = tf.signal.fft2d(patch)[..., None]
-
-        freq = K.concatenate([tf.math.real(freq), tf.math.imag(freq)], axis=-1)
-        freq = K.cast(freq, "float32")
-
-        freq = K.permute_dimensions(freq, (0, 1, 3, 4, 2, 5))  # channels to last
-
+        patch = ops.transpose(patch, (0, 1, 4, 2, 3))  # move channels to first
+        freq = torch.fft.fft2(patch, norm="ortho")
+        freq = ops.stack([freq.real, freq.imag], axis=-1)
+        freq = ops.transpose(freq, (0, 1, 3, 4, 2, 5))  # channels to last
         return freq
 
     def _get_weight_matrix(self, freq_true: torch.Tensor, freq_pred: torch.Tensor) -> torch.Tensor:
@@ -136,20 +127,20 @@ class FocalFrequencyLoss():  # pylint:disable=too-few-public-methods
         :class:`torch.Tensor`
             The weights matrix for prioritizing hard frequencies
         """
-        weights = K.square(freq_pred - freq_true)
-        weights = K.sqrt(weights[..., 0] + weights[..., 1])
-        weights = K.pow(weights, self._alpha)
+        weights = ops.square(freq_pred - freq_true)
+        weights = ops.sqrt(weights[..., 0] + weights[..., 1])
+        weights = ops.power(weights, self._alpha)
 
         if self._log_matrix:  # adjust the spectrum weight matrix by logarithm
-            weights = K.log(weights + 1.0)
+            weights = ops.log(weights + 1.0)
 
         if self._batch_matrix:  # calculate the spectrum weight matrix using batch-based statistics
-            weights = weights / K.max(weights)
+            weights = weights / ops.max(weights)
         else:
-            weights = weights / K.max(K.max(weights, axis=-2), axis=-2)[..., None, None, :]
+            weights = weights / ops.max(ops.max(weights, axis=-2), axis=-2)[..., None, None, :]
 
-        weights = K.switch(tf.math.is_nan(weights), K.zeros_like(weights), weights)
-        weights = K.clip(weights, min_value=0.0, max_value=1.0)
+        weights = ops.where(torch.isnan(weights), ops.zeros_like(weights), weights)
+        weights = ops.clip(weights, x_min=0.0, x_max=1.0)
 
         return weights
 
@@ -172,14 +163,14 @@ class FocalFrequencyLoss():  # pylint:disable=too-few-public-methods
             The final loss matrix
         """
 
-        tmp = K.square(freq_pred - freq_true)  # freq distance using squared Euclidean distance
+        tmp = ops.square(freq_pred - freq_true)  # freq distance using squared Euclidean distance
 
         freq_distance = tmp[..., 0] + tmp[..., 1]
         loss = weight_matrix * freq_distance  # dynamic spectrum weighting (Hadamard product)
 
         return loss
 
-    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
+    def call(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Call the Focal Frequency Loss Function.
 
         Parameters
@@ -195,7 +186,7 @@ class FocalFrequencyLoss():  # pylint:disable=too-few-public-methods
             The loss for this batch of images
         """
         if not all(self._dims):
-            rows, cols = K.int_shape(y_true)[1:3]
+            rows, cols = y_true.shape[1:3]
             assert cols % self._patch_factor == 0 and rows % self._patch_factor == 0, (
                 "Patch factor must be a divisor of the image height and width")
             self._dims = (rows, cols)
@@ -207,14 +198,14 @@ class FocalFrequencyLoss():  # pylint:disable=too-few-public-methods
         freq_pred = self._tensor_to_frequency_spectrum(patches_pred)
 
         if self._ave_spectrum:  # whether to use minibatch average spectrum
-            freq_true = K.mean(freq_true, axis=0, keepdims=True)
-            freq_pred = K.mean(freq_pred, axis=0, keepdims=True)
+            freq_true = ops.mean(freq_true, axis=0, keepdims=True)
+            freq_pred = ops.mean(freq_pred, axis=0, keepdims=True)
 
         weight_matrix = self._get_weight_matrix(freq_true, freq_pred)
         return self._calculate_loss(freq_true, freq_pred, weight_matrix)
 
 
-class GeneralizedLoss():  # pylint:disable=too-few-public-methods
+class GeneralizedLoss(Loss):
     """  Generalized function used to return a large variety of mathematical loss functions.
 
     The primary benefit is a smooth, differentiable version of L1 loss.
@@ -237,10 +228,11 @@ class GeneralizedLoss():  # pylint:disable=too-few-public-methods
         Default: `1.0/255.0`
     """
     def __init__(self, alpha: float = 1.0, beta: float = 1.0/255.0) -> None:
+        super().__init__(name=self.__class__.__name__)
         self._alpha = alpha
         self._beta = beta
 
-    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
+    def call(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Call the Generalized Loss Function
 
         Parameters
@@ -256,14 +248,14 @@ class GeneralizedLoss():  # pylint:disable=too-few-public-methods
             The loss value from the results of function(y_pred - y_true)
         """
         diff = y_pred - y_true
-        second = (K.pow(K.pow(diff/self._beta, 2.) / K.abs(2. - self._alpha) + 1.,
-                        (self._alpha / 2.)) - 1.)
-        loss = (K.abs(2. - self._alpha)/self._alpha) * second
-        loss = K.mean(loss, axis=-1) * self._beta
+        second = (ops.power(ops.power(diff/self._beta, 2.) / ops.abs(2. - self._alpha) + 1.,
+                            (self._alpha / 2.)) - 1.)
+        loss = (ops.abs(2. - self._alpha)/self._alpha) * second
+        loss = ops.mean(loss, axis=-1) * self._beta
         return loss
 
 
-class GradientLoss():  # pylint:disable=too-few-public-methods
+class GradientLoss(Loss):
     """ Gradient Loss Function.
 
     Calculates the first and second order gradient difference between pixels of an image in the x
@@ -277,11 +269,89 @@ class GradientLoss():  # pylint:disable=too-few-public-methods
     Chengwu Lu & Hua Huang, 2014 - http://downloads.hindawi.com/journals/mpe/2014/790547.pdf
     """
     def __init__(self) -> None:
+        super().__init__(name=self.__class__.__name__)
         self.generalized_loss = GeneralizedLoss(alpha=1.9999)
         self._tv_weight = 1.0
         self._tv2_weight = 1.0
 
-    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
+    @classmethod
+    def _diff_x(cls, img: torch.Tensor) -> torch.Tensor:
+        """ X Difference """
+        x_left = img[:, :, 1:2, :] - img[:, :, 0:1, :]
+        x_inner = img[:, :, 2:, :] - img[:, :, :-2, :]
+        x_right = img[:, :, -1:, :] - img[:, :, -2:-1, :]
+        x_out = ops.concatenate([x_left, x_inner, x_right], axis=2)
+        return x_out * 0.5
+
+    @classmethod
+    def _diff_y(cls, img: torch.Tensor) -> torch.Tensor:
+        """ Y Difference """
+        y_top = img[:, 1:2, :, :] - img[:, 0:1, :, :]
+        y_inner = img[:, 2:, :, :] - img[:, :-2, :, :]
+        y_bot = img[:, -1:, :, :] - img[:, -2:-1, :, :]
+        y_out = ops.concatenate([y_top, y_inner, y_bot], axis=1)
+        return y_out * 0.5
+
+    @classmethod
+    def _diff_xx(cls, img: torch.Tensor) -> torch.Tensor:
+        """ X-X Difference """
+        x_left = img[:, :, 1:2, :] + img[:, :, 0:1, :]
+        x_inner = img[:, :, 2:, :] + img[:, :, :-2, :]
+        x_right = img[:, :, -1:, :] + img[:, :, -2:-1, :]
+        x_out = ops.concatenate([x_left, x_inner, x_right], axis=2)
+        return x_out - 2.0 * img
+
+    @classmethod
+    def _diff_yy(cls, img: torch.Tensor) -> torch.Tensor:
+        """ Y-Y Difference """
+        y_top = img[:, 1:2, :, :] + img[:, 0:1, :, :]
+        y_inner = img[:, 2:, :, :] + img[:, :-2, :, :]
+        y_bot = img[:, -1:, :, :] + img[:, -2:-1, :, :]
+        y_out = ops.concatenate([y_top, y_inner, y_bot], axis=1)
+        return y_out - 2.0 * img
+
+    @classmethod
+    def _diff_xy(cls, img: torch.Tensor) -> torch.Tensor:
+        """ X-Y Difference """
+        # xout1
+        # Left
+        top = img[:, 1:2, 1:2, :] + img[:, 0:1, 0:1, :]
+        inner = img[:, 2:, 1:2, :] + img[:, :-2, 0:1, :]
+        bottom = img[:, -1:, 1:2, :] + img[:, -2:-1, 0:1, :]
+        xy_left = ops.concatenate([top, inner, bottom], axis=1)
+        # Mid
+        top = img[:, 1:2, 2:, :] + img[:, 0:1, :-2, :]
+        mid = img[:, 2:, 2:, :] + img[:, :-2, :-2, :]
+        bottom = img[:, -1:, 2:, :] + img[:, -2:-1, :-2, :]
+        xy_mid = ops.concatenate([top, mid, bottom], axis=1)
+        # Right
+        top = img[:, 1:2, -1:, :] + img[:, 0:1, -2:-1, :]
+        inner = img[:, 2:, -1:, :] + img[:, :-2, -2:-1, :]
+        bottom = img[:, -1:, -1:, :] + img[:, -2:-1, -2:-1, :]
+        xy_right = ops.concatenate([top, inner, bottom], axis=1)
+
+        # Xout2
+        # Left
+        top = img[:, 0:1, 1:2, :] + img[:, 1:2, 0:1, :]
+        inner = img[:, :-2, 1:2, :] + img[:, 2:, 0:1, :]
+        bottom = img[:, -2:-1, 1:2, :] + img[:, -1:, 0:1, :]
+        xy_left = ops.concatenate([top, inner, bottom], axis=1)
+        # Mid
+        top = img[:, 0:1, 2:, :] + img[:, 1:2, :-2, :]
+        mid = img[:, :-2, 2:, :] + img[:, 2:, :-2, :]
+        bottom = img[:, -2:-1, 2:, :] + img[:, -1:, :-2, :]
+        xy_mid = ops.concatenate([top, mid, bottom], axis=1)
+        # Right
+        top = img[:, 0:1, -1:, :] + img[:, 1:2, -2:-1, :]
+        inner = img[:, :-2, -1:, :] + img[:, 2:, -2:-1, :]
+        bottom = img[:, -2:-1, -1:, :] + img[:, -1:, -2:-1, :]
+        xy_right = ops.concatenate([top, inner, bottom], axis=1)
+
+        xy_out1 = ops.concatenate([xy_left, xy_mid, xy_right], axis=2)
+        xy_out2 = ops.concatenate([xy_left, xy_mid, xy_right], axis=2)
+        return (xy_out1 - xy_out2) * 0.25
+
+    def call(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Call the gradient loss function.
 
         Parameters
@@ -311,85 +381,8 @@ class GradientLoss():  # pylint:disable=too-few-public-methods
         # TODO simplify to use MSE instead
         return loss
 
-    @classmethod
-    def _diff_x(cls, img: torch.Tensor) -> torch.Tensor:
-        """ X Difference """
-        x_left = img[:, :, 1:2, :] - img[:, :, 0:1, :]
-        x_inner = img[:, :, 2:, :] - img[:, :, :-2, :]
-        x_right = img[:, :, -1:, :] - img[:, :, -2:-1, :]
-        x_out = K.concatenate([x_left, x_inner, x_right], axis=2)
-        return x_out * 0.5
 
-    @classmethod
-    def _diff_y(cls, img: torch.Tensor) -> torch.Tensor:
-        """ Y Difference """
-        y_top = img[:, 1:2, :, :] - img[:, 0:1, :, :]
-        y_inner = img[:, 2:, :, :] - img[:, :-2, :, :]
-        y_bot = img[:, -1:, :, :] - img[:, -2:-1, :, :]
-        y_out = K.concatenate([y_top, y_inner, y_bot], axis=1)
-        return y_out * 0.5
-
-    @classmethod
-    def _diff_xx(cls, img: torch.Tensor) -> torch.Tensor:
-        """ X-X Difference """
-        x_left = img[:, :, 1:2, :] + img[:, :, 0:1, :]
-        x_inner = img[:, :, 2:, :] + img[:, :, :-2, :]
-        x_right = img[:, :, -1:, :] + img[:, :, -2:-1, :]
-        x_out = K.concatenate([x_left, x_inner, x_right], axis=2)
-        return x_out - 2.0 * img
-
-    @classmethod
-    def _diff_yy(cls, img: torch.Tensor) -> torch.Tensor:
-        """ Y-Y Difference """
-        y_top = img[:, 1:2, :, :] + img[:, 0:1, :, :]
-        y_inner = img[:, 2:, :, :] + img[:, :-2, :, :]
-        y_bot = img[:, -1:, :, :] + img[:, -2:-1, :, :]
-        y_out = K.concatenate([y_top, y_inner, y_bot], axis=1)
-        return y_out - 2.0 * img
-
-    @classmethod
-    def _diff_xy(cls, img: torch.Tensor) -> torch.Tensor:
-        """ X-Y Difference """
-        # xout1
-        # Left
-        top = img[:, 1:2, 1:2, :] + img[:, 0:1, 0:1, :]
-        inner = img[:, 2:, 1:2, :] + img[:, :-2, 0:1, :]
-        bottom = img[:, -1:, 1:2, :] + img[:, -2:-1, 0:1, :]
-        xy_left = K.concatenate([top, inner, bottom], axis=1)
-        # Mid
-        top = img[:, 1:2, 2:, :] + img[:, 0:1, :-2, :]
-        mid = img[:, 2:, 2:, :] + img[:, :-2, :-2, :]
-        bottom = img[:, -1:, 2:, :] + img[:, -2:-1, :-2, :]
-        xy_mid = K.concatenate([top, mid, bottom], axis=1)
-        # Right
-        top = img[:, 1:2, -1:, :] + img[:, 0:1, -2:-1, :]
-        inner = img[:, 2:, -1:, :] + img[:, :-2, -2:-1, :]
-        bottom = img[:, -1:, -1:, :] + img[:, -2:-1, -2:-1, :]
-        xy_right = K.concatenate([top, inner, bottom], axis=1)
-
-        # Xout2
-        # Left
-        top = img[:, 0:1, 1:2, :] + img[:, 1:2, 0:1, :]
-        inner = img[:, :-2, 1:2, :] + img[:, 2:, 0:1, :]
-        bottom = img[:, -2:-1, 1:2, :] + img[:, -1:, 0:1, :]
-        xy_left = K.concatenate([top, inner, bottom], axis=1)
-        # Mid
-        top = img[:, 0:1, 2:, :] + img[:, 1:2, :-2, :]
-        mid = img[:, :-2, 2:, :] + img[:, 2:, :-2, :]
-        bottom = img[:, -2:-1, 2:, :] + img[:, -1:, :-2, :]
-        xy_mid = K.concatenate([top, mid, bottom], axis=1)
-        # Right
-        top = img[:, 0:1, -1:, :] + img[:, 1:2, -2:-1, :]
-        inner = img[:, :-2, -1:, :] + img[:, 2:, -2:-1, :]
-        bottom = img[:, -2:-1, -1:, :] + img[:, -1:, -2:-1, :]
-        xy_right = K.concatenate([top, inner, bottom], axis=1)
-
-        xy_out1 = K.concatenate([xy_left, xy_mid, xy_right], axis=2)
-        xy_out2 = K.concatenate([xy_left, xy_mid, xy_right], axis=2)
-        return (xy_out1 - xy_out2) * 0.25
-
-
-class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
+class LaplacianPyramidLoss(Loss):  # pylint:disable=too-few-public-methods
     """ Laplacian Pyramid Loss Function
 
     Notes
@@ -414,8 +407,11 @@ class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
                  max_levels: int = 5,
                  gaussian_size: int = 5,
                  gaussian_sigma: float = 1.0) -> None:
+        super().__init__(name=self.__class__.__name__)
         self._max_levels = max_levels
-        self._weights = K.constant([np.power(2., -2 * idx) for idx in range(max_levels + 1)])
+        self._weights = Variable([np.power(2., -2 * idx)
+                                  for idx in range(max_levels + 1)],
+                                  trainable=False)
         self._gaussian_kernel = self._get_gaussian_kernel(gaussian_size, gaussian_sigma)
 
     @classmethod
@@ -441,7 +437,7 @@ class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
         kernel = np.exp(- x_2[:, None] - x_2[None, :])
         kernel /= kernel.sum()
         kernel = np.reshape(kernel, (size, size, 1, 1))
-        return K.constant(kernel)
+        return Variable(kernel, trainable=False)
 
     def _conv_gaussian(self, inputs: torch.Tensor) -> torch.Tensor:
         """ Perform Gaussian convolution on a batch of images.
@@ -456,19 +452,20 @@ class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
         :class:`torch.Tensor`
             The convolved images
         """
-        channels = K.int_shape(inputs)[-1]
-        gauss = K.tile(self._gaussian_kernel, (1, 1, 1, channels))
+        channels = inputs.shape[-1]
+        gauss = ops.tile(self._gaussian_kernel, (1, 1, 1, channels))
 
         # TF doesn't implement replication padding like pytorch. This is an inefficient way to
         # implement it for a square guassian kernel
+        # TODO Make this pure pytorch code
         size = self._gaussian_kernel.shape[1] // 2
         padded_inputs = inputs
         for _ in range(size):
-            padded_inputs = tf.pad(padded_inputs,  # noqa,pylint:disable=no-value-for-parameter,unexpected-keyword-arg
-                                   ([0, 0], [1, 1], [1, 1], [0, 0]),
-                                   mode="SYMMETRIC")
+            padded_inputs = ops.pad(padded_inputs,
+                                    ([0, 0], [1, 1], [1, 1], [0, 0]),
+                                    mode="symmetric")
 
-        retval = K.conv2d(padded_inputs, gauss, strides=1, padding="valid")
+        retval = ops.conv(padded_inputs, gauss, strides=1, padding="valid")
         return retval
 
     def _get_laplacian_pyramid(self, inputs: torch.Tensor) -> list[torch.Tensor]:
@@ -490,11 +487,11 @@ class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
             gauss = self._conv_gaussian(current)
             diff = current - gauss
             pyramid.append(diff)
-            current = K.pool2d(gauss, (2, 2), strides=(2, 2), padding="valid", pool_mode="avg")
+            current = ops.average_pool(gauss, (2, 2), strides=(2, 2), padding="valid")
         pyramid.append(current)
         return pyramid
 
-    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
+    def call(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Calculate the Laplacian Pyramid Loss.
 
         Parameters
@@ -512,16 +509,20 @@ class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
         pyramid_true = self._get_laplacian_pyramid(y_true)
         pyramid_pred = self._get_laplacian_pyramid(y_pred)
 
-        losses = K.stack([K.sum(K.abs(ppred - ptrue)) / K.cast(K.prod(K.shape(ptrue)), "float32")
-                          for ptrue, ppred in zip(pyramid_true, pyramid_pred)])
-        loss = K.sum(losses * self._weights)
+        losses = ops.stack([ops.sum(ops.abs(ppred - ptrue)) / ops.cast(ops.prod(ops.shape(ptrue)),
+                                                                       "float32")
+                            for ptrue, ppred in zip(pyramid_true, pyramid_pred)])
+        loss = ops.sum(losses * self._weights)
 
         return loss
 
 
-class LInfNorm():  # pylint:disable=too-few-public-methods
+class LInfNorm(Loss):
     """ Calculate the L-inf norm as a loss function. """
-    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, name=self.__class__.__name__, **kwargs)
+
+    def call(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Call the L-inf norm loss function.
 
         Parameters
@@ -536,9 +537,9 @@ class LInfNorm():  # pylint:disable=too-few-public-methods
         :class:`torch.Tensor`
             The loss value
         """
-        diff = K.abs(y_true - y_pred)
-        max_loss = K.max(diff, axis=(1, 2), keepdims=True)
-        loss = K.mean(max_loss, axis=-1)
+        diff = ops.abs(y_true - y_pred)
+        max_loss = ops.max(diff, axis=(1, 2), keepdims=True)
+        loss = ops.mean(max_loss, axis=-1)
         return loss
 
 
@@ -564,7 +565,7 @@ class LossWrapper(Loss):
     """
     def __init__(self) -> None:
         logger.debug("Initializing: %s", self.__class__.__name__)
-        super().__init__(name="LossWrapper")
+        super().__init__(name=self.__class__.__name__)
         self._loss_functions: list[Loss] = []
         self._loss_weights: list[float] = []
         self._mask_channels: list[int] = []

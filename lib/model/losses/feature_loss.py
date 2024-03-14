@@ -6,10 +6,9 @@ import logging
 import typing as T
 
 import keras
-from keras import applications as kapp
+from keras import applications as kapp, ops, Variable
 from keras.layers import Dropout, Conv2D, Input, Layer, Resizing
 from keras.models import Model
-import keras.backend as K
 
 import numpy as np
 
@@ -98,7 +97,7 @@ class _LPIPSTrunkNet():  # pylint:disable=too-few-public-methods
         epsilon: float, optional
             Epsilon to apply to the normalization operation. Default: `1e-10`
         """
-        norm_factor = K.sqrt(K.sum(K.square(inputs), axis=-1, keepdims=True))
+        norm_factor = ops.sqrt(ops.sum(ops.square(inputs), axis=-1, keepdims=True))
         return inputs / (norm_factor + epsilon)
 
     def _process_weights(self, model: Model) -> Model:
@@ -204,7 +203,7 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):  # pylint:disable=too-few-public-methods
         :class:`tensorflow.Tensor`
             The output from the linear block
         """
-        in_shape = K.int_shape(net_output_layer)[1:]
+        in_shape = net_output_layer.shape[1:]
         input_ = Input(in_shape)
         var_x = Dropout(rate=0.5)(input_) if self._use_dropout else input_
         var_x = Conv2D(1, 1, strides=1, padding="valid", use_bias=False)(var_x)
@@ -232,7 +231,7 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):  # pylint:disable=too-few-public-methods
         return model
 
 
-class LPIPSLoss():  # pylint:disable=too-few-public-methods
+class LPIPSLoss(keras.losses.Loss):  # pylint:disable=too-few-public-methods
     """ LPIPS Loss Function.
 
     A perceptual loss function that uses linear outputs from pretrained CNNs feature layers.
@@ -295,15 +294,17 @@ class LPIPSLoss():  # pylint:disable=too-few-public-methods
             "spatial: %s, normalize: %s, ret_per_layer: %s)", self.__class__.__name__,
             trunk_network, trunk_pretrained, trunk_eval_mode, linear_pretrained, linear_eval_mode,
             linear_use_dropout, lpips, spatial, normalize, ret_per_layer)
-
+        super().__init__(name=self.__class__.__name__)
         self._spatial = spatial
         self._use_lpips = lpips
         self._normalize = normalize
         self._ret_per_layer = ret_per_layer
-        self._shift = K.constant(np.array([-.030, -.088, -.188],
-                                          dtype="float32")[None, None, None, :])
-        self._scale = K.constant(np.array([.458, .448, .450],
-                                          dtype="float32")[None, None, None, :])
+        self._shift = Variable(np.array([-.030, -.088, -.188],
+                                        dtype="float32")[None, None, None, :],
+                               trainable=False)
+        self._scale = Variable(np.array([.458, .448, .450],
+                                        dtype="float32")[None, None, None, :],
+                               trainable=False)
 
         # Loss needs to be done as fp32. We could cast at output, but better to update the model
         switch_mixed_precision = keras.mixed_precision.global_policy().name == "mixed_float16"
@@ -340,7 +341,7 @@ class LPIPSLoss():  # pylint:disable=too-few-public-methods
         """
         if self._use_lpips:
             return self._linear_net(inputs)
-        return [K.sum(x, axis=-1) for x in inputs]
+        return [ops.sum(x, axis=-1) for x in inputs]
 
     def _process_output(self, inputs: torch.Tensor, output_dims: tuple) -> torch.Tensor:
         """ Process an individual output based on whether :attr:`is_spatial` has been selected.
@@ -363,9 +364,9 @@ class LPIPSLoss():  # pylint:disable=too-few-public-methods
         """
         if self._spatial:
             return Resizing(*output_dims, interpolation="bilinear")(inputs)
-        return K.mean(inputs, axis=(1, 2), keepdims=True)
+        return ops.mean(inputs, axis=(1, 2), keepdims=True)
 
-    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
+    def call(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Perform the LPIPS Loss Function.
 
         Parameters
@@ -393,11 +394,11 @@ class LPIPSLoss():  # pylint:disable=too-few-public-methods
         diffs = [(out_true - out_pred) ** 2
                  for out_true, out_pred in zip(net_true, net_pred)]
 
-        dims = K.int_shape(y_true)[1:3]
+        dims = y_true.shape[1:3]
         res = [self._process_output(diff, dims) for diff in self._process_diffs(diffs)]
 
         axis = 0 if self._spatial else None
-        val = K.sum(res, axis=axis)
+        val = ops.sum(res, axis=axis)
 
         retval = (val, res) if self._ret_per_layer else val
         return retval / 10.0   # Reduce by factor of 10 'cos this loss is STRONG
