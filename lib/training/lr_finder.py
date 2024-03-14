@@ -8,8 +8,6 @@ import typing as T
 from datetime import datetime
 from enum import Enum
 
-import keras.backend as K
-
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -87,7 +85,7 @@ class LearningRateFinder:  # pylint:disable=too-few-public-methods
         loss: float
             The loss value for the current batch
         """
-        learning_rate = K.get_value(self._model.model.optimizer.lr)
+        learning_rate = self._model.model.optimizer.learning_rate.numpy()
         self._metrics["learning_rates"].append(learning_rate)
 
         self._loss["avg"] = (self._beta * self._loss["avg"]) + ((1 - self._beta) * loss)
@@ -105,7 +103,7 @@ class LearningRateFinder:  # pylint:disable=too-few-public-methods
 
         learning_rate *= self._lr_multiplier
 
-        K.set_value(self._model.model.optimizer.lr, learning_rate)
+        self._model.model.optimizer.learning_rate.assign(learning_rate)
 
     def _update_description(self, progress_bar: tqdm) -> None:
         """ Update the description of the progress bar for the current iteration
@@ -161,7 +159,7 @@ class LearningRateFinder:  # pylint:disable=too-few-public-methods
         self._model.model.compile(optimizer=new_opt, loss=self._model.model.loss)
 
         logger.info("Updating Learning Rate from %s to %s", f"{original_lr:.1e}", f"{new_lr:.1e}")
-        K.set_value(self._model.model.optimizer.lr, new_lr)
+        self._model.model.optimizer.learning_rate.assign(new_lr)
 
     def find(self) -> bool:
         """ Find the optimal learning rate
@@ -174,8 +172,8 @@ class LearningRateFinder:  # pylint:disable=too-few-public-methods
         if not self._model.io.model_exists:
             self._model.io.save()
 
-        original_lr = K.get_value(self._model.model.optimizer.lr)
-        K.set_value(self._model.model.optimizer.lr, self._start_lr)
+        original_lr = self._model.model.optimizer.learning_rate.numpy()
+        self._model.model.optimizer.learning_rate.assign(self._start_lr)
 
         self._train()
         print()

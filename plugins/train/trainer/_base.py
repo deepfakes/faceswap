@@ -17,6 +17,7 @@ import numpy as np
 
 import keras
 from torch.cuda import OutOfMemoryError
+from tensorflow import summary
 
 from lib.image import hex_to_rgb
 from lib.training import Feeder, LearningRateFinder
@@ -259,9 +260,8 @@ class TrainerBase():
                    "(in config) if it has one.")
             raise FaceswapError(msg) from err
         self._log_tensorboard(loss)
-        #loss = self._collate_and_store_loss(loss[1:])  # TODO
-        #self._print_loss(loss)  # TODO
-        print(loss)
+        loss = self._collate_and_store_loss(loss[1:])
+        self._print_loss(loss)
         if do_snapshot:
             self._model.io.snapshot()
         self._update_viewers(viewer, timelapse_kwargs)
@@ -282,9 +282,9 @@ class TrainerBase():
 
         # Bug in TF 2.8/2.9/2.10 where batch recording got deleted.
         # ref: https://github.com/keras-team/keras/issues/16173
-        with tf.summary.record_if(True), self._tensorboard._train_writer.as_default():  # noqa:E501  pylint:disable=protected-access,not-context-manager
+        with summary.record_if(True), self._tensorboard._train_writer.as_default():  # noqa:E501  pylint:disable=protected-access,not-context-manager
             for name, value in logs.items():
-                tf.summary.scalar(
+                summary.scalar(
                     "batch_" + name,
                     value,
                     step=self._tensorboard._train_step)  # pylint:disable=protected-access
@@ -509,14 +509,14 @@ class _Samples():  # pylint:disable=too-few-public-methods
 
         if self._model.config["learn_mask"]:  # Add mask to 4th channel of final output
             standard = [np.concatenate(side[-2:], axis=-1)
-                        for side in [[s.numpy() for s in t] for t in standard]]
+                        for side in [[s.cpu().detach().numpy() for s in t] for t in standard]]
             swapped = [np.concatenate(side[-2:], axis=-1)
-                       for side in [[s.numpy() for s in t] for t in swapped]]
+                       for side in [[s.cpu().detach().numpy() for s in t] for t in swapped]]
         else:  # Retrieve final output
             standard = [side[-1] if isinstance(side, list) else side
-                        for side in [t.numpy() for t in standard]]
+                        for side in [t.cpu().detach().numpy() for t in standard]]
             swapped = [side[-1] if isinstance(side, list) else side
-                       for side in [t.numpy() for t in swapped]]
+                       for side in [t.cpu().detach().numpy() for t in swapped]]
 
         preds["a_a"] = standard[0]
         preds["b_b"] = standard[1]
