@@ -918,7 +918,6 @@ class MSSIMLoss(keras.losses.Loss):
         :class:`torch.Tensor`
             The MS-SSIM Loss value
         """
-        # TODO pytorch implementation
         im_size = y_true.shape[1]
         # filter size cannot be larger than the smallest scale
         smallest_scale = self._get_smallest_size(im_size, len(self._power_factors) - 1)
