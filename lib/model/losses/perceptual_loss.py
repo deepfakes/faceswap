@@ -944,7 +944,7 @@ class MSSIMLoss(keras.losses.Loss):
             The smallest size the image will be scaled to based on the original image size and
             the amount of scaling factors that will occur
         """
-        logger.debug("scale id: %s, size: %s", idx, size)
+        logger.trace("scale id: %s, size: %s", idx, size)  # type:ignore[attr-defined]
         if idx > 0:
             size = self._get_smallest_size(size // 2, idx - 1)
         return size

@@ -619,7 +619,8 @@ class LossWrapper(Loss):
         for func, weight, mask_channel in zip(self._loss_functions,
                                               self._loss_weights,
                                               self._mask_channels):
-            logger.debug("Processing loss function: (func: %s, weight: %s, mask_channel: %s)",
+            logger.trace("Processing loss function: "  # type:ignore[attr-defined]
+                         "(func: %s, weight: %s, mask_channel: %s)",
                          func, weight, mask_channel)
             n_true, n_pred = self._apply_mask(y_true, y_pred, mask_channel)
             loss += (func(n_true, n_pred) * weight)
@@ -653,10 +654,10 @@ class LossWrapper(Loss):
             The predicted batch of images with the required mask applied
         """
         if mask_channel == -1:
-            logger.debug("No mask to apply")
+            logger.trace("No mask to apply")  # type:ignore[attr-defined]
             return y_true[..., :3], y_pred[..., :3]
 
-        logger.debug("Applying mask from channel %s", mask_channel)
+        logger.trace("Applying mask from channel %s", mask_channel)  # type:ignore[attr-defined]
 
         mask = ops.tile(ops.expand_dims(y_true[..., mask_channel], axis=-1), (1, 1, 1, 3))
         mask_as_k_inv_prop = 1 - mask_prop
