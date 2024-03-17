@@ -9,6 +9,8 @@ from keras.layers import (
     DepthwiseConv2D as KDepthwiseConv2d, LeakyReLU, PReLU, SeparableConv2D, UpSampling2D)
 from keras.initializers import HeUniform, VarianceScaling
 
+from lib.logger import parse_class_init
+
 from .initializers import ICNR, ConvolutionAware
 from .layers import PixelShuffler, ReflectionPadding2D, Swish, KResizeImages
 from .normalization import InstanceNormalization
@@ -118,6 +120,7 @@ class Conv2D(KConv2D):  # pylint:disable=too-few-public-methods, too-many-ancest
         layers. Default: ``False``
     """
     def __init__(self, *args, padding: str = "same", is_upscale: bool = False, **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         if kwargs.get("name", None) is None:
             filters = kwargs["filters"] if "filters" in kwargs else args[0]
             kwargs["name"] = _get_name(f"conv2d_{filters}")
@@ -126,6 +129,7 @@ class Conv2D(KConv2D):  # pylint:disable=too-few-public-methods, too-many-ancest
             initializer = ICNR(initializer=initializer)
             logger.debug("Using ICNR Initializer: %s", initializer)
         super().__init__(*args, padding=padding, kernel_initializer=initializer, **kwargs)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
 
 class DepthwiseConv2D(KDepthwiseConv2d):  # noqa,pylint:disable=too-few-public-methods, too-many-ancestors
@@ -149,6 +153,7 @@ class DepthwiseConv2D(KDepthwiseConv2d):  # noqa,pylint:disable=too-few-public-m
         layers. Default: ``False``
     """
     def __init__(self, *args, padding: str = "same", is_upscale: bool = False, **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         if kwargs.get("name", None) is None:
             kwargs["name"] = _get_name("dwconv2d")
         initializer = _get_default_initializer(kwargs.pop("depthwise_initializer", None))
@@ -156,6 +161,7 @@ class DepthwiseConv2D(KDepthwiseConv2d):  # noqa,pylint:disable=too-few-public-m
             initializer = ICNR(initializer=initializer)
             logger.debug("Using ICNR Initializer: %s", initializer)
         super().__init__(*args, padding=padding, depthwise_initializer=initializer, **kwargs)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
 
 class Conv2DOutput():  # pylint:disable=too-few-public-methods
@@ -191,13 +197,12 @@ class Conv2DOutput():  # pylint:disable=too-few-public-methods
                  kernel_size: int | tuple[int],
                  activation: str = "sigmoid",
                  padding: str = "same", **kwargs) -> None:
-        self._name = _get_name(kwargs.pop("name")) if "name" in kwargs else _get_name(
-            f"conv_output_{filters}")
-        self._filters = filters
-        self._kernel_size = kernel_size
-        self._activation = activation
-        self._padding = padding
-        self._kwargs = kwargs
+        logger.debug(parse_class_init(locals()))
+        name = _get_name(kwargs.pop("name")) if "name" in kwargs else _get_name(
+                         f"conv_output_{filters}")
+        self._conv = Conv2D(filters, kernel_size, padding=padding, name=f"{name}_conv2d", **kwargs)
+        self._activation = Activation(activation, dtype="float32", name=name)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def __call__(self, inputs: Tensor) -> Tensor:
         """ Call the Faceswap Convolutional Output Layer.
@@ -212,13 +217,8 @@ class Conv2DOutput():  # pylint:disable=too-few-public-methods
         Tensor
             The output tensor from the Convolution 2D Layer
         """
-        var_x = Conv2D(self._filters,
-                       self._kernel_size,
-                       padding=self._padding,
-                       name=f"{self._name}_conv2d",
-                       **self._kwargs)(inputs)
-        var_x = Activation(self._activation, dtype="float32", name=self._name)(var_x)
-        return var_x
+        var_x = self._conv(inputs)
+        return self._activation(var_x)
 
 
 class Conv2DBlock():  # pylint:disable=too-few-public-methods
@@ -272,13 +272,9 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
                  use_depthwise: bool = False,
                  relu_alpha: float = 0.1,
                  **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
+
         self._name = kwargs.pop("name") if "name" in kwargs else _get_name(f"conv_{filters}")
-
-        logger.debug("name: %s, filters: %s, kernel_size: %s, strides: %s, padding: %s, "
-                     "normalization: %s, activation: %s, use_depthwise: %s, kwargs: %s)",
-                     self._name, filters, kernel_size, strides, padding, normalization,
-                     activation, use_depthwise, kwargs)
-
         self._use_reflect_padding = _CONFIG["reflect_padding"]
 
         kernel_size = (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
@@ -292,6 +288,9 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
         self._relu_alpha = relu_alpha
 
         self._assert_arguments()
+        self._layers = self._get_layers()
+        logger.debug("Initialized %s", self.__class__.__name__)
+
 
     def _assert_arguments(self) -> None:
         """ Validate the given arguments. """
@@ -299,6 +298,46 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
             "normalization should be 'batch', 'instance' or None")
         assert self._activation in ("leakyrelu", "swish", "prelu", None), (
             "activation should be 'leakyrelu', 'prelu', 'swish' or None")
+
+    def _get_layers(self) -> list[keras.layers.Layer]:
+        """ Obtain the layer chain for the block
+
+        Returns
+        -------
+        list[:class:`keras.layers.Layer]
+            The layers, in the correct order, to pass the tensor through
+        """
+        retval = []
+        if self._use_reflect_padding:
+            retval.append(ReflectionPadding2D(stride=self._strides[0],
+                                              kernel_size=self._args[-1][0],  # type:ignore[index]
+                                              name=f"{self._name}_reflectionpadding2d"))
+
+        conv: keras.layers.Layer = DepthwiseConv2D if self._use_depthwise else Conv2D
+
+        retval.append(conv(*self._args,
+                           strides=self._strides,
+                           padding=self._padding,
+                           name=f"{self._name}_{'dw' if self._use_depthwise else ''}conv2d",
+                           **self._kwargs))
+
+        # normalization
+        if self._normalization == "instance":
+            retval.append(InstanceNormalization(name=f"{self._name}_instancenorm"))
+
+        if self._normalization == "batch":
+            retval.append(BatchNormalization(axis=3, name=f"{self._name}_batchnorm"))
+
+        # activation
+        if self._activation == "leakyrelu":
+            retval.append(LeakyReLU(self._relu_alpha, name=f"{self._name}_leakyrelu"))
+        if self._activation == "swish":
+            retval.append(Swish(name=f"{self._name}_swish"))
+        if self._activation == "prelu":
+            retval.append(PReLU(name=f"{self._name}_prelu"))
+
+        logger.debug("%s layers: %s", self.__class__.__name__, retval)
+        return retval
 
     def __call__(self, inputs: Tensor) -> Tensor:
         """ Call the Faceswap Convolutional Layer.
@@ -313,30 +352,9 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
         Tensor
             The output tensor from the Convolution 2D Layer
         """
-        if self._use_reflect_padding:
-            inputs = ReflectionPadding2D(stride=self._strides[0],
-                                         kernel_size=self._args[-1][0],  # type:ignore[index]
-                                         name=f"{self._name}_reflectionpadding2d")(inputs)
-        conv: keras.layers.Layer = DepthwiseConv2D if self._use_depthwise else Conv2D
-        var_x = conv(*self._args,
-                     strides=self._strides,
-                     padding=self._padding,
-                     name=f"{self._name}_{'dw' if self._use_depthwise else ''}conv2d",
-                     **self._kwargs)(inputs)
-        # normalization
-        if self._normalization == "instance":
-            var_x = InstanceNormalization(name=f"{self._name}_instancenorm")(var_x)
-        if self._normalization == "batch":
-            var_x = BatchNormalization(axis=3, name=f"{self._name}_batchnorm")(var_x)
-
-        # activation
-        if self._activation == "leakyrelu":
-            var_x = LeakyReLU(self._relu_alpha, name=f"{self._name}_leakyrelu")(var_x)
-        if self._activation == "swish":
-            var_x = Swish(name=f"{self._name}_swish")(var_x)
-        if self._activation == "prelu":
-            var_x = PReLU(name=f"{self._name}_prelu")(var_x)
-
+        var_x = inputs
+        for layer in self._layers:
+            var_x = layer(var_x)
         return var_x
 
 
@@ -364,17 +382,20 @@ class SeparableConv2DBlock():  # pylint:disable=too-few-public-methods
                  filters: int,
                  kernel_size: int | tuple[int, int] = 5,
                  strides: int | tuple[int, int] = 2, **kwargs) -> None:
-        self._name = _get_name(f"separableconv2d_{filters}")
-        logger.debug("name: %s, filters: %s, kernel_size: %s, strides: %s, kwargs: %s)",
-                     self._name, filters, kernel_size, strides, kwargs)
-
-        self._filters = filters
-        self._kernel_size = kernel_size
-        self._strides = strides
+        logger.debug(parse_class_init(locals()))
 
         initializer = _get_default_initializer(kwargs.pop("kernel_initializer", None))
         kwargs["kernel_initializer"] = initializer
-        self._kwargs = kwargs
+
+        name = _get_name(f"separableconv2d_{filters}")
+        self._conv = SeparableConv2D(filters,
+                                     kernel_size=kernel_size,
+                                     strides=strides,
+                                     padding="same",
+                                     name=f"{name}_seperableconv2d",
+                                     **kwargs)
+        self._activation = Activation("relu", name=f"{name}_relu")
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def __call__(self, inputs: Tensor) -> Tensor:
         """ Call the Faceswap Separable Convolutional 2D Block.
@@ -389,14 +410,8 @@ class SeparableConv2DBlock():  # pylint:disable=too-few-public-methods
         Tensor
             The output tensor from the Upscale Layer
         """
-        var_x = SeparableConv2D(self._filters,
-                                kernel_size=self._kernel_size,
-                                strides=self._strides,
-                                padding="same",
-                                name=f"{self._name}_seperableconv2d",
-                                **self._kwargs)(inputs)
-        var_x = Activation("relu", name=f"{self._name}_relu")(var_x)
-        return var_x
+        var_x = self._conv(inputs)
+        return self._activation(var_x)
 
 
 #  << UPSCALING >>
@@ -440,19 +455,19 @@ class UpscaleBlock():  # pylint:disable=too-few-public-methods
                  normalization: str | None = None,
                  activation: str | None = "leakyrelu",
                  **kwargs) -> None:
-        self._name = _get_name(f"upscale_{filters}")
-        logger.debug("name: %s. filters: %s, kernel_size: %s, padding: %s, scale_factor: %s, "
-                     "normalization: %s, activation: %s, kwargs: %s)",
-                     self._name, filters, kernel_size, padding, scale_factor, normalization,
-                     activation, kwargs)
-
-        self._filters = filters
-        self._kernel_size = kernel_size
-        self._padding = padding
-        self._scale_factor = scale_factor
-        self._normalization = normalization
-        self._activation = activation
-        self._kwargs = kwargs
+        logger.debug(parse_class_init(locals()))
+        name = _get_name(f"upscale_{filters}")
+        self._conv = Conv2DBlock(filters * scale_factor * scale_factor,
+                                 kernel_size,
+                                 strides=(1, 1),
+                                 padding=padding,
+                                 normalization=normalization,
+                                 activation=activation,
+                                 name=f"{name}_conv2d",
+                                 is_upscale=True,
+                                 **kwargs)
+        self._shuffle = PixelShuffler(name=f"{name}_pixelshuffler", size=scale_factor)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def __call__(self, inputs: Tensor) -> Tensor:
         """ Call the Faceswap Convolutional Layer.
@@ -467,18 +482,8 @@ class UpscaleBlock():  # pylint:disable=too-few-public-methods
         Tensor
             The output tensor from the Upscale Layer
         """
-        var_x = Conv2DBlock(self._filters * self._scale_factor * self._scale_factor,
-                            self._kernel_size,
-                            strides=(1, 1),
-                            padding=self._padding,
-                            normalization=self._normalization,
-                            activation=self._activation,
-                            name=f"{self._name}_conv2d",
-                            is_upscale=True,
-                            **self._kwargs)(inputs)
-        var_x = PixelShuffler(name=f"{self._name}_pixelshuffler",
-                              size=self._scale_factor)(var_x)
-        return var_x
+        var_x = self._conv(inputs)
+        return self._shuffle(var_x)
 
 
 class Upscale2xBlock():  # pylint:disable=too-few-public-methods
@@ -519,6 +524,7 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
     kwargs: dict
         Any additional Keras standard layer keyword arguments to pass to the Convolutional 2D layer
     """
+    # TODO Class function this
     def __init__(self,
                  filters: int,
                  kernel_size: int | tuple[int, int] = 3,
@@ -528,16 +534,35 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
                  sr_ratio: float = 0.5,
                  scale_factor: int = 2,
                  fast: bool = False, **kwargs) -> None:
-        self._name = _get_name(f"upscale2x_{filters}_{'fast' if fast else 'hyb'}")
+        logger.debug(parse_class_init(locals()))
 
         self._fast = fast
-        self._filters = filters if self._fast else filters - int(filters * sr_ratio)
-        self._kernel_size = kernel_size
-        self._padding = padding
-        self._interpolation = interpolation
-        self._activation = activation
-        self._scale_factor = scale_factor
-        self._kwargs = kwargs
+        self._filters = filters if fast else filters - int(filters * sr_ratio)
+
+        name = _get_name(f"upscale2x_{filters}_{'fast' if fast else 'hyb'}")
+
+        self._upscale =  UpscaleBlock(self._filters,
+                                      kernel_size=kernel_size,
+                                      padding=padding,
+                                      scale_factor=scale_factor,
+                                      activation=activation,
+                                      **kwargs)
+
+        if self._fast or (not self._fast and self._filters > 0):
+            self._conv = Conv2D(self._filters,
+                                3,
+                                padding=padding,
+                                is_upscale=True,
+                                name=f"{name}_conv2d",
+                                **kwargs)
+            self._upsample = UpSampling2D(size=(scale_factor, scale_factor),
+                                          interpolation=interpolation,
+                                          name=f"{name}_upsampling2D")
+
+        self._joiner = Add() if self._fast else Concatenate(name=f"{name}_concatenate")
+
+        logger.debug("Initialized %s", self.__class__.__name__)
+
 
     def __call__(self, inputs: Tensor) -> Tensor:
         """ Call the Faceswap Upscale 2x Layer.
@@ -554,33 +579,21 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
         """
         var_x = inputs
         if not self._fast:
-            var_x_sr = UpscaleBlock(self._filters,
-                                    kernel_size=self._kernel_size,
-                                    padding=self._padding,
-                                    scale_factor=self._scale_factor,
-                                    activation=self._activation,
-                                    **self._kwargs)(var_x)
+            var_x_sr = self._upscale(var_x)
         if self._fast or (not self._fast and self._filters > 0):
-            var_x2 = Conv2D(self._filters, 3,
-                            padding=self._padding,
-                            is_upscale=True,
-                            name=f"{self._name}_conv2d",
-                            **self._kwargs)(var_x)
-            var_x2 = UpSampling2D(size=(self._scale_factor, self._scale_factor),
-                                  interpolation=self._interpolation,
-                                  name=f"{self._name}_upsampling2D")(var_x2)
+
+            var_x2 = self._conv(var_x)
+            var_x2 = self._upsample(var_x2)
+
             if self._fast:
-                var_x1 = UpscaleBlock(self._filters,
-                                      kernel_size=self._kernel_size,
-                                      padding=self._padding,
-                                      scale_factor=self._scale_factor,
-                                      activation=self._activation,
-                                      **self._kwargs)(var_x)
-                var_x = Add()([var_x2, var_x1])
+                var_x1 = self._upscale(var_x)
+                var_x = self._joiner([var_x2, var_x1])
             else:
-                var_x = Concatenate(name=f"{self._name}_concatenate")([var_x_sr, var_x2])
+                var_x = self._joiner([var_x_sr, var_x2])
+
         else:
             var_x = var_x_sr
+
         return var_x
 
 
@@ -620,13 +633,32 @@ class UpscaleResizeImagesBlock():  # pylint:disable=too-few-public-methods
                  activation: str | None = "leakyrelu",
                  scale_factor: int = 2,
                  interpolation: T.Literal["nearest", "bilinear"] = "bilinear") -> None:
-        self._name = _get_name(f"upscale_ri_{filters}")
-        self._interpolation = interpolation
-        self._size = scale_factor
-        self._filters = filters
-        self._kernel_size = kernel_size
-        self._padding = padding
-        self._activation = activation
+        logger.debug(parse_class_init(locals()))
+        name = _get_name(f"upscale_ri_{filters}")
+
+        self._resize = KResizeImages(size=scale_factor,
+                                     interpolation=interpolation,
+                                     name=f"{name}_resize")
+        self._conv = Conv2D(filters,
+                            kernel_size,
+                            strides=1,
+                            padding=padding,
+                            is_upscale=True,
+                            name=f"{name}_conv")
+        self._conv_trans = Conv2DTranspose(filters,
+                                           3,
+                                           strides=2,
+                                           padding=padding,
+                                           name=f"{name}_convtrans")
+        self._add = Add()
+
+        if activation == "leakyrelu":
+            self._acivation = LeakyReLU(0.2, name=f"{name}_leakyrelu")
+        if activation == "swish":
+            self._acivation = Swish(name=f"{name}_swish")
+        if activation == "prelu":
+            self._acivation = PReLU(name=f"{name}_prelu")
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def __call__(self, inputs: Tensor) -> Tensor:
         """ Call the Faceswap Resize Images Layer.
@@ -643,27 +675,14 @@ class UpscaleResizeImagesBlock():  # pylint:disable=too-few-public-methods
         """
         var_x = inputs
 
-        var_x_sr = KResizeImages(size=self._size,
-                                 interpolation=self._interpolation,
-                                 name=f"{self._name}_resize")(var_x)
-        var_x_sr = Conv2D(self._filters, self._kernel_size,
-                          strides=1,
-                          padding=self._padding,
-                          is_upscale=True,
-                          name=f"{self._name}_conv")(var_x_sr)
-        var_x_us = Conv2DTranspose(self._filters, 3,
-                                   strides=2,
-                                   padding=self._padding,
-                                   name=f"{self._name}_convtrans")(var_x)
-        var_x = Add()([var_x_sr, var_x_us])
+        var_x_sr = self._resize(var_x)
+        var_x_sr = self._conv(var_x_sr)
 
-        if self._activation == "leakyrelu":
-            var_x = LeakyReLU(0.2, name=f"{self._name}_leakyrelu")(var_x)
-        if self._activation == "swish":
-            var_x = Swish(name=f"{self._name}_swish")(var_x)
-        if self._activation == "prelu":
-            var_x = PReLU(name=f"{self._name}_prelu")(var_x)
-        return var_x
+        var_x_us = self._conv_trans(var_x)
+
+        var_x = self._add([var_x_sr, var_x_us])
+
+        return self._acivation(var_x)
 
 
 class UpscaleDNYBlock():  # pylint:disable=too-few-public-methods
@@ -706,29 +725,39 @@ class UpscaleDNYBlock():  # pylint:disable=too-few-public-methods
                  size: int = 2,
                  interpolation: str = "bilinear",
                  **kwargs) -> None:
-        self._name = _get_name(f"upscale_dny_{filters}")
-        self._interpolation = interpolation
-        self._size = size
-        self._filters = filters
-        self._kernel_size = kernel_size
-        self._padding = padding
-        self._activation = activation
-        self._kwargs = kwargs
+        logger.debug(parse_class_init(locals()))
+        name = _get_name(f"upscale_dny_{filters}")
+        self._upsample = UpSampling2D(size=size,
+                                      interpolation=interpolation,
+                                      name=f"{name}_upsample2d")
+        self._convs = [Conv2DBlock(filters,
+                                   kernel_size,
+                                   strides=1,
+                                   padding=padding,
+                                   activation=activation,
+                                   relu_alpha=0.2,
+                                   name=f"{name}_conv2d_{idx + 1}",
+                                   is_upscale=True,
+                                   **kwargs)
+                       for idx in range(2)]
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def __call__(self, inputs: Tensor) -> Tensor:
-        var_x = UpSampling2D(size=self._size,
-                             interpolation=self._interpolation,
-                             name=f"{self._name}_upsample2d")(inputs)
-        for idx in range(2):
-            var_x = Conv2DBlock(self._filters,
-                                self._kernel_size,
-                                strides=1,
-                                padding=self._padding,
-                                activation=self._activation,
-                                relu_alpha=0.2,
-                                name=f"{self._name}_conv2d_{idx + 1}",
-                                is_upscale=True,
-                                **self._kwargs)(var_x)
+        """ Call the UpscaleDNY block
+
+        Parameters
+        ----------
+        inputs: :class;`torch.Tensor`
+            The input to the block
+
+        Returns
+        -------
+        :class:`torch.Tensor`
+            The output from the block
+        """
+        var_x = self._upsample(inputs)
+        for conv in (self._convs):
+            var_x = conv(var_x)
         return var_x
 
 
@@ -760,9 +789,9 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
                  kernel_size: int | tuple[int, int] = 3,
                  padding: str = "same",
                  **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
+
         self._name = _get_name(f"residual_{filters}")
-        logger.debug("name: %s, filters: %s, kernel_size: %s, padding: %s, kwargs: %s)",
-                     self._name, filters, kernel_size, padding, kwargs)
         self._use_reflect_padding = _CONFIG["reflect_padding"]
 
         self._filters = filters
@@ -770,6 +799,51 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
                              kernel_size) if isinstance(kernel_size, int) else kernel_size
         self._padding = "valid" if self._use_reflect_padding else padding
         self._kwargs = kwargs
+
+        self._layers = self._get_layers()
+        self._add = Add()
+        self._activation = LeakyReLU(alpha=0.2, name=f"{self._name}_leakyrelu_3")
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _get_layers(self) -> list[keras.layers.Layer]:
+        """ Obtain the layer chain for the block
+
+        Returns
+        -------
+        list[:class:`keras.layers.Layer]
+            The layers, in the correct order, to pass the tensor through
+        """
+        retval = []
+        if self._use_reflect_padding:
+            retval.append(ReflectionPadding2D(stride=1,
+                                              kernel_size=self._kernel_size[0],
+                                              name=f"{self._name}_reflectionpadding2d_0"))
+
+        retval.append(Conv2D(self._filters,
+                             kernel_size=self._kernel_size,
+                             padding=self._padding,
+                             name=f"{self._name}_conv2d_0",
+                             **self._kwargs))
+        retval.append(LeakyReLU(alpha=0.2, name=f"{self._name}_leakyrelu_1"))
+
+        if self._use_reflect_padding:
+            retval.append(ReflectionPadding2D(stride=1,
+                                              kernel_size=self._kernel_size[0],
+                                              name=f"{self._name}_reflectionpadding2d_1"))
+
+        kwargs = {key: val for key, val in self._kwargs.items() if key != "kernel_initializer"}
+        if not _CONFIG["conv_aware_init"]:
+            kwargs["kernel_initializer"] = VarianceScaling(scale=0.2,
+                                                           mode="fan_in",
+                                                           distribution="uniform")
+        retval.append(Conv2D(self._filters,
+                             kernel_size=self._kernel_size,
+                             padding=self._padding,
+                             name=f"{self._name}_conv2d_1",
+                             **kwargs))
+
+        logger.debug("%s layers: %s", self.__class__.__name__, retval)
+        return retval
 
     def __call__(self, inputs: Tensor) -> Tensor:
         """ Call the Faceswap Residual Block.
@@ -785,32 +859,8 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
             The output tensor from the Upscale Layer
         """
         var_x = inputs
-        if self._use_reflect_padding:
-            var_x = ReflectionPadding2D(stride=1,
-                                        kernel_size=self._kernel_size[0],
-                                        name=f"{self._name}_reflectionpadding2d_0")(var_x)
-        var_x = Conv2D(self._filters,
-                       kernel_size=self._kernel_size,
-                       padding=self._padding,
-                       name=f"{self._name}_conv2d_0",
-                       **self._kwargs)(var_x)
-        var_x = LeakyReLU(alpha=0.2, name=f"{self._name}_leakyrelu_1")(var_x)
-        if self._use_reflect_padding:
-            var_x = ReflectionPadding2D(stride=1,
-                                        kernel_size=self._kernel_size[0],
-                                        name=f"{self._name}_reflectionpadding2d_1")(var_x)
+        for layer in self._layers:
+            var_x = layer(var_x)
 
-        kwargs = {key: val for key, val in self._kwargs.items() if key != "kernel_initializer"}
-        if not _CONFIG["conv_aware_init"]:
-            kwargs["kernel_initializer"] = VarianceScaling(scale=0.2,
-                                                           mode="fan_in",
-                                                           distribution="uniform")
-        var_x = Conv2D(self._filters,
-                       kernel_size=self._kernel_size,
-                       padding=self._padding,
-                       name=f"{self._name}_conv2d_1",
-                       **kwargs)(var_x)
-
-        var_x = Add()([var_x, inputs])
-        var_x = LeakyReLU(alpha=0.2, name=f"{self._name}_leakyrelu_3")(var_x)
-        return var_x
+        var_x = self._add([var_x, inputs])
+        return self._activation(var_x)
