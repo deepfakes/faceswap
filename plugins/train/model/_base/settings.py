@@ -21,7 +21,8 @@ from contextlib import nullcontext
 import torch
 import keras
 from keras import backend as K, losses as k_losses
-from keras.dtype_policies.dtype_policy import DTypePolicy, set_dtype_policy
+from keras.config import set_dtype_policy
+from keras.dtype_policies import DTypePolicy
 from keras.optimizers import LossScaleOptimizer
 
 from lib.model import losses, optimizers
@@ -330,12 +331,20 @@ class Optimizer():  # pylint:disable=too-few-public-methods
             ``True`` if AutoClip should be enabled otherwise ``False``
         """
         self._kwargs["learning_rate"] = learning_rate
+
+        # Test for if keras optimizer changes its structure to no longer have _clip_gradients.
+        # Ensures any tests fails in this situation
+        assert hasattr(self._optimizer,
+                       "_clip_gradients"), "keras.BaseOptimizer._clip_gradients no longer exists"
+
         if not autoclip:
             return
 
         logger.info("Enabling AutoClip")
-        self._kwargs["gradient_transformers"] = [AutoClipper(10, history_size=10000)]
-        logger.debug("optimizer kwargs: %s", self._kwargs)
+        # TODO Keras3 has removed the ""gradient_transformers" kwarg, and there now appears to be
+        # no standardised method to add custom gradent transformers. Currently, we monkey patch its
+        # _clip_gradients function, which feels hacky and potentially problematic
+        setattr(self._optimizer, "_clip_gradients", AutoClipper(10, history_size=10000))
 
 
 class Settings():
@@ -376,7 +385,7 @@ class Settings():
             strategy = arguments.distribution_strategy
         else:
             strategy = "default"
-        
+
         # TODO
         #self._strategy = self._get_strategy(strategy)
         self._strategy = None
