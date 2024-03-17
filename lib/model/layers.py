@@ -2,6 +2,7 @@
 """ Custom Layers for faceswap.py. """
 from __future__ import annotations
 
+import logging
 import sys
 import inspect
 import typing as T
@@ -9,18 +10,24 @@ import typing as T
 import keras
 from keras.saving import get_custom_objects
 from keras import ops
-import keras.backend as K
+
+from lib.logger import parse_class_init
 
 if T.TYPE_CHECKING:
     import torch
+
+logger = logging.getLogger(__name__)
 
 
 class _GlobalPooling2D(keras.layers.Layer):
     """Abstract class for different global pooling 2D layers. """
     def __init__(self, data_format: str | None = None, **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
+
         super().__init__(**kwargs)
         self.data_format = "channels_last" if data_format is None else data_format
         self.input_spec = keras.layers.InputSpec(ndim=4)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def compute_output_shape(self, input_shape):
         """ Compute the output shape based on the input shape.
@@ -113,9 +120,11 @@ class KResizeImages(keras.layers.Layer):
                  size: int = 2,
                  interpolation: T.Literal["nearest", "bilinear"] = "nearest",
                  **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(**kwargs)
         self.size = size
         self.interpolation = interpolation
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         """ Call the upsample layer
@@ -180,8 +189,10 @@ class L2Normalize(keras.layers.Layer):
         The standard Keras Layer keyword arguments (if any)
     """
     def __init__(self, axis: int, **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         self.axis = axis
         super().__init__(**kwargs)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         """This is where the layer's logic lives.
@@ -261,9 +272,11 @@ class PixelShuffler(keras.layers.Layer):
                  size: int | tuple[int, int] = (2, 2),
                  data_format: str | None = None,
                  **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(**kwargs)
         self.data_format = "channels_last" if data_format is None else data_format
         self.size = (size, size) if isinstance(size, int) else tuple(size)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         """This is where the layer's logic lives.
@@ -397,7 +410,9 @@ class QuickGELU(keras.layers.Layer):
     """
 
     def __init__(self, name: str = "QuickGELU", **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(name=name, **kwargs)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         """ Call the QuickGELU layerr
@@ -430,6 +445,8 @@ class ReflectionPadding2D(keras.layers.Layer):
         The standard Keras Layer keyword arguments (if any)
     """
     def __init__(self, stride: int = 2, kernel_size: int = 5, **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
+
         if isinstance(stride, (tuple, list)):
             assert len(stride) == 2 and stride[0] == stride[1]
             stride = stride[0]
@@ -437,6 +454,8 @@ class ReflectionPadding2D(keras.layers.Layer):
         self.kernel_size = kernel_size
         self.input_spec: list[torch.Tensor] | None = None
         super().__init__(**kwargs)
+
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def build(self, input_shape: torch.Tensor) -> None:
         """Creates the layer weights.
@@ -559,8 +578,10 @@ class Swish(keras.layers.Layer):
     Swish: a Self-Gated Activation Function: https://arxiv.org/abs/1710.05941v1
     """
     def __init__(self, beta: float = 1.0, **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(**kwargs)
         self.beta = beta
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def call(self, inputs, *args, **kwargs):
         """ Call the Swish Activation function.

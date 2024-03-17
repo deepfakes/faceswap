@@ -7,6 +7,8 @@ import typing as T
 from keras import layers
 from keras.models import Model
 
+from lib.logger import parse_class_init
+
 if T.TYPE_CHECKING:
     import torch
 
@@ -27,7 +29,7 @@ class _net():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  input_shape: tuple[int, int, int] | None = None) -> None:
-        logger.debug("Initializing: %s (input_shape: %s)", self.__class__.__name__, input_shape)
+        logger.debug(parse_class_init(locals()))
         self._input_shape = (None, None, 3) if input_shape is None else input_shape
         assert len(self._input_shape) == 3 and self._input_shape[-1] == 3, (
             "Input shape must be in the format (height, width, channels) and the number of "

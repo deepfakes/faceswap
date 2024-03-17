@@ -11,6 +11,8 @@ from keras import ops, Variable
 
 import torch
 
+from lib.logger import parse_class_init
+
 if T.TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -56,6 +58,7 @@ class FocalFrequencyLoss(Loss):
                  ave_spectrum: bool = False,
                  log_matrix: bool = False,
                  batch_matrix: bool = False) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(name=self.__class__.__name__)
         self._alpha = alpha
         # TODO Fix bug where FFT will be incorrect if patch_factor > 1
@@ -64,6 +67,7 @@ class FocalFrequencyLoss(Loss):
         self._log_matrix = log_matrix
         self._batch_matrix = batch_matrix
         self._dims: tuple[int, int] = (0, 0)
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     def _get_patches(self, inputs: torch.Tensor) -> torch.Tensor:
         """ Crop the incoming batch of images into patches as defined by :attr:`_patch_factor.
@@ -228,9 +232,11 @@ class GeneralizedLoss(Loss):
         Default: `1.0/255.0`
     """
     def __init__(self, alpha: float = 1.0, beta: float = 1.0/255.0) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(name=self.__class__.__name__)
         self._alpha = alpha
         self._beta = beta
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     def call(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Call the Generalized Loss Function
@@ -269,10 +275,12 @@ class GradientLoss(Loss):
     Chengwu Lu & Hua Huang, 2014 - http://downloads.hindawi.com/journals/mpe/2014/790547.pdf
     """
     def __init__(self) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(name=self.__class__.__name__)
         self.generalized_loss = GeneralizedLoss(alpha=1.9999)
         self._tv_weight = 1.0
         self._tv2_weight = 1.0
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     @classmethod
     def _diff_x(cls, img: torch.Tensor) -> torch.Tensor:
@@ -407,12 +415,14 @@ class LaplacianPyramidLoss(Loss):  # pylint:disable=too-few-public-methods
                  max_levels: int = 5,
                  gaussian_size: int = 5,
                  gaussian_sigma: float = 1.0) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(name=self.__class__.__name__)
         self._max_levels = max_levels
         self._weights = Variable([np.power(2., -2 * idx)
                                   for idx in range(max_levels + 1)],
                                   trainable=False)
         self._gaussian_kernel = self._get_gaussian_kernel(gaussian_size, gaussian_sigma)
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     @classmethod
     def _get_gaussian_kernel(cls, size: int, sigma: float) -> torch.Tensor:
@@ -520,7 +530,9 @@ class LaplacianPyramidLoss(Loss):  # pylint:disable=too-few-public-methods
 class LInfNorm(Loss):
     """ Calculate the L-inf norm as a loss function. """
     def __init__(self, *args, **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(*args, name=self.__class__.__name__, **kwargs)
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     def call(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """ Call the L-inf norm loss function.
@@ -564,7 +576,7 @@ class LossWrapper(Loss):
     shape (4, 128, 128, 3) ready for masking and feeding through the loss functions.
     """
     def __init__(self) -> None:
-        logger.debug("Initializing: %s", self.__class__.__name__)
+        logger.debug(parse_class_init(locals()))
         super().__init__(name=self.__class__.__name__)
         self._loss_functions: list[Loss] = []
         self._loss_weights: list[float] = []

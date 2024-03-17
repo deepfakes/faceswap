@@ -12,6 +12,7 @@ from keras.models import Model
 
 import numpy as np
 
+from lib.logger import parse_class_init
 from lib.model.networks import AlexNet, SqueezeNet
 from lib.utils import GetModel
 
@@ -60,8 +61,7 @@ class _LPIPSTrunkNet():  # pylint:disable=too-few-public-methods
         ``True`` if pretrained trunk network weights should be loaded, otherwise ``False``
     """
     def __init__(self, net_name: str, eval_mode: bool, load_weights: bool) -> None:
-        logger.debug("Initializing: %s (net_name '%s', eval_mode: %s, load_weights: %s)",
-                     self.__class__.__name__, net_name, eval_mode, load_weights)
+        logger.debug(parse_class_init(locals()))
         self._eval_mode = eval_mode
         self._load_weights = load_weights
         self._net_name = net_name
@@ -167,9 +167,7 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):  # pylint:disable=too-few-public-methods
                  load_weights: bool,
                  trunk_net: Model,
                  use_dropout: bool) -> None:
-        logger.debug(
-            "Initializing: %s (trunk_net: %s, use_dropout: %s)", self.__class__.__name__,
-            trunk_net, use_dropout)
+        logger.debug(parse_class_init(locals()))
         super().__init__(net_name=net_name, eval_mode=eval_mode, load_weights=load_weights)
 
         self._trunk = trunk_net
@@ -288,12 +286,7 @@ class LPIPSLoss(keras.losses.Loss):  # pylint:disable=too-few-public-methods
                  spatial: bool = False,
                  normalize: bool = True,
                  ret_per_layer: bool = False) -> None:
-        logger.debug(
-            "Initializing: %s (trunk_network '%s', trunk_pretrained: %s, trunk_eval_mode: %s, "
-            "linear_pretrained: %s, linear_eval_mode: %s, linear_use_dropout: %s, lpips: %s, "
-            "spatial: %s, normalize: %s, ret_per_layer: %s)", self.__class__.__name__,
-            trunk_network, trunk_pretrained, trunk_eval_mode, linear_pretrained, linear_eval_mode,
-            linear_use_dropout, lpips, spatial, normalize, ret_per_layer)
+        logger.debug(parse_class_init(locals()))
         super().__init__(name=self.__class__.__name__)
         self._spatial = spatial
         self._use_lpips = lpips

@@ -11,6 +11,7 @@ import keras
 from keras import ops, Variable
 
 from lib.keras_utils import ColorSpaceConvert, frobenius_norm, replicate_pad
+from lib.logger import parse_class_init
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ class DSSIMObjective(keras.losses.Loss):
                  filter_size: int = 11,
                  filter_sigma: float = 1.5,
                  max_value: float = 1.0) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(name=self.__class__.__name__)
         self._filter_size = filter_size
         self._filter_sigma = filter_sigma
@@ -57,6 +59,7 @@ class DSSIMObjective(keras.losses.Loss):
         compensation = 1.0
         self._c1 = (k_1 * max_value) ** 2
         self._c2 = ((k_2 * max_value) ** 2) * compensation
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     def _get_kernel(self) -> torch.Tensor:
         """ Obtain the base kernel for performing depthwise convolution.
@@ -167,6 +170,7 @@ class GMSDLoss(keras.losses.Loss):
     """
 
     def __init__(self, *args, **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(*args, name=self.__class__.__name__, **kwargs)
         self._scharr_edges = Variable(np.array([[[[0.00070, 0.00070]],
                                                  [[0.00520, 0.00370]],
@@ -195,6 +199,7 @@ class GMSDLoss(keras.losses.Loss):
                                                  [[-0.0007, -0.0007]]]]),
                                       dtype="float32",
                                       trainable=False)
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     def _map_scharr_edges(self, image: torch.Tensor, magnitude: bool) -> torch.Tensor:
         """ Returns a tensor holding modified Scharr edge maps.
@@ -326,11 +331,7 @@ class LDRFLIPLoss(keras.losses.Loss):
                  epsilon: float = 1e-15,
                  pixels_per_degree: float | None = None,
                  color_order: T.Literal["bgr", "rgb"] = "bgr") -> None:
-        logger.debug("Initializing: %s (computed_distance_exponent '%s', feature_exponent: %s, "
-                     "lower_threshold_exponent: %s, upper_threshold_exponent: %s, epsilon: %s, "
-                     "pixels_per_degree: %s, color_order: %s)", self.__class__.__name__,
-                     computed_distance_exponent, feature_exponent, lower_threshold_exponent,
-                     upper_threshold_exponent, epsilon, pixels_per_degree, color_order)
+        logger.debug(parse_class_init(locals()))
         super().__init__(name=self.__class__.__name__)
         self._computed_distance_exponent = computed_distance_exponent
         self._feature_exponent = feature_exponent
@@ -519,9 +520,11 @@ class _SpatialFilters():  # pylint:disable=too-few-public-methods
         impacts the tolerance when calculating loss.
     """
     def __init__(self, pixels_per_degree: float) -> None:
+        logger.debug(parse_class_init(locals()))
         self._pixels_per_degree = pixels_per_degree
         self._spatial_filters, self._radius = self._generate_spatial_filters()
         self._ycxcz2rgb = ColorSpaceConvert(from_space="ycxcz", to_space="rgb")
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     def _generate_spatial_filters(self) -> tuple[torch.Tensor, int]:
         """ Generates spatial contrast sensitivity filters with width depending on the number of
@@ -611,6 +614,7 @@ class _FeatureDetection():  # pylint:disable=too-few-public-methods
         The number of pixels per degree of visual angle of the observer
     """
     def __init__(self, pixels_per_degree: float) -> None:
+        logger.debug(parse_class_init(locals()))
         width = 0.082
         self._std = 0.5 * width * pixels_per_degree
         self._radius = int(np.ceil(3 * self._std))
@@ -622,6 +626,7 @@ class _FeatureDetection():  # pylint:disable=too-few-public-methods
             "edge": Variable(np.multiply(-grid[0], gradient), trainable=False),
             "point": Variable(np.multiply(grid[0] ** 2 / (self._std ** 2) - 1, gradient),
                                          trainable=False)}
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     def __call__(self, image: torch.Tensor, feature_type: str) -> torch.Tensor:
         """ Run the feature detection
@@ -696,6 +701,7 @@ class MSSIMLoss(keras.losses.Loss):
                  max_value: float = 1.0,
                  power_factors: tuple[float, ...] = (0.0448, 0.2856, 0.3001, 0.2363, 0.1333)
                  ) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(name=self.__class__.__name__)
         self.filter_size = filter_size
         self._filter_sigma = Variable(filter_sigma, dtype="float32", trainable=False)
@@ -705,6 +711,7 @@ class MSSIMLoss(keras.losses.Loss):
         self._power_factors = power_factors
         self._divisor = [1, 2, 2, 1]
         self._divisor_tensor = Variable(self._divisor[1:], dtype="int32", trainable=False)
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     @classmethod
     def _reducer(cls, image: torch.Tensor, kernel: torch.Tensor) -> torch.Tensor:

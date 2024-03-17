@@ -4,6 +4,8 @@ import logging
 import numpy as np
 import torch
 
+from lib.logger import parse_class_init
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,11 +25,12 @@ class AutoClipper():  # pylint:disable=too-few-public-methods
     original paper: https://arxiv.org/abs/2007.14469
     """
     def __init__(self, clip_percentile: int, history_size: int = 10000) -> None:
-        logger.debug("Initializing %s (clip_percentile: %s, history_size: %s)",
-                     self.__class__.__name__, clip_percentile, history_size)
+        logger.debug(parse_class_init(locals()))
+
         self._clip_percentile = clip_percentile
         self._history_size = history_size
         self._grad_history = []
+
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def __call__(self, gradients: list[torch.Tensor]) -> list[torch.Tensor]:

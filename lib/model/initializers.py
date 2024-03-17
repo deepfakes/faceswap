@@ -10,9 +10,10 @@ import typing as T
 from keras import initializers, ops, Variable
 from keras.src.initializers.random_initializers import compute_fans
 from keras.saving import get_custom_objects
-import keras.backend as K
 
 import numpy as np
+
+from lib.logger import parse_class_init
 
 if T.TYPE_CHECKING:
     from torch import Tensor
@@ -48,10 +49,11 @@ class ICNR(initializers.Initializer):
 
     def __init__(self,
                  initializer: dict[str, T.Any] | initializers.Initializer, scale: int = 2) -> None:
-        logger.debug("Initializing %s (initializer: %s, scale: %s)",
-                    self.__class__.__name__, initializer, scale)
+        logger.debug(parse_class_init(locals()))
+
         self._scale = scale
         self._initializer = initializer
+
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def __call__(self,
@@ -168,13 +170,14 @@ class ConvolutionAware(initializers.Initializer):
                  eps_std: float = 0.05,
                  seed: int | None = None,
                  initialized: bool = False) -> None:
-        logger.debug("Initializing %s (eps_std: %s, seed: %s, initialized: %s)",
-                    self.__class__.__name__, eps_std, seed, initialized)
+        logger.debug(parse_class_init(locals()))
+
         self._eps_std = eps_std
         self._seed = seed
         self._orthogonal = initializers.Orthogonal()
         self._he_uniform = initializers.he_uniform()
         self._initialized = initialized
+
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @classmethod

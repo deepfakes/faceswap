@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import inspect
+import logging
 import sys
 import typing as T
 
 from keras import constraints,initializers, layers, ops, regularizers
 from keras.saving import get_custom_objects
 
+from lib.logger import parse_class_init
+
 if T.TYPE_CHECKING:
     import torch
+
+logger = logging.getLogger(__name__)
 
 
 class AdaInstanceNormalization(layers.Layer):
@@ -48,12 +53,14 @@ class AdaInstanceNormalization(layers.Layer):
                  center: bool = True,
                  scale: bool = True,
                  **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(**kwargs)
         self.axis = axis
         self.momentum = momentum
         self.epsilon = epsilon
         self.center = center
         self.scale = scale
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def build(self, input_shape: tuple[int, ...]) -> None:
         """Creates the layer weights.
@@ -181,6 +188,7 @@ class GroupNormalization(layers.Layer):
                  group: int = 32,
                  data_format: str | None = None,
                  **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         self.beta = None
         self.gamma = None
         super().__init__(**kwargs)
@@ -194,6 +202,7 @@ class GroupNormalization(layers.Layer):
         self.data_format = "channels_last" if data_format is None else data_format
 
         self.supports_masking = True
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def build(self, input_shape: tuple[int, ...]) -> None:
         """Creates the layer weights.
@@ -379,6 +388,7 @@ class InstanceNormalization(layers.Layer):
                  beta_constraint: T.Any = None,
                  gamma_constraint: T.Any = None,
                  **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         self.beta = None
         self.gamma = None
         super().__init__(**kwargs)
@@ -393,6 +403,7 @@ class InstanceNormalization(layers.Layer):
         self.gamma_regularizer = regularizers.get(gamma_regularizer)
         self.beta_constraint = constraints.get(beta_constraint)
         self.gamma_constraint = constraints.get(gamma_constraint)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def build(self, input_shape: tuple[int, ...]) -> None:
         """Creates the layer weights.
@@ -542,6 +553,7 @@ class RMSNormalization(layers.Layer):
                  epsilon: float = 1e-8,
                  partial: float = 0.0,
                  bias: bool = False, **kwargs) -> False:
+        logger.debug(parse_class_init(locals()))
         self.scale = None
         self.offset = 0
         super().__init__(**kwargs)
@@ -558,6 +570,7 @@ class RMSNormalization(layers.Layer):
         self.partial = partial
         self.bias = bias
         self.offset = 0.
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def build(self, input_shape: tuple[int, ...]) -> None:
         """ Validate and populate :attr:`axis`
