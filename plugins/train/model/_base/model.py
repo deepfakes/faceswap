@@ -260,13 +260,11 @@ class ModelBase():
                 inputs = self._get_inputs()
                 if not self._settings.use_mixed_precision and not is_summary:
                     # Store layer names which can be switched to mixed precision
-                    
-                    # TODO Re-enable mixed precision switching
                     self._model = self.build_model(inputs)
-                    #model, mp_layers = self._settings.get_mixed_precision_layers(self.build_model,
-                    #                                                             inputs)
-                    #self._state.add_mixed_precision_layers(mp_layers)
-                    #self._model = model
+                    model, mp_layers = self._settings.get_mixed_precision_layers(self.build_model,
+                                                                                 inputs)
+                    self._state.add_mixed_precision_layers(mp_layers)
+                    self._model = model
                 else:
                     self._model = self.build_model(inputs)
             if not is_summary and not self._is_predict:
@@ -408,7 +406,7 @@ class ModelBase():
         weights.freeze()
 
         self._loss.configure(self.model)
-        self.model.compile(optimizer=optimizer, loss=self._loss.functions)
+        self.model.compile(optimizer=optimizer, loss=self._loss.functions, metrics=self._loss.functions)
         self._state.add_session_loss_names(self._loss.names)
         logger.debug("Compiled Model: %s", self.model)
 

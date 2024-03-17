@@ -567,7 +567,9 @@ class Settings():
                 continue
 
             dtype = config["dtype"]
-            if isinstance(dtype, dict) and dtype["config"]["name"] == "mixed_float16":
+            # Fail tests if Keras changes the way it stores dtypes
+            assert isinstance(dtype, str), "Keras config dtype storage method has changed"
+            if dtype == "mixed_float16":
                 logger.debug("Adding supported mixed precision layer: %s %s", layer["name"], dtype)
                 retval.append(layer["name"])
             else:
@@ -625,21 +627,16 @@ class Settings():
             The list of layer names within the full precision model that can be switched
             to mixed precision
         """
-        logger.info("Storing Mixed Precision compatible layers. Please ignore any following "
-                    "warnings about using mixed precision.")
+        logger.debug("Storing Mixed Precision compatible layers.")
         self._set_keras_mixed_precision(True)
-        with tf.device("CPU"):
-            model = build_func(inputs)
-            layers = self._get_mixed_precision_layers(model.get_config()["layers"])
-
-        keras.backend.clear_session()
-        self._set_keras_mixed_precision(False)
-
-        config = model.get_config()
-        self._switch_precision(config["layers"], layers)
-        new_model = model.from_config(config)
+        model = build_func(inputs)
+        layers = self._get_mixed_precision_layers(model.get_config()["layers"])
         del model
-        return new_model, layers
+
+        self._set_keras_mixed_precision(False)
+        model = build_func(inputs)
+        logger.debug("model: %s, mixed precision layers: %s", model, layers)
+        return model, layers
 
     def check_model_precision(self,
                               model: keras.models.Model,
