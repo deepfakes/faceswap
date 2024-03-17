@@ -16,6 +16,7 @@ import sys
 import typing as T
 
 from keras import layers, models as kmodels
+from keras.saving import load_model
 
 from lib.model.backup_restore import Backup
 from lib.utils import FaceswapError
@@ -94,7 +95,7 @@ class IO():
     @property
     def filename(self) -> str:
         """str: The filename for this model."""
-        return os.path.join(self._model_dir, f"{self._plugin.name}.h5")
+        return os.path.join(self._model_dir, f"{self._plugin.name}.keras")
 
     @property
     def model_exists(self) -> bool:
@@ -113,9 +114,9 @@ class IO():
         """ :list: or ``None`` If there are multiple model types in the requested folder, or model
         types that don't correspond to the requested plugin type, then returns the list of plugin
         names that exist in the folder, otherwise returns ``None`` """
-        plugins = [fname.replace(".h5", "")
+        plugins = [fname.replace(".keras", "")
                    for fname in os.listdir(self._model_dir)
-                   if fname.endswith(".h5")]
+                   if fname.endswith(".keras")]
         test_names = plugins + [self._plugin.name]
         test = False if not test_names else os.path.commonprefix(test_names) == ""
         retval = None if not test else plugins
@@ -143,7 +144,7 @@ class IO():
             sys.exit(1)
 
         try:
-            model = kmodels.load_model(self.filename, compile=False)
+            model = load_model(self.filename, compile=False)
         except RuntimeError as err:
             if "unable to get link info" in str(err).lower():
                 msg = (f"Unable to load the model from '{self.filename}'. This may be a "
@@ -302,7 +303,7 @@ class Weights():
 
     @classmethod
     def _check_weights_file(cls, weights_file: str) -> str | None:
-        """ Validate that we have a valid path to a .h5 file.
+        """ Validate that we have a valid path to a .keras file.
 
         Parameters
         ----------
@@ -321,9 +322,9 @@ class Weights():
         msg = ""
         if not os.path.exists(weights_file):
             msg = f"Load weights selected, but the path '{weights_file}' does not exist."
-        elif not os.path.splitext(weights_file)[-1].lower() == ".h5":
+        elif not os.path.splitext(weights_file)[-1].lower() == ".keras":
             msg = (f"Load weights selected, but the path '{weights_file}' is not a valid Keras "
-                   f"model (.h5) file.")
+                   f"model (.keras) file.")
 
         if msg:
             msg += " Please check and try again."
@@ -409,7 +410,7 @@ class Weights():
         Returns
         -------
         list
-            List of all models contained within the .h5 file
+            List of all models contained within the .keras file
 
         Raises
         ------
@@ -417,7 +418,7 @@ class Weights():
             In the event of a failure to load the weights, or the weights belonging to a different
             model
         """
-        retval = get_all_sub_models(kmodels.load_model(self._weights_file, compile=False))
+        retval = get_all_sub_models(load_model(self._weights_file, compile=False))
         if not retval:
             raise FaceswapError(f"Error loading weights file {self._weights_file}.")
 
