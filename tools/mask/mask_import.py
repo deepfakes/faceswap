@@ -294,7 +294,7 @@ class Import:  # pylint:disable=too-few-public-methods
                               is_aligned=self._is_faces,
                               dtype="float32")
         assert aligned.face is not None
-        face.add_mask("custom",
+        face.add_mask(f"custom_{self._centering}",
                       aligned.face / 255.,
                       aligned.adjusted_matrix,
                       aligned.interpolators[1],
