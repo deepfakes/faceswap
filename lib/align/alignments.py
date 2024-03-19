@@ -426,7 +426,7 @@ class Alignments():
         frame_data = self._data.get(frame_name, T.cast(AlignmentDict, {}))
         return frame_data.get("faces", T.cast(list[AlignmentFileDict], []))
 
-    def _count_faces_in_frame(self, frame_name: str) -> int:
+    def count_faces_in_frame(self, frame_name: str) -> int:
         """ Return number of faces that appear within :attr:`data` for the given frame_name.
 
         Parameters
@@ -464,7 +464,7 @@ class Alignments():
         """
         logger.debug("Deleting face %s for frame_name '%s'", face_index, frame_name)
         face_index = int(face_index)
-        if face_index + 1 > self._count_faces_in_frame(frame_name):
+        if face_index + 1 > self.count_faces_in_frame(frame_name):
             logger.debug("No face to delete: (frame_name: '%s', face_index %s)",
                          frame_name, face_index)
             return False
@@ -493,7 +493,7 @@ class Alignments():
         if frame_name not in self._data:
             self._data[frame_name] = {"faces": [], "video_meta": {}}
         self._data[frame_name]["faces"].append(face)
-        retval = self._count_faces_in_frame(frame_name) - 1
+        retval = self.count_faces_in_frame(frame_name) - 1
         logger.debug("Returning new face index: %s", retval)
         return retval
 
@@ -541,6 +541,18 @@ class Alignments():
                 logger.verbose("Filtering out face: (filename: %s, index: %s)",  # type:ignore
                                source_frame, face_idx)
                 del frame_data["faces"][face_idx]
+
+    def update_from_dict(self, data: dict[str, AlignmentDict]) -> None:
+        """ Replace all alignments with the contents of the given dictionary
+
+        Parameters
+        ----------
+        data: dict[str, AlignmentDict]
+            The alignments, in correctly formatted dictionary form, to be populated into this
+            :class:`Alignments`
+        """
+        logger.debug("Populating alignments with %s entries", len(data))
+        self._data = data
 
     # << GENERATORS >> #
     def yield_faces(self) -> Generator[tuple[str, list[AlignmentFileDict], int, str], None, None]:
