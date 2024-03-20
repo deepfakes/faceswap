@@ -7,6 +7,7 @@ import os
 import platform
 import re
 import sys
+import typing as T
 import time
 import traceback
 
@@ -541,6 +542,23 @@ def crash_log() -> str:
         outfile.write(original_traceback)
         outfile.write(sysinfo.encode("utf-8"))
     return filename
+
+
+def parse_class_init(locals_dict: dict[str, T.Any]) -> str:
+    """ Parse a locals dict from a class and return in a format suitable for logging
+    Parameters
+    ----------
+    locals_dict: dict[str, T.Any]
+        A locals() dictionary from a newly initialized class
+    Returns
+    -------
+    str
+        The locals information suitable for logging
+    """
+    delimit = {k: f"'{v}'" if isinstance(v, str) else v
+               for k, v in locals_dict.items() if k != "self"}
+    dsp = ", ".join(f"{k}: {v}" for k, v in delimit.items())
+    return f"Initializing {locals_dict['self'].__class__.__name__} ({dsp})"
 
 
 _OLD_FACTORY = logging.getLogRecordFactory()
