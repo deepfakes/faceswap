@@ -13,6 +13,8 @@ import traceback
 
 from datetime import datetime
 
+import numpy as np
+
 
 # TODO - Remove this monkey patch when TF autograph fixed to handle newer logging lib
 def _patched_format(self, record):
@@ -544,6 +546,28 @@ def crash_log() -> str:
     return filename
 
 
+def _process_value(value: T.Any) -> T.Any:
+    """ Process the values from a local dict and return in a loggable format
+
+    Parameters
+    ----------
+    value: Any
+        The dictionary value
+
+    Returns
+    -------
+    Any
+        The original or ammended value
+    """
+    if isinstance(value, str):
+        return f'"{value}"'
+    if isinstance(value, np.ndarray) and np.prod(value.shape) > 10:
+        return f'[type: "{type(value).__name__}" shape: {value.shape}, dtype: "{value.dtype}"]'
+    if isinstance(value, (list, tuple, set)) and len(value) > 10:
+        return f'[type: "{type(value).__name__}" len: {len(value)}'
+    return value
+
+
 def parse_class_init(locals_dict: dict[str, T.Any]) -> str:
     """ Parse a locals dict from a class and return in a format suitable for logging
     Parameters
@@ -555,10 +579,11 @@ def parse_class_init(locals_dict: dict[str, T.Any]) -> str:
     str
         The locals information suitable for logging
     """
-    delimit = {k: f"'{v}'" if isinstance(v, str) else v
+    delimit = {k: _process_value(v)
                for k, v in locals_dict.items() if k != "self"}
     dsp = ", ".join(f"{k}: {v}" for k, v in delimit.items())
-    return f"Initializing {locals_dict['self'].__class__.__name__} ({dsp})"
+    dsp = f" ({dsp})" if dsp else ""
+    return f"Initializing {locals_dict['self'].__class__.__name__}{dsp}"
 
 
 _OLD_FACTORY = logging.getLogRecordFactory()

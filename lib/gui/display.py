@@ -10,6 +10,8 @@ import gettext
 import tkinter as tk
 from tkinter import ttk
 
+from lib.logger import parse_class_init
+
 from .display_analysis import Analysis
 from .display_command import GraphDisplay, PreviewExtract, PreviewTrain
 from .utils import get_config
@@ -31,7 +33,7 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
     """
 
     def __init__(self, parent):
-        logger.debug("Initializing %s", self.__class__.__name__)
+        logger.debug(parse_class_init(locals()))
         super().__init__(parent)
         parent.add(self)
         tk_vars = get_config().tk_vars

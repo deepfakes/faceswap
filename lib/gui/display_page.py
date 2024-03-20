@@ -20,9 +20,7 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Parent frame holder for each tab.
         Defines uniform structure for each tab to inherit from """
     def __init__(self, parent, tab_name, helptext):
-        logger.debug("Initializing %s: (tab_name: '%s', helptext: %s)",
-                     self.__class__.__name__, tab_name, helptext)
-        ttk.Frame.__init__(self, parent)
+        super().__init__(parent)
 
         self._parent = parent
         self.running_task = parent.running_task
@@ -41,8 +39,6 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         self.pack(fill=tk.BOTH, side=tk.TOP, anchor=tk.NW)
         parent.add(self, text=self.tabname.title())
-
-        logger.debug("Initialized %s", self.__class__.__name__,)
 
     @property
     def _tab_is_active(self):
@@ -167,9 +163,7 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
     """ Parent Context Sensitive Display Tab """
 
     def __init__(self, parent, tab_name, helptext, wait_time, command=None):
-        logger.debug("%s: OptionalPage args: (wait_time: %s, command: %s)",
-                     self.__class__.__name__, wait_time, command)
-        DisplayPage.__init__(self, parent, tab_name, helptext)
+        super().__init__(parent, tab_name, helptext)
 
         self._waittime = wait_time
         self.command = command

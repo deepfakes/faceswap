@@ -8,6 +8,8 @@ import os
 import tkinter as tk
 from tkinter import ttk
 
+from lib.logger import parse_class_init
+
 from .custom_widgets import Tooltip
 from .display_page import DisplayPage
 from .popup_session import SessionPopUp
@@ -36,8 +38,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         The help text to display for the summary statistics page
     """
     def __init__(self, parent, tab_name, helptext):
-        logger.debug("Initializing: %s: (parent, %s, tab_name: '%s', helptext: '%s')",
-                     self.__class__.__name__, parent, tab_name, helptext)
+        logger.debug(parse_class_init(locals()))
         super().__init__(parent, tab_name, helptext)
         self._summary = None
 
@@ -62,10 +63,10 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         dict
             The dictionary of variable names to tkinter variables
         """
-        return dict(selected_id=tk.StringVar(),
-                    refresh_graph=get_config().tk_vars.refresh_graph,
-                    is_training=get_config().tk_vars.is_training,
-                    analysis_folder=get_config().tk_vars.analysis_folder)
+        return {"selected_id": tk.StringVar(),
+                "refresh_graph": get_config().tk_vars.refresh_graph,
+                "is_training": get_config().tk_vars.is_training,
+                "analysis_folder": get_config().tk_vars.analysis_folder}
 
     def on_tab_select(self):
         """ Callback for when the analysis tab is selected.
@@ -299,7 +300,7 @@ class _Options():  # pylint:disable=too-few-public-methods
         The Analysis Display Tab that holds the options buttons
     """
     def __init__(self, parent):
-        logger.debug("Initializing: %s (parent: %s)", self.__class__.__name__, parent)
+        logger.debug(parse_class_init(locals()))
         self._parent = parent
         self._buttons = self._add_buttons()
         self._add_training_callback()
@@ -380,8 +381,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         The help text to display for the summary statistics page
     """
     def __init__(self, parent, selected_id, helptext):
-        logger.debug("Initializing: %s: (parent, %s, selected_id: %s, helptext: '%s')",
-                     self.__class__.__name__, parent, selected_id, helptext)
+        logger.debug(parse_class_init(locals()))
         super().__init__(parent)
         self._selected_id = selected_id
 

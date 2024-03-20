@@ -3,6 +3,7 @@
 from __future__ import annotations
 import logging
 import os
+import re
 import typing as T
 import zlib
 
@@ -14,6 +15,7 @@ from tensorflow.core.util import event_pb2  # pylint:disable=no-name-in-module
 from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
     errors_impl as tf_errors)
 
+from lib.logger import parse_class_init
 from lib.serializer import get_serializer
 
 if T.TYPE_CHECKING:
@@ -46,7 +48,7 @@ class _LogFiles():
         The folder that contains the Tensorboard log files
     """
     def __init__(self, logs_folder: str) -> None:
-        logger.debug("Initializing: %s: (logs_folder: '%s')", self.__class__.__name__, logs_folder)
+        logger.debug(parse_class_init(locals()))
         self._logs_folder = logs_folder
         self._filenames = self._get_log_filenames()
         logger.debug("Initialized: %s", self.__class__.__name__)
@@ -215,7 +217,7 @@ class _CacheData():
 class _Cache():
     """ Holds parsed Tensorflow log event data in a compressed cache in memory. """
     def __init__(self) -> None:
-        logger.debug("Initializing: %s", self.__class__.__name__)
+        logger.debug(parse_class_init(locals()))
         self._data: dict[int, _CacheData] = {}
         self._carry_over: dict[int, EventData] = {}
         self._loss_labels: list[str] = []
@@ -471,8 +473,7 @@ class TensorBoardLogs():
         ``True`` if the events are being read whilst Faceswap is training otherwise ``False``
     """
     def __init__(self, logs_folder: str, is_training: bool) -> None:
-        logger.debug("Initializing: %s: (logs_folder: %s, is_training: %s)",
-                     self.__class__.__name__, logs_folder, is_training)
+        logger.debug(parse_class_init(locals()))
         self._is_training = False
         self._training_iterator = None
 
@@ -631,12 +632,12 @@ class _EventParser():  # pylint:disable=too-few-public-methods
         otherwise ``False``
     """
     def __init__(self, iterator: Iterator[bytes], cache: _Cache, live_data: bool) -> None:
-        logger.debug("Initializing: %s: (iterator: %s, cache: %s, live_data: %s)",
-                     self.__class__.__name__, iterator, cache, live_data)
+        logger.debug(parse_class_init(locals()))
         self._live_data = live_data
         self._cache = cache
         self._iterator = self._get_latest_live(iterator) if live_data else iterator
         self._loss_labels: list[str] = []
+        self._num_strip = re.compile(r"_\d+$")
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @classmethod
@@ -728,7 +729,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
                                  if layer["name"] == layer_name)["config"]
             layer_outputs = self._get_outputs(output_config)
             for output in layer_outputs:  # Drill into sub-model to get the actual output names
-                loss_name = output[0][0]
+                loss_name = self._num_strip.sub("", output[0][0])  # strip trailing numbers
                 if loss_name[-2:] not in ("_a", "_b"):  # Rename losses to reflect the side output
                     new_name = f"{loss_name.replace('_both', '')}_{side}"
                     logger.debug("Renaming loss output from '%s' to '%s'", loss_name, new_name)

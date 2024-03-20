@@ -9,6 +9,7 @@ import typing as T
 
 from tkinter import ttk
 
+from lib.logger import parse_class_init
 from lib.training.preview_tk import PreviewTk
 
 from .display_graph import TrainingGraph
@@ -28,8 +29,7 @@ _ = _LANG.gettext
 class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ Tab to display output preview images for extract and convert """
     def __init__(self, *args, **kwargs) -> None:
-        logger.debug("Initializing %s (args: %s, kwargs: %s)",
-                     self.__class__.__name__, args, kwargs)
+        logger.debug(parse_class_init(locals()))
         self._preview = get_images().preview_extract
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -83,8 +83,7 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ Training preview image(s) """
     def __init__(self, *args, **kwargs) -> None:
-        logger.debug("Initializing %s (args: %s, kwargs: %s)",
-                     self.__class__.__name__, args, kwargs)
+        logger.debug(parse_class_init(locals()))
         self._preview = get_images().preview_train
         self._display: PreviewTk | None = None
         super().__init__(*args, **kwargs)
@@ -172,9 +171,11 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
                  helptext: str,
                  wait_time: int,
                  command: str | None = None) -> None:
+        logger.debug(parse_class_init(locals()))
         self._trace_vars: dict[T.Literal["smoothgraph", "display_iterations"],
                                tuple[tk.BooleanVar, str]] = {}
         super().__init__(parent, tab_name, helptext, wait_time, command)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_vars(self) -> None:
         """ Add graphing specific variables to the default variables.
@@ -212,7 +213,8 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
         Pull latest data and run the tab's update code when the tab is selected.
         """
-        logger.debug("Callback received for '%s' tab", self.tabname)
+        logger.debug("Callback received for '%s' tab (display_item: %s)",
+                     self.tabname, self.display_item)
         if self.display_item is not None:
             get_config().tk_vars.refresh_graph.set(True)
         self._update_page()
