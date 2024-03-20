@@ -17,6 +17,7 @@ from threading import Event
 
 import numpy as np
 
+from lib.logger import parse_class_init
 from lib.serializer import get_serializer
 
 from .event_reader import TensorBoardLogs
@@ -30,7 +31,7 @@ class GlobalSession():
     :attr:`lib.gui.analysis.Session`
     """
     def __init__(self) -> None:
-        logger.debug("Initializing %s", self.__class__.__name__)
+        logger.debug(parse_class_init(locals()))
         self._state: dict[str, T.Any] = {}
         self._model_dir = ""
         self._model_name = ""
@@ -289,7 +290,7 @@ class SessionsSummary():  # pylint:disable=too-few-public-methods
         The loaded or currently training session
     """
     def __init__(self, session: GlobalSession) -> None:
-        logger.debug("Initializing %s: (session: %s)", self.__class__.__name__, session)
+        logger.debug(parse_class_init(locals()))
         self._session = session
         self._state = session._state
 
@@ -539,11 +540,7 @@ class Calculations():
                  avg_samples: int = 500,
                  smooth_amount: float = 0.90,
                  flatten_outliers: bool = False) -> None:
-        logger.debug("Initializing %s: (session_id: %s, display: %s, loss_keys: %s, "
-                     "selections: %s, avg_samples: %s, smooth_amount: %s, flatten_outliers: %s)",
-                     self.__class__.__name__, session_id, display, loss_keys, selections,
-                     avg_samples, smooth_amount, flatten_outliers)
-
+        logger.debug(parse_class_init(locals()))
         warnings.simplefilter("ignore", np.RankWarning)
 
         self._session_id = session_id
@@ -872,6 +869,7 @@ class _ExponentialMovingAverage():  # pylint:disable=too-few-public-methods
     Adapted from: https://stackoverflow.com/questions/42869495
     """
     def __init__(self, data: np.ndarray, amount: float) -> None:
+        logger.debug(parse_class_init(locals()))
         assert data.ndim == 1
         amount = min(max(amount, 0.001), 0.999)
 
@@ -880,6 +878,7 @@ class _ExponentialMovingAverage():  # pylint:disable=too-few-public-methods
         self._dtype = "float32" if data.dtype == np.float32 else "float64"
         self._row_size = self._get_max_row_size()
         self._out = np.empty_like(data, dtype=self._dtype)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def __call__(self) -> np.ndarray:
         """ Perform the exponential moving average calculation.

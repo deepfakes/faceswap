@@ -18,6 +18,8 @@ from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
                                                NavigationToolbar2Tk)
 from matplotlib.backend_bases import NavigationToolbar2
 
+from lib.logger import parse_class_init
+
 from .custom_widgets import Tooltip
 from .utils import get_config, get_images, LongRunningTask
 
@@ -40,7 +42,6 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         The data label for the y-axis
     """
     def __init__(self, parent: ttk.Frame, data, ylabel: str) -> None:
-        logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(parent)
         matplotlib.use("TkAgg")  # Can't be at module level as breaks Github CI
         style.use("ggplot")
@@ -58,7 +59,6 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         self._initiate_graph()
         self._update_plot(initiate=True)
-        logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def calcs(self):
@@ -335,10 +335,12 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
     """
 
     def __init__(self, parent: ttk.Frame, data, ylabel: str) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(parent, data, ylabel)
         self._thread: LongRunningTask | None = None  # Thread for LongRunningTask
         self._displayed_keys: list[str] = []
         self._add_callback()
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def _add_callback(self) -> None:
         """ Add the variable trace to update graph on refresh button press or save iteration. """
@@ -427,8 +429,10 @@ class SessionGraph(GraphBase):  # pylint: disable=too-many-ancestors
         Should be one of ``"log"`` or ``"linear"``
     """
     def __init__(self, parent: ttk.Frame, data, ylabel: str, scale: str) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(parent, data, ylabel)
         self._scale = scale
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def build(self) -> None:
         """ Build the session graph """
@@ -494,7 +498,7 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ances
                  window: ttk.Frame,
                  *,
                  pack_toolbar: bool = True) -> None:
-
+        logger.debug(parse_class_init(locals()))
         # Avoid using self.window (prefer self.canvas.get_tk_widget().master),
         # so that Tool implementations can reuse the methods.
 
@@ -528,6 +532,7 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ances
         NavigationToolbar2.__init__(self, canvas)  # pylint:disable=non-parent-init-called
         if pack_toolbar:
             self.pack(side=tk.BOTTOM, fill=tk.X)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @staticmethod
     def _Button(frame: ttk.Frame,  # pylint:disable=arguments-differ,arguments-renamed
