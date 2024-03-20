@@ -3,16 +3,14 @@
 from __future__ import annotations
 import logging
 import os
+import struct
 import typing as T
 import zlib
 
 from dataclasses import dataclass, field
 
 import numpy as np
-#import tensorflow as tf
-#from tensorflow.core.util import event_pb2  # pylint:disable=no-name-in-module
-#from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
-#    errors_impl as tf_errors)
+from tensorboard.compat.proto import event_pb2
 
 from lib.serializer import get_serializer
 
@@ -456,6 +454,31 @@ class _Cache():
         return retval
 
 
+def record_iterator(log_file: str) -> T.Generator[bytes, None, None]:
+    """ A replacement for tensorflow's :func:`compat.v1.io.tf_record_iterator`
+
+    Parameters
+    ----------
+    log_file: str
+        The full path to the protobuf file to read logs from
+
+    Yields
+    ------
+    bytes
+        An event record
+    """
+    with open(log_file, "rb") as ifile:
+        while True:
+            b_header = ifile.read(8)
+            if not b_header:
+                break
+            read_len = int(struct.unpack('Q', b_header)[0])
+            ifile.seek(4, 1)
+            data = ifile.read(read_len)
+            ifile.seek(4, 1)
+            yield data
+
+
 class TensorBoardLogs():
     """ Parse data from TensorBoard logs.
 
@@ -509,7 +532,7 @@ class TensorBoardLogs():
             self._log_files.refresh()
             log_file = self._log_files.get(self.session_ids[-1])
             logger.debug("Setting training iterator for log file: '%s'", log_file)
-            self._training_iterator = tf.compat.v1.io.tf_record_iterator(log_file)
+            self._training_iterator = record_iterator(log_file)
         else:
             logger.debug("Removing training iterator")
             del self._training_iterator
@@ -529,7 +552,7 @@ class TensorBoardLogs():
             The session ID to cache the data for
         """
         live_data = self._is_training and session_id == max(self.session_ids)
-        iterator = self._training_iterator if live_data else tf.compat.v1.io.tf_record_iterator(
+        iterator = self._training_iterator if live_data else record_iterator(
             self._log_files.get(session_id))
         assert iterator is not None
         parser = _EventParser(iterator, self._cache, live_data)
@@ -622,7 +645,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
 
     Parameters
     ----------
-    iterator: :func:`tf.compat.v1.io.tf_record_iterator`
+    iterator: :func:`record_iterator`
         The iterator to use for reading Tensorflow event logs
     cache: :class:`_Cache`
         The cache object to store the collected parsed events to
@@ -647,7 +670,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
 
         Parameters
         ----------
-        iterator: :func:`tf.compat.v1.io.tf_record_iterator`
+        iterator: :func:`record_iterator`
             The live training iterator to use for reading Tensorflow event logs
 
         Yields
@@ -663,11 +686,12 @@ class _EventParser():  # pylint:disable=too-few-public-methods
             except StopIteration:
                 logger.debug("End of data reached")
                 break
-            except tf.errors.DataLossError as err:
-                # Truncated records are ignored. The iterator holds the offset, so the record will
-                # be completed at the next call.
-                logger.debug("Truncated record. Original Error: %s", err)
-                break
+            # TODO
+            #except tf.errors.DataLossError as err:
+            #    # Truncated records are ignored. The iterator holds the offset, so the record will
+            #    # be completed at the next call.
+            #    logger.debug("Truncated record. Original Error: %s", err)
+            #    break
         logger.debug("Collected %s records from live log file", i)
 
     def cache_events(self, session_id: int) -> None:
@@ -685,16 +709,19 @@ class _EventParser():  # pylint:disable=too-few-public-methods
                 event = event_pb2.Event.FromString(record)  # pylint:disable=no-member
                 if not event.summary.value:
                     continue
-                if event.summary.value[0].tag == "keras":
+                if event.summary.value[0].tag.split("/", maxsplit=1)[0] == "keras":
                     self._parse_outputs(event)
                 if event.summary.value[0].tag.startswith("batch_"):
                     data[event.step] = self._process_event(event,
                                                            data.get(event.step, EventData()))
 
-        except tf_errors.DataLossError as err:
-            logger.warning("The logs for Session %s are corrupted and cannot be displayed. "
-                           "The totals do not include this session. Original error message: "
-                           "'%s'", session_id, str(err))
+        # TODO
+        except:
+            raise
+        #except tf_errors.DataLossError as err:
+        #    logger.warning("The logs for Session %s are corrupted and cannot be displayed. "
+        #                   "The totals do not include this session. Original error message: "
+        #                   "'%s'", session_id, str(err))
 
         self._cache.cache_data(session_id, data, self._loss_labels, is_live=self._live_data)
 
@@ -795,7 +822,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
             # in logging or may be due to work around put in place in FS training function for the
             # following bug in TF 2.8/2.9 when writing records:
             #  https://github.com/keras-team/keras/issues/16173
-            loss = float(tf.make_ndarray(summary.tensor))
+            loss = float(np.frombuffer(summary.tensor.tensor_content, dtype="float32"))
 
         step.loss.append(loss)
 

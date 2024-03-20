@@ -17,12 +17,13 @@ import numpy as np
 
 import keras
 from torch.cuda import OutOfMemoryError
-from tensorflow import summary
 
 from lib.image import hex_to_rgb
 from lib.training import Feeder, LearningRateFinder
 from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.train._config import Config
+
+from .tensorboard import TorchTensorBoard
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
@@ -167,7 +168,7 @@ class TrainerBase():
                     f"{learning_rate:.1e}")
         return False
 
-    def _set_tensorboard(self) -> keras.callbacks.TensorBoard:
+    def _set_tensorboard(self) -> TorchTensorBoard:
         """ Set up Tensorboard callback for logging loss.
 
         Bypassed if command line option "no-logs" has been selected.
@@ -186,16 +187,10 @@ class TrainerBase():
         log_dir = os.path.join(str(self._model.io.model_dir),
                                f"{self._model.name}_logs",
                                f"session_{self._model.state.session_id}")
-        tensorboard = keras.callbacks.TensorBoard(log_dir=log_dir,
-                                                  histogram_freq=0,  # Must be 0 or hangs
-                                                  write_graph=True,
-                                                  write_images=False,
-                                                  update_freq="batch",
-                                                  profile_batch=0,
-                                                  embeddings_freq=0,
-                                                  embeddings_metadata=None)
+        tensorboard = TorchTensorBoard(log_dir=log_dir,
+                                       write_graph=True,
+                                       update_freq="batch")
         tensorboard.set_model(self._model.model)
-        tensorboard.on_train_begin(0)
         logger.verbose("Enabled TensorBoard Logging")  # type: ignore
         return tensorboard
 
@@ -280,16 +275,7 @@ class TrainerBase():
         logs = {log[0]: log[1]
                 for log in zip(self._model.state.loss_names, loss)}
 
-        # Bug in TF 2.8/2.9/2.10 where batch recording got deleted.
-        # ref: https://github.com/keras-team/keras/issues/16173
-        with summary.record_if(True), self._tensorboard._train_writer.as_default():  # noqa:E501  pylint:disable=protected-access,not-context-manager
-            for name, value in logs.items():
-                summary.scalar(
-                    "batch_" + name,
-                    value,
-                    step=self._tensorboard._train_step)  # pylint:disable=protected-access
-        # TODO revert this code if fixed in tensorflow
-        # self._tensorboard.on_train_batch_end(self._model.iterations, logs=logs)
+        self._tensorboard.on_train_batch_end(self._model.iterations, logs=logs)
 
     def _collate_and_store_loss(self, loss: list[float]) -> list[float]:
         """ Collate the loss into totals for each side.
@@ -381,7 +367,7 @@ class TrainerBase():
         if not self._tensorboard:
             return
         logger.debug("Ending Tensorboard Session: %s", self._tensorboard)
-        self._tensorboard.on_train_end(None)
+        self._tensorboard.on_train_end()
 
 
 class _Samples():  # pylint:disable=too-few-public-methods
