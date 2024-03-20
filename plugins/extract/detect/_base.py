@@ -283,8 +283,26 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                 if angle == 0:
                     batch.prediction = pred
                 else:
-                    batch.prediction = np.array([b if b.any() else p
-                                                 for b, p in zip(batch.prediction, pred)])
+                    try:
+                        batch.prediction = np.array([b if b.any() else p
+                                                    for b, p in zip(batch.prediction, pred)])
+                    except ValueError as err:
+                        # If batches are different sizes after rotation Numpy will error, so we
+                        # need to explicitly set the dtype to 'object' rather than let it infer
+                        # numpy error:
+                        # ValueError: setting an array element with a sequence. The requested array
+                        # has an inhomogeneous shape after 1 dimensions. The detected shape was
+                        # (8,) + inhomogeneous part
+                        if "inhomogeneous" in str(err):
+                            batch.prediction = np.array([b if b.any() else p
+                                                         for b, p in zip(batch.prediction, pred)],
+                                                        dtype="object")
+                            logger.trace(  # type:ignore[attr-defined]
+                                "Mismatched array sizes, setting dtype to object: %s",
+                                [p.shape for p in batch.prediction])
+                        else:
+                            raise
+
                 logger.trace("angle: %s, filenames: %s, "  # type:ignore[attr-defined]
                              "prediction: %s",
                              angle, batch.filename, pred)
@@ -307,7 +325,6 @@ class Detector(Extractor):  # pylint:disable=abstract-method
             found_faces = T.cast(list[np.ndarray], ([face if not found.any() else found
                                                      for face, found in zip(batch.prediction,
                                                                             found_faces)]))
-
             if all(face.any() for face in found_faces):
                 logger.trace("Faces found for all images")  # type:ignore[attr-defined]
                 break
