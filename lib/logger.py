@@ -13,8 +13,6 @@ import traceback
 
 from datetime import datetime
 
-import numpy as np
-
 
 # TODO - Remove this monkey patch when TF autograph fixed to handle newer logging lib
 def _patched_format(self, record):
@@ -561,10 +559,16 @@ def _process_value(value: T.Any) -> T.Any:
     """
     if isinstance(value, str):
         return f'"{value}"'
-    if isinstance(value, np.ndarray) and np.prod(value.shape) > 10:
-        return f'[type: "{type(value).__name__}" shape: {value.shape}, dtype: "{value.dtype}"]'
     if isinstance(value, (list, tuple, set)) and len(value) > 10:
         return f'[type: "{type(value).__name__}" len: {len(value)}'
+
+    try:
+        import numpy as np
+    except ImportError:
+        return value
+
+    if isinstance(value, np.ndarray) and np.prod(value.shape) > 10:
+        return f'[type: "{type(value).__name__}" shape: {value.shape}, dtype: "{value.dtype}"]'
     return value
 
 
