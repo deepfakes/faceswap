@@ -76,14 +76,15 @@ class Backup():
         Parameters
         ----------
         full_path: str
-            The full path to a `.h5` model file or a `.json` state file
+            The full path to a `.keras` model file or a `.json` state file
         """
         backupfile = full_path + ".bk"
         if os.path.exists(backupfile):
             os.remove(backupfile)
         if os.path.exists(full_path):
-            logger.verbose("Backing up: '%s' to '%s'", full_path, backupfile)
-            os.rename(full_path, backupfile)
+            logger.verbose("Backing up: '%s' to '%s'",  # type:ignore[attr-defined]
+                           full_path, backupfile)
+            copyfile(full_path, backupfile)
 
     def snapshot_models(self, iterations):
         """ Take a snapshot of the model at the current state and back it up.

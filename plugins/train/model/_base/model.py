@@ -360,13 +360,13 @@ class ModelBase():
 
     def _summary_to_log(self, summary: str, line_break: bool) -> None:
         """ Function to output Keras model summary to log file at verbose log level
-        
+
         Parameters
         ----------
         summary, str
             The model summary output from keras
-        
-        line_breal: bool
+
+        line_break: bool
             Unused, but required by Keras for print_fn as of keras 3.0.5
         """
         for line in summary.splitlines():
@@ -430,12 +430,11 @@ class ModelBase():
 
         Parameters
         ----------
-        loss: list
+        loss: list[float]
             The loss values for the A and B side for the current iteration. This should be the
             collated loss values for each side.
         """
-        self._io.history[0].append(loss[0])
-        self._io.history[1].append(loss[1])
+        self._io.history.append(sum(loss))
 
 
 class State():
@@ -468,7 +467,9 @@ class State():
         self._mixed_precision_layers: list[str] = []
         self._rebuild_model = False
         self._sessions: dict[int, dict] = {}
-        self._lowest_avg_loss: dict[str, float] = {}
+        self.lowest_avg_loss: float = 0.0
+        """float: The lowest average loss seen between save intervals. """
+
         self._config: dict[str, ConfigValueType] = {}
         self._load(config_changeable_items)
         self._session_id = self._new_session_id()
@@ -494,11 +495,6 @@ class State():
     def iterations(self) -> int:
         """ int: The total number of iterations that the model has trained. """
         return self._iterations
-
-    @property
-    def lowest_avg_loss(self) -> dict:
-        """dict: The lowest average save interval loss seen for each side. """
-        return self._lowest_avg_loss
 
     @property
     def session_id(self) -> int:
@@ -626,7 +622,14 @@ class State():
         state = self._serializer.load(self._filename)
         self._name = state.get("name", self._name)
         self._sessions = state.get("sessions", {})
-        self._lowest_avg_loss = state.get("lowest_avg_loss", {})
+
+        self.lowest_avg_loss = state.get("lowest_avg_loss", 0.0)
+        if isinstance(self.lowest_avg_loss, dict):
+            lowest_avg_loss = sum(self.lowest_avg_loss.values())
+            logger.info("Collating legacy lowest_avg_loss from %s to %s",
+                        self.lowest_avg_loss, lowest_avg_loss)
+            self.lowest_avg_loss = lowest_avg_loss
+
         self._iterations = state.get("iterations", 0)
         self._mixed_precision_layers = state.get("mixed_precision_layers", [])
         self._config = state.get("config", {})
@@ -638,7 +641,7 @@ class State():
         logger.debug("Saving State")
         state = {"name": self._name,
                  "sessions": self._sessions,
-                 "lowest_avg_loss": self._lowest_avg_loss,
+                 "lowest_avg_loss": self.lowest_avg_loss,
                  "iterations": self._iterations,
                  "mixed_precision_layers": self._mixed_precision_layers,
                  "config": _CONFIG}

@@ -84,7 +84,8 @@ class IO():
         self._is_predict = is_predict
         self._model_dir = model_dir
         self._save_optimizer = save_optimizer
-        self._history: list[list[float]] = [[], []]  # Loss histories per save iteration
+        self._history: list[float] = []
+        """list[float]: Loss history for current save iteration """
         self._backup = Backup(self._model_dir, self._plugin.name)
 
     @property
@@ -105,8 +106,8 @@ class IO():
         return os.path.isfile(self.filename)
 
     @property
-    def history(self) -> list[list[float]]:
-        """ list: list of loss histories per side for the current save iteration. """
+    def history(self) -> list[float]:
+        """ list[float]: list of loss history for the current save iteration. """
         return self._history
 
     @property
@@ -180,89 +181,75 @@ class IO():
         force_save_optimizer: bool, optional
             ``True`` to force saving the optimizer weights with the model, otherwise ``False``.
             Default:``False``
-
-        Notes
-        -----
-        The backup function actually backups the model from the previous save iteration rather than
-        the current save iteration. This is not a bug, but protection against long save times, as
-        models can get quite large, so renaming the current model file rather than copying it can
-        save substantial amount of time.
         """
         logger.debug("Backing up and saving models")
         print("")  # Insert a new line to avoid spamming the same row as loss output
-        save_averages = self._get_save_averages()
-        if save_averages and self._should_backup(save_averages):
-            self._backup.backup_model(self.filename)
-            self._backup.backup_model(self._plugin.state.filename)
-
         include_optimizer = (force_save_optimizer or
                              self._save_optimizer == "always" or
                              (self._save_optimizer == "exit" and is_exit))
 
-        try:
-            self._plugin.model.save(self.filename, include_optimizer=include_optimizer)
-        except ValueError as err:
-            if include_optimizer and "name already exists" in str(err):
-                logger.warning("Due to a bug in older versions of Tensorflow, optimizer state "
-                               "cannot be saved for this model.")
-                self._plugin.model.save(self.filename, include_optimizer=False)
-            else:
-                raise
-
+        self._plugin.model.save(self.filename, include_optimizer=include_optimizer)
         self._plugin.state.save()
 
+        save_average = self._get_save_average()
+        if save_average and self._should_backup(save_average):
+            self._backup.backup_model(self.filename)
+            self._backup.backup_model(self._plugin.state.filename)
+
         msg = "[Saved optimizer state for Snapshot]" if force_save_optimizer else "[Saved model]"
-        if save_averages:
-            lossmsg = [f"face_{side}: {avg:.5f}"
-                       for side, avg in zip(("a", "b"), save_averages)]
-            msg += f" - Average loss since last save: {', '.join(lossmsg)}"
+        if save_average:
+            msg += f" - Average total loss since last save: {save_average:.5f}"
         logger.info(msg)
 
-    def _get_save_averages(self) -> list[float]:
-        """ Return the average loss since the last save iteration and reset historical loss """
+    def _get_save_average(self) -> float:
+        """ Return the average loss since the last save iteration and reset historical loss
+
+        Returns
+        -------
+        float
+            The average loss since the last save iteration
+        """
         logger.debug("Getting save averages")
-        if not all(loss for loss in self._history):
-            logger.debug("No loss in history")
-            retval = []
+        if not self._history:
+            logger.info("No loss in history")
+            retval = 0.0
         else:
-            retval = [sum(loss) / len(loss) for loss in self._history]
-            self._history = [[], []]  # Reset historical loss
-        logger.debug("Average losses since last save: %s", retval)
+            retval = sum(self._history) / len(self._history)
+            self._history = []  # Reset historical loss
+        logger.info("Average loss since last save: %s", retval)
         return retval
 
-    def _should_backup(self, save_averages: list[float]) -> bool:
-        """ Check whether the loss averages for this save iteration is the lowest that has been
+    def _should_backup(self, save_average: float) -> bool:
+        """ Check whether the loss average for this save iteration is the lowest that has been
         seen.
 
-        This protects against model corruption by only backing up the model if both sides have
-        seen a total fall in loss.
+        This protects against model corruption by only backing up the model if the sum of all loss
+        functions has fallen.
 
         Notes
         -----
         This is by no means a perfect system. If the model corrupts at an iteration close
         to a save iteration, then the averages may still be pushed lower than a previous
-        save average, resulting in backing up a corrupted model.
+        save average, resulting in backing up a corrupted model. Changing loss weighting can also
+        arteficially impact this
 
         Parameters
         ----------
-        save_averages: list
-            The average loss for each side for this save iteration
+        save_average: float
+            The average loss since the last save iteration
         """
-        backup = True
-        for side, loss in zip(("a", "b"), save_averages):
-            if not self._plugin.state.lowest_avg_loss.get(side, None):
-                logger.debug("Set initial save iteration loss average for '%s': %s", side, loss)
-                self._plugin.state.lowest_avg_loss[side] = loss
-                continue
-            backup = loss < self._plugin.state.lowest_avg_loss[side] if backup else backup
+        if not self._plugin.state.lowest_avg_loss:
+            logger.debug("Set initial save iteration loss average: %s", save_average)
+            self._plugin.state.lowest_avg_loss = save_average
+            return False
+
+        old_average = self._plugin.state.lowest_avg_loss
+        backup = save_average < old_average
 
         if backup:  # Update lowest loss values to the state file
-            # pylint:disable=unnecessary-comprehension
-            old_avgs = {key: val for key, val in self._plugin.state.lowest_avg_loss.items()}
-            self._plugin.state.lowest_avg_loss["a"] = save_averages[0]
-            self._plugin.state.lowest_avg_loss["b"] = save_averages[1]
-            logger.debug("Updated lowest historical save iteration averages from: %s to: %s",
-                         old_avgs, self._plugin.state.lowest_avg_loss)
+            self._plugin.state.lowest_avg_loss = save_average
+            logger.debug("Updated lowest historical save iteration average from: %s to: %s",
+                         old_average, save_average)
 
         logger.debug("Should backup: %s", backup)
         return backup
