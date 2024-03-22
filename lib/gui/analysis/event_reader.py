@@ -456,29 +456,79 @@ class _Cache():
         return retval
 
 
-def record_iterator(log_file: str) -> T.Generator[bytes, None, None]:
+class RecordIterator:
     """ A replacement for tensorflow's :func:`compat.v1.io.tf_record_iterator`
 
     Parameters
     ----------
     log_file: str
-        The full path to the protobuf file to read logs from
-
-    Yields
-    ------
-    bytes
-        An event record
+        The event log file to obtain records from
+    is_live: bool, optional
+        ``True`` if the log file is for a live training session that will constantly provide data.
+        Default: ``False``
     """
-    with open(log_file, "rb") as ifile:
-        while True:
-            b_header = ifile.read(8)
-            if not b_header:
-                break
-            read_len = int(struct.unpack('Q', b_header)[0])
-            ifile.seek(4, 1)
-            data = ifile.read(read_len)
-            ifile.seek(4, 1)
-            yield data
+    def __init__(self, log_file, is_live: bool = False) -> None:
+        logger.debug(parse_class_init(locals()))
+        self._file_path = log_file
+        self._log_file = open(self._file_path, "rb")  # pylint:disable=consider-using-with
+        self._is_live = is_live
+        self._position = 0
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def __iter__(self) -> RecordIterator:
+        """ Iterate over a Tensorboard event file"""
+        return self
+
+    def _on_file_read(self) -> None:
+        """ If the file is closed and we are reading live data, re-open the file and seek to the
+        correct position """
+        if not self._is_live or not self._log_file.closed:
+            return
+
+        logger.trace("Re-opening '%s' and Seeking to %s",  # type:ignore[attr-defined]
+                     self._file_path, self._position)
+        self._log_file = open(self._file_path, "rb")  # pylint:disable=consider-using-with
+        self._log_file.seek(self._position, 0)
+
+    def _on_file_end(self) -> None:
+        """ Close the event file. If live data, record the current position"""
+        if self._is_live:
+            self._position = self._log_file.tell()
+            logger.trace("Setting live position to %s",  # type:ignore[attr-defined]
+                         self._position)
+
+        logger.trace("EOF. Closing '%s'", self._file_path)  # type:ignore[attr-defined]
+        self._log_file.close()
+
+    def __next__(self) -> bytes:
+        """ Get the next event log from a Tensorboard event file
+
+        Returns
+        -------
+        bytes
+            A Tensorboard event log
+
+        Raises
+        ------
+        StopIteration
+            When the event log is fully consumed
+        """
+        self._on_file_read()
+
+        b_header = self._log_file.read(8)
+
+        if not b_header:
+            self._on_file_end()
+            raise StopIteration
+
+        read_len = int(struct.unpack('Q', b_header)[0])
+        self._log_file.seek(4, 1)
+        data = self._log_file.read(read_len)
+
+        self._log_file.seek(4, 1)
+        logger.trace("Returning event data of len %s", read_len)  # type:ignore[attr-defined]
+
+        return data
 
 
 class TensorBoardLogs():
@@ -533,7 +583,7 @@ class TensorBoardLogs():
             self._log_files.refresh()
             log_file = self._log_files.get(self.session_ids[-1])
             logger.debug("Setting training iterator for log file: '%s'", log_file)
-            self._training_iterator = record_iterator(log_file)
+            self._training_iterator = RecordIterator(log_file, is_live=True)
         else:
             logger.debug("Removing training iterator")
             del self._training_iterator
@@ -553,7 +603,7 @@ class TensorBoardLogs():
             The session ID to cache the data for
         """
         live_data = self._is_training and session_id == max(self.session_ids)
-        iterator = self._training_iterator if live_data else record_iterator(
+        iterator = self._training_iterator if live_data else RecordIterator(
             self._log_files.get(session_id))
         assert iterator is not None
         parser = _EventParser(iterator, self._cache, live_data)
@@ -646,7 +696,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
 
     Parameters
     ----------
-    iterator: :func:`record_iterator`
+    iterator: :class:`RecordIterator`
         The iterator to use for reading Tensorflow event logs
     cache: :class:`_Cache`
         The cache object to store the collected parsed events to
@@ -671,7 +721,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
 
         Parameters
         ----------
-        iterator: :func:`record_iterator`
+        iterator: :class:`RecordIterator`
             The live training iterator to use for reading Tensorflow event logs
 
         Yields
@@ -687,12 +737,6 @@ class _EventParser():  # pylint:disable=too-few-public-methods
             except StopIteration:
                 logger.debug("End of data reached")
                 break
-            # TODO
-            #except tf.errors.DataLossError as err:
-            #    # Truncated records are ignored. The iterator holds the offset, so the record will
-            #    # be completed at the next call.
-            #    logger.debug("Truncated record. Original Error: %s", err)
-            #    break
         logger.debug("Collected %s records from live log file", i)
 
     def cache_events(self, session_id: int) -> None:
@@ -705,24 +749,15 @@ class _EventParser():  # pylint:disable=too-few-public-methods
         """
         assert self._iterator is not None
         data: dict[int, EventData] = {}
-        try:
-            for record in self._iterator:
-                event = event_pb2.Event.FromString(record)  # pylint:disable=no-member
-                if not event.summary.value:
-                    continue
-                if event.summary.value[0].tag.split("/", maxsplit=1)[0] == "keras":
-                    self._parse_outputs(event)
-                if event.summary.value[0].tag.startswith("batch_"):
-                    data[event.step] = self._process_event(event,
-                                                           data.get(event.step, EventData()))
-
-        # TODO
-        except:
-            raise
-        #except tf_errors.DataLossError as err:
-        #    logger.warning("The logs for Session %s are corrupted and cannot be displayed. "
-        #                   "The totals do not include this session. Original error message: "
-        #                   "'%s'", session_id, str(err))
+        for record in self._iterator:
+            event = event_pb2.Event.FromString(record)  # pylint:disable=no-member
+            if not event.summary.value:
+                continue
+            if event.summary.value[0].tag.split("/", maxsplit=1)[0] == "keras":
+                self._parse_outputs(event)
+            if event.summary.value[0].tag.startswith("batch_"):
+                data[event.step] = self._process_event(event,
+                                                       data.get(event.step, EventData()))
 
         self._cache.cache_data(session_id, data, self._loss_labels, is_live=self._live_data)
 
@@ -743,9 +778,9 @@ class _EventParser():  # pylint:disable=too-few-public-methods
             The event data containing the keras model structure to be parsed
         """
         serializer = get_serializer("json")
-        struct = event.summary.value[0].tensor.string_val[0]
+        structure = event.summary.value[0].tensor.string_val[0]
 
-        config = serializer.unmarshal(struct)["config"]
+        config = serializer.unmarshal(structure)["config"]
         model_outputs = self._get_outputs(config)
 
         for side_outputs, side in zip(model_outputs, ("a", "b")):

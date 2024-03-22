@@ -14,7 +14,6 @@ from lib.logger import parse_class_init
 logger = logging.getLogger(__name__)
 
 
-
 class TorchTensorBoard(keras.callbacks.Callback):
     """Enable visualizations for TensorBoard. Adapted from Keras' Tensorboard Callback keeping
     only the parts we need, and using Torch rather than TensorFlow
@@ -43,7 +42,7 @@ class TorchTensorBoard(keras.callbacks.Callback):
     def __init__(self,
                  log_dir: str = "logs",
                  write_graph: bool = True,
-                 update_freq: T.Literal["batch", "epoch"] | int ="epoch") -> None:
+                 update_freq: T.Literal["batch", "epoch"] | int = "epoch") -> None:
         logger.debug(parse_class_init(locals()))
         super().__init__()
         self.log_dir = str(log_dir)
@@ -63,7 +62,7 @@ class TorchTensorBoard(keras.callbacks.Callback):
     @property
     def _train_writer(self) -> SummaryWriter:
         """:class:`torch.utils.tensorboard.SummaryWriter`: The summary writer """
-        if "train"  not in self._writers:
+        if "train" not in self._writers:
             self._writers["train"] = SummaryWriter(self._train_dir)
         return self._writers["train"]
 
@@ -91,12 +90,18 @@ class TorchTensorBoard(keras.callbacks.Callback):
             self._write_keras_model_summary()
             self._should_write_train_graph = True
 
-    def on_train_begin(self) -> None:
-        """ Initialize the call back on train start """
+    def on_train_begin(self, logs=None) -> None:
+        """ Initialize the call back on train start
+
+        Parameters
+        ----------
+        logs: None
+            Unused
+        """
         self._global_train_batch = 0
         self._previous_epoch_iterations = 0
 
-    def on_train_batch_end(self, batch: int, logs: dict[str, float]) -> None:
+    def on_train_batch_end(self, batch: int, logs: dict[str, float] | None = None) -> None:
         """ Update Tensorboard logs on batch end
 
         Parameters
@@ -115,7 +120,19 @@ class TorchTensorBoard(keras.callbacks.Callback):
                                           value,
                                           global_step=batch)
 
-    def on_train_end(self) -> None:
-        """ Close the writer on train completion """
+    def on_save(self) -> None:
+        """ Flush data to disk on save """
+        logger.debug("Flushing Tensorboard writer")
+        self._train_writer.flush()
+
+    def on_train_end(self, logs=None) -> None:
+        """ Close the writer on train completion
+
+        Parameters
+        ----------
+        logs: None
+            Unused
+        """
         for writer in self._writers.values():
+            writer.flush()
             writer.close()

@@ -15,7 +15,6 @@ import typing as T
 import cv2
 import numpy as np
 
-import keras
 from torch.cuda import OutOfMemoryError
 
 from lib.image import hex_to_rgb
@@ -358,7 +357,7 @@ class TrainerBase():
         if timelapse_kwargs:
             self._timelapse.output_timelapse(timelapse_kwargs)
 
-    def clear_tensorboard(self) -> None:
+    def _clear_tensorboard(self) -> None:
         """ Stop Tensorboard logging.
 
         Tensorboard logging needs to be explicitly shutdown on training termination. Called from
@@ -368,6 +367,19 @@ class TrainerBase():
             return
         logger.debug("Ending Tensorboard Session: %s", self._tensorboard)
         self._tensorboard.on_train_end()
+
+    def save(self, is_exit: bool = False) -> None:
+        """ Save the model
+
+        Parameters
+        ----------
+        is_exit: bool, optional
+            ``True`` if save has been called on model exit. Default: ``False``
+        """
+        self._model.io.save(is_exit=is_exit)
+        self._tensorboard.on_save()
+        if is_exit:
+            self._clear_tensorboard()
 
 
 class _Samples():  # pylint:disable=too-few-public-methods
