@@ -225,8 +225,17 @@ class _Cache():
                 logger.debug("All metadata already cached for: %s", keys)
                 return read_image_batch(filenames)
 
-            batch, metadata = read_image_batch(filenames, with_metadata=True)
-
+            try:
+                batch, metadata = read_image_batch(filenames, with_metadata=True)
+            except ValueError as err:
+                if "inhomogeneous" in str(err):
+                    raise FaceswapError(
+                        "There was an error loading a batch of images. This is most likely due to "
+                        "non-faceswap extracted faces in your training folder."
+                        "\nAll training images should be Faceswap extracted faces."
+                        "\nAll training images should be the same size."
+                        f"\nThe files that caused this error are: {filenames}") from err
+                raise
             if len(batch.shape) == 1:
                 folder = os.path.dirname(filenames[0])
                 details = [
