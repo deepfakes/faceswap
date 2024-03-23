@@ -378,7 +378,6 @@ class ModelBase():
             print_fn = None  # Print straight to stdout
         else:
             # print to logger
-            #print_fn = lambda x: logger.verbose("%s", x)  #type:ignore[attr-defined]  # noqa[E731]  # pylint:disable=C3001
             print_fn = self._summary_to_log
         for idx, model in enumerate(get_all_sub_models(self.model)):
             if idx == 0:
@@ -406,7 +405,8 @@ class ModelBase():
         weights.freeze()
 
         self._loss.configure(self.model)
-        self.model.compile(optimizer=optimizer, loss=self._loss.functions, metrics=self._loss.functions)
+        losses = list(self._loss.functions.values())
+        self.model.compile(optimizer=optimizer, loss=losses, metrics=losses)
         self._state.add_session_loss_names(self._loss.names)
         logger.debug("Compiled Model: %s", self.model)
 

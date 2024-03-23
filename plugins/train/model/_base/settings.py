@@ -104,8 +104,9 @@ class Loss():
         return self._names
 
     @property
-    def functions(self) -> dict:
-        """ dict: The loss functions that apply to each model output. """
+    def functions(self) -> dict[str, losses.LossWrapper]:
+        """ dict[str, :class:`~lib.model.losses.LossWrapper`]: The loss functions that apply to
+        each model output. """
         return self._funcs
 
     @property
@@ -143,13 +144,6 @@ class Loss():
 
         Adds the loss names to :attr:`names`
 
-        Notes
-        -----
-        TODO Currently there is an issue in Tensorflow that wraps all outputs in an Identity layer
-        when running in Eager Execution mode, which means we cannot use the name of the output
-        layers to name the losses (https://github.com/tensorflow/tensorflow/issues/32180).
-        With this in mind, losses are named based on their shapes
-
         Parameters
         ----------
         outputs: list
@@ -186,14 +180,14 @@ class Loss():
         logger.debug("Obtained loss function `%s` (%s)", name, retval)
         return retval
 
-    def _set_loss_functions(self, output_names: list[str]):
+    def _set_loss_functions(self, output_names: list[str]) -> None:
         """ Set the loss functions and their associated weights.
 
         Adds the loss functions to the :attr:`functions` dictionary.
 
         Parameters
         ----------
-        output_names: list
+        output_names: list[str]
             The output names from the model
         """
         face_losses = [(lossname, self._config.get(f"loss_weight_{k[-1]}", 100))
@@ -211,7 +205,7 @@ class Loss():
                     self._add_face_loss_function(loss_func, func, weight / 100.)
 
             logger.debug("%s: (output_name: '%s', function: %s)", name, output_name, loss_func)
-            self._funcs[output_name] = loss_func
+            self._funcs[name] = loss_func
         logger.debug("functions: %s", self._funcs)
 
     def _add_face_loss_function(self,

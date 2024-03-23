@@ -482,7 +482,74 @@ class _Samples():  # pylint:disable=too-few-public-methods
         logger.debug("Resized sample: (side: '%s' shape: %s)", side, retval.shape)
         return retval
 
-    def _get_predictions(self, feed_a: np.ndarray, feed_b: np.ndarray) -> dict[str, np.ndarray]:
+    def _filter_multiscale_output(self, standard: list[torch.Tensor], swapped: list[torch.Tensor]
+                                  ) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
+        """ Only return the largest predictions if the model has multi-scaled output
+
+        Parameters
+        ----------
+        standard: list[:class:`torch.Tensor`]
+            The standard output from the model
+        swapped: list[:class:`torch.Tensor`]
+            The swapped output from the model
+
+        Returns
+        -------
+        standard: list[:class:`torch.Tensor`]
+            The standard output from the model, filtered to just the largest output
+        swapped: list[:class:`torch.Tensor`]
+            The swapped output from the model, filtered to just the largest output
+        """
+        sizes = set(p.shape[1] for p in standard)
+        if len(sizes) == 1:
+            return standard, swapped
+        logger.debug("Received outputs. standard: %s, swapped: %s",
+                     [s.shape for s in standard], [s.shape for s in swapped])
+        logger.debug("Stripping multi-scale outputs for sizes %s", sizes)
+        standard = [s for s in standard if s.shape[1] == max(sizes)]
+        swapped = [s for s in swapped if s.shape[1] == max(sizes)]
+        logger.debug("Stripped outputs. standard: %s, swapped: %s",
+                     [s.shape for s in standard], [s.shape for s in swapped])
+        return standard, swapped
+
+    def _collate_output(self, standard: list[torch.Tensor], swapped: list[torch.Tensor]
+                        ) -> tuple[list[np.ndarray], list[np.ndarray]]:
+        """ Merge the mask onto the preview image's 4th channel if learn mask is selected.
+        Return as numpy array
+
+        Parameters
+        ----------
+        standard: list[:class:`torch.Tensor`]
+            The standard output from the model
+        swapped: list[:class:`torch.Tensor`]
+            The swapped output from the model
+
+        Returns
+        -------
+        standard: list[:class:`numpy.ndarray`]
+            The standard output from the model, with mask merged
+        swapped: list[:class:`numpy.ndarray`]
+            The swapped output from the model, with mask merged
+        """
+        logger.debug("Received tensors. standard: %s, swapped: %s",
+                     [s.shape for s in standard], [s.shape for s in swapped])
+
+        # Pull down outputs
+        standard = [p.cpu().detach().numpy() for p in standard]
+        swapped = [p.cpu().detach().numpy() for p in swapped]
+
+        if self._model.config["learn_mask"]:  # Add mask to 4th channel of final output
+            standard = [np.concatenate(standard[idx * 2: (idx * 2) + 2], axis=-1)
+                        for idx in range(2)]
+            swapped = [np.concatenate(swapped[idx * 2: (idx * 2) + 2], axis=-1)
+                       for idx in range(2)]
+        logger.debug("Collated output. standard: %s, swapped: %s",
+                     [(s.shape, s.dtype) for s in standard],
+                     [(s.shape, s.dtype) for s in swapped])
+        return standard, swapped
+
+    def _get_predictions(self, feed_a: np.ndarray, feed_b: np.ndarray
+                         ) -> dict[T.Literal["a_a", "a_b", "b_b", "b_a"], np.ndarray]:
         """ Feed the samples to the model and return predictions
 
         Parameters
@@ -498,22 +565,14 @@ class _Samples():  # pylint:disable=too-few-public-methods
             List of :class:`numpy.ndarray` of predictions received from the model
         """
         logger.debug("Getting Predictions")
-        preds: dict[str, np.ndarray] = {}
+        preds: dict[T.Literal["a_a", "a_b", "b_b", "b_a"], np.ndarray] = {}
 
         with torch.inference_mode():
             standard = self._model.model([feed_a, feed_b])
             swapped = self._model.model([feed_b, feed_a])
 
-        if self._model.config["learn_mask"]:  # Add mask to 4th channel of final output
-            standard = [np.concatenate(side[-2:], axis=-1)
-                        for side in [[s.cpu().detach().numpy() for s in t] for t in standard]]
-            swapped = [np.concatenate(side[-2:], axis=-1)
-                       for side in [[s.cpu().detach().numpy() for s in t] for t in swapped]]
-        else:  # Retrieve final output
-            standard = [side[-1] if isinstance(side, list) else side
-                        for side in [t.cpu().detach().numpy() for t in standard]]
-            swapped = [side[-1] if isinstance(side, list) else side
-                       for side in [t.cpu().detach().numpy() for t in swapped]]
+        standard, swapped = self._filter_multiscale_output(standard, swapped)
+        standard, swapped = self._collate_output(standard, swapped)
 
         preds["a_a"] = standard[0]
         preds["b_b"] = standard[1]
@@ -523,12 +582,13 @@ class _Samples():  # pylint:disable=too-few-public-methods
         logger.debug("Returning predictions: %s", {key: val.shape for key, val in preds.items()})
         return preds
 
-    def _compile_preview(self, predictions: dict[str, np.ndarray]) -> np.ndarray:
+    def _compile_preview(self, predictions: dict[T.Literal["a_a", "a_b", "b_b", "b_a"], np.ndarray]
+                         ) -> np.ndarray:
         """ Compile predictions and images into the final preview image.
 
         Parameters
         ----------
-        predictions: dict
+        predictions: dict[Literal["a_a", "a_b", "b_b", "b_a"], np.ndarray
             The predictions from the model
 
         Returns
