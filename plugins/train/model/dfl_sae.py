@@ -68,10 +68,10 @@ class Model(ModelBase):
                                      inter_both(encoder_b)])
 
             decoder = self.decoder("both", int_output_shape)
-            outputs = [decoder(inter_a), decoder(inter_b)]
+            outputs = decoder(inter_a) + decoder(inter_b)
         else:
-            outputs = [self.decoder("a", enc_output_shape)(encoder_a),
-                       self.decoder("b", enc_output_shape)(encoder_b)]
+            outputs = (self.decoder("a", enc_output_shape)(encoder_a) +
+                       self.decoder("b", enc_output_shape)(encoder_b))
         autoencoder = KModel(inputs, outputs, name=self.model_name)
         return autoencoder
 

@@ -30,6 +30,7 @@ _video_extensions = [  # pylint:disable=invalid-name
     ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
     ".ts", ".vob"]
 _TORCH_VERS: tuple[int, int] | None = None
+_KERAS_VERS: tuple[int, int] | None = None
 ValidBackends = T.Literal["nvidia", "cpu", "apple_silicon", "directml", "rocm"]
 
 
@@ -182,6 +183,28 @@ def get_torch_version() -> tuple[int, int]:
         split = torch.__version__.split(".")[:2]
         _TORCH_VERS = (int(split[0]), int(split[1]))
     return _TORCH_VERS
+
+
+def get_keras_version() -> tuple[int, int]:
+    """ Obtain the major. minor version of currently installed Keras.
+
+    Returns
+    -------
+    tuple[int, int]
+        A tuple of the form (major, minor) representing the version of Keras that is installed
+
+    Example
+    -------
+    >>> from lib.utils import get_torch_version
+    >>> get_torch_version()
+    (2, 2)
+    """
+    global _KERAS_VERS  # pylint:disable=global-statement
+    if _KERAS_VERS is None:
+        import keras  # pylint:disable=import-outside-toplevel
+        split = keras.__version__.split(".")[:2]
+        _KERAS_VERS = (int(split[0]), int(split[1]))
+    return _KERAS_VERS
 
 
 def get_folder(path: str, make_folder: bool = True) -> str:

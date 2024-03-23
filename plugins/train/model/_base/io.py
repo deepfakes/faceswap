@@ -216,7 +216,7 @@ class IO():
         else:
             retval = sum(self._history) / len(self._history)
             self._history = []  # Reset historical loss
-        logger.info("Average loss since last save: %s", retval)
+        logger.info("Average loss since last save: %s", round(retval, 5))
         return retval
 
     def _should_backup(self, save_average: float) -> bool:

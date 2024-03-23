@@ -73,7 +73,7 @@ class Model(ModelBase):
         encoder_a = encoder(inputs[0])
         encoder_b = encoder(inputs[1])
 
-        outputs = [self.decoder_a()(encoder_a), self.decoder_b()(encoder_b)]
+        outputs = self.decoder_a()(encoder_a) + self.decoder_b()(encoder_b)
 
         autoencoder = KModel(inputs, outputs, name=self.model_name)
         return autoencoder

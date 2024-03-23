@@ -14,7 +14,7 @@ import typing as T
 
 import cv2
 import numpy as np
-
+import torch
 from torch.cuda import OutOfMemoryError
 
 from lib.image import hex_to_rgb
@@ -500,10 +500,9 @@ class _Samples():  # pylint:disable=too-few-public-methods
         logger.debug("Getting Predictions")
         preds: dict[str, np.ndarray] = {}
 
-        # Calling model.predict() can lead to both VRAM and system memory leaks, so call model
-        # directly
-        standard = self._model.model([feed_a, feed_b])
-        swapped = self._model.model([feed_b, feed_a])
+        with torch.inference_mode():
+            standard = self._model.model([feed_a, feed_b])
+            swapped = self._model.model([feed_b, feed_a])
 
         if self._model.config["learn_mask"]:  # Add mask to 4th channel of final output
             standard = [np.concatenate(side[-2:], axis=-1)

@@ -60,7 +60,7 @@ class Model(ModelBase):
 
         decoder_b = self.decoder_b if self.details > 0 else self.decoder_b_fast
 
-        outputs = [self.decoder_a()(encoder_a), decoder_b()(encoder_b)]
+        outputs = self.decoder_a()(encoder_a) + decoder_b()(encoder_b)
 
         autoencoder = KModel(inputs, outputs, name=self.model_name)
         return autoencoder
@@ -71,27 +71,27 @@ class Model(ModelBase):
         var_x = input_
 
         var_x1 = Conv2DBlock(self.encoder_filters // 2, activation="leakyrelu")(var_x)
-        var_x2 = AveragePooling2D()(var_x)
+        var_x2 = AveragePooling2D(pool_size=(2, 2))(var_x)
         var_x2 = LeakyReLU(0.1)(var_x2)
         var_x = Concatenate()([var_x1, var_x2])
 
         var_x1 = Conv2DBlock(self.encoder_filters, activation="leakyrelu")(var_x)
-        var_x2 = AveragePooling2D()(var_x)
+        var_x2 = AveragePooling2D(pool_size=(2, 2))(var_x)
         var_x2 = LeakyReLU(0.1)(var_x2)
         var_x = Concatenate()([var_x1, var_x2])
 
         var_x1 = Conv2DBlock(self.encoder_filters * 2, activation="leakyrelu")(var_x)
-        var_x2 = AveragePooling2D()(var_x)
+        var_x2 = AveragePooling2D(pool_size=(2, 2))(var_x)
         var_x2 = LeakyReLU(0.1)(var_x2)
         var_x = Concatenate()([var_x1, var_x2])
 
         var_x1 = Conv2DBlock(self.encoder_filters * 4, activation="leakyrelu")(var_x)
-        var_x2 = AveragePooling2D()(var_x)
+        var_x2 = AveragePooling2D(pool_size=(2, 2))(var_x)
         var_x2 = LeakyReLU(0.1)(var_x2)
         var_x = Concatenate()([var_x1, var_x2])
 
         var_x1 = Conv2DBlock(self.encoder_filters * 8, activation="leakyrelu")(var_x)
-        var_x2 = AveragePooling2D()(var_x)
+        var_x2 = AveragePooling2D(pool_size=(2, 2))(var_x)
         var_x2 = LeakyReLU(0.1)(var_x2)
         var_x = Concatenate()([var_x1, var_x2])
 

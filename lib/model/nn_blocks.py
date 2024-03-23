@@ -385,13 +385,14 @@ class SeparableConv2DBlock():  # pylint:disable=too-few-public-methods
         logger.debug(parse_class_init(locals()))
 
         initializer = _get_default_initializer(kwargs.pop("kernel_initializer", None))
-        kwargs["kernel_initializer"] = initializer
 
         name = _get_name(f"separableconv2d_{filters}")
         self._conv = SeparableConv2D(filters,
                                      kernel_size=kernel_size,
                                      strides=strides,
                                      padding="same",
+                                     depthwise_initializer=initializer,
+                                     pointwise_initializer=initializer,
                                      name=f"{name}_seperableconv2d",
                                      **kwargs)
         self._activation = Activation("relu", name=f"{name}_relu")

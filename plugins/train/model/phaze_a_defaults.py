@@ -49,6 +49,7 @@ _HELPTEXT: str = (
 _ENCODERS: list[str] = sorted([
     "clipv_vit-b-16", "clipv_vit-b-32", "clipv_vit-l-14", "clipv_vit-l-14-336px",
     "clipv_farl-b-16-16", "clipv_farl-b-16-64",
+    "convnext_tiny", "convnext_small", "convnext_base", "convnext_large", "convnext_extra_large",
     "densenet121", "densenet169", "densenet201", "efficientnet_b0", "efficientnet_b1",
     "efficientnet_b2", "efficientnet_b3", "efficientnet_b4", "efficientnet_b5", "efficientnet_b6",
     "efficientnet_b7", "efficientnet_v2_b0", "efficientnet_v2_b1", "efficientnet_v2_b2",
@@ -147,21 +148,23 @@ _DEFAULTS = {
             "trained on face related tasks. All have a default input size of 224px except for "
             "ViT-L-14-336px that has an input size of 336px. Ref: Learning Transferable Visual "
             "Models From Natural Language Supervision (2021): https://arxiv.org/abs/2103.00020"
-            "\n\n\tdensenet: (32px -224px). Ref: Densely Connected Convolutional Networks "
-            "(2016): https://arxiv.org/abs/1608.06993?source=post_page"
-            "\n\n\tefficientnet: [Tensorflow 2.3+ only] EfficientNet has numerous variants (B0 - "
-            "B8) that increases the model width, depth and dimensional space at each step. The "
-            "minimum input resolution is 32px for all variants. The maximum input resolution for "
-            "each variant is: b0: 224px, b1: 240px, b2: 260px, b3: 300px, b4: 380px, b5: 456px, "
-            "b6: 528px, b7 600px. Ref: Rethinking Model Scaling for Convolutional Neural "
-            "Networks (2020): https://arxiv.org/abs/1905.11946"
-            "\n\n\tefficientnet_v2: [Tensorflow 2.8+ only] EfficientNetV2 is the follow up to "
-            "efficientnet. It has numerous variants (B0 - B3 and Small, Medium and Large) that "
-            "increases the model width, depth and dimensional space at each step. The minimum "
-            "input resolution is 32px for all variants. The maximum input resolution for each "
-            "variant is: b0: 224px, b1: 240px, b2: 260px, b3: 300px, s: 384px, m: 480px, l: "
-            "480px. Ref: EfficientNetV2: Smaller Models and Faster Training (2021): "
-            "https://arxiv.org/abs/2104.00298"
+            "\n\n\tconvnext: There are 6 varations of increasing complexity. All have a default "
+            "input size of 224px. Ref: A ConvNet for the 2020s (2022): "
+            "https://arxiv.org/abs/1608.06993"
+            "\n\n\tdensenet: (32px-224px). Ref: Densely Connected Convolutional Networks "
+            "(2016): https://arxiv.org/abs/1608.06993"
+            "\n\n\tefficientnet: EfficientNet has numerous variants (B0 -B8) that increases the "
+            "model width, depth and dimensional space at each step. The minimum input resolution "
+            "is 32px for all variants. The maximum input resolution for each variant is: b0: "
+            "224px, b1: 240px, b2: 260px, b3: 300px, b4: 380px, b5: 456px, b6: 528px, b7 600px. "
+            "Ref: Rethinking Model Scaling for Convolutional Neural Networks (2020): "
+            "https://arxiv.org/abs/1905.11946"
+            "\n\n\tefficientnet_v2: EfficientNetV2 is the follow up to efficientnet. It has "
+            "numerous variants (B0 - B3 and Small, Medium and Large) that increases the model "
+            "width, depth and dimensional space at each step. The minimum input resolution is "
+            "32px for all variants. The maximum input resolution for each variant is: b0: 224px, "
+            "b1: 240px, b2: 260px, b3: 300px, s: 384px, m: 480px, l: 480px. Ref: EfficientNetV2: "
+            "Smaller Models and Faster Training (2021): https://arxiv.org/abs/2104.00298"
             "\n\n\tfs_original: (32px - 1024px). A configurable variant of the original facewap "
             "encoder. ImageNet weights cannot be loaded for this model. Additional parameters "
             "can be configured with the 'fs_enc' options. A version of this encoder is used in "
