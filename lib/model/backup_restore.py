@@ -98,7 +98,7 @@ class Backup():
         iterations: int
             The number of iterations that the model has trained when performing the snapshot.
         """
-        print("")  # New line so log message doesn't append to last loss output
+        print("\x1b[2K", end="\r")  # Erase the current line
         logger.verbose("Saving snapshot")
         snapshot_dir = "{}_snapshot_{}_iters".format(self.model_dir, iterations)
 

@@ -350,7 +350,7 @@ class Train():  # pylint:disable=too-few-public-methods
 
             if viewer is not None and not save_iteration:
                 # Spammy but required by GUI to know to update window
-                print("")
+                print("\x1b[2K", end="\r")  # Clear last line
                 logger.info("[Preview Updated]")
 
             if self._stop:
@@ -426,7 +426,7 @@ class Train():  # pylint:disable=too-few-public-methods
                 logger.debug("Removing gui trigger file: %s", filename)
                 os.remove(filename)
                 if trigger == "refresh":
-                    print("")  # Let log print on different line from loss output
+                    print("\x1b[2K", end="\r")  # Clear last line
                     logger.info("Refresh preview requested...")
         return retval
 

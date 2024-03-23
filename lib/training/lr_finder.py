@@ -176,7 +176,7 @@ class LearningRateFinder:  # pylint:disable=too-few-public-methods
         self._model.model.optimizer.learning_rate.assign(self._start_lr)
 
         self._train()
-        print()
+        print("\x1b[2K", end="\r")  # Clear line
 
         best_idx = self._metrics["losses"].index(self._loss["best"])
         new_lr = self._metrics["learning_rates"][best_idx] / self._strength

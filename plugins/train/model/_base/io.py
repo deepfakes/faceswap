@@ -183,22 +183,26 @@ class IO():
             Default:``False``
         """
         logger.debug("Backing up and saving models")
-        print("")  # Insert a new line to avoid spamming the same row as loss output
         include_optimizer = (force_save_optimizer or
                              self._save_optimizer == "always" or
                              (self._save_optimizer == "exit" and is_exit))
 
+        print("\x1b[2K", end="\r")  # Clear last line
+        logger.info("Saving Model...")
         self._plugin.model.save(self.filename, include_optimizer=include_optimizer)
         self._plugin.state.save()
 
         save_average = self._get_save_average()
-        if save_average and self._should_backup(save_average):
+        should_backup = self._should_backup(save_average)
+        if save_average and should_backup:
             self._backup.backup_model(self.filename)
             self._backup.backup_model(self._plugin.state.filename)
 
         msg = "[Saved optimizer state for Snapshot]" if force_save_optimizer else "[Saved model]"
         if save_average:
             msg += f" - Average total loss since last save: {save_average:.5f}"
+        if should_backup:
+            msg += " [Model backed up]"
         logger.info(msg)
 
     def _get_save_average(self) -> float:
@@ -216,7 +220,7 @@ class IO():
         else:
             retval = sum(self._history) / len(self._history)
             self._history = []  # Reset historical loss
-        logger.info("Average loss since last save: %s", round(retval, 5))
+        logger.debug("Average loss since last save: %s", round(retval, 5))
         return retval
 
     def _should_backup(self, save_average: float) -> bool:

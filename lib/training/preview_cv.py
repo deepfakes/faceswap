@@ -165,7 +165,7 @@ class PreviewCV(PreviewBase):  # pylint:disable=too-few-public-methods
             return
 
         if key == ord("r"):
-            print("")  # Let log print on different line from loss output
+            print("\x1b[2K", end="\r")  # clear last line
             logger.info("Refresh preview requested...")
 
         self._triggers[self._lookup[key]].set()

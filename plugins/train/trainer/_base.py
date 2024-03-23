@@ -326,7 +326,7 @@ class TrainerBase():
         timestamp = time.strftime("%H:%M:%S")
         output = f"[{timestamp}] [#{self._model.iterations:05d}] {output}"
         try:
-            print(f"\r{output}", end="")
+            print(f"{output}", end="\r")
         except OSError as err:
             logger.warning("Swallowed OS Error caused by Tensorflow distributed training. output "
                            "line: %s, error: %s", output, str(err))
@@ -424,7 +424,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
         if not (self._model.config["learn_mask"] or self._model.config["penalized_mask_loss"]):
             return
         display_mask = not self._display_mask
-        print("")  # Break to not garble loss output
+        print("\x1b[2K", end="\r")  # Clear last line
         logger.info("Toggling mask display %s...", "on" if display_mask else "off")
         self._display_mask = display_mask
 

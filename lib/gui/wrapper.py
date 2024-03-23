@@ -309,6 +309,9 @@ class FaceswapControl():
         if self._command == "train" and self._capture_loss(output):
             return True
 
+        if self._command == "train" and output.strip() == "\x1b[2K":  # Clear line command for cli
+            return True
+
         if self._command == "effmpeg" and self._capture_ffmpeg(output):
             return True
 

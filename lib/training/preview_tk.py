@@ -511,7 +511,7 @@ class _Image():
         now = datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
         filename = os.path.join(root_path, f"preview_{now}.png")
         cv2.imwrite(filename, self.source)
-        print("")
+        print("\x1b[2K", end="\r")  # Clear last line
         logger.info("Saved preview to: '%s'", filename)
 
         if self._is_standalone:
@@ -888,7 +888,7 @@ class PreviewTk(PreviewBase):  # pylint:disable=too-few-public-methods
         key = T.cast(TriggerKeysType, keypress)
         logger.debug("Processing keypress '%s'", key)
         if key == "r":
-            print("")  # Let log print on different line from loss output
+            print("\x1b[2K", end="\r")  # Clear last line
             logger.info("Refresh preview requested...")
 
         self._triggers[self._keymaps[key]].set()
