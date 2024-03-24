@@ -10,15 +10,15 @@ from multiprocessing import Process
 
 from lib.utils import _video_extensions, FaceswapError
 from .media import AlignmentData
-from .jobs import Check, Sort, Spatial  # noqa pylint: disable=unused-import
-from .jobs_faces import FromFaces, RemoveFaces, Rename  # noqa pylint: disable=unused-import
-from .jobs_frames import Draw, Extract  # noqa pylint: disable=unused-import
+from .jobs import Check, Sort, Spatial  # noqa pylint:disable=unused-import
+from .jobs_faces import FromFaces, RemoveFaces, Rename  # noqa pylint:disable=unused-import
+from .jobs_frames import Draw, Extract  # noqa pylint:disable=unused-import
 
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
-class Alignments():  # pylint:disable=too-few-public-methods
+class Alignments():
     """ The main entry point for Faceswap's Alignments Tool. This tool is part of the Faceswap
     Tools suite and should be called from the ``python tools.py alignments`` command.
 
@@ -239,7 +239,7 @@ class Alignments():  # pylint:disable=too-few-public-methods
                 self._run_process(args)
 
 
-class _Alignments():  # pylint:disable=too-few-public-methods
+class _Alignments():
     """ The main entry point for Faceswap's Alignments Tool. This tool is part of the Faceswap
     Tools suite and should be called from the ``python tools.py alignments`` command.
 

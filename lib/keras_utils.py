@@ -68,7 +68,7 @@ def replicate_pad(image: torch.Tensor, padding: int) -> torch.Tensor:
     return padded
 
 
-class ColorSpaceConvert():  # pylint:disable=too-few-public-methods
+class ColorSpaceConvert():
     """ Transforms inputs between different color spaces on the GPU
 
     Notes

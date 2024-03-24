@@ -229,7 +229,7 @@ class ExtractBox(Editor):
         callback = dict(anchor=self._resize, rotate=self._rotate, box=self._move)
         self._drag_callback = callback[self._mouse_location[0]]
 
-    def _drag_stop(self, event):  # pylint: disable=unused-argument
+    def _drag_stop(self, event):  # pylint:disable=unused-argument
         """ Trigger a viewport thumbnail update on click + drag release
 
         Parameters

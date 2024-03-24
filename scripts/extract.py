@@ -25,10 +25,10 @@ if T.TYPE_CHECKING:
     from lib.align.alignments import PNGHeaderAlignmentsDict
 
 # tqdm.monitor_interval = 0  # workaround for TqdmSynchronisationWarning  # TODO?
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
-class Extract():  # pylint:disable=too-few-public-methods
+class Extract():
     """ The Faceswap Face Extraction Process.
 
     The extraction process is responsible for detecting faces in a series of images/video, aligning
@@ -617,7 +617,7 @@ class PipelineLoader():
         logger.debug("Reload Images: Complete")
 
 
-class _Extract():  # pylint:disable=too-few-public-methods
+class _Extract():
     """ The Actual extraction process.
 
     This class is called by the parent :class:`Extract` process

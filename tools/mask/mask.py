@@ -22,7 +22,7 @@ from .mask_output import Output
 logger = logging.getLogger(__name__)
 
 
-class Mask:  # pylint:disable=too-few-public-methods
+class Mask:
     """ This tool is part of the Faceswap Tools suite and should be called from
     ``python tools.py mask`` command.
 
@@ -128,7 +128,7 @@ class Mask:  # pylint:disable=too-few-public-methods
                 self._run_mask_process(arguments)
 
 
-class _Mask:  # pylint:disable=too-few-public-methods
+class _Mask:
     """ This tool is part of the Faceswap Tools suite and should be called from
     ``python tools.py mask`` command.
 

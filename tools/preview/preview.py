@@ -34,14 +34,14 @@ if T.TYPE_CHECKING:
     from lib.queue_manager import EventQueue
     from .control_panels import BusyProgressBar
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 # LOCALES
 _LANG = gettext.translation("tools.preview", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
 
-class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
+class Preview(tk.Tk):
     """ This tool is part of the Faceswap Tools suite and should be called from
     ``python tools.py preview`` command.
 
@@ -455,7 +455,7 @@ class Samples():
         logger.debug("Predicted faces")
 
 
-class Patch():  # pylint:disable=too-few-public-methods
+class Patch():
     """ The Patch pipeline
 
     Runs in it's own thread. Takes the output from the Faceswap model predictor and runs the faces

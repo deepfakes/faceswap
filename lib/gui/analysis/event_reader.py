@@ -19,7 +19,7 @@ from lib.serializer import get_serializer
 if T.TYPE_CHECKING:
     from collections.abc import Generator, Iterator
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 @dataclass
@@ -691,7 +691,7 @@ class TensorBoardLogs():
         return retval
 
 
-class _EventParser():  # pylint:disable=too-few-public-methods
+class _EventParser():
     """ Parses Tensorflow event and populates data to :class:`_Cache`.
 
     Parameters

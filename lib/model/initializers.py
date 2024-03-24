@@ -284,7 +284,8 @@ class ConvolutionAware(initializers.Initializer):
 
             transpose_dimensions = (2, 1, 0)
             kernel_shape = (row,)
-            correct_ifft = lambda shape, s=[None]: np.fft.irfft(shape, s[0])  # noqa:E731
+            correct_ifft = lambda shape, s=[None]: np.fft.irfft(shape, s[0])  # noqa:E731,E501 pylint:disable=unnecessary-lambda-assignment
+
             correct_fft = np.fft.rfft
 
         elif rank == 4:

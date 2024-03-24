@@ -248,7 +248,7 @@ class DetectedFaces():
         return retval
 
 
-class _DiskIO():  # pylint:disable=too-few-public-methods
+class _DiskIO():
     """ Handles the loading of :class:`~lib.align.DetectedFaces` from the alignments file
     into :class:`DetectedFaces` and the saving of this data (in the opposite direction) to an
     alignments file.

@@ -194,7 +194,7 @@ def _get_name(name: str, start_idx: int = 1) -> str:
     return retval
 
 
-class ConvBn():  # pylint:disable=too-few-public-methods
+class ConvBn():
     """ Convolutional 3D with Batch Normalization block.
 
     Parameters
@@ -267,7 +267,7 @@ class ConvBn():  # pylint:disable=too-few-public-methods
         return var_x
 
 
-class ResNet18():  # pylint:disable=too-few-public-methods
+class ResNet18():
     """ ResNet 18 block. Used at the start of BiSeNet Face Parsing. """
     def __init__(self):
         self._feature_index = 1 if K.image_data_format() == "channels_first" else -1
@@ -367,7 +367,7 @@ class ResNet18():  # pylint:disable=too-few-public-methods
         return feat8, feat16, feat32
 
 
-class AttentionRefinementModule():  # pylint:disable=too-few-public-methods
+class AttentionRefinementModule():
     """ The Attention Refinement block for BiSeNet Face Parsing
 
     Parameters
@@ -405,7 +405,7 @@ class AttentionRefinementModule():  # pylint:disable=too-few-public-methods
         return var_x
 
 
-class ContextPath():  # pylint:disable=too-few-public-methods
+class ContextPath():
     """ The Context Path block for BiSeNet Face Parsing. """
     def __init__(self):
         self._resnet = ResNet18()
@@ -444,7 +444,7 @@ class ContextPath():  # pylint:disable=too-few-public-methods
         return feat8, feat16, feat32
 
 
-class FeatureFusionModule():  # pylint:disable=too-few-public-methods
+class FeatureFusionModule():
     """ The Feature Fusion block for BiSeNet Face Parsing
 
     Parameters
@@ -488,7 +488,7 @@ class FeatureFusionModule():  # pylint:disable=too-few-public-methods
         return var_x
 
 
-class BiSeNetOutput():  # pylint:disable=too-few-public-methods
+class BiSeNetOutput():
     """ The BiSeNet Output block for Face Parsing
 
     Parameters

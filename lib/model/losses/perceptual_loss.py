@@ -236,7 +236,7 @@ class GMSDLoss(keras.losses.Loss):
         if not magnitude:  # direction of edges
             # Reshape to [batch_size, h, w, d, num_kernels].
             shape = ops.concatenate([image_shape, num_kernels], axis=0)
-            output = ops.reshape(output, shape=shape)
+            output = ops.reshape(output, shape)
             output = ops.reshape(output, ops.concatenate([image_shape, num_kernels]))
             output = torch.atan(ops.squeeze(output[:, :, :, :, 0] / output[:, :, :, :, 1],
                                             axis=None))
@@ -509,7 +509,7 @@ class LDRFLIPLoss(keras.losses.Loss):
         return delta_e_c
 
 
-class _SpatialFilters():  # pylint:disable=too-few-public-methods
+class _SpatialFilters():
     """ Filters an image with channel specific spatial contrast sensitivity functions and clips
     result to the unit cube in linear RGB.
 
@@ -605,7 +605,7 @@ class _SpatialFilters():  # pylint:disable=too-few-public-methods
         return rgb
 
 
-class _FeatureDetection():  # pylint:disable=too-few-public-methods
+class _FeatureDetection():
     """ Detect features (i.e. edges and points) in an achromatic YCxCz image.
 
     For use with LDRFlipLoss.
@@ -769,9 +769,9 @@ class MSSIMLoss(keras.losses.Loss):
 
         num1 = self._reducer(image1 * image2, kernel) * 2.0
         den1 = self._reducer(ops.square(image1) + ops.square(image2), kernel)
-        cs = (num1 - num0 + c_2) / (den1 - den0 + c_2)
+        cs_ = (num1 - num0 + c_2) / (den1 - den0 + c_2)
 
-        return luminance, cs
+        return luminance, cs_
 
     def _fspecial_gauss(self, size: int) -> torch.Tensor:
         """Function to mimic the 'fspecial' gaussian MATLAB function.
@@ -829,13 +829,14 @@ class MSSIMLoss(keras.losses.Loss):
         kernel = self._fspecial_gauss(filter_size)
         kernel = ops.tile(kernel, [1, 1, shape[-1], 1])
 
-        luminance, cs = self._ssim_helper(image1, image2, kernel)
+        luminance, cs_ = self._ssim_helper(image1, image2, kernel)
 
         # Average over the second and the third from the last: height, width.
-        ssim_val = ops.mean(luminance * cs, [-3, -2])
-        cs = ops.mean(cs, [-3, -2])
-        return ssim_val, cs
+        ssim_val = ops.mean(luminance * cs_, [-3, -2])
+        cs_ = ops.mean(cs_, [-3, -2])
+        return ssim_val, cs_
 
+    @classmethod
     def _do_pad(cls, images: torch.Tensor, remainder: torch.Tensor) -> list[torch.Tensor]:
         """ Pad images
 
@@ -901,8 +902,8 @@ class MSSIMLoss(keras.losses.Loss):
                           for x, h, t in zip(downscaled, heads, tails)]
 
             # Overwrite previous ssim value since we only need the last one.
-            ssim_per_channel, cs = self._ssim_per_channel(*images, filter_size)
-            mcs.append(ops.relu(cs))
+            ssim_per_channel, cs_ = self._ssim_per_channel(*images, filter_size)
+            mcs.append(ops.relu(cs_))
 
         mcs.pop()  # Remove the cs score for the last scale.
 

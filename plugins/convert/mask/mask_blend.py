@@ -13,7 +13,7 @@ from plugins.convert._config import Config
 logger = logging.getLogger(__name__)
 
 
-class Mask():  # pylint:disable=too-few-public-methods
+class Mask():
     """ Manipulations to perform to the mask that is to be applied to the output of the Faceswap
     model.
 

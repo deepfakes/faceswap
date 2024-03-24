@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """ Install packages for faceswap.py """
-# pylint: disable=too-many-lines
+# pylint:disable=too-many-lines
 
 import logging
 import ctypes
@@ -19,7 +19,7 @@ from pkg_resources import parse_requirements
 
 from lib.logger import log_setup
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 backend_type: T.TypeAlias = T.Literal['nvidia', 'apple_silicon', 'directml', 'cpu', 'rocm', "all"]
 
 _INSTALL_FAILED = False
@@ -510,7 +510,7 @@ class Packages():
         self._check_conda_missing_dependencies()
 
 
-class Checks():  # pylint:disable=too-few-public-methods
+class Checks():
     """ Pre-installation checks
 
     Parameters
@@ -711,7 +711,7 @@ def _check_ld_config(lib: str) -> str:
     return retval
 
 
-class ROCmCheck():  # pylint:disable=too-few-public-methods
+class ROCmCheck():
     """ Find the location of system installed ROCm on Linux """
     # TODO
     def __init__(self) -> None:
@@ -746,7 +746,7 @@ class ROCmCheck():  # pylint:disable=too-few-public-methods
             return
 
 
-class CudaCheck():  # pylint:disable=too-few-public-methods
+class CudaCheck():
     """ Find the location of system installed Cuda and cuDNN on Windows and Linux. """
 
     def __init__(self) -> None:
@@ -898,7 +898,7 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
         return cudnn_checkfiles
 
 
-class Install():  # pylint:disable=too-few-public-methods
+class Install():
     """ Handles installation of Faceswap requirements
 
     Parameters
@@ -1328,7 +1328,7 @@ class Installer():
         self._seen_lines.add(text)
 
 
-class PexpectInstaller(Installer):  # pylint: disable=too-few-public-methods
+class PexpectInstaller(Installer):
     """ Package installer for Linux/macOS using Pexpect
 
     Uses Pexpect for installing packages allowing access to realtime feedback
@@ -1366,7 +1366,7 @@ class PexpectInstaller(Installer):  # pylint: disable=too-few-public-methods
         return proc.exitstatus
 
 
-class WinPTYInstaller(Installer):  # pylint: disable=too-few-public-methods
+class WinPTYInstaller(Installer):
     """ Package installer for Windows using WinPTY
 
     Spawns a pseudo PTY for installing packages allowing access to realtime feedback

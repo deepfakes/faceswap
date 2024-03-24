@@ -18,10 +18,10 @@ if T.TYPE_CHECKING:
     import argparse
     from collections.abc import Callable
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
-class ScriptExecutor():  # pylint:disable=too-few-public-methods
+class ScriptExecutor():
     """ Loads the relevant script modules and executes the script.
 
         This class is initialized in each of the argparsers for the relevant
@@ -64,7 +64,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         min_ver = (2, 2)
         max_ver = (2, 2)
         try:
-            import torch  # noqa:F401
+            import torch  # noqa:F401 pylint:disable=unused-import,import-outside-toplevel
         except ImportError as err:
             msg = (
                 f"There was an error importing PyTorch. This is most likely because you do "
@@ -121,7 +121,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             If tkinter cannot be imported
         """
         try:
-            import tkinter  # noqa pylint: disable=unused-import,import-outside-toplevel
+            import tkinter  # noqa pylint:disable=unused-import,import-outside-toplevel
         except ImportError as err:
             logger.error("It looks like TkInter isn't installed for your OS, so the GUI has been "
                          "disabled. To enable the GUI please install the TkInter application. You "
@@ -178,11 +178,11 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         except FaceswapError as err:
             for line in str(err).splitlines():
                 logger.error(line)
-        except KeyboardInterrupt:  # pylint: disable=try-except-raise
+        except KeyboardInterrupt:  # pylint:disable=try-except-raise
             raise
         except SystemExit:
             pass
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint:disable=broad-except
             crash_file = crash_log()
             logger.exception("Got Exception on main handler:")
             logger.critical("An unexpected crash has occurred. Crash report written to '%s'. "

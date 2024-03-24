@@ -20,7 +20,7 @@ if T.TYPE_CHECKING:
     from tensorflow import Tensor
 
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 _CONFIG: dict = {}
@@ -99,7 +99,7 @@ def _get_default_initializer(
     return retval
 
 
-class Conv2D(KConv2D):  # pylint:disable=too-few-public-methods, too-many-ancestors
+class Conv2D(KConv2D):  # pylint:disable=too-many-ancestors
     """ A standard Keras Convolution 2D layer with parameters updated to be more appropriate for
     Faceswap architecture.
 
@@ -132,7 +132,7 @@ class Conv2D(KConv2D):  # pylint:disable=too-few-public-methods, too-many-ancest
         logger.debug("Initialized %s", self.__class__.__name__)
 
 
-class DepthwiseConv2D(KDepthwiseConv2d):  # noqa,pylint:disable=too-few-public-methods, too-many-ancestors
+class DepthwiseConv2D(KDepthwiseConv2d):  # noqa,pylint:disable=too-many-ancestors
     """ A standard Keras Depthwise Convolution 2D layer with parameters updated to be more
     appropriate for Faceswap architecture.
 
@@ -164,7 +164,7 @@ class DepthwiseConv2D(KDepthwiseConv2d):  # noqa,pylint:disable=too-few-public-m
         logger.debug("Initialized %s", self.__class__.__name__)
 
 
-class Conv2DOutput():  # pylint:disable=too-few-public-methods
+class Conv2DOutput():
     """ A Convolution 2D layer that separates out the activation layer to explicitly set the data
     type on the activation to float 32 to fully support mixed precision training.
 
@@ -221,7 +221,7 @@ class Conv2DOutput():  # pylint:disable=too-few-public-methods
         return self._activation(var_x)
 
 
-class Conv2DBlock():  # pylint:disable=too-few-public-methods
+class Conv2DBlock():
     """ A standard Convolution 2D layer which applies user specified configuration to the
     layer.
 
@@ -357,7 +357,7 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
         return var_x
 
 
-class SeparableConv2DBlock():  # pylint:disable=too-few-public-methods
+class SeparableConv2DBlock():
     """ Seperable Convolution Block.
 
     Parameters
@@ -416,7 +416,7 @@ class SeparableConv2DBlock():  # pylint:disable=too-few-public-methods
 
 #  << UPSCALING >>
 
-class UpscaleBlock():  # pylint:disable=too-few-public-methods
+class UpscaleBlock():
     """ An upscale layer for sub-pixel up-scaling.
 
     Adds reflection padding if it has been selected by the user, and other post-processing
@@ -486,7 +486,7 @@ class UpscaleBlock():  # pylint:disable=too-few-public-methods
         return self._shuffle(var_x)
 
 
-class Upscale2xBlock():  # pylint:disable=too-few-public-methods
+class Upscale2xBlock():
     """ Custom hybrid upscale layer for sub-pixel up-scaling.
 
     Most of up-scaling is approximating lighting gradients which can be accurately achieved
@@ -596,7 +596,7 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
         return var_x
 
 
-class UpscaleResizeImagesBlock():  # pylint:disable=too-few-public-methods
+class UpscaleResizeImagesBlock():
     """ Upscale block that uses the Keras Backend function resize_images to perform the up scaling
     Similar in methodology to the :class:`Upscale2xBlock`
 
@@ -684,7 +684,7 @@ class UpscaleResizeImagesBlock():  # pylint:disable=too-few-public-methods
         return self._acivation(var_x)
 
 
-class UpscaleDNYBlock():  # pylint:disable=too-few-public-methods
+class UpscaleDNYBlock():
     """ Upscale block that implements methodology similar to the Disney Research Paper using an
     upsampling2D block and 2 x convolutions
 
@@ -761,7 +761,7 @@ class UpscaleDNYBlock():  # pylint:disable=too-few-public-methods
 
 
 # << OTHER BLOCKS >>
-class ResidualBlock():  # pylint:disable=too-few-public-methods
+class ResidualBlock():
     """ Residual block from dfaker.
 
     Parameters

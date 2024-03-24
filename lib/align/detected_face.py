@@ -21,7 +21,7 @@ if T.TYPE_CHECKING:
     from collections.abc import Callable
     from .aligned_face import CenteringType
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 class DetectedFace():
@@ -876,7 +876,7 @@ class LandmarksMask(Mask):
         self.add(mask, affine_matrix, interpolator)
 
 
-class BlurMask():  # pylint:disable=too-few-public-methods
+class BlurMask():
     """ Factory class to return the correct blur object for requested blur type.
 
     Works for square images only. Currently supports Gaussian and Normalized Box Filters.

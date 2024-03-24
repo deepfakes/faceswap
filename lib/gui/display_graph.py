@@ -29,7 +29,7 @@ if T.TYPE_CHECKING:
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
+class GraphBase(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Base class for matplotlib line graphs.
 
     Parameters
@@ -321,7 +321,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         del self._fig
 
 
-class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
+class TrainingGraph(GraphBase):  # pylint:disable=too-many-ancestors
     """ Live graph to be displayed during training.
 
     Parameters
@@ -352,7 +352,7 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
         self._plotcanvas.draw()
         logger.debug("Built training graph")
 
-    def refresh(self, *args) -> None:  # pylint: disable=unused-argument
+    def refresh(self, *args) -> None:  # pylint:disable=unused-argument
         """ Read the latest loss data and apply to current graph """
         refresh_var = T.cast(tk.BooleanVar, get_config().tk_vars.refresh_graph)
         if not refresh_var.get() and self._thread is None:
@@ -406,15 +406,15 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
 
     def _resize_fig(self) -> None:
         """ Resize the figure to the current canvas size. """
-        class Event():  # pylint: disable=too-few-public-methods
+        class Event():  # pylint:disable=too-few-public-methods
             """ Event class that needs to be passed to plotcanvas.resize """
-            pass  # pylint: disable=unnecessary-pass
+            pass  # pylint:disable=unnecessary-pass
         setattr(Event, "width", self.winfo_width())
         setattr(Event, "height", self.winfo_height())
-        self._plotcanvas.resize(Event)  # pylint: disable=no-value-for-parameter
+        self._plotcanvas.resize(Event)  # pylint:disable=no-value-for-parameter
 
 
-class SessionGraph(GraphBase):  # pylint: disable=too-many-ancestors
+class SessionGraph(GraphBase):  # pylint:disable=too-many-ancestors
     """ Session Graph for session pop-up.
 
     Parameters
@@ -476,7 +476,7 @@ class SessionGraph(GraphBase):  # pylint: disable=too-many-ancestors
         logger.debug("Updated scale type")
 
 
-class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ancestors
+class NavigationToolbar(NavigationToolbar2Tk):  # pylint:disable=too-many-ancestors
     """ Overrides the default Navigation Toolbar to provide only the buttons we require
     and to layout the items in a consistent manner with the rest of the GUI for the Analysis
     Session Graph pop up Window.
@@ -493,7 +493,7 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ances
     toolitems = [t for t in NavigationToolbar2Tk.toolitems if
                  t[0] in ("Home", "Pan", "Zoom", "Save")]
 
-    def __init__(self,  # pylint: disable=super-init-not-called
+    def __init__(self,  # pylint:disable=super-init-not-called
                  canvas: FigureCanvasTkAgg,
                  window: ttk.Frame,
                  *,

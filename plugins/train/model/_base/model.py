@@ -29,7 +29,7 @@ if T.TYPE_CHECKING:
     from lib.config import ConfigValueType
 
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 _CONFIG: dict[str, ConfigValueType] = {}
 
 
@@ -136,7 +136,7 @@ class ModelBase():
     def config(self) -> dict:
         """ dict: The configuration dictionary for current plugin, as set by the user's
         configuration settings. """
-        global _CONFIG  # pylint: disable=global-statement
+        global _CONFIG  # pylint:disable=global-statement
         if not _CONFIG:
             model_name = self._config_section
             logger.debug("Loading config for: %s", model_name)
@@ -196,7 +196,7 @@ class ModelBase():
     def _load_config(self) -> None:
         """ Load the global config for reference in :attr:`config` and set the faceswap blocks
         configuration options in `lib.model.nn_blocks` """
-        global _CONFIG  # pylint: disable=global-statement
+        global _CONFIG  # pylint:disable=global-statement
         if not _CONFIG:
             model_name = self._config_section
             logger.debug("Loading config for: %s", model_name)
@@ -660,7 +660,7 @@ class State():
             Configuration options that can be altered when resuming a model, and their current
             values
         """
-        global _CONFIG  # pylint: disable=global-statement
+        global _CONFIG  # pylint:disable=global-statement
         if _CONFIG is None:
             return
         legacy_update = self._update_legacy_config()
@@ -790,7 +790,7 @@ class State():
             self._rebuild_model = self._rebuild_model or key in rebuild_tasks
 
 
-class _Inference():  # pylint:disable=too-few-public-methods
+class _Inference():
     """ Calculates required layers and compiles a saved model for inference.
 
     Parameters

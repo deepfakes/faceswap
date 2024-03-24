@@ -22,7 +22,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class SortAlignedMetric(SortMethod):  # pylint:disable=too-few-public-methods
+class SortAlignedMetric(SortMethod):
     """ Sort by comparison of metrics stored in an Aligned Face objects. This is a parent class
     for sort by aligned metrics methods. Individual methods should inherit from this class
 

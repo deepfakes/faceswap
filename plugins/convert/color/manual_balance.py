@@ -44,6 +44,6 @@ class Color(Adjustment):
         mode = self.config["colorspace"].lower()
         colorspace = "YCrCb" if mode == "ycrcb" else mode.upper()
         conversion = f"{colorspace}2BGR" if to_bgr else f"BGR2{colorspace}"
-        image = cv2.cvtColor(new_face.astype("uint8"),  # pylint: disable=no-member
+        image = cv2.cvtColor(new_face.astype("uint8"),  # pylint:disable=no-member
                              getattr(cv2, f"COLOR_{conversion}")).astype("float32") / 255.0
         return image

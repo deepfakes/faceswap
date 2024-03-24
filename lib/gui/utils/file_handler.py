@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import filedialog
 import typing as T
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 _FILETYPE = T.Literal["default", "alignments", "config_project", "config_task",
                       "config_all", "csv", "image", "ini", "state", "log", "video"]
 _HANDLETYPE = T.Literal["open", "save", "filename", "filename_multi", "save_filename",
@@ -339,7 +339,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         return filedialog.asksaveasfilename(**self._kwargs)  # type: ignore
 
     @staticmethod
-    def _nothing() -> None:  # pylint: disable=useless-return
+    def _nothing() -> None:  # pylint:disable=useless-return
         """ Method that does nothing, used for disabling open/save pop up.  """
         logger.debug("Popping Nothing browser")
         return

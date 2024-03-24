@@ -21,7 +21,7 @@ if T.TYPE_CHECKING:
     import torch
     from collections.abc import Generator
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 class Recognition(Identity):
@@ -369,7 +369,7 @@ class VGGFace2(KSession):
         return inputs, [var_x]
 
 
-class Cluster():  # pylint: disable=too-few-public-methods
+class Cluster():
     """ Cluster the outputs from a VGG-Face 2 Model
 
     Parameters

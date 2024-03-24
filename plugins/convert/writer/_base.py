@@ -10,7 +10,7 @@ import numpy as np
 
 from plugins.convert._config import Config
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 def get_config(plugin_name: str, configfile: str | None = None) -> dict:
@@ -166,7 +166,7 @@ class Output():
         """
         raise NotImplementedError
 
-    def pre_encode(self, image: np.ndarray, **kwargs) -> T.Any:  # pylint: disable=unused-argument
+    def pre_encode(self, image: np.ndarray, **kwargs) -> T.Any:  # pylint:disable=unused-argument
         """ Some writer plugins support the pre-encoding of images prior to saving out. As
         patching is done in multiple threads, but writing is done in a single thread, it can
         speed up the process to do any pre-encoding as part of the converter process.

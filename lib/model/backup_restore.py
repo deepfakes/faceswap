@@ -10,7 +10,7 @@ from shutil import copyfile, copytree, rmtree
 from lib.serializer import get_serializer
 from lib.utils import get_folder
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 class Backup():
@@ -57,7 +57,7 @@ class Backup():
             retval = True
         elif not for_restore and ((os.path.isfile(fullpath) and not filename.endswith(".bk")) or
                                   (os.path.isdir(fullpath) and
-                                   filename == "{}_logs".format(self.model_name))):
+                                   filename == f"{self.model_name}_logs")):
             # Only filenames that do not end with .bk or folders that are the logs folder
             # are valid for backup
             retval = True
@@ -100,7 +100,7 @@ class Backup():
         """
         print("\x1b[2K", end="\r")  # Erase the current line
         logger.verbose("Saving snapshot")
-        snapshot_dir = "{}_snapshot_{}_iters".format(self.model_dir, iterations)
+        snapshot_dir = f"{self.model_dir}_snapshot_{iterations}_iters"
 
         if os.path.isdir(snapshot_dir):
             logger.debug("Removing previously existing snapshot folder: '%s'", snapshot_dir)
@@ -139,7 +139,7 @@ class Backup():
         """
         logger.info("Archiving existing model files...")
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
-        archive_dir = os.path.join(self.model_dir, "{}_archived_{}".format(self.model_name, now))
+        archive_dir = os.path.join(self.model_dir, f"{self.model_name}_archived_{now}")
         os.mkdir(archive_dir)
         for filename in os.listdir(self.model_dir):
             if not self._check_valid(filename, for_restore=False):
@@ -188,10 +188,9 @@ class Backup():
         """ Get the existing session names from a state file. """
         serializer = get_serializer("json")
         state_file = os.path.join(self.model_dir,
-                                  "{}_state.{}".format(self.model_name, serializer.file_extension))
+                                  f"{self.model_name}_state.{serializer.file_extension}")
         state = serializer.load(state_file)
-        session_names = ["session_{}".format(key)
-                         for key in state["sessions"].keys()]
+        session_names = [f"session_{key}" for key in state["sessions"].keys()]
         logger.debug("Session to restore: %s", session_names)
         return session_names
 
@@ -210,7 +209,7 @@ class Backup():
         list
             The full paths to the log folders
         """
-        archive_logs = os.path.join(archive_dir, "{}_logs".format(self.model_name))
+        archive_logs = os.path.join(archive_dir, f"{self.model_name}_logs")
         paths = [os.path.join(dirpath.replace(archive_dir, "")[1:], folder)
                  for dirpath, dirnames, _ in os.walk(archive_logs)
                  for folder in dirnames

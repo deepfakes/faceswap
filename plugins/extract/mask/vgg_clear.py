@@ -144,7 +144,7 @@ class VGGClear(KSession):
         return input_, var_x
 
 
-class _ConvBlock():  # pylint:disable=too-few-public-methods
+class _ConvBlock():
     """ Convolutional loop with max pooling layer for VGG Clear.
 
     Parameters
@@ -189,7 +189,7 @@ class _ConvBlock():  # pylint:disable=too-few-public-methods
         return var_x
 
 
-class _ScorePool():  # pylint:disable=too-few-public-methods
+class _ScorePool():
     """ Cropped scaling of the pooling layer.
 
     Parameters

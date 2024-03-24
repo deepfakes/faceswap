@@ -9,12 +9,12 @@ from matplotlib import font_manager
 
 from lib.config import FaceswapConfig
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 class Config(FaceswapConfig):
     """ Config File for GUI """
-    # pylint: disable=too-many-statements
+    # pylint:disable=too-many-statements
     def set_defaults(self):
         """ Set the default values for config """
         logger.debug("Setting defaults")

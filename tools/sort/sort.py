@@ -26,7 +26,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Sort():  # pylint:disable=too-few-public-methods
+class Sort():
     """ Sorts folders of faces based on input criteria
 
     Wrapper for the sort process to run in either batch mode or single use mode
@@ -123,7 +123,7 @@ class Sort():  # pylint:disable=too-few-public-methods
             sort.process()
 
 
-class _Sort():  # pylint:disable=too-few-public-methods
+class _Sort():
     """ Sorts folders of faces based on input criteria """
     def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: arguments: %s", self.__class__.__name__, arguments)

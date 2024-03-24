@@ -27,7 +27,7 @@ if T.TYPE_CHECKING:
     from lib.align import AlignedFace
     from plugins.extract.pipeline import ExtractMedia
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 def finalize(images_found: int, num_faces_detected: int, verify_output: bool) -> None:
@@ -345,7 +345,7 @@ class Images():
         return frame
 
 
-class PostProcess():  # pylint:disable=too-few-public-methods
+class PostProcess():
     """ Optional pre/post processing tasks for convert and extract.
 
     Builds a pipeline of actions that have optionally been requested to be performed
@@ -428,7 +428,7 @@ class PostProcess():  # pylint:disable=too-few-public-methods
             action.process(extract_media)
 
 
-class PostProcessAction():  # pylint: disable=too-few-public-methods
+class PostProcessAction():
     """ Parent class for Post Processing Actions.
 
     Usable in Extract or Convert or both depending on context. Any post-processing actions should
@@ -465,7 +465,7 @@ class PostProcessAction():  # pylint: disable=too-few-public-methods
         raise NotImplementedError
 
 
-class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-methods
+class DebugLandmarks(PostProcessAction):
     """ Draw debug landmarks on face output. Extract Only """
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(self, *args, **kwargs)

@@ -9,7 +9,7 @@ from lib.logger import parse_class_init
 logger = logging.getLogger(__name__)
 
 
-class AutoClipper():  # pylint:disable=too-few-public-methods
+class AutoClipper():
     """ AutoClip: Adaptive Gradient Clipping for Source Separation Networks
 
     Parameters
@@ -46,8 +46,8 @@ class AutoClipper():  # pylint:disable=too-few-public-methods
         list[:class:`torch.Tensor`]
             The autoclipped gradients
         """
-        self._grad_history.append(sum([g.data.norm(2).item() ** 2
-                                       for g in gradients if g is not None]) ** (1. / 2))
+        self._grad_history.append(sum(g.data.norm(2).item() ** 2
+                                      for g in gradients if g is not None) ** (1. / 2))
         self._grad_history = self._grad_history[-self._history_size:]
         clip_value = np.percentile(self._grad_history, self._clip_percentile)
         torch.nn.utils.clip_grad_norm_(gradients, clip_value)

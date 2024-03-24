@@ -20,7 +20,7 @@ if T.TYPE_CHECKING:
     from lib.gui.command import CommandNotebook
     from lib.gui.command import ToolsNotebook
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 PATHCACHE = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])), "lib", "gui", ".cache")
 _CONFIG: Config | None = None
@@ -49,7 +49,7 @@ def initialize_config(root: tk.Tk,
         ``None`` if the config has already been initialized otherwise the global configuration
         options
     """
-    global _CONFIG  # pylint: disable=global-statement
+    global _CONFIG  # pylint:disable=global-statement
     if _CONFIG is not None:
         return None
     logger.debug("Initializing config: (root: %s, cli_opts: %s, "

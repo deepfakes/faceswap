@@ -19,7 +19,7 @@ from .actions import (DirFullPaths, DirOrFileFullPaths, DirOrFilesFullPaths, Fil
                       FilesFullPaths, MultiOption, Radio, SaveFileFullPaths, Slider)
 from .launcher import ScriptExecutor
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 _GPUS = GPUStats().cli_devices
 
 # LOCALES
@@ -83,7 +83,7 @@ class SmartFormatter(argparse.HelpFormatter):
                     txt = f"  - {txt[2:]}"
                 output.extend(textwrap.wrap(txt, width, subsequent_indent=indent))
             return output
-        return argparse.HelpFormatter._split_lines(self,  # pylint: disable=protected-access
+        return argparse.HelpFormatter._split_lines(self,  # pylint:disable=protected-access
                                                    text,
                                                    width)
 

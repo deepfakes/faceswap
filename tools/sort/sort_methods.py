@@ -506,8 +506,8 @@ class SortMultiMethod(SortMethod):
             retval = InfoLoader(input_dir, self._sorter.loader_type)
         else:
             retval = InfoLoader(input_dir, "all")
-        self._sorter._iterator = retval  # pylint: disable=protected-access
-        self._grouper._iterator = retval  # pylint: disable=protected-access
+        self._sorter._iterator = retval  # pylint:disable=protected-access
+        self._grouper._iterator = retval  # pylint:disable=protected-access
         return retval
 
     def score_image(self,

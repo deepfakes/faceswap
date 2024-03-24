@@ -291,7 +291,7 @@ class BoundingBox(Editor):
             self._update_cursor(event)
             self._drag_start(event)
 
-    def _drag_stop(self, event):  # pylint: disable=unused-argument
+    def _drag_stop(self, event):  # pylint:disable=unused-argument
         """ Trigger a viewport thumbnail update on click + drag release
 
         Parameters

@@ -87,7 +87,7 @@ ModelConfig: dict[TypeModels, ViTConfig] = {  # Each model has a different set o
 # VISUAL TRANSFORMER #
 # ################## #
 
-class Transformer():  # pylint:disable=too-few-public-methods
+class Transformer():
     """ A class representing a Transformer model with attention mechanism and residual connections.
 
     Parameters
@@ -344,7 +344,7 @@ class Projection(EmbeddingLayer):
         return K.tile(K.transpose(self._var)[None], [K.shape(inputs)[0], 1, 1])
 
 
-class VisualTransformer():  # pylint:disable=too-few-public-methods
+class VisualTransformer():
     """ A class representing a Visual Transformer model for image classification tasks.
 
     Parameters
@@ -434,7 +434,7 @@ class VisualTransformer():  # pylint:disable=too-few-public-methods
 # ################ #
 # MODIEFIED RESNET #
 # ################ #
-class Bottleneck():  # pylint:disable=too-few-public-methods
+class Bottleneck():
     """ A ResNet bottleneck block that performs a sequence of convolutions, batch normalization,
     and ReLU activation operations on an input tensor.
 
@@ -533,7 +533,7 @@ class Bottleneck():  # pylint:disable=too-few-public-methods
         return out
 
 
-class AttentionPool2d():  # pylint:disable=too-few-public-methods
+class AttentionPool2d():
     """ An Attention Pooling layer that applies a multi-head self-attention mechanism over a
     spatial grid of features.
 
@@ -599,7 +599,7 @@ class AttentionPool2d():  # pylint:disable=too-few-public-methods
         return var_x[:, 0, ...]
 
 
-class ModifiedResNet():  # pylint:disable=too-few-public-methods
+class ModifiedResNet():
     """ A ResNet class that is similar to torchvision's but contains the following changes:
 
     - There are now 3 "stem" convolutions as opposed to 1, with an average pool instead of a max
@@ -732,7 +732,7 @@ class ModifiedResNet():  # pylint:disable=too-few-public-methods
 # ### #
 # VIT #
 # ### #
-class ViT():  # pylint:disable=too-few-public-methods
+class ViT():
     """ Visiual Transform from CLIP
 
     A Convolutional Language-Image Pre-Training (CLIP) model that encodes images and text into a

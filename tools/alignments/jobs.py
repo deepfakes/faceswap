@@ -418,7 +418,7 @@ class Sort():
         return reindexed
 
 
-class Spatial():  # pylint:disable=too-few-public-methods
+class Spatial():
     """ Apply spatial temporal filtering to landmarks
 
     Parameters

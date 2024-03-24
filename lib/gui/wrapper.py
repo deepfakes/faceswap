@@ -18,9 +18,9 @@ from .analysis import Session
 from .utils import get_config, get_images, LongRunningTask, preview_trigger
 
 if os.name == "nt":
-    import win32console  # pylint: disable=import-error
+    import win32console  # pylint:disable=import-error
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 class ProcessWrapper():

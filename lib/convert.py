@@ -23,7 +23,7 @@ if T.TYPE_CHECKING:
     from plugins.convert.mask.mask_blend import Mask as MaskAdjust
     from plugins.convert.scaling._base import Adjustment as ScalingAdjust
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 @dataclass
@@ -201,7 +201,7 @@ class Converter():
                              item.inbound.filename)
                 try:
                     image = self._patch_image(item)
-                except Exception as err:  # pylint: disable=broad-except
+                except Exception as err:  # pylint:disable=broad-except
                     # Log error and output original frame
                     logger.error("Failed to convert image: '%s'. Reason: %s",
                                  item.inbound.filename, str(err))

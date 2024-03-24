@@ -16,7 +16,7 @@ from .config import get_config, PATHCACHE
 if T.TYPE_CHECKING:
     from collections.abc import Sequence
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 _IMAGES: "Images" | None = None
 _PREVIEW_TRIGGER: "PreviewTrigger" | None = None
 TRAININGPREVIEW = ".gui_training_preview.png"
@@ -28,7 +28,7 @@ def initialize_images() -> None:
     This should only be called once on first GUI startup. Future access to :class:`Images`
     handler should only be executed through :func:`get_images`.
     """
-    global _IMAGES  # pylint: disable=global-statement
+    global _IMAGES  # pylint:disable=global-statement
     if _IMAGES is not None:
         return
     logger.debug("Initializing images")

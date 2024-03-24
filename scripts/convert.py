@@ -35,7 +35,7 @@ if T.TYPE_CHECKING:
     from lib.queue_manager import EventQueue
 
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 @dataclass
@@ -62,7 +62,7 @@ class ConvertItem:
     swapped_faces: np.ndarray = np.array([])
 
 
-class Convert():  # pylint:disable=too-few-public-methods
+class Convert():
     """ The Faceswap Face Conversion Process.
 
     The conversion process is responsible for swapping the faces on source frames with the output
@@ -515,7 +515,7 @@ class DiskIO():
         logger.debug("Started thread: '%s'", task)
 
     # Loading tasks
-    def _load(self, *args) -> None:  # pylint: disable=unused-argument
+    def _load(self, *args) -> None:  # pylint:disable=unused-argument
         """ Load frames from disk.
 
         In a background thread:
@@ -1100,7 +1100,7 @@ class Predict():
         logger.trace("Queued out batch. Batchsize: %s", len(batch))  # type:ignore
 
 
-class OptionalActions():  # pylint:disable=too-few-public-methods
+class OptionalActions():
     """ Process specific optional actions for Convert.
 
     Currently only handles skip faces. This class should probably be (re)moved.

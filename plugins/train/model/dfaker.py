@@ -11,7 +11,7 @@ from keras.models import Model as KModel
 from lib.model.nn_blocks import Conv2DOutput, UpscaleBlock, ResidualBlock
 from .original import Model as OriginalModel
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 class Model(OriginalModel):

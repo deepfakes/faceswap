@@ -34,15 +34,15 @@ class Scaling(Adjustment):
         kernel[center, center] = 1.0
         box_filter = np.ones(kernel_size, dtype="float32") / kernel_size[0]**2
         kernel = kernel + (kernel - box_filter) * amount
-        new_face = cv2.filter2D(new_face, -1, kernel)  # pylint: disable=no-member
+        new_face = cv2.filter2D(new_face, -1, kernel)  # pylint:disable=no-member
         return new_face
 
     @staticmethod
     def gaussian(new_face, kernel_center, amount):
         """ Sharpen using gaussian filter """
         kernel_size = kernel_center[0]
-        blur = cv2.GaussianBlur(new_face, kernel_size, 0)  # pylint: disable=no-member
-        new_face = cv2.addWeighted(new_face,  # pylint: disable=no-member
+        blur = cv2.GaussianBlur(new_face, kernel_size, 0)  # pylint:disable=no-member
+        new_face = cv2.addWeighted(new_face,  # pylint:disable=no-member
                                    1.0 + (0.5 * amount),
                                    blur,
                                    -(0.5 * amount),
@@ -53,7 +53,7 @@ class Scaling(Adjustment):
         """ Sharpen using unsharp mask """
         kernel_size = kernel_center[0]
         threshold = self.config["threshold"] / 255.0
-        blur = cv2.GaussianBlur(new_face, kernel_size, 0)  # pylint: disable=no-member
+        blur = cv2.GaussianBlur(new_face, kernel_size, 0)  # pylint:disable=no-member
         low_contrast_mask = (abs(new_face - blur) < threshold).astype("float32")
         sharpened = (new_face * (1.0 + amount)) + (blur * -amount)
         new_face = (new_face * (1.0 - low_contrast_mask)) + (sharpened * low_contrast_mask)

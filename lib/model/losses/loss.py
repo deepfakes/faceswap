@@ -390,7 +390,7 @@ class GradientLoss(Loss):
         return loss
 
 
-class LaplacianPyramidLoss(Loss):  # pylint:disable=too-few-public-methods
+class LaplacianPyramidLoss(Loss):
     """ Laplacian Pyramid Loss Function
 
     Notes

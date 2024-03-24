@@ -382,7 +382,7 @@ class TrainerBase():
             self._clear_tensorboard()
 
 
-class _Samples():  # pylint:disable=too-few-public-methods
+class _Samples():
     """ Compile samples for display for preview and time-lapse
 
     Parameters
@@ -845,7 +845,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
         return headers
 
 
-class _Timelapse():  # pylint:disable=too-few-public-methods
+class _Timelapse():
     """ Create a time-lapse preview image.
 
     Parameters

@@ -21,7 +21,7 @@ import sys
 
 # Windows
 if os.name == "nt":
-    import msvcrt  # pylint: disable=import-error
+    import msvcrt  # pylint:disable=import-error
 
 # Posix (Linux, OS X)
 else:
@@ -43,7 +43,7 @@ class KBHit:
             self.old_term = termios.tcgetattr(self.file_desc)
 
             # New terminal setting unbuffered
-            self.new_term[3] = (self.new_term[3] & ~termios.ICANON & ~termios.ECHO)
+            self.new_term[3] = self.new_term[3] & ~termios.ICANON & ~termios.ECHO
             termios.tcsetattr(self.file_desc, termios.TCSAFLUSH, self.new_term)
 
             # Support normal-terminal reset at exit

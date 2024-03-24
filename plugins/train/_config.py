@@ -101,7 +101,7 @@ _NON_PRIMARY_LOSS = ["flip", "lpips_alex", "lpips_squeeze", "lpips_vgg16", "none
 
 class Config(FaceswapConfig):
     """ Config File for Models """
-    # pylint: disable=too-many-statements
+    # pylint:disable=too-many-statements
     def set_defaults(self) -> None:
         """ Set the default values for config """
         logger.debug("Setting defaults")

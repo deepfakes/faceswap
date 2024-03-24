@@ -25,7 +25,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class FromFaces():  # pylint:disable=too-few-public-methods
+class FromFaces():
     """ Scan a folder of Faceswap Extracted Faces and re-create the associated alignments file(s)
 
     Parameters
@@ -222,7 +222,7 @@ class FromFaces():  # pylint:disable=too-few-public-methods
             aln.save()
 
 
-class Rename():  # pylint:disable=too-few-public-methods
+class Rename():
     """ Rename faces in a folder to match their filename as stored in an alignments file.
 
     Parameters
@@ -319,7 +319,7 @@ class Rename():  # pylint:disable=too-few-public-methods
         return rename_count
 
 
-class RemoveFaces():  # pylint:disable=too-few-public-methods
+class RemoveFaces():
     """ Remove items from alignments file.
 
     Parameters
@@ -407,7 +407,7 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
         logger.info("%s Extracted face(s) had their header information updated", len(to_update))
 
 
-class FaceToFile():  # pylint:disable=too-few-public-methods
+class FaceToFile():
     """ Updates any optional/missing keys in the alignments file with any data that has been
     populated in a PNGHeader. Includes masks and identity fields.
 

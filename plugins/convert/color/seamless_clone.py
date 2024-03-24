@@ -34,11 +34,11 @@ class Color(Adjustment):
                                ((height, height), (width, width), (0, 0)),
                                'constant')).astype("uint8")
 
-        blended = cv2.seamlessClone(insertion,  # pylint: disable=no-member
+        blended = cv2.seamlessClone(insertion,  # pylint:disable=no-member
                                     prior,
                                     insertion_mask,
                                     (x_center, y_center),
-                                    cv2.NORMAL_CLONE)  # pylint: disable=no-member
+                                    cv2.NORMAL_CLONE)  # pylint:disable=no-member
         blended = blended[height:-height, width:-width]
 
         return blended.astype("float32") / 255.0

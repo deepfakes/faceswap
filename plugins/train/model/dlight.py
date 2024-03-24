@@ -21,7 +21,7 @@ from lib.utils import FaceswapError
 from ._base import ModelBase
 
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 class Model(ModelBase):

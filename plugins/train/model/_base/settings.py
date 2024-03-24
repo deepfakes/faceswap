@@ -35,7 +35,7 @@ if T.TYPE_CHECKING:
     from argparse import Namespace
     from .model import State
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 @dataclass
@@ -270,7 +270,7 @@ class Loss():
         return mask_channels
 
 
-class Optimizer():  # pylint:disable=too-few-public-methods
+class Optimizer():
     """ Obtain the selected optimizer with the appropriate keyword arguments.
 
     Parameters

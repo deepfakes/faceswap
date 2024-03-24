@@ -26,7 +26,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Import:  # pylint:disable=too-few-public-methods
+class Import:
     """ Import masks from disk into an Alignments file
 
     Parameters
