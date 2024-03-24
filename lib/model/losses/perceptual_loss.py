@@ -98,7 +98,9 @@ class DSSIMObjective(keras.losses.Loss):
         """
         return ops.depthwise_conv(image, kernel, strides=(1, 1), padding="valid")
 
-    def _get_ssim(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def _get_ssim(self,
+                  y_true: torch.Tensor,
+                  y_pred: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """ Obtain the structural similarity between a batch of true and predicted images.
 
         Parameters
@@ -411,7 +413,7 @@ class LDRFLIPLoss(keras.losses.Loss):
         delta = self._hyab(preprocessed_true, preprocessed_pred)
         power_delta = ops.power(delta, self._computed_distance_exponent)
         cmax = ops.power(self._hyab(hunt_adjusted_green, hunt_adjusted_blue),
-                     self._computed_distance_exponent)
+                         self._computed_distance_exponent)
         return self._redistribute_errors(power_delta, cmax)
 
     def _process_features(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
@@ -625,7 +627,7 @@ class _FeatureDetection():  # pylint:disable=too-few-public-methods
         self._grads = {
             "edge": Variable(np.multiply(-grid[0], gradient), trainable=False),
             "point": Variable(np.multiply(grid[0] ** 2 / (self._std ** 2) - 1, gradient),
-                                         trainable=False)}
+                              trainable=False)}
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def __call__(self, image: torch.Tensor, feature_type: str) -> torch.Tensor:
@@ -901,7 +903,6 @@ class MSSIMLoss(keras.losses.Loss):
             # Overwrite previous ssim value since we only need the last one.
             ssim_per_channel, cs = self._ssim_per_channel(*images, filter_size)
             mcs.append(ops.relu(cs))
-
 
         mcs.pop()  # Remove the cs score for the last scale.
 

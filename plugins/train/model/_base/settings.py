@@ -381,7 +381,7 @@ class Settings():
             strategy = "default"
 
         # TODO
-        #self._strategy = self._get_strategy(strategy)
+        # self._strategy = self._get_strategy(strategy)
         self._strategy = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -521,7 +521,8 @@ class Settings():
         gpus = tf.config.get_visible_devices("GPU")
         if len(gpus) == 1:
             # TODO Remove these monkey patches when Strategy supports mixed-precision
-            from keras.mixed_precision import loss_scale_optimizer  # pylint:disable=import-outside-toplevel
+            # pylint:disable=import-outside-toplevel
+            from keras.mixed_precision import loss_scale_optimizer
 
             # Force a return of True on Loss Scale Optimizer Stategy check
             loss_scale_optimizer.strategy_supports_loss_scaling = lambda: True

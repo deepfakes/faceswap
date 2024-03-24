@@ -64,7 +64,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         min_ver = (2, 2)
         max_ver = (2, 2)
         try:
-            import torch
+            import torch  # noqa:F401
         except ImportError as err:
             msg = (
                 f"There was an error importing PyTorch. This is most likely because you do "

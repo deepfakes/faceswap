@@ -561,7 +561,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             raise FaceswapError(msg) from err
 
         return batch
-        
+
     def _process_refeeds(self, batch: AlignerBatch) -> list[AlignerBatch]:
         """ Process the output for each selected re-feed
 

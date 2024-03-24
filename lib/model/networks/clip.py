@@ -400,10 +400,10 @@ class VisualTransformer():  # pylint:disable=too-few-public-methods
         """
         inputs = layers.Input([self._input_resolution, self._input_resolution, 3])
         var_x: torch.Tensor = layers.Conv2D(self._width,  # shape = [*, grid, grid, width]
-                                         self._patch_size,
-                                         strides=self._patch_size,
-                                         use_bias=False,
-                                         name=f"{self._name}.conv1")(inputs)
+                                            self._patch_size,
+                                            strides=self._patch_size,
+                                            use_bias=False,
+                                            name=f"{self._name}.conv1")(inputs)
 
         var_x = layers.Reshape((-1, self._width))(var_x)  # shape = [*, grid ** 2, width]
 

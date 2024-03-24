@@ -15,7 +15,6 @@ from collections import OrderedDict
 
 import numpy as np
 import keras
-import keras.backend as K
 
 from lib.serializer import get_serializer
 from lib.model.nn_blocks import set_config as set_nnblock_config
@@ -370,7 +369,7 @@ class ModelBase():
             Unused, but required by Keras for print_fn as of keras 3.0.5
         """
         for line in summary.splitlines():
-            logger.verbose(line)  #type:ignore[attr-defined]
+            logger.verbose(line)  # type:ignore[attr-defined]
 
     def _output_summary(self) -> None:
         """ Output the summary of the model and all sub-models to the verbose logger. """

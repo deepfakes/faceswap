@@ -9,7 +9,7 @@ import numpy as np
 
 from keras.layers import Activation
 from keras.models import Model
-from keras.saving import load_model  as k_load_model
+from keras.saving import load_model as k_load_model
 
 from lib.utils import get_backend
 

@@ -222,7 +222,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                    "editing the plugin settings (GUI: Settings > Configure extract settings, "
                    "CLI: Edit the file faceswap/config/extract.ini)."
                    "\n3) Enable 'Single Process' mode.")
-            raise FaceswapError(msg) from err            
+            raise FaceswapError(msg) from err
 
         return batch
 

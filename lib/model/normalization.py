@@ -7,7 +7,7 @@ import logging
 import sys
 import typing as T
 
-from keras import constraints,initializers, layers, ops, regularizers
+from keras import constraints, initializers, layers, ops, regularizers
 from keras.saving import get_custom_objects
 
 from lib.logger import parse_class_init
@@ -234,6 +234,64 @@ class GroupNormalization(layers.Layer):
                                     name='beta')
         self.built = True  # pylint:disable=attribute-defined-outside-init
 
+    def _process_4_channel(self, inputs: torch.Tensor) -> torch.Tensor:
+        """ Logic for processing 4 channel inputs
+
+        Parameters
+        ----------
+        inputs: :class:`torch.Tensor`
+            The input to the layer
+
+        Returns
+        -------
+        :class:`torch.Tensor`
+            A tensor or list/tuple of tensors
+        """
+        input_shape = inputs.shape
+        if self.data_format == 'channels_last':
+            batch_size, height, width, channels = input_shape
+            if batch_size is None:
+                batch_size = -1
+
+            if channels < self.group:
+                raise ValueError('Input channels should be larger than group size' +
+                                 '; Received input channels: ' + str(channels) +
+                                 '; Group size: ' + str(self.group))
+
+            var_x = ops.reshape(inputs, (batch_size,
+                                         height,
+                                         width,
+                                         self.group,
+                                         channels // self.group))
+            mean = ops.mean(var_x, axis=[1, 2, 4], keepdims=True)
+            std = ops.sqrt(ops.var(var_x, axis=[1, 2, 4], keepdims=True) + self.epsilon)
+            var_x = (var_x - mean) / std
+
+            var_x = ops.reshape(var_x, (batch_size, height, width, channels))
+            return self.gamma * var_x + self.beta
+
+        # Channels first
+        batch_size, channels, height, width = input_shape
+        if batch_size is None:
+            batch_size = -1
+
+        if channels < self.group:
+            raise ValueError('Input channels should be larger than group size' +
+                             '; Received input channels: ' + str(channels) +
+                             '; Group size: ' + str(self.group))
+
+        var_x = ops.reshape(inputs, (batch_size,
+                                     self.group,
+                                     channels // self.group,
+                                     height,
+                                     width))
+        mean = ops.mean(var_x, axis=[2, 3, 4], keepdims=True)
+        std = ops.sqrt(ops.var(var_x, axis=[2, 3, 4], keepdims=True) + self.epsilon)
+        var_x = (var_x - mean) / std
+
+        var_x = ops.reshape(var_x, (batch_size, channels, height, width))
+        return self.gamma * var_x + self.beta
+
     def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         """This is where the layer's logic lives.
 
@@ -254,62 +312,19 @@ class GroupNormalization(layers.Layer):
                              '; Received input shape:', str(input_shape))
 
         if len(input_shape) == 4:
-            if self.data_format == 'channels_last':
-                batch_size, height, width, channels = input_shape
-                if batch_size is None:
-                    batch_size = -1
+            return self._process_4_channel(inputs)
 
-                if channels < self.group:
-                    raise ValueError('Input channels should be larger than group size' +
-                                     '; Received input channels: ' + str(channels) +
-                                     '; Group size: ' + str(self.group))
+        reduction_axes = list(range(0, len(input_shape)))
+        del reduction_axes[0]
+        batch_size, _ = input_shape
+        if batch_size is None:
+            batch_size = -1
 
-                var_x = ops.reshape(inputs, (batch_size,
-                                            height,
-                                            width,
-                                            self.group,
-                                            channels // self.group))
-                mean = ops.mean(var_x, axis=[1, 2, 4], keepdims=True)
-                std = ops.sqrt(ops.var(var_x, axis=[1, 2, 4], keepdims=True) + self.epsilon)
-                var_x = (var_x - mean) / std
+        mean = ops.mean(inputs, keepdims=True)
+        std = ops.sqrt(ops.var(inputs, keepdims=True) + self.epsilon)
+        var_x = (inputs - mean) / std
 
-                var_x = ops.reshape(var_x, (batch_size, height, width, channels))
-                retval = self.gamma * var_x + self.beta
-            elif self.data_format == 'channels_first':
-                batch_size, channels, height, width = input_shape
-                if batch_size is None:
-                    batch_size = -1
-
-                if channels < self.group:
-                    raise ValueError('Input channels should be larger than group size' +
-                                     '; Received input channels: ' + str(channels) +
-                                     '; Group size: ' + str(self.group))
-
-                var_x = ops.reshape(inputs, (batch_size,
-                                           self.group,
-                                           channels // self.group,
-                                           height,
-                                           width))
-                mean = ops.mean(var_x, axis=[2, 3, 4], keepdims=True)
-                std = ops.sqrt(ops.var(var_x, axis=[2, 3, 4], keepdims=True) + self.epsilon)
-                var_x = (var_x - mean) / std
-
-                var_x = ops.reshape(var_x, (batch_size, channels, height, width))
-                retval = self.gamma * var_x + self.beta
-
-        elif len(input_shape) == 2:
-            reduction_axes = list(range(0, len(input_shape)))
-            del reduction_axes[0]
-            batch_size, _ = input_shape
-            if batch_size is None:
-                batch_size = -1
-
-            mean = ops.mean(inputs, keepdims=True)
-            std = ops.sqrt(ops.var(inputs, keepdims=True) + self.epsilon)
-            var_x = (inputs - mean) / std
-
-            retval = self.gamma * var_x + self.beta
-        return retval
+        return self.gamma * var_x + self.beta
 
     def get_config(self) -> dict[str, T.Any]:
         """Returns the config of the layer.
@@ -381,8 +396,8 @@ class InstanceNormalization(layers.Layer):
                  epsilon: float = 1e-3,
                  center: bool = True,
                  scale: bool = True,
-                 beta_initializer: str ="zeros",
-                 gamma_initializer: str ="ones",
+                 beta_initializer: str = "zeros",
+                 gamma_initializer: str = "ones",
                  beta_regularizer: T.Any = None,
                  gamma_regularizer: T.Any = None,
                  beta_constraint: T.Any = None,
@@ -421,7 +436,8 @@ class InstanceNormalization(layers.Layer):
         if (self.axis is not None) and (ndim == 2):
             raise ValueError("Cannot specify axis for rank 1 tensor")
 
-        self.input_spec = layers.InputSpec(ndim=ndim)  # pylint:disable=attribute-defined-outside-init
+        self.input_spec = layers.InputSpec(  # pylint:disable=attribute-defined-outside-init
+            ndim=ndim)
 
         if self.axis is None:
             shape = (1,)

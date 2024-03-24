@@ -8,6 +8,7 @@ import keras
 from keras.saving import get_custom_objects
 from keras.optimizers import Adam, Nadam, RMSprop   # noqa:E501,F401  pylint:disable=unused-import
 
+
 class AdaBelief(keras.optimizers.Optimizer):
     """ Implementation of the AdaBelief Optimizer
 

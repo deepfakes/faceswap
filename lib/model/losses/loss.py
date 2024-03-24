@@ -420,7 +420,7 @@ class LaplacianPyramidLoss(Loss):  # pylint:disable=too-few-public-methods
         self._max_levels = max_levels
         self._weights = Variable([np.power(2., -2 * idx)
                                   for idx in range(max_levels + 1)],
-                                  trainable=False)
+                                 trainable=False)
         self._gaussian_kernel = self._get_gaussian_kernel(gaussian_size, gaussian_sigma)
         logger.debug("Initialized: %s", self.__class__.__name__)
 

@@ -91,7 +91,7 @@ class ICNR(initializers.Initializer):
         var_x = ops.image.resize(var_x,
                                  size,
                                  interpolation="nearest",
-                                 data_format= "channels_last")
+                                 data_format="channels_last")
         var_x = self._space_to_depth(var_x)
         var_x = ops.transpose(var_x, [1, 2, 0, 3])
 
@@ -284,7 +284,7 @@ class ConvolutionAware(initializers.Initializer):
 
             transpose_dimensions = (2, 1, 0)
             kernel_shape = (row,)
-            correct_ifft = lambda shape, s=[None]: np.fft.irfft(shape, s[0])
+            correct_ifft = lambda shape, s=[None]: np.fft.irfft(shape, s[0])  # noqa:E731
             correct_fft = np.fft.rfft
 
         elif rank == 4:

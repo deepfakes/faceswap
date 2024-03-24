@@ -103,10 +103,10 @@ class L2Norm(Layer):
         var_x = inputs / norm * self.w
         return var_x
 
-    def compute_output_shape(self,
-                             input_shape: tuple[None, int, int, int]) -> tuple[None, int, int, int]:
+    def compute_output_shape(self, input_shape: tuple[None, int, int, int]
+                             ) -> tuple[None, int, int, int]:
         """ Input shape and output shape are the same
-        
+
         Parameters
         ----------
         input_shape: tuple[None, int, int, int]

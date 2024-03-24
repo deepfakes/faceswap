@@ -160,17 +160,8 @@ class Effmpeg():
         self.print_ = False
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def process(self):
-        """ EFFMPEG Process """
-        logger.debug("Running Effmpeg")
-        # Format action to match the method name
-        self.args.action = self.args.action.replace('-', '_')
-        logger.debug("action: '%s", self.args.action)
-
-        # Instantiate input DataItem object
-        self.input = DataItem(path=self.args.input)
-
-        # Instantiate output DataItem object
+    def _set_output(self) -> None:
+        """ Set :attr:`output` based on input arguments """
         if self.args.action in self._actions_have_dir_output:
             self.output = DataItem(path=self.__get_default_output())
         elif self.args.action in self._actions_have_vid_output:
@@ -180,14 +171,22 @@ class Effmpeg():
             else:
                 self.output = DataItem(path=self.__get_default_output())
 
-        if self.args.ref_vid is None \
-                or self.args.ref_vid == '':
+    def _set_ref_video(self) -> None:
+        """ Set :attr:`ref_vid` based on input arguments """
+        if self.args.ref_vid is None or self.args.ref_vid == '':
             self.args.ref_vid = None
 
-        # Instantiate ref_vid DataItem object
         self.ref_vid = DataItem(path=self.args.ref_vid)
 
-        # Check that correct input and output arguments were provided
+    def _check_inputs(self) -> None:
+        """ Validate provided arguments are valid
+
+        Raises
+        ------
+        ValueError
+            If provided arguments are not valid
+        """
+
         if self.args.action in self._actions_have_dir_input and not self.input.is_type("dir"):
             raise ValueError("The chosen action requires a directory as its "
                              "input, but you entered: "
@@ -218,13 +217,17 @@ class Effmpeg():
                                "one may be used with the chosen action. If this is "
                                "intentional then ignore this warning.")
 
-        # Process start and duration arguments
+    def _set_times(self) -> None:
+        """Set start, end and duration attributes """
         self.start = self.parse_time(self.args.start)
         self.end = self.parse_time(self.args.end)
         if not self.__check_equals_time(self.args.end, "00:00:00"):
             self.duration = self.__get_duration(self.start, self.end)
         else:
             self.duration = self.parse_time(str(self.args.duration))
+
+    def _set_fps(self) -> None:
+        """ Set :attr:`arguments.fps` based on input arguments"""
         # If fps was left blank in gui, set it to default -1.0 value
         if self.args.fps == '':
             self.args.fps = str(-1.0)
@@ -243,6 +246,31 @@ class Effmpeg():
                 self.args.fps = self.ref_vid.fps
             elif self.input.fps is not None and self.__check_have_fps(['r']):
                 self.args.fps = self.input.fps
+
+    def process(self):
+        """ EFFMPEG Process """
+        logger.debug("Running Effmpeg")
+        # Format action to match the method name
+        self.args.action = self.args.action.replace('-', '_')
+        logger.debug("action: '%s", self.args.action)
+
+        # Instantiate input DataItem object
+        self.input = DataItem(path=self.args.input)
+
+        # Instantiate output DataItem object
+        self._set_output()
+
+        # Instantiate ref_vid DataItem object
+        self._set_ref_video()
+
+        # Check that correct input and output arguments were provided
+        self._check_inputs()
+
+        # Process start and duration arguments
+        self._set_times()
+
+        # Set fps
+        self._set_fps()
 
         # Processing transpose
         if self.args.transpose is None or \

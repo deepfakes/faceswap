@@ -738,12 +738,11 @@ class Extractor():
         for plugin, alloc in zip(plugins, to_allocate):
             if plugin.batchsize != alloc[0]:
                 logger.debug("Updating batchsize for plugin %s from %s to %s",
-                            plugin.name, plugin.batchsize, alloc[0])
+                             plugin.name, plugin.batchsize, alloc[0])
                 plugin.batchsize = alloc[0]
                 msg.append(f"{plugin.__class__.__name__}: {plugin.batchsize}")
 
         logger.info("Reset batch sizes due to available VRAM: %s", ", ".join(msg))
-
 
     def _set_extractor_batchsize(self) -> None:
         """

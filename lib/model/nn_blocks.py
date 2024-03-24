@@ -291,7 +291,6 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
         self._layers = self._get_layers()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-
     def _assert_arguments(self) -> None:
         """ Validate the given arguments. """
         assert self._normalization in ("batch", "instance", None), (
@@ -542,12 +541,12 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
 
         name = _get_name(f"upscale2x_{filters}_{'fast' if fast else 'hyb'}")
 
-        self._upscale =  UpscaleBlock(self._filters,
-                                      kernel_size=kernel_size,
-                                      padding=padding,
-                                      scale_factor=scale_factor,
-                                      activation=activation,
-                                      **kwargs)
+        self._upscale = UpscaleBlock(self._filters,
+                                     kernel_size=kernel_size,
+                                     padding=padding,
+                                     scale_factor=scale_factor,
+                                     activation=activation,
+                                     **kwargs)
 
         if self._fast or (not self._fast and self._filters > 0):
             self._conv = Conv2D(self._filters,
@@ -563,7 +562,6 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
         self._joiner = Add() if self._fast else Concatenate(name=f"{name}_concatenate")
 
         logger.debug("Initialized %s", self.__class__.__name__)
-
 
     def __call__(self, inputs: Tensor) -> Tensor:
         """ Call the Faceswap Upscale 2x Layer.

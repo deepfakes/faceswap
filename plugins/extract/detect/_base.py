@@ -320,10 +320,10 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                 batch.prediction = pred
             else:
                 batch.prediction = np.array([b if b.any() else p
-                                                for b, p in zip(batch.prediction, pred)])
+                                             for b, p in zip(batch.prediction, pred)])
             logger.trace("angle: %s, filenames: %s, "  # type:ignore[attr-defined]
-                            "prediction: %s",
-                            angle, batch.filename, pred)
+                         "prediction: %s",
+                         angle, batch.filename, pred)
 
             if angle != 0 and any(face.any() for face in batch.prediction):
                 logger.verbose("found face(s) by rotating image %s "  # type:ignore[attr-defined]
