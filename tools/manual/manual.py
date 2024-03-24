@@ -18,7 +18,7 @@ from lib.gui.control_helper import ControlPanel
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.image import SingleFrameLoader, read_image_meta
 from lib.multithreading import MultiThread
-from lib.utils import _video_extensions
+from lib.utils import VIDEO_EXTENSIONS
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
 from .detected_faces import DetectedFaces
@@ -569,7 +569,7 @@ class TkGlobals():
         """
         if os.path.isdir(frames_location):
             retval = False
-        elif os.path.splitext(frames_location)[1].lower() in _video_extensions:
+        elif os.path.splitext(frames_location)[1].lower() in VIDEO_EXTENSIONS:
             retval = True
         else:
             logger.error("The input location '%s' is not valid", frames_location)

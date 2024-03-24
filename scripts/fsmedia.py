@@ -19,7 +19,7 @@ import imageio
 
 from lib.align import Alignments as AlignmentsBase, get_centered_size
 from lib.image import count_frames, read_image
-from lib.utils import (camel_case_split, get_image_paths, _video_extensions)
+from lib.utils import (camel_case_split, get_image_paths, VIDEO_EXTENSIONS)
 
 if T.TYPE_CHECKING:
     from collections.abc import Generator
@@ -222,7 +222,7 @@ class Images():
             logger.error("Input location %s not found.", self._args.input_dir)
             sys.exit(1)
         if (os.path.isfile(self._args.input_dir) and
-                os.path.splitext(self._args.input_dir)[1].lower() in _video_extensions):
+                os.path.splitext(self._args.input_dir)[1].lower() in VIDEO_EXTENSIONS):
             logger.info("Input Video: %s", self._args.input_dir)
             retval = True
         else:

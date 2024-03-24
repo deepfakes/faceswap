@@ -18,7 +18,7 @@ from lib.keypress import KBHit
 from lib.multithreading import MultiThread, FSThread
 from lib.training import Preview, PreviewBuffer, TriggerType
 from lib.utils import (get_folder, get_image_paths,
-                       FaceswapError, _image_extensions)
+                       FaceswapError, IMAGE_EXTENSIONS)
 from plugins.plugin_loader import PluginLoader
 
 if T.TYPE_CHECKING:
@@ -174,7 +174,7 @@ class Train():
                 continue  # Time-lapse folder is training folder
 
             filenames = [fname for fname in os.listdir(folder)
-                         if os.path.splitext(fname)[-1].lower() in _image_extensions]
+                         if os.path.splitext(fname)[-1].lower() in IMAGE_EXTENSIONS]
             if not filenames:
                 raise FaceswapError(f"The Timelapse path '{folder}' does not contain any valid "
                                     "images")

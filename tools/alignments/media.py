@@ -17,7 +17,7 @@ from tqdm import tqdm
 from lib.align import Alignments, DetectedFace, update_legacy_png_header
 from lib.image import (count_frames, generate_thumbnail, ImagesLoader,
                        png_write_meta, read_image, read_image_meta_batch)
-from lib.utils import _image_extensions, _video_extensions, FaceswapError
+from lib.utils import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, FaceswapError
 
 if T.TYPE_CHECKING:
     from collections.abc import Generator
@@ -134,7 +134,7 @@ class MediaLoader():
 
         if (loadtype == "Frames" and
                 os.path.isfile(self.folder) and
-                os.path.splitext(self.folder)[1].lower() in _video_extensions):
+                os.path.splitext(self.folder)[1].lower() in VIDEO_EXTENSIONS):
             logger.verbose("Video exists at: '%s'", self.folder)  # type: ignore
             retval = cv2.VideoCapture(self.folder)  # pylint:disable=no-member
             # TODO ImageIO single frame seek seems slow. Look into this
@@ -148,7 +148,7 @@ class MediaLoader():
     def valid_extension(filename) -> bool:
         """ bool: Check whether passed in file has a valid extension """
         extension = os.path.splitext(filename)[1]
-        retval = extension.lower() in _image_extensions
+        retval = extension.lower() in IMAGE_EXTENSIONS
         logger.trace("Filename has valid extension: '%s': %s", filename, retval)  # type: ignore
         return retval
 

@@ -1,5 +1,6 @@
 #!/usr/bin/python
 """ Logging Functions for Faceswap. """
+# NOTE: Don't import non stdlib packages. This module is accessed by setup.py
 import collections
 import logging
 from logging.handlers import RotatingFileHandler
@@ -12,17 +13,6 @@ import time
 import traceback
 
 from datetime import datetime
-
-
-# TODO - Remove this monkey patch when TF autograph fixed to handle newer logging lib
-def _patched_format(self, record):
-    """ Autograph tf-2.10 has a bug with the 3.10 version of logging.PercentStyle._format(). It is
-    non-critical but spits out warnings. This is the Python 3.9 version of the function and should
-    be removed once fixed """
-    return self._fmt % record.__dict__  # pylint:disable=protected-access
-
-
-setattr(logging.PercentStyle, "_format", _patched_format)
 
 
 class FaceswapLogger(logging.Logger):
@@ -144,7 +134,7 @@ class ColoredFormatter(logging.Formatter):
     def _get_sample_time_string(self) -> int:
         """ Obtain a sample time string and calculate correct padding.
 
-        This may be inaccurate wheb ticking over an integer from single to double digits, but that
+        This may be inaccurate when ticking over an integer from single to double digits, but that
         shouldn't be a huge issue.
 
         Returns
@@ -207,7 +197,6 @@ class FaceswapFormatter(logging.Formatter):
             The formatted log message
         """
         record.message = record.getMessage()
-        record = self._rewrite_warnings(record)
         record = self._lower_external(record)
         # strip newlines
         if record.levelno < 30 and ("\n" in record.message or "\r" in record.message):
@@ -230,37 +219,6 @@ class FaceswapFormatter(logging.Formatter):
                 msg = msg + "\n"
             msg = msg + self.formatStack(record.stack_info)
         return msg
-
-    @classmethod
-    def _rewrite_warnings(cls, record: logging.LogRecord) -> logging.LogRecord:
-        """ Change certain warning messages from WARNING to DEBUG to avoid passing non-important
-        information to output.
-
-        Parameters
-        ----------
-        record: :class:`logging.LogRecord`
-            The log record to check for rewriting
-
-        Returns
-        -------
-        :class:`logging.LogRecord`
-            The log rewritten or untouched record
-
-        """
-        if record.levelno == 30 and record.funcName == "warn" and record.module == "ag_logging":
-            # TF 2.3 in Conda is imported with the wrong gast(0.4 when 0.3.3 should be used). This
-            # causes warnings in autograph. They don't appear to impact performance so de-elevate
-            # warning to debug
-            record.levelno = 10
-            record.levelname = "DEBUG"
-
-        if record.levelno == 30 and (record.funcName == "_tfmw_add_deprecation_warning" or
-                                     record.module in ("deprecation", "deprecation_wrapper")):
-            # Keras Deprecations.
-            record.levelno = 10
-            record.levelname = "DEBUG"
-
-        return record
 
     @classmethod
     def _lower_external(cls, record: logging.LogRecord) -> logging.LogRecord:
@@ -563,7 +521,7 @@ def _process_value(value: T.Any) -> T.Any:
         return f'[type: "{type(value).__name__}" len: {len(value)}'
 
     try:
-        import numpy as np
+        import numpy as np  # pylint:disable=import-outside-toplevel
     except ImportError:
         return value
 

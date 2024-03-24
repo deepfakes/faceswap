@@ -1,5 +1,7 @@
 #!/usr/bin python3
 """ Utilities available across all scripts """
+# NOTE: Do not import keras/pytorch in this script, as it is accessed before they should be loaded
+
 from __future__ import annotations
 import json
 import logging
@@ -7,7 +9,6 @@ import os
 import sys
 import tkinter as tk
 import typing as T
-import warnings
 import zipfile
 
 from multiprocessing import current_process
@@ -24,11 +25,9 @@ if T.TYPE_CHECKING:
     from http.client import HTTPResponse
 
 # Global variables
-_image_extensions = [  # pylint:disable=invalid-name
-    ".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
-_video_extensions = [  # pylint:disable=invalid-name
-    ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
-    ".ts", ".vob"]
+IMAGE_EXTENSIONS = [".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
+VIDEO_EXTENSIONS = [".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
+                    ".ts", ".vob"]
 _TORCH_VERS: tuple[int, int] | None = None
 _KERAS_VERS: tuple[int, int] | None = None
 ValidBackends = T.Literal["nvidia", "cpu", "apple_silicon", "directml", "rocm"]
@@ -272,7 +271,7 @@ def get_image_paths(directory: str, extension: str | None = None) -> list[str]:
     ['/path/to/directory/image1.jpg']
     """
     logger = logging.getLogger(__name__)
-    image_extensions = _image_extensions if extension is None else [extension]
+    image_extensions = IMAGE_EXTENSIONS if extension is None else [extension]
     dir_contents = []
 
     if not os.path.exists(directory):
@@ -393,39 +392,6 @@ def full_path_split(path: str) -> list[str]:
     # Remove any empty strings which may have got inserted
     allparts = [part for part in allparts if part]
     return allparts
-
-
-def set_system_verbosity(log_level: str):
-    """ Set the verbosity level of tensorflow and suppresses future and deprecation warnings from
-    any modules.
-
-    This function sets the `TF_CPP_MIN_LOG_LEVEL` environment variable to control the verbosity of
-    TensorFlow output, as well as filters certain warning types to be ignored. The log level is
-    determined based on the input string `log_level`.
-
-    Parameters
-    ----------
-    log_level: str
-        The requested Faceswap log level.
-
-    References
-    ----------
-    https://stackoverflow.com/questions/35911252/disable-tensorflow-debugging-information
-
-    Example
-    -------
-    >>> from lib.utils import set_system_verbosity
-    >>> set_system_verbosity('warning')
-    """
-    logger = logging.getLogger(__name__)
-    from lib.logger import get_loglevel  # pylint:disable=import-outside-toplevel
-    numeric_level = get_loglevel(log_level)
-    log_level = "3" if numeric_level > 15 else "0"
-    logger.debug("System Verbosity level: %s", log_level)
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = log_level
-    if log_level != '0':
-        for warncat in (FutureWarning, DeprecationWarning, UserWarning):
-            warnings.simplefilter(action='ignore', category=warncat)
 
 
 def deprecation_warning(function: str, additional_info: str | None = None) -> None:
