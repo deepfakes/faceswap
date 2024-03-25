@@ -798,7 +798,7 @@ class Aligner():
             The detected face object to remove masks from
         """
         del_masks = {m for m in detected_face.mask if m not in ("components", "extended")}
-        logger.info("Removing masks after landmark update: %s", del_masks)
+        logger.debug("Removing masks after landmark update: %s", del_masks)
         for mask in del_masks:
             del detected_face.mask[mask]
 
