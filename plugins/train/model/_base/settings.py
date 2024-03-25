@@ -20,7 +20,7 @@ from contextlib import nullcontext
 
 import torch
 import keras
-from keras import backend as K, losses as k_losses
+from keras import losses as k_losses
 from keras.config import set_dtype_policy
 from keras.dtype_policies import DTypePolicy
 from keras.optimizers import LossScaleOptimizer
@@ -53,7 +53,8 @@ class LossClass:
     kwargs: dict
         Any keyword arguments to supply to the loss function at initialization.
     """
-    function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | T.Any = k_losses.MeanSquaredError
+    function: Callable[[torch.Tensor, torch.Tensor],
+                       torch.Tensor] | T.Any = k_losses.MeanSquaredError
     init: bool = True
     kwargs: dict[str, T.Any] = field(default_factory=dict)
 
@@ -122,7 +123,7 @@ class Loss():
         ``None`` if there is no mask input. """
         if self._mask_inputs is None:
             return None
-        return [K.int_shape(mask_input) for mask_input in self._mask_inputs]
+        return [mask_input.shape for mask_input in self._mask_inputs]
 
     def configure(self, model: keras.models.Model) -> None:
         """ Configure the loss functions for the given inputs and outputs.
@@ -366,8 +367,6 @@ class Settings():
                  is_predict: bool) -> None:
         logger.debug("Initializing %s: (arguments: %s, mixed_precision: %s, is_predict: %s)",
                      self.__class__.__name__, arguments, mixed_precision, is_predict)
-        self._set_tf_settings(arguments.exclude_gpus)
-
         use_mixed_precision = not is_predict and mixed_precision
         self._use_mixed_precision = use_mixed_precision
         if use_mixed_precision:
@@ -407,32 +406,6 @@ class Settings():
             The original optimizer with loss scaling applied
         """
         return LossScaleOptimizer(optimizer)
-
-    @classmethod
-    def _set_tf_settings(cls, exclude_devices: list[int]) -> None:
-        """ Specify Devices to place operations on and Allow TensorFlow to manage VRAM growth.
-
-        Parameters
-        ----------
-        exclude_devices: list or ``None``
-            List of GPU device indices that should not be made available to Tensorflow. Pass
-            ``None`` if all devices should be made available
-        """
-        backend = get_backend()
-        if backend == "cpu":
-            logger.verbose("Hiding GPUs from Tensorflow")  # type:ignore[attr-defined]
-            tf.config.set_visible_devices([], "GPU")
-            return
-
-        if not exclude_devices:
-            logger.debug("Not setting any specific Tensorflow settings")
-            return
-
-        gpus = tf.config.list_physical_devices('GPU')
-        if exclude_devices:
-            gpus = [gpu for idx, gpu in enumerate(gpus) if idx not in exclude_devices]
-            logger.debug("Filtering devices to: %s", gpus)
-            tf.config.set_visible_devices(gpus, "GPU")
 
     @classmethod
     def _set_keras_mixed_precision(cls, enable: bool) -> None:
