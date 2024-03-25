@@ -14,8 +14,9 @@ import keras.backend as K
 from keras.layers import (  # pylint:disable=import-error
     Activation, Add, BatchNormalization, Concatenate, Conv2D, GlobalAveragePooling2D, Input,
     MaxPooling2D, Multiply, Reshape, UpSampling2D, ZeroPadding2D)
+from keras.models import Model
 
-from lib.model.session import KSession
+from lib.logger import parse_class_init
 from plugins.extract._base import _get_config
 from ._base import BatchType, Masker, MaskerBatch
 
@@ -34,7 +35,7 @@ class Mask(Masker):
         model_filename = f"bisnet_face_parsing_v{version}.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
 
-        self.model: KSession
+        self.model: BiSeNet
         self.name = "BiSeNet - Face Parsing"
         self.input_size = 512
         self.color_format = "RGB"
@@ -105,15 +106,10 @@ class Mask(Masker):
         """ Initialize the BiSeNet Face Parsing model. """
         assert isinstance(self.model_path, str)
         lbls = 5 if self._is_faceswap else 19
-        self.model = BiSeNet(self.model_path,
-                             self._exclude_gpus,
-                             self.input_size,
-                             lbls,
-                             self.config["cpu"])
-
+        self.model = BiSeNet(self.model_path, self.input_size, lbls)
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")
-        self.model.predict(placeholder)
+        self.model(placeholder)
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
@@ -128,7 +124,7 @@ class Mask(Masker):
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions """
-        return self.model.predict(feed)[0]
+        return self.model(feed)[0]
 
     def process_output(self, batch: BatchType) -> None:
         """ Compile found faces for output """
@@ -525,49 +521,40 @@ class BiSeNetOutput():
         return var_x
 
 
-class BiSeNet(KSession):
+class BiSeNet():
     """ BiSeNet Face-Parsing Mask from https://github.com/zllrunning/face-parsing.PyTorch
 
     PyTorch model implemented in Keras by TorzDF
 
     Parameters
     ----------
-    model_path: str
-        The path to the keras model file
-    exclude_gpus: list
-        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
-        ``None`` to not exclude any GPUs
+    weights_path: str
+        The path to the keras weights file
     input_size: int
         The input size to the model
     num_classes: int
         The number of segmentation classes to create
-    cpu_mode: bool, optional
-        ``True`` run the model on CPU. Default: ``False``
     """
-    def __init__(self,
-                 model_path: str,
-                 exclude_gpus: list[int] | None,
-                 input_size: int,
-                 num_classes: int,
-                 cpu_mode: bool) -> None:
-        super().__init__("BiSeNet Face Parsing",
-                         model_path,
-                         exclude_gpus=exclude_gpus,
-                         cpu_mode=cpu_mode)
+    def __init__(self, weights_path: str, input_size: int, num_classes: int) -> None:
+        logger.debug(parse_class_init(locals()))
         self._input_size = input_size
         self._num_classes = num_classes
         self._cp = ContextPath()
-        self.define_model(self._model_definition)
-        self.load_model_weights()
+        self._model = self._load_model(weights_path)
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _model_definition(self) -> tuple[Tensor, list[Tensor]]:
-        """ Definition of the VGG Obstructed Model.
+    def _load_model(self, weights_path: str) -> Model:  # pylint:disable=too-many-locals
+        """ Definition of the BiSeNet-FP  Model.
+
+        Parameters
+        ----------
+        weights_path: str
+            Full path to the model's weights
 
         Returns
         -------
-        tuple
-            The tensor input to the model and tensor output to the model for compilation by
-            :func`define_model`
+        :class:`keras.models.Model`
+            The BiSeNet-FP model
         """
         input_ = Input((self._input_size, self._input_size, 3))
 
@@ -590,4 +577,22 @@ class BiSeNet(KSession):
         feat_out32 = UpSampling2D(size=(height // f_h32, width // f_w32),
                                   interpolation="bilinear")(feat_out32)
 
-        return input_, [feat_out, feat_out16, feat_out32]
+        retval = Model(input_, [feat_out, feat_out16, feat_out32])
+        retval.load_weights(weights_path)
+        retval.make_predict_function()
+        return retval
+
+    def __call__(self, inputs: np.ndarray) -> np.ndarray:
+        """ Get predictions from the BiSeNet-FP model
+
+        Parameters
+        ----------
+        inputs: :class:`numpy.ndarray`
+            The input to BiSeNet-FP
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The output from BiSeNet-FP
+        """
+        return self._model.predict(inputs, verbose=0)

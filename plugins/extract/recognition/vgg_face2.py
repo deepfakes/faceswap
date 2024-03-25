@@ -10,10 +10,11 @@ import psutil
 from fastcluster import linkage, linkage_vector
 from keras.layers import (Activation, add, AveragePooling2D, BatchNormalization, Conv2D, Dense,
                           Flatten, Input, MaxPooling2D)
+from keras.models import Model
 from keras.regularizers import L2
 
+from lib.logger import parse_class_init
 from lib.model.layers import L2Normalize
-from lib.model.session import KSession
 from lib.utils import FaceswapError
 from ._base import BatchType, RecogBatch, Identity
 
@@ -46,7 +47,7 @@ class Recognition(Identity):
         git_model_id = 10
         model_filename = "vggface2_resnet50_v2.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
-        self.model: KSession
+        self.model: Model
         self.name: str = "VGGFace2"
         self.input_size = 224
         self.color_format = "BGR"
@@ -63,13 +64,10 @@ class Recognition(Identity):
     def init_model(self) -> None:
         """ Initialize VGG Face 2 Model. """
         assert isinstance(self.model_path, str)
-        self.model = VGGFace2(self.input_size,
-                              self.model_path,
-                              exclude_gpus=self._exclude_gpus,
-                              cpu_mode=self.config["cpu"])
+        self.model = VGGFace2(self.input_size, self.model_path)
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")
-        self.model.predict(placeholder)
+        self.model(placeholder)
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
@@ -92,7 +90,7 @@ class Recognition(Identity):
         numpy.ndarray
             The encodings for the face
         """
-        retval = self.model.predict(feed)
+        retval = self.model(feed)
         assert isinstance(retval, np.ndarray)
         return retval
 
@@ -303,7 +301,7 @@ class ResNet50:
         return var_x
 
 
-class VGGFace2(KSession):
+class VGGFace2():
     """ VGG-Face 2 model with resnet 50 backbone. Adapted from
     https://github.com/WeidiXie/Keras-VGGFace2-ResNet50
 
@@ -311,13 +309,8 @@ class VGGFace2(KSession):
     ----------
     input_size, int
         The input size for the model.
-    model_path: str
-        The path to the keras model file
-    exclude_gpus: list
-        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
-        ``None`` to not exclude any GPUs
-    cpu_mode: bool, optional
-        ``True`` run the model on CPU. Default: ``False``
+    weights_path: str
+        The path to the keras weights file
     num_class: int, optional
         Number of classes to train the model on
     weight_decay: float
@@ -325,38 +318,29 @@ class VGGFace2(KSession):
     """
     def __init__(self,
                  input_size: int,
-                 model_path: str,
-                 exclude_gpus: list[int] | None,
-                 cpu_mode: bool,
+                 weights_path: str,
                  num_classes: int = 8631,
                  weight_decay: float = 1e-4) -> None:
-        logger.debug("Initializing %s: input_size: %s, model_path: %s, exclude_gpus: %s, "
-                     "num_classes: %s, weight_decay: %s, train: %s",
-                     self.__class__.__name__, input_size, model_path, exclude_gpus, cpu_mode,
-                     num_classes, weight_decay)
-        super().__init__("VGG Face 2",
-                         model_path,
-                         exclude_gpus=exclude_gpus,
-                         cpu_mode=cpu_mode)
+        logger.debug(parse_class_init(locals()))
         self._input_shape = (input_size, input_size, 3)
         self._weight_decay = weight_decay
         self._num_classes = num_classes
         self._resnet = ResNet50(input_shape=self._input_shape, weight_decay=self._weight_decay)
-
-        self.define_model(self._model_definition)
-        self.load_model_weights()
-
+        self._model = self._load_model(weights_path)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _model_definition(self) -> tuple[torch.Tensor, list[torch.Tensor]]:
-        """ Run the vgg-face2 model on the input tensor
+    def _load_model(self, weights_path: str) -> Model:
+        """ load the vgg-face2 model
+
+        Parameters
+        ----------
+        weights_path: str
+            Full path to the model's weights
 
         Returns
         -------
-        :class:`torch.Tensor`
-            The input tensor to vgg-face2
-        list[`torch.Tensor`]
-            The output from vgg-face2
+        :class:`keras.models.Model`
+            The VGG-Obstructed model
         """
         inputs = Input(self._input_shape)
         var_x = self._resnet(inputs)
@@ -364,9 +348,27 @@ class VGGFace2(KSession):
         var_x = AveragePooling2D((7, 7), name="avg_pool")(var_x)
         var_x = Flatten()(var_x)
         var_x = Dense(512, activation="relu", name="dim_proj")(var_x)
-
         var_x = L2Normalize(axis=1)(var_x)
-        return inputs, [var_x]
+
+        retval = Model(inputs, var_x)
+        retval.load_weights(weights_path)
+        retval.make_predict_function()
+        return retval
+
+    def __call__(self, inputs: np.ndarray) -> np.ndarray:
+        """ Get output from the vgg-face2 model
+
+        Parameters
+        ----------
+        inputs: :class:`numpy.ndarray`
+            The input to vgg-face2
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The output from vgg-face2
+        """
+        return self._model.predict(inputs, verbose=0)
 
 
 class Cluster():

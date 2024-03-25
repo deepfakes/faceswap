@@ -2,18 +2,16 @@
 """ MTCNN Face detection plugin """
 from __future__ import annotations
 import logging
-import typing as T
 
 import cv2
 import numpy as np
 
+from keras.models import Model
 from keras.layers import Conv2D, Dense, Flatten, Input, MaxPooling2D, Permute, PReLU
 
-from lib.model.session import KSession
+from lib.logger import parse_class_init
 from ._base import BatchType, Detector
 
-if T.TYPE_CHECKING:
-    from torch import Tensor
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +23,7 @@ class Detect(Detector):
         model_filename = ["mtcnn_det_v2.1.h5", "mtcnn_det_v2.2.h5", "mtcnn_det_v2.3.h5"]
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.name = "MTCNN"
+        self.model: MTCNN
         self.input_size = 640
         self.vram = 128 if not self.config["cpu"] else 0  # 66 in testing
         self.vram_per_batch = 64 if not self.config["cpu"] else 0  # ~50 in testing
@@ -60,10 +59,7 @@ class Detect(Detector):
     def init_model(self) -> None:
         """ Initialize MTCNN Model. """
         assert isinstance(self.model_path, list)
-        self.model = MTCNN(self.model_path,
-                           self._exclude_gpus,
-                           self.config["cpu"],
-                           **self.kwargs)  # type:ignore
+        self.model = MTCNN(self.model_path, **self.kwargs)
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detection image(s) for prediction
@@ -135,18 +131,13 @@ class Detect(Detector):
 # SOFTWARE.
 
 
-class PNet(KSession):
+class PNet():
     """ Keras P-Net model for MTCNN
 
     Parameters
     ----------
-    model_path: str
+    weights_path: str
         The path to the keras model file
-    exclude_gpus: list, optional
-        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
-        ``None`` to not exclude any GPUs. Default: ``None``
-    cpu_mode: bool, optional
-        ``True`` run the model on CPU. Default: ``False``
     input_size: int
         The input size of the model
     minsize: int, optional
@@ -155,20 +146,13 @@ class PNet(KSession):
         Threshold for P-Net
     """
     def __init__(self,
-                 model_path: str,
-                 exclude_gpus: list[int] | None,
-                 cpu_mode: bool,
+                 weights_path: str,
                  input_size: int,
                  min_size: int,
                  factor: float,
                  threshold: float) -> None:
-        super().__init__("MTCNN-PNet",
-                         model_path,
-                         exclude_gpus=exclude_gpus,
-                         cpu_mode=cpu_mode)
-
-        self.define_model(self.model_definition)
-        self.load_model_weights()
+        logger.debug(parse_class_init(locals()))
+        self._model = self._load_model(weights_path)
 
         self._input_size = input_size
         self._threshold = threshold
@@ -177,10 +161,22 @@ class PNet(KSession):
         self._pnet_sizes = [(int(input_size * scale), int(input_size * scale))
                             for scale in self._pnet_scales]
         self._pnet_input: list[np.ndarray] | None = None
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     @staticmethod
-    def model_definition() -> tuple[list[Tensor], list[Tensor]]:
-        """ Keras P-Network Definition for MTCNN """
+    def _load_model(weights_path: str) -> Model:
+        """ Keras P-Network Definition for MTCNN
+
+        Parameters
+        ----------
+        weights_path: str
+            Full path to the model's weights
+
+        Returns
+        -------
+        :class:`keras.models.Model`
+            The p-net model
+        """
         input_ = Input(shape=(None, None, 3))
         var_x = Conv2D(10, (3, 3), strides=1, padding='valid', name='conv1')(input_)
         var_x = PReLU(shared_axes=[1, 2], name='PReLU1')(var_x)
@@ -191,7 +187,11 @@ class PNet(KSession):
         var_x = PReLU(shared_axes=[1, 2], name='PReLU3')(var_x)
         classifier = Conv2D(2, (1, 1), activation='softmax', name='conv4-1')(var_x)
         bbox_regress = Conv2D(4, (1, 1), name='conv4-2')(var_x)
-        return [input_], [classifier, bbox_regress]
+
+        retval = Model(input_, [classifier, bbox_regress])
+        retval.load_weights(weights_path)
+        retval.make_predict_function()
+        return retval
 
     def _calculate_scales(self,
                           minsize: int,
@@ -221,49 +221,6 @@ class PNet(KSession):
             factor_count += 1
         logger.trace(scales)  # type:ignore
         return scales
-
-    def __call__(self, images: np.ndarray) -> list[np.ndarray]:
-        """ first stage - fast proposal network (p-net) to obtain face candidates
-
-        Parameters
-        ----------
-        images: :class:`numpy.ndarray`
-            The batch of images to detect faces in
-
-        Returns
-        -------
-        List
-            List of face candidates from P-Net
-        """
-        batch_size = images.shape[0]
-        rectangles: list[list[list[int | float]]] = [[] for _ in range(batch_size)]
-        scores: list[list[np.ndarray]] = [[] for _ in range(batch_size)]
-
-        if self._pnet_input is None:
-            self._pnet_input = [np.empty((batch_size, rheight, rwidth, 3), dtype="float32")
-                                for rheight, rwidth in self._pnet_sizes]
-
-        for scale, batch, (rheight, rwidth) in zip(self._pnet_scales,
-                                                   self._pnet_input,
-                                                   self._pnet_sizes):
-            _ = [cv2.resize(images[idx], (rwidth, rheight), dst=batch[idx])
-                 for idx in range(batch_size)]
-            cls_prob, roi = self.predict(batch)
-            cls_prob = cls_prob[..., 1]
-            out_side = max(cls_prob.shape[1:3])
-            cls_prob = np.swapaxes(cls_prob, 1, 2)
-            roi = np.swapaxes(roi, 1, 3)
-            for idx in range(batch_size):
-                # first index 0 = class score, 1 = one hot representation
-                rect, score = self._detect_face_12net(cls_prob[idx, ...],
-                                                      roi[idx, ...],
-                                                      out_side,
-                                                      1 / scale)
-                rectangles[idx].extend(rect)
-                scores[idx].extend(score)
-
-        return [nms(np.array(rect), np.array(score), 0.7, "iou")[0]  # don't output scores
-                for rect, score in zip(rectangles, scores)]
 
     def _detect_face_12net(self,
                            class_probabilities: np.ndarray,
@@ -309,44 +266,84 @@ class PNet(KSession):
 
         return nms(rects, scores, 0.3, "iou")
 
+    def __call__(self, images: np.ndarray) -> list[np.ndarray]:
+        """ first stage - fast proposal network (p-net) to obtain face candidates
 
-class RNet(KSession):
+        Parameters
+        ----------
+        images: :class:`numpy.ndarray`
+            The batch of images to detect faces in
+
+        Returns
+        -------
+        List
+            List of face candidates from P-Net
+        """
+        batch_size = images.shape[0]
+        rectangles: list[list[list[int | float]]] = [[] for _ in range(batch_size)]
+        scores: list[list[np.ndarray]] = [[] for _ in range(batch_size)]
+
+        if self._pnet_input is None:
+            self._pnet_input = [np.empty((batch_size, rheight, rwidth, 3), dtype="float32")
+                                for rheight, rwidth in self._pnet_sizes]
+
+        for scale, batch, (rheight, rwidth) in zip(self._pnet_scales,
+                                                   self._pnet_input,
+                                                   self._pnet_sizes):
+            _ = [cv2.resize(images[idx], (rwidth, rheight), dst=batch[idx])
+                 for idx in range(batch_size)]
+            cls_prob, roi = self._model.predict(batch, verbose=0)
+            cls_prob = cls_prob[..., 1]
+            out_side = max(cls_prob.shape[1:3])
+            cls_prob = np.swapaxes(cls_prob, 1, 2)
+            roi = np.swapaxes(roi, 1, 3)
+            for idx in range(batch_size):
+                # first index 0 = class score, 1 = one hot representation
+                rect, score = self._detect_face_12net(cls_prob[idx, ...],
+                                                      roi[idx, ...],
+                                                      out_side,
+                                                      1 / scale)
+                rectangles[idx].extend(rect)
+                scores[idx].extend(score)
+
+        return [nms(np.array(rect), np.array(score), 0.7, "iou")[0]  # don't output scores
+                for rect, score in zip(rectangles, scores)]
+
+
+class RNet():
     """ Keras R-Net model Definition for MTCNN
 
     Parameters
     ----------
-    model_path: str
+    weights_path: str
         The path to the keras model file
-    exclude_gpus: list, optional
-        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
-        ``None`` to not exclude any GPUs. Default: ``None``
-    cpu_mode: bool, optional
-        ``True`` run the model on CPU. Default: ``False``
     input_size: int
         The input size of the model
     threshold: list, optional
         Threshold for R-Net
 
     """
-    def __init__(self,
-                 model_path: str,
-                 exclude_gpus: list[int] | None,
-                 cpu_mode: bool,
-                 input_size: int,
-                 threshold: float) -> None:
-        super().__init__("MTCNN-RNet",
-                         model_path,
-                         exclude_gpus=exclude_gpus,
-                         cpu_mode=cpu_mode)
-        self.define_model(self.model_definition)
-        self.load_model_weights()
-
+    def __init__(self, weights_path: str, input_size: int, threshold: float) -> None:
+        logger.debug(parse_class_init(locals()))
+        self._model = self._load_model(weights_path)
         self._input_size = input_size
         self._threshold = threshold
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     @staticmethod
-    def model_definition() -> tuple[list[Tensor], list[Tensor]]:
-        """ Keras R-Network Definition for MTCNN """
+    def _load_model(weights_path: str) -> Model:
+        """ Keras R-Network Definition for MTCNN
+
+        Parameters
+        ----------
+        weights_path: str
+            Full path to the model's weights
+
+        Returns
+        -------
+        :class:`keras.models.Model`
+            The r-net model
+        """
         input_ = Input(shape=(24, 24, 3))
         var_x = Conv2D(28, (3, 3), strides=1, padding='valid', name='conv1')(input_)
         var_x = PReLU(shared_axes=[1, 2], name='prelu1')(var_x)
@@ -364,42 +361,11 @@ class RNet(KSession):
         var_x = PReLU(name='prelu4')(var_x)
         classifier = Dense(2, activation='softmax', name='conv5-1')(var_x)
         bbox_regress = Dense(4, name='conv5-2')(var_x)
-        return [input_], [classifier, bbox_regress]
 
-    def __call__(self,
-                 images: np.ndarray,
-                 rectangle_batch: list[np.ndarray],
-                 ) -> list[np.ndarray]:
-        """ second stage - refinement of face candidates with r-net
-
-        Parameters
-        ----------
-        images: :class:`numpy.ndarray`
-            The batch of images to detect faces in
-        rectangle_batch:
-            List of :class:`numpy.ndarray` face candidates from P-Net
-
-        Returns
-        -------
-        List
-            List of :class:`numpy.ndarray` refined face candidates from R-Net
-        """
-        ret: list[np.ndarray] = []
-        for idx, (rectangles, image) in enumerate(zip(rectangle_batch, images)):
-            if not np.any(rectangles):
-                ret.append(np.array([]))
-                continue
-
-            feed_batch = np.empty((rectangles.shape[0], 24, 24, 3), dtype="float32")
-
-            _ = [cv2.resize(image[rect[1]: rect[3], rect[0]: rect[2]],
-                            (24, 24),
-                            dst=feed_batch[idx])
-                 for idx, rect in enumerate(rectangles)]
-
-            cls_prob, roi_prob = self.predict(feed_batch)
-            ret.append(self._filter_face_24net(cls_prob, roi_prob, rectangles))
-        return ret
+        retval = Model(input_, [classifier, bbox_regress])
+        retval.load_weights(weights_path)
+        retval.make_predict_function()
+        return retval
 
     def _filter_face_24net(self,
                            class_probabilities: np.ndarray,
@@ -434,43 +400,75 @@ class RNet(KSession):
         bbox = np.clip(rect2square(bbox), 0, self._input_size).astype("int")
         return nms(bbox, scores, 0.3, "iou")[0]
 
+    def __call__(self,
+                 images: np.ndarray,
+                 rectangle_batch: list[np.ndarray],
+                 ) -> list[np.ndarray]:
+        """ second stage - refinement of face candidates with r-net
 
-class ONet(KSession):
+        Parameters
+        ----------
+        images: :class:`numpy.ndarray`
+            The batch of images to detect faces in
+        rectangle_batch:
+            List of :class:`numpy.ndarray` face candidates from P-Net
+
+        Returns
+        -------
+        List
+            List of :class:`numpy.ndarray` refined face candidates from R-Net
+        """
+        ret: list[np.ndarray] = []
+        for idx, (rectangles, image) in enumerate(zip(rectangle_batch, images)):
+            if not np.any(rectangles):
+                ret.append(np.array([]))
+                continue
+
+            feed_batch = np.empty((rectangles.shape[0], 24, 24, 3), dtype="float32")
+
+            _ = [cv2.resize(image[rect[1]: rect[3], rect[0]: rect[2]],
+                            (24, 24),
+                            dst=feed_batch[idx])
+                 for idx, rect in enumerate(rectangles)]
+
+            cls_prob, roi_prob = self._model.predict(feed_batch, verbose=0)
+            ret.append(self._filter_face_24net(cls_prob, roi_prob, rectangles))
+        return ret
+
+
+class ONet():
     """ Keras O-Net model for MTCNN
 
     Parameters
     ----------
-    model_path: str
+    weights_path: str
         The path to the keras model file
-    exclude_gpus: list, optional
-        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
-        ``None`` to not exclude any GPUs. Default: ``None``
-    cpu_mode: bool, optional
-        ``True`` run the model on CPU. Default: ``False``
     input_size: int
         The input size of the model
     threshold: list, optional
         Threshold for O-Net
     """
-    def __init__(self,
-                 model_path: str,
-                 exclude_gpus: list[int] | None,
-                 cpu_mode: bool,
-                 input_size: int,
-                 threshold: float) -> None:
-        super().__init__("MTCNN-ONet",
-                         model_path,
-                         exclude_gpus=exclude_gpus,
-                         cpu_mode=cpu_mode)
-        self.define_model(self.model_definition)
-        self.load_model_weights()
-
+    def __init__(self, weights_path: str, input_size: int, threshold: float) -> None:
+        logger.debug(parse_class_init(locals()))
+        self._model = self._load_model(weights_path)
         self._input_size = input_size
         self._threshold = threshold
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     @staticmethod
-    def model_definition() -> tuple[list[Tensor], list[Tensor]]:
-        """ Keras O-Network for MTCNN """
+    def _load_model(weights_path: str) -> Model:
+        """ Keras P-Network Definition for MTCNN
+
+        Parameters
+        ----------
+        weights_path: str
+            Full path to the model's weights
+
+        Returns
+        -------
+        :class:`keras.models.Model`
+            The p-net model
+        """
         input_ = Input(shape=(48, 48, 3))
         var_x = Conv2D(32, (3, 3), strides=1, padding='valid', name='conv1')(input_)
         var_x = PReLU(shared_axes=[1, 2], name='prelu1')(var_x)
@@ -491,42 +489,10 @@ class ONet(KSession):
         classifier = Dense(2, activation='softmax', name='conv6-1')(var_x)
         bbox_regress = Dense(4, name='conv6-2')(var_x)
         landmark_regress = Dense(10, name='conv6-3')(var_x)
-        return [input_], [classifier, bbox_regress, landmark_regress]
-
-    def __call__(self,
-                 images: np.ndarray,
-                 rectangle_batch: list[np.ndarray]
-                 ) -> list[tuple[np.ndarray, np.ndarray]]:
-        """ Third stage - further refinement and facial landmarks positions with o-net
-
-        Parameters
-        ----------
-        images: :class:`numpy.ndarray`
-            The batch of images to detect faces in
-        rectangle_batch:
-            List of :class:`numpy.ndarray` face candidates from R-Net
-
-        Returns
-        -------
-        List
-            List of refined final candidates, scores and landmark points from O-Net
-        """
-        ret: list[tuple[np.ndarray, np.ndarray]] = []
-        for idx, rectangles in enumerate(rectangle_batch):
-            if not np.any(rectangles):
-                ret.append((np.empty((0, 5)), np.empty(0)))
-                continue
-            image = images[idx]
-            feed_batch = np.empty((rectangles.shape[0], 48, 48, 3), dtype="float32")
-
-            _ = [cv2.resize(image[rect[1]: rect[3], rect[0]: rect[2]],
-                            (48, 48),
-                            dst=feed_batch[idx])
-                 for idx, rect in enumerate(rectangles)]
-
-            cls_probs, roi_probs, pts_probs = self.predict(feed_batch)
-            ret.append(self._filter_face_48net(cls_probs, roi_probs, pts_probs, rectangles))
-        return ret
+        retval = Model(input_, [classifier, bbox_regress, landmark_regress])
+        retval.load_weights(weights_path)
+        retval.make_predict_function()
+        return retval
 
     def _filter_face_48net(self, class_probabilities: np.ndarray,
                            roi: np.ndarray,
@@ -574,19 +540,49 @@ class ONet(KSession):
         results, scores = nms(picks, scores, 0.3, "iom")
         return np.concatenate([results[..., :4], scores[..., None]], axis=-1), results[..., 4:].T
 
+    def __call__(self,
+                 images: np.ndarray,
+                 rectangle_batch: list[np.ndarray]
+                 ) -> list[tuple[np.ndarray, np.ndarray]]:
+        """ Third stage - further refinement and facial landmarks positions with o-net
+
+        Parameters
+        ----------
+        images: :class:`numpy.ndarray`
+            The batch of images to detect faces in
+        rectangle_batch:
+            List of :class:`numpy.ndarray` face candidates from R-Net
+
+        Returns
+        -------
+        List
+            List of refined final candidates, scores and landmark points from O-Net
+        """
+        ret: list[tuple[np.ndarray, np.ndarray]] = []
+        for idx, rectangles in enumerate(rectangle_batch):
+            if not np.any(rectangles):
+                ret.append((np.empty((0, 5)), np.empty(0)))
+                continue
+            image = images[idx]
+            feed_batch = np.empty((rectangles.shape[0], 48, 48, 3), dtype="float32")
+
+            _ = [cv2.resize(image[rect[1]: rect[3], rect[0]: rect[2]],
+                            (48, 48),
+                            dst=feed_batch[idx])
+                 for idx, rect in enumerate(rectangles)]
+
+            cls_probs, roi_probs, pts_probs = self._model.predict(feed_batch, verbose=0)
+            ret.append(self._filter_face_48net(cls_probs, roi_probs, pts_probs, rectangles))
+        return ret
+
 
 class MTCNN():
     """ MTCNN Detector for face alignment
 
     Parameters
     ----------
-    model_path: list
+    weights_path: list
         List of paths to the 3 MTCNN subnet weights
-    exclude_gpus: list, optional
-        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
-        ``None`` to not exclude any GPUs. Default: ``None``
-    cpu_mode: bool, optional
-        ``True`` run the model on CPU. Default: ``False``
     input_size: int, optional
         The height, width input size to the model. Default: 640
     minsize: int, optional
@@ -598,37 +594,24 @@ class MTCNN():
         Default: `0.709`
     """
     def __init__(self,
-                 model_path: list[str],
-                 exclude_gpus: list[int] | None,
-                 cpu_mode: bool,
+                 weights_path: list[str],
                  input_size: int = 640,
                  minsize: int = 20,
                  threshold: list[float] | None = None,
                  factor: float = 0.709) -> None:
-        logger.debug("Initializing: %s: (model_path: '%s', exclude_gpus: %s, "
-                     "input_size: %s, minsize: %s, threshold: %s, factor: %s)",
-                     self.__class__.__name__, model_path, exclude_gpus, input_size, minsize,
-                     threshold, factor)
-
+        logger.debug(parse_class_init(locals()))
         threshold = [0.6, 0.7, 0.7] if threshold is None else threshold
-        self._pnet = PNet(model_path[0],
-                          exclude_gpus,
-                          cpu_mode,
+        self._pnet = PNet(weights_path[0],
                           input_size,
                           minsize,
                           factor,
                           threshold[0])
-        self._rnet = RNet(model_path[1],
-                          exclude_gpus,
-                          cpu_mode,
+        self._rnet = RNet(weights_path[1],
                           input_size,
                           threshold[1])
-        self._onet = ONet(model_path[2],
-                          exclude_gpus,
-                          cpu_mode,
+        self._onet = ONet(weights_path[2],
                           input_size,
                           threshold[2])
-
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def detect_faces(self, batch: np.ndarray) -> tuple[np.ndarray, tuple[np.ndarray]]:

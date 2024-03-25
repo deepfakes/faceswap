@@ -16,7 +16,8 @@ import logging
 import typing as T
 
 import numpy as np
-from lib.model.session import KSession
+from keras.models import load_model, Model
+
 from ._base import BatchType, Masker, MaskerBatch
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ class Mask(Masker):
         git_model_id = 6
         model_filename = "DFL_256_sigmoid_v1.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
-        self.model: KSession
+        self.model: Model
         self.name = "U-Net"
         self.input_size = 256
         self.vram = 320  # 276 in testing
@@ -38,14 +39,11 @@ class Mask(Masker):
 
     def init_model(self) -> None:
         assert self.name is not None and isinstance(self.model_path, str)
-        self.model = KSession(self.name,
-                              self.model_path,
-                              model_kwargs={},
-                              exclude_gpus=self._exclude_gpus)
-        self.model.load_model()
+        self.model = load_model(self.model_path)
+        self.model.make_predict_function()
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")
-        self.model.predict(placeholder)
+        self.model.predict(placeholder, verbose=0)
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
@@ -56,7 +54,7 @@ class Mask(Masker):
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions """
-        retval = self.model.predict(feed)
+        retval = self.model.predict(feed, verbose=0)
         assert isinstance(retval, np.ndarray)
         return retval
 

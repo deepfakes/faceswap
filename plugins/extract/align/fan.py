@@ -10,11 +10,12 @@ import typing as T
 import cv2
 import numpy as np
 
-from lib.model.session import KSession
+from keras.models import load_model
 from ._base import Aligner, AlignerBatch, BatchType
 
 if T.TYPE_CHECKING:
     from lib.align import DetectedFace
+    from keras import Model
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class Align(Aligner):
         git_model_id = 13
         model_filename = "face-alignment-network_2d4_keras_v2.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
-        self.model: KSession
+        self.model: Model
         self.name = "FAN"
         self.input_size = 256
         self.color_format = "RGB"
@@ -39,14 +40,12 @@ class Align(Aligner):
         """ Initialize FAN model """
         assert isinstance(self.name, str)
         assert isinstance(self.model_path, str)
-        self.model = KSession(self.name,
-                              self.model_path,
-                              exclude_gpus=self._exclude_gpus)
-        self.model.load_model()
+        self.model = load_model(self.model_path, compile=False)
+        self.model.make_predict_function()
         # Feed a placeholder so Aligner is primed for Manual tool
         placeholder_shape = (self.batchsize, self.input_size, self.input_size, 3)
         placeholder = np.zeros(placeholder_shape, dtype="float32")
-        self.model.predict(placeholder)
+        self.model.predict(placeholder, verbose=False)
 
     def faces_to_feed(self, faces: np.ndarray) -> np.ndarray:
         """ Convert a batch of face images from UINT8 (0-255) to fp32 (0.0-1.0)
@@ -221,7 +220,7 @@ class Align(Aligner):
         logger.trace("Predicting Landmarks")  # type:ignore[attr-defined]
         # TODO Remove lazy transpose and change points from predict to use the correct
         # order
-        retval = self.model.predict(feed)[-1].transpose(0, 3, 1, 2)
+        retval = self.model.predict(feed, verbose=False)[-1].transpose(0, 3, 1, 2)
         return retval
 
     def process_output(self, batch: BatchType) -> None:

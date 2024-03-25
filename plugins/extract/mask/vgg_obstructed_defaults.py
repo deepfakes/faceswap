@@ -51,18 +51,18 @@ _HELPTEXT = (
 
 
 _DEFAULTS = {
-    "batch-size": dict(
-        default=2,
-        info="The batch size to use. To a point, higher batch sizes equal better performance, but "
-             "setting it too high can harm performance.\n"
-             "\n\tNvidia users: If the batchsize is set higher than the your GPU can accomodate "
-             "then this will automatically be lowered.",
-        datatype=int,
-        rounding=1,
-        min_max=(1, 64),
-        choices=[],
-        group="settings",
-        gui_radio=False,
-        fixed=True,
-    )
+    "batch-size": {
+        "default": 2,
+        "info": "The batch size to use. To a point, higher batch sizes equal better performance, "
+                "but setting it too high can harm performance.\n"
+                "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
+                "accomodate then this will automatically be lowered.",
+        "datatype": int,
+        "rounding": 1,
+        "min_max": (1, 64),
+        "choices": [],
+        "group": "settings",
+        "gui_radio": False,
+        "fixed": True,
+    }
 }

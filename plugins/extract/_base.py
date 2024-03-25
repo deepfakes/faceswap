@@ -19,9 +19,7 @@ from .pipeline import ExtractMedia
 if T.TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
     from queue import Queue
-    import cv2
     from lib.align import DetectedFace
-    from lib.model.session import KSession
     from .align._base import AlignerBatch
     from .detect._base import DetectorBatch
     from .mask._base import MaskerBatch
@@ -107,9 +105,6 @@ class Extractor():
         https://github.com/deepfakes-models/faceswap-models for more information
     model_filename: str
         The name of the model file to be loaded
-    exclude_gpus: list, optional
-        A list of indices correlating to connected GPUs that PyTorch should not use. Pass
-        ``None`` to not exclude any GPUs. Default: ``None``
     configfile: str, optional
         Path to a custom configuration ``ini`` file. Default: Use system configfile
     instance: int, optional
@@ -149,15 +144,13 @@ class Extractor():
     def __init__(self,
                  git_model_id: int | None = None,
                  model_filename: str | list[str] | None = None,
-                 exclude_gpus: list[int] | None = None,
                  configfile: str | None = None,
                  instance: int = 0) -> None:
-        logger.debug("Initializing %s: (git_model_id: %s, model_filename: %s, exclude_gpus: %s, "
-                     "configfile: %s, instance: %s, )", self.__class__.__name__, git_model_id,
-                     model_filename, exclude_gpus, configfile, instance)
+        logger.debug("Initializing %s: (git_model_id: %s, model_filename: %s, configfile: %s, "
+                     "instance: %s, )", self.__class__.__name__, git_model_id, model_filename,
+                     configfile, instance)
         self._is_initialized = False
         self._instance = instance
-        self._exclude_gpus = exclude_gpus
         self.config = _get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
         """ dict: Config for this plugin, loaded from ``extract.ini`` configfile """
 
@@ -176,7 +169,7 @@ class Extractor():
         self.queue_size = 1
         """ int: Queue size for all internal queues. Set in :func:`initialize()` """
 
-        self.model: KSession | cv2.dnn.Net | None = None
+        self.model: T.Any = None
         """varies: The model for this plugin. Set in the plugin's :func:`init_model()` method """
 
         # For detectors that support batching, this should be set to  the calculated batch size

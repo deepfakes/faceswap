@@ -51,29 +51,31 @@ _HELPTEXT = (
 
 
 _DEFAULTS = {
-    "batch-size": dict(
-        default=8,
-        info="The batch size to use. To a point, higher batch sizes equal better performance, but "
-             "setting it too high can harm performance.",
-        datatype=int,
-        rounding=1,
-        min_max=(1, 64),
-        group="settings"),
-    "centering": dict(
-        default="face",
-        info="Whether to create a dummy mask with face or head centering.",
-        choices=["face", "head"],
-        datatype=str,
-        group="settings",
-        gui_radio=True),
-    "fill": dict(
-        default=False,
-        info="Whether the mask should be filled (True) in which case the custom mask will be "
-             "created with the whole area masked in (i.e. you would need to manually edit out the "
-             "background) or unfilled (False) in which case you would need to manually edit in "
-             "the face.",
-        datatype=bool,
-        group="settings",
-        gui_radio=True,
-    ),
+    "batch-size": {
+        "default": 8,
+        "info": "The batch size to use. To a point, higher batch sizes equal better performance, "
+                "but setting it too high can harm performance.",
+        "datatype": int,
+        "rounding": 1,
+        "min_max": (1, 64),
+        "group": "settings"
+    },
+    "centering": {
+        "default": "face",
+        "info": "Whether to create a dummy mask with face or head centering.",
+        "choices": ["face", "head"],
+        "datatype": str,
+        "group": "settings",
+        "gui_radio": True
+    },
+    "fill": {
+        "default": False,
+        "info": "Whether the mask should be filled (True) in which case the custom mask will be "
+                "created with the whole area masked in (i.e. you would need to manually edit out "
+                "the background) or unfilled (False) in which case you would need to manually "
+                "edit in the face.",
+        "datatype": bool,
+        "group": "settings",
+        "gui_radio": True,
+    },
 }

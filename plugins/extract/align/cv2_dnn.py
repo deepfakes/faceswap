@@ -46,6 +46,7 @@ class Align(Aligner):
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
 
         self.model: cv2.dnn.Net
+        self.model_path: str
         self.name = "cv2-DNN Aligner"
         self.input_size = 128
         self.color_format = "RGB"

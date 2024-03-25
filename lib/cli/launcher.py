@@ -11,8 +11,7 @@ from importlib import import_module
 
 from lib.gpu_stats import set_exclude_devices, GPUStats
 from lib.logger import crash_log, log_setup
-from lib.utils import (FaceswapError, get_torch_version,
-                       safe_shutdown, set_backend, set_system_verbosity)
+from lib.utils import FaceswapError, get_torch_version, safe_shutdown, set_backend
 
 if T.TYPE_CHECKING:
     import argparse
@@ -163,7 +162,6 @@ class ScriptExecutor():
         arguments: :class:`argparse.Namespace`
             The command line arguments to be passed to the executing script.
         """
-        set_system_verbosity(arguments.loglevel)
         is_gui = hasattr(arguments, "redirect_gui") and arguments.redirect_gui
         log_setup(arguments.loglevel, arguments.logfile, self._command, is_gui)
         success = False

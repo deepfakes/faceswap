@@ -51,23 +51,25 @@ _HELPTEXT = (
 
 
 _DEFAULTS = {
-    "batch-size": dict(
-        default=16,
-        info="The batch size to use. To a point, higher batch sizes equal better performance, but "
-             "setting it too high can harm performance.\n"
-             "\n\tNvidia users: If the batchsize is set higher than the your GPU can accomodate "
-             "then this will automatically be lowered.",
-        datatype=int,
-        rounding=1,
-        min_max=(1, 64),
-        choices=[],
-        group="settings",
-        gui_radio=False,
-        fixed=True),
-    "cpu": dict(
-        default=False,
-        info="VGG Face2 still runs fairly quickly on CPU on some setups. Enable "
-             "CPU mode here to use the CPU for this plugin to save some VRAM at a speed cost.",
-        datatype=bool,
-        group="settings"),
+    "batch-size": {
+        "default": 16,
+        "info": "The batch size to use. To a point, higher batch sizes equal better performance, "
+                "but setting it too high can harm performance.\n"
+                "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
+                "accomodate then this will automatically be lowered.",
+        "datatype": int,
+        "rounding": 1,
+        "min_max": (1, 64),
+        "choices": [],
+        "group": "settings",
+        "gui_radio": False,
+        "fixed": True
+    },
+    "cpu": {
+        "default": False,
+        "info": "VGG Face2 still runs fairly quickly on CPU on some setups. Enable "
+                "CPU mode here to use the CPU for this plugin to save some VRAM at a speed cost.",
+        "datatype": bool,
+        "group": "settings"
+    },
 }

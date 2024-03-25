@@ -65,7 +65,6 @@ class Extract():
                                     recognition=recognition,
                                     configfile=configfile,
                                     multiprocess=not self._args.singleprocess,
-                                    exclude_gpus=self._args.exclude_gpus,
                                     rotate_images=self._args.rotate_images,
                                     min_size=self._args.min_size,
                                     normalize_method=normalization,

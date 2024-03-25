@@ -7,10 +7,11 @@ import typing as T
 import numpy as np
 
 from keras.layers import (
-    Add, Conv2D, Conv2DTranspose, Cropping2D, Dropout, Input, Lambda, MaxPooling2D,
+    Activation, Add, Conv2D, Conv2DTranspose, Cropping2D, Dropout, Input, Lambda, MaxPooling2D,
     ZeroPadding2D)
+from keras.models import Model
 
-from lib.model.session import KSession
+from lib.logger import parse_class_init
 from ._base import BatchType, Masker, MaskerBatch
 
 if T.TYPE_CHECKING:
@@ -25,7 +26,7 @@ class Mask(Masker):
         git_model_id = 8
         model_filename = "Nirkin_300_softmax_v1.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
-        self.model: KSession
+        self.model: VGGClear
         self.name = "VGG Clear"
         self.input_size = 300
         self.vram = 1344  # 1308 in testing
@@ -34,12 +35,10 @@ class Mask(Masker):
 
     def init_model(self) -> None:
         assert isinstance(self.model_path, str)
-        self.model = VGGClear(self.model_path,
-                              exclude_gpus=self._exclude_gpus)
-        self.model.append_softmax_activation(layer_index=-1)
+        self.model = VGGClear(self.model_path)
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")
-        self.model.predict(placeholder)
+        self.model(placeholder)
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
@@ -51,7 +50,7 @@ class Mask(Masker):
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions """
-        predictions = self.model.predict(feed)
+        predictions = self.model(feed)
         assert isinstance(predictions, np.ndarray)
         return predictions[..., -1]
 
@@ -60,7 +59,7 @@ class Mask(Masker):
         return
 
 
-class VGGClear(KSession):
+class VGGClear():
     """ VGG Clear mask for Faceswap.
 
     Caffe model re-implemented in Keras by Kyle Vrooman.
@@ -68,11 +67,8 @@ class VGGClear(KSession):
 
     Parameters
     ----------
-    model_path: str
+    weights_path: str
         The path to the keras model file
-    exclude_gpus: list
-        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
-        ``None`` to not exclude any GPUs
 
     References
     ----------
@@ -84,24 +80,24 @@ class VGGClear(KSession):
     https://github.com/YuvalNirkin/face_segmentation/releases/download/1.1/face_seg_fcn8s_300_no_aug.zip
 
     """
-    def __init__(self,
-                 model_path: str,
-                 exclude_gpus: list[int] | None):
-        super().__init__("VGG Obstructed",
-                         model_path,
-                         exclude_gpus=exclude_gpus)
-        self.define_model(self._model_definition)
-        self.load_model_weights()
+    def __init__(self, weights_path: str) -> None:
+        logger.debug(parse_class_init(locals()))
+        self._model = self._load_model(weights_path)
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     @classmethod
-    def _model_definition(cls) -> tuple[Tensor, Tensor]:
-        """ Definition of the VGG Obstructed Model.
+    def _load_model(cls, weights_path: str) -> Model:
+        """ Definition of the VGG Clear Model.
+
+        Parameters
+        ----------
+        weights_path: str
+            Full path to the model's weights
 
         Returns
         -------
-        tuple
-            The tensor input to the model and tensor output to the model for compilation by
-            :func`define_model`
+        :class:`keras.models.Model`
+            The VGG-Clear model
         """
         input_ = Input(shape=(300, 300, 3))
         var_x = ZeroPadding2D(padding=((100, 100), (100, 100)), name="zero_padding2d_1")(input_)
@@ -141,7 +137,27 @@ class VGGClear(KSession):
                                 use_bias=False,
                                 name="upscore8_r")(var_x)
         var_x = Cropping2D(cropping=((31, 45), (31, 45)), name="score")(var_x)
-        return input_, var_x
+        var_x = Activation("softmax", name="softmax")(var_x)
+
+        retval = Model(input_, var_x)
+        retval.load_weights(weights_path)
+        retval.make_predict_function()
+        return retval
+
+    def __call__(self, inputs: np.ndarray) -> np.ndarray:
+        """ Get predictions from the VGG-Clear model
+
+        Parameters
+        ----------
+        inputs: :class:`numpy.ndarray`
+            The input to VGG-Clear
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The output from VGG-Clear
+        """
+        return self._model.predict(inputs, verbose=0)
 
 
 class _ConvBlock():
@@ -206,7 +222,7 @@ class _ScorePool():
         self._cropping = (crop, crop)
         self._scale = scale
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: np.ndarray) -> np.ndarray:
         """ Score pool block.
 
         Parameters

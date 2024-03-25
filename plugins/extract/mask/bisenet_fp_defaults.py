@@ -50,56 +50,58 @@ _HELPTEXT = (
 
 
 _DEFAULTS = {
-    "batch-size": dict(
-        default=8,
-        info="The batch size to use. To a point, higher batch sizes equal better performance, but "
-             "setting it too high can harm performance.\n"
-             "\n\tNvidia users: If the batchsize is set higher than the your GPU can accomodate "
-             "then this will automatically be lowered.",
-        datatype=int,
-        rounding=1,
-        min_max=(1, 64),
-        choices=[],
-        group="settings",
-        gui_radio=False,
-        fixed=True),
-    "cpu": dict(
-        default=False,
-        info="BiseNet mask still runs fairly quickly on CPU on some setups. Enable "
-             "CPU mode here to use the CPU for this masker to save some VRAM at a speed cost.",
-        datatype=bool,
-        group="settings"),
-    "weights": dict(
-        default="faceswap",
-        info="The trained weights to use.\n"
-             "\n\tfaceswap - Weights trained on wildly varied Faceswap extracted data to better "
-             "handle varying conditions, obstructions, glasses and multiple targets within a "
-             "single extracted image."
-             "\n\toriginal - The original weights trained on the CelebAMask-HQ dataset.",
-        choices=["faceswap", "original"],
-        datatype=str,
-        group="settings",
-        gui_radio=True,
-    ),
-    "include_ears": dict(
-        default=False,
-        info="Whether to include ears within the face mask.",
-        datatype=bool,
-        group="settings"
-    ),
-    "include_hair": dict(
-        default=False,
-        info="Whether to include hair within the face mask.",
-        datatype=bool,
-        group="settings"
-    ),
-    "include_glasses": dict(
-        default=True,
-        info="Whether to include glasses within the face mask.\n\tFor 'original' weights "
-             "excluding glasses will mask out the lenses as well as the frames.\n\tFor 'faceswap' "
-             "weights, the model has been trained to mask out lenses if eyes cannot be seen (i.e. "
-             "dark sunglasses) or just the frames if the eyes can be seen. ",
-        datatype=bool,
-        group="settings"
-    ),
+    "batch-size": {
+        "default": 8,
+        "info": "The batch size to use. To a point, higher batch sizes equal better performance, "
+                "but setting it too high can harm performance.\n"
+                "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
+                "accomodate then this will automatically be lowered.",
+        "datatype": int,
+        "rounding": 1,
+        "min_max": (1, 64),
+        "choices": [],
+        "group": "settings",
+        "gui_radio": False,
+        "fixed": True
+    },
+    "cpu": {
+        "default": False,
+        "info": "BiseNet mask still runs fairly quickly on CPU on some setups. Enable "
+                "CPU mode here to use the CPU for this masker to save some VRAM at a speed cost.",
+        "datatype": bool,
+        "group": "settings"
+    },
+    "weights": {
+        "default": "faceswap",
+        "info": "The trained weights to use.\n"
+                "\n\tfaceswap - Weights trained on wildly varied Faceswap extracted data to "
+                "better handle varying conditions, obstructions, glasses and multiple targets "
+                "within a single extracted image."
+                "\n\toriginal - The original weights trained on the CelebAMask-HQ dataset.",
+        "choices": ["faceswap", "original"],
+        "datatype": str,
+        "group": "settings",
+        "gui_radio": True,
+    },
+    "include_ears": {
+        "default": False,
+        "info": "Whether to include ears within the face mask.",
+        "datatype": bool,
+        "group": "settings"
+    },
+    "include_hair": {
+        "default": False,
+        "info": "Whether to include hair within the face mask.",
+        "datatype": bool,
+        "group": "settings"
+    },
+    "include_glasses": {
+        "default": True,
+        "info": "Whether to include glasses within the face mask.\n\tFor 'original' weights "
+                "excluding glasses will mask out the lenses as well as the frames.\n\tFor "
+                "'faceswap' weights, the model has been trained to mask out lenses if eyes cannot "
+                "be seen (i.e. dark sunglasses) or just the frames if the eyes can be seen.",
+        "datatype": bool,
+        "group": "settings"
+    },
 }

@@ -66,9 +66,6 @@ class Extractor():
     multiprocess: bool, optional
         Whether to attempt processing the plugins in parallel. This may get overridden
         internally depending on the plugin combination. Default: ``False``
-    exclude_gpus: list, optional
-        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
-        ``None`` to not exclude any GPUs. Default: ``None``
     rotate_images: str, optional
         Used to set the :attr:`plugins.extract.detect.rotation` attribute. Pass in a single number
         to use increments of that size up to 360, or pass in a ``list`` of ``ints`` to enumerate
@@ -103,7 +100,6 @@ class Extractor():
                  recognition: str | None = None,
                  configfile: str | None = None,
                  multiprocess: bool = False,
-                 exclude_gpus: list[int] | None = None,
                  rotate_images: str | None = None,
                  min_size: int = 0,
                  normalize_method:  T.Literal["none", "clahe", "hist", "mean"] | None = None,
@@ -111,17 +107,16 @@ class Extractor():
                  re_align: bool = False,
                  disable_filter: bool = False) -> None:
         logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, recognition: %s, "
-                     "configfile: %s, multiprocess: %s, exclude_gpus: %s, rotate_images: %s, "
-                     "min_size: %s, normalize_method: %s, re_feed: %s, re_align: %s, "
-                     "disable_filter: %s)", self.__class__.__name__, detector, aligner, masker,
-                     recognition, configfile, multiprocess, exclude_gpus, rotate_images, min_size,
-                     normalize_method, re_feed, re_align, disable_filter)
+                     "configfile: %s, multiprocess: %s, rotate_images: %s, min_size: %s, "
+                     "normalize_method: %s, re_feed: %s, re_align: %s, disable_filter: %s)",
+                     self.__class__.__name__, detector, aligner, masker, recognition, configfile,
+                     multiprocess, rotate_images, min_size, normalize_method, re_feed, re_align,
+                     disable_filter)
         self._instance = _get_instance()
         maskers = [T.cast(str | None,
                    masker)] if not isinstance(masker, list) else T.cast(list[str | None],
                                                                         masker)
         self._flow = self._set_flow(detector, aligner, maskers, recognition)
-        self._exclude_gpus = exclude_gpus
         # We only ever need 1 item in each queue. This is 2 items cached (1 in queue 1 waiting
         # for queue) at each point. Adding more just stacks RAM with no speed benefit.
         self._queue_size = 1
@@ -605,8 +600,7 @@ class Extractor():
             return None
         aligner_name = aligner.replace("-", "_").lower()
         logger.debug("Loading Aligner: '%s'", aligner_name)
-        plugin = PluginLoader.get_aligner(aligner_name)(exclude_gpus=self._exclude_gpus,
-                                                        configfile=configfile,
+        plugin = PluginLoader.get_aligner(aligner_name)(configfile=configfile,
                                                         normalize_method=normalize_method,
                                                         re_feed=re_feed,
                                                         re_align=re_align,
@@ -625,8 +619,7 @@ class Extractor():
             return None
         detector_name = detector.replace("-", "_").lower()
         logger.debug("Loading Detector: '%s'", detector_name)
-        plugin = PluginLoader.get_detector(detector_name)(exclude_gpus=self._exclude_gpus,
-                                                          rotation=rotation,
+        plugin = PluginLoader.get_detector(detector_name)(rotation=rotation,
                                                           min_size=min_size,
                                                           configfile=configfile,
                                                           instance=self._instance)
@@ -654,8 +647,7 @@ class Extractor():
             return None
         masker_name = masker.replace("-", "_").lower()
         logger.debug("Loading Masker: '%s'", masker_name)
-        plugin = PluginLoader.get_masker(masker_name)(exclude_gpus=self._exclude_gpus,
-                                                      configfile=configfile,
+        plugin = PluginLoader.get_masker(masker_name)(configfile=configfile,
                                                       instance=self._instance)
         return plugin
 
@@ -668,8 +660,7 @@ class Extractor():
             return None
         recognition_name = recognition.replace("-", "_").lower()
         logger.debug("Loading Recognition: '%s'", recognition_name)
-        plugin = PluginLoader.get_recognition(recognition_name)(exclude_gpus=self._exclude_gpus,
-                                                                configfile=configfile,
+        plugin = PluginLoader.get_recognition(recognition_name)(configfile=configfile,
                                                                 instance=self._instance)
         return plugin
 
