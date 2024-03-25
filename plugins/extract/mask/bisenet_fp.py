@@ -106,7 +106,7 @@ class Mask(Masker):
         """ Initialize the BiSeNet Face Parsing model. """
         assert isinstance(self.model_path, str)
         lbls = 5 if self._is_faceswap else 19
-        self.model = BiSeNet(self.model_path, self.input_size, lbls)
+        self.model = BiSeNet(self.model_path, self.batchsize, self.input_size, lbls)
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")
         self.model(placeholder)
@@ -530,13 +530,20 @@ class BiSeNet():
     ----------
     weights_path: str
         The path to the keras weights file
+    batch_size: int
+        The batch size to feed the model
     input_size: int
         The input size to the model
     num_classes: int
         The number of segmentation classes to create
     """
-    def __init__(self, weights_path: str, input_size: int, num_classes: int) -> None:
+    def __init__(self,
+                 weights_path: str,
+                 batch_size: int,
+                 input_size: int,
+                 num_classes: int) -> None:
         logger.debug(parse_class_init(locals()))
+        self._batch_size = batch_size
         self._input_size = input_size
         self._num_classes = num_classes
         self._cp = ContextPath()
@@ -595,4 +602,4 @@ class BiSeNet():
         :class:`numpy.ndarray`
             The output from BiSeNet-FP
         """
-        return self._model.predict(inputs, verbose=0)
+        return self._model.predict(inputs, verbose=0, batch_size=self._batch_size)

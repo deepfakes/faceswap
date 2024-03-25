@@ -59,7 +59,7 @@ class Detect(Detector):
     def init_model(self) -> None:
         """ Initialize MTCNN Model. """
         assert isinstance(self.model_path, list)
-        self.model = MTCNN(self.model_path, **self.kwargs)
+        self.model = MTCNN(self.model_path, self.batchsize, **self.kwargs)
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detection image(s) for prediction
@@ -138,6 +138,8 @@ class PNet():
     ----------
     weights_path: str
         The path to the keras model file
+    batch_size: int
+        The batch size to feed the model
     input_size: int
         The input size of the model
     minsize: int, optional
@@ -147,11 +149,13 @@ class PNet():
     """
     def __init__(self,
                  weights_path: str,
+                 batch_size: int,
                  input_size: int,
                  min_size: int,
                  factor: float,
                  threshold: float) -> None:
         logger.debug(parse_class_init(locals()))
+        self._batch_size = batch_size
         self._model = self._load_model(weights_path)
 
         self._input_size = input_size
@@ -292,7 +296,7 @@ class PNet():
                                                    self._pnet_sizes):
             _ = [cv2.resize(images[idx], (rwidth, rheight), dst=batch[idx])
                  for idx in range(batch_size)]
-            cls_prob, roi = self._model.predict(batch, verbose=0)
+            cls_prob, roi = self._model.predict(batch, verbose=0, batch_size=self._batch_size)
             cls_prob = cls_prob[..., 1]
             out_side = max(cls_prob.shape[1:3])
             cls_prob = np.swapaxes(cls_prob, 1, 2)
@@ -317,14 +321,21 @@ class RNet():
     ----------
     weights_path: str
         The path to the keras model file
+    batch_size: int
+        The batch size to feed the model
     input_size: int
         The input size of the model
     threshold: list, optional
         Threshold for R-Net
 
     """
-    def __init__(self, weights_path: str, input_size: int, threshold: float) -> None:
+    def __init__(self,
+                 weights_path: str,
+                 batch_size: int,
+                 input_size: int,
+                 threshold: float) -> None:
         logger.debug(parse_class_init(locals()))
+        self._batch_size = batch_size
         self._model = self._load_model(weights_path)
         self._input_size = input_size
         self._threshold = threshold
@@ -431,7 +442,9 @@ class RNet():
                             dst=feed_batch[idx])
                  for idx, rect in enumerate(rectangles)]
 
-            cls_prob, roi_prob = self._model.predict(feed_batch, verbose=0)
+            cls_prob, roi_prob = self._model.predict(feed_batch,
+                                                     verbose=0,
+                                                     batch_size=self._batch_size)
             ret.append(self._filter_face_24net(cls_prob, roi_prob, rectangles))
         return ret
 
@@ -443,13 +456,20 @@ class ONet():
     ----------
     weights_path: str
         The path to the keras model file
+    batch_size: int
+        The batch size to feed the model
     input_size: int
         The input size of the model
     threshold: list, optional
         Threshold for O-Net
     """
-    def __init__(self, weights_path: str, input_size: int, threshold: float) -> None:
+    def __init__(self,
+                 weights_path: str,
+                 batch_size: int,
+                 input_size: int,
+                 threshold: float) -> None:
         logger.debug(parse_class_init(locals()))
+        self._batch_size = batch_size
         self._model = self._load_model(weights_path)
         self._input_size = input_size
         self._threshold = threshold
@@ -571,7 +591,9 @@ class ONet():
                             dst=feed_batch[idx])
                  for idx, rect in enumerate(rectangles)]
 
-            cls_probs, roi_probs, pts_probs = self._model.predict(feed_batch, verbose=0)
+            cls_probs, roi_probs, pts_probs = self._model.predict(feed_batch,
+                                                                  verbose=0,
+                                                                  batch_size=self._batch_size)
             ret.append(self._filter_face_48net(cls_probs, roi_probs, pts_probs, rectangles))
         return ret
 
@@ -583,6 +605,8 @@ class MTCNN():
     ----------
     weights_path: list
         List of paths to the 3 MTCNN subnet weights
+    batch_size: int
+        The batch size to feed the model
     input_size: int, optional
         The height, width input size to the model. Default: 640
     minsize: int, optional
@@ -595,6 +619,7 @@ class MTCNN():
     """
     def __init__(self,
                  weights_path: list[str],
+                 batch_size: int,
                  input_size: int = 640,
                  minsize: int = 20,
                  threshold: list[float] | None = None,
@@ -602,14 +627,17 @@ class MTCNN():
         logger.debug(parse_class_init(locals()))
         threshold = [0.6, 0.7, 0.7] if threshold is None else threshold
         self._pnet = PNet(weights_path[0],
+                          batch_size,
                           input_size,
                           minsize,
                           factor,
                           threshold[0])
         self._rnet = RNet(weights_path[1],
+                          batch_size,
                           input_size,
                           threshold[1])
         self._onet = ONet(weights_path[2],
+                          batch_size,
                           input_size,
                           threshold[2])
         logger.debug("Initialized: %s", self.__class__.__name__)

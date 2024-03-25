@@ -45,7 +45,7 @@ class Align(Aligner):
         # Feed a placeholder so Aligner is primed for Manual tool
         placeholder_shape = (self.batchsize, self.input_size, self.input_size, 3)
         placeholder = np.zeros(placeholder_shape, dtype="float32")
-        self.model.predict(placeholder, verbose=False)
+        self.model.predict(placeholder, verbose=False, batch_size=self.batchsize)
 
     def faces_to_feed(self, faces: np.ndarray) -> np.ndarray:
         """ Convert a batch of face images from UINT8 (0-255) to fp32 (0.0-1.0)
@@ -220,7 +220,9 @@ class Align(Aligner):
         logger.trace("Predicting Landmarks")  # type:ignore[attr-defined]
         # TODO Remove lazy transpose and change points from predict to use the correct
         # order
-        retval = self.model.predict(feed, verbose=False)[-1].transpose(0, 3, 1, 2)
+        retval = self.model.predict(feed,
+                                    verbose=False,
+                                    batch_size=self.batchsize)[-1].transpose(0, 3, 1, 2)
         return retval
 
     def process_output(self, batch: BatchType) -> None:

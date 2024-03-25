@@ -64,7 +64,7 @@ class Recognition(Identity):
     def init_model(self) -> None:
         """ Initialize VGG Face 2 Model. """
         assert isinstance(self.model_path, str)
-        self.model = VGGFace2(self.input_size, self.model_path)
+        self.model = VGGFace2(self.input_size, self.model_path, self.batchsize)
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")
         self.model(placeholder)
@@ -311,6 +311,8 @@ class VGGFace2():
         The input size for the model.
     weights_path: str
         The path to the keras weights file
+    batch_size: int
+        The batch size to feed the model
     num_class: int, optional
         Number of classes to train the model on
     weight_decay: float
@@ -319,10 +321,12 @@ class VGGFace2():
     def __init__(self,
                  input_size: int,
                  weights_path: str,
+                 batch_size: int,
                  num_classes: int = 8631,
                  weight_decay: float = 1e-4) -> None:
         logger.debug(parse_class_init(locals()))
         self._input_shape = (input_size, input_size, 3)
+        self._batch_size = batch_size
         self._weight_decay = weight_decay
         self._num_classes = num_classes
         self._resnet = ResNet50(input_shape=self._input_shape, weight_decay=self._weight_decay)
@@ -368,7 +372,7 @@ class VGGFace2():
         :class:`numpy.ndarray`
             The output from vgg-face2
         """
-        return self._model.predict(inputs, verbose=0)
+        return self._model.predict(inputs, verbose=0, batch_size=self._batch_size)
 
 
 class Cluster():

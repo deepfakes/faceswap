@@ -43,7 +43,7 @@ class Mask(Masker):
         self.model.make_predict_function()
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")
-        self.model.predict(placeholder, verbose=0)
+        self.model.predict(placeholder, verbose=0, batch_size=self.batchsize)
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
@@ -54,7 +54,7 @@ class Mask(Masker):
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions """
-        retval = self.model.predict(feed, verbose=0)
+        retval = self.model.predict(feed, verbose=0, batch_size=self.batchsize)
         assert isinstance(retval, np.ndarray)
         return retval
 

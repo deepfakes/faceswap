@@ -35,7 +35,7 @@ class Mask(Masker):
 
     def init_model(self) -> None:
         assert isinstance(self.model_path, str)
-        self.model = VGGObstructed(self.model_path)
+        self.model = VGGObstructed(self.model_path, self.batchsize)
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")
         self.model(placeholder)
@@ -68,6 +68,8 @@ class VGGObstructed():
     ----------
     weights_path: str
         The path to the keras model file
+    batch_size: int
+        The batch size to feed the model
 
     References
     ----------
@@ -76,8 +78,9 @@ class VGGObstructed():
     Model file sourced from:
     https://github.com/YuvalNirkin/face_segmentation/releases/download/1.0/face_seg_fcn8s.zip
     """
-    def __init__(self, weights_path: str) -> None:
+    def __init__(self, weights_path: str, batch_size: int) -> None:
         logger.debug(parse_class_init(locals()))
+        self._batch_size = batch_size
         self._model = self._load_model(weights_path)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
@@ -156,7 +159,7 @@ class VGGObstructed():
         :class:`numpy.ndarray`
             The output from VGG-Obstructed
         """
-        return self._model.predict(inputs, verbose=0)
+        return self._model.predict(inputs, verbose=0, batch_size=self._batch_size)
 
 
 class _ConvBlock():

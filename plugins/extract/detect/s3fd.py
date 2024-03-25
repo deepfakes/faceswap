@@ -42,7 +42,7 @@ class Detect(Detector):
         """ Initialize S3FD Model"""
         assert isinstance(self.model_path, str)
         confidence = self.config["confidence"] / 100
-        self.model = S3fd(self.model_path, confidence)
+        self.model = S3fd(self.model_path, self.batchsize, confidence)
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detection image(s) for prediction """
@@ -242,11 +242,14 @@ class S3fd():
     ----------
     weights_path: str
         Full path to the S3FD weights file
+    batch_size: int
+        The batch size to feed the model
     confidence: float
         The confidence level to accept detections at
     """
-    def __init__(self, weights_path: str, confidence: float) -> None:
+    def __init__(self, weights_path: str, batch_size: int, confidence: float) -> None:
         logger.debug(parse_class_init(locals()))
+        self._batch_size = batch_size
         self._model = self._load_model(weights_path)
         self.confidence = confidence
         self.average_img = np.array([104.0, 117.0, 123.0])
@@ -536,4 +539,4 @@ class S3fd():
         :class:`numpy.ndarray`
             The output from S3FD
         """
-        return self._model.predict(inputs, verbose=0)
+        return self._model.predict(inputs, verbose=0, batch_size=self._batch_size)
