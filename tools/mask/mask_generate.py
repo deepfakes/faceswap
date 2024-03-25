@@ -33,8 +33,6 @@ class MaskGenerator:
         ``True`` to update all faces, ``False`` to only update faces missing masks
     input_is_faces: bool
         ``True`` if the input are faceswap extracted faces otherwise ``False``
-    exclude_gpus: list[int]
-        List of any GPU IDs that should be excluded
     loader: :class:`tools.mask.loader.Loader`
         The loader for loading source images/video from disk
     """
@@ -44,18 +42,17 @@ class MaskGenerator:
                  input_is_faces: bool,
                  loader: Loader,
                  alignments: Alignments | None,
-                 input_location: str,
-                 exclude_gpus: list[int]) -> None:
+                 input_location: str) -> None:
         logger.debug("Initializing %s (mask_type: %s, update_all: %s, input_is_faces: %s, "
-                     "loader: %s, alignments: %s, input_location: %s, exclude_gpus: %s)",
+                     "loader: %s, alignments: %s, input_location: %s)",
                      self.__class__.__name__, mask_type, update_all, input_is_faces, loader,
-                     alignments, input_location, exclude_gpus)
+                     alignments, input_location)
 
         self._update_all = update_all
         self._is_faces = input_is_faces
         self._alignments = alignments
 
-        self._extractor = self._get_extractor(mask_type, exclude_gpus)
+        self._extractor = self._get_extractor(mask_type)
         self._mask_type = self._set_correct_mask_type(mask_type)
         self._input_thread = self._set_loader_thread(loader)
         self._saver = ImagesSaver(input_location, as_bytes=True) if input_is_faces else None
@@ -64,16 +61,13 @@ class MaskGenerator:
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _get_extractor(self, mask_type, exclude_gpus: list[int]) -> Extractor:
+    def _get_extractor(self, mask_type) -> Extractor:
         """ Obtain a Mask extractor plugin and launch it
 
         Parameters
         ----------
         mask_type: str
             The mask type to generate
-        exclude_gpus: list or ``None``
-            A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
-            ``None`` to not exclude any GPUs.
 
         Returns
         -------
@@ -81,7 +75,7 @@ class MaskGenerator:
             The launched Extractor
         """
         logger.debug("masker: %s", mask_type)
-        extractor = Extractor(None, None, mask_type, exclude_gpus=exclude_gpus)
+        extractor = Extractor(None, None, mask_type)
         extractor.launch()
         logger.debug(extractor)
         return extractor

@@ -834,7 +834,7 @@ class SortFace(SortMethod):
     """
     def __init__(self, arguments: Namespace, is_group: bool = False) -> None:
         super().__init__(arguments, loader_type="all", is_group=is_group)
-        self._vgg_face = VGGFace(exclude_gpus=arguments.exclude_gpus)
+        self._vgg_face = VGGFace()
         self._vgg_face.init_model()
         threshold = arguments.threshold
         self._output_update_info = True

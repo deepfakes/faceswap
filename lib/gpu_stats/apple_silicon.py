@@ -189,3 +189,14 @@ class AppleSiliconStats(_GPUStats):
                 for _ in range(self._device_count)]
         self._log("debug", f"SoC RAM free: {vram}")
         return vram
+
+    def exclude_devices(self, devices: list[int]) -> None:
+        """ Apple-Silicon does not support excluding devices
+
+        Parameters
+        ----------
+        devices: list[int]
+            The GPU device IDS to be excluded
+        """
+        self._logger.warning("Apple Silicon does not support excluding GPUs. This option has been "
+                             "ignored")

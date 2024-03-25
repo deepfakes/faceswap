@@ -9,7 +9,7 @@ import typing as T
 
 from importlib import import_module
 
-from lib.gpu_stats import set_exclude_devices, GPUStats
+from lib.gpu_stats import GPUStats
 from lib.logger import crash_log, log_setup
 from lib.utils import FaceswapError, get_torch_version, safe_shutdown, set_backend
 
@@ -215,7 +215,7 @@ class ScriptExecutor():
                              "integers.")
                 sys.exit(1)
             arguments.exclude_gpus = [int(idx) for idx in arguments.exclude_gpus]
-            set_exclude_devices(arguments.exclude_gpus)
+            GPUStats().exclude_devices(arguments.exclude_gpus)
 
         if GPUStats().exclude_all_devices:
             msg = "Switching backend to CPU"

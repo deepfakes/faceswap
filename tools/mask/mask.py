@@ -171,8 +171,7 @@ class _Mask:
                                            self._input_is_faces,
                                            self._loader,
                                            self._alignments,
-                                           arguments.input,
-                                           arguments.exclude_gpus)
+                                           arguments.input)
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
