@@ -5,14 +5,16 @@
 from __future__ import annotations
 import logging
 import typing as T
-
 from dataclasses import dataclass, field
 
+import keras
 import numpy as np
+import torch
 
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
 from lib.utils import GetModel
+from lib.utils import get_backend
 from ._config import Config
 from .pipeline import ExtractMedia
 
@@ -359,6 +361,38 @@ class Extractor():
             The ``queue`` that the batch will be fed from. This will be the input to the plugin.
         """
         raise NotImplementedError
+
+    @classmethod
+    def get_device_context(cls, cpu: bool) -> T.ContextManager:
+        """ Get a device context manager for running inference on the CPU
+
+        Parameters
+        ----------
+        cpu: bool
+            ``True`` to get a context manager for running on the CPU. ``False`` to get a
+            context manager for the default device
+
+        Returns
+        -------
+        ContextManager
+            The context manager for running ops on the selected device
+        """
+        if cpu:
+            logger.debug("CPU mode selected. Returning CPU device context")
+            return keras.device("cpu")
+
+        # TODO apple_silicon + directml
+        if get_backend() == "apple_silicon":
+            pass
+        if get_backend() == "directml":
+            pass
+
+        if torch.cuda.is_available():
+            logger.debug("Cuda available. Returning Cuda device context")
+            return keras.device("cuda")
+
+        logger.debug("Cuda not available. Returning CPU device context")
+        return keras.device("cpu")
 
     # <<< THREADING METHODS >>> #
     def start(self) -> None:

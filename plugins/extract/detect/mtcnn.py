@@ -59,7 +59,12 @@ class Detect(Detector):
     def init_model(self) -> None:
         """ Initialize MTCNN Model. """
         assert isinstance(self.model_path, list)
-        self.model = MTCNN(self.model_path, self.batchsize, **self.kwargs)
+        placeholder_shape = (self.batchsize, self.input_size, self.input_size, 3)
+        placeholder = np.zeros(placeholder_shape, dtype="float32")
+
+        with self.get_device_context(self.config["cpu"]):
+            self.model = MTCNN(self.model_path, self.batchsize, **self.kwargs)
+            self.model.detect_faces(placeholder)
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detection image(s) for prediction
@@ -85,7 +90,8 @@ class Detect(Detector):
             The batch with the predictions added to the dictionary
         """
         assert isinstance(self.model, MTCNN)
-        prediction, points = self.model.detect_faces(feed)
+        with self.get_device_context(self.config["cpu"]):
+            prediction, points = self.model.detect_faces(feed)
         logger.trace("prediction: %s, mtcnn_points: %s",  # type:ignore
                      prediction, points)
         return prediction

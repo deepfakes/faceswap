@@ -106,10 +106,12 @@ class Mask(Masker):
         """ Initialize the BiSeNet Face Parsing model. """
         assert isinstance(self.model_path, str)
         lbls = 5 if self._is_faceswap else 19
-        self.model = BiSeNet(self.model_path, self.batchsize, self.input_size, lbls)
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")
-        self.model(placeholder)
+
+        with self.get_device_context(self.config["cpu"]):
+            self.model = BiSeNet(self.model_path, self.batchsize, self.input_size, lbls)
+            self.model(placeholder)
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
@@ -124,7 +126,8 @@ class Mask(Masker):
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions """
-        return self.model(feed)[0]
+        with self.get_device_context(self.config["cpu"]):
+            return self.model(feed)[0]
 
     def process_output(self, batch: BatchType) -> None:
         """ Compile found faces for output """

@@ -43,6 +43,9 @@ class Detect(Detector):
         assert isinstance(self.model_path, str)
         confidence = self.config["confidence"] / 100
         self.model = S3fd(self.model_path, self.batchsize, confidence)
+        placeholder_shape = (self.batchsize, self.input_size, self.input_size, 3)
+        placeholder = np.zeros(placeholder_shape, dtype="float32")
+        self.model(placeholder)
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detection image(s) for prediction """

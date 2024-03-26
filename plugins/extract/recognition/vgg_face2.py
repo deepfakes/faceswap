@@ -64,10 +64,12 @@ class Recognition(Identity):
     def init_model(self) -> None:
         """ Initialize VGG Face 2 Model. """
         assert isinstance(self.model_path, str)
-        self.model = VGGFace2(self.input_size, self.model_path, self.batchsize)
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")
-        self.model(placeholder)
+
+        with self.get_device_context(self.config["cpu"]):
+            self.model = VGGFace2(self.input_size, self.model_path, self.batchsize)
+            self.model(placeholder)
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
@@ -90,7 +92,8 @@ class Recognition(Identity):
         numpy.ndarray
             The encodings for the face
         """
-        retval = self.model(feed)
+        with self.get_device_context(self.config["cpu"]):
+            retval = self.model(feed)
         assert isinstance(retval, np.ndarray)
         return retval
 
