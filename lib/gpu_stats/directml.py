@@ -13,7 +13,7 @@ from enum import Enum, IntEnum
 
 from comtypes import COMError, IUnknown, GUID, STDMETHOD, HRESULT  # pylint:disable=import-error
 
-from ._base import _GPUStats
+from ._base import _GPUStats, _EXCLUDE_DEVICES
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
@@ -628,3 +628,27 @@ class DirectML(_GPUStats):
         vram = [int(device.local_mem.Budget / (1024 * 1024)) for device in self._devices]
         self._log("debug", f"GPU VRAM free: {vram}")
         return vram
+
+    def exclude_devices(self, devices: list[int]) -> None:
+        """ Exclude GPU devices from being used by Faceswap. Sets the DML_VISIBLE_DEVICES
+        environment variable. This must be called before Torch/Keras are imported
+
+        Parameters
+        ----------
+        devices: list[int]
+            The GPU device IDS to be excluded
+        """
+        if not devices:
+            return
+        self._logger.debug("Excluding GPU indicies: %s", devices)
+
+        _EXCLUDE_DEVICES.extend(devices)
+
+        active = self._get_active_devices()
+
+        os.environ["DML_VISIBLE_DEVICES"] = ",".join(str(d) for d in active
+                                                     if d not in _EXCLUDE_DEVICES)
+
+        self._logger.debug("DML environmet variables: %s",
+                           [f"{k}: {v}" for k, v in os.environ.items()
+                            if k.lower().startswith("dml")])
