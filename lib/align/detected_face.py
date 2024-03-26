@@ -88,8 +88,8 @@ class DetectedFace():
                  landmarks_xy: np.ndarray | None = None,
                  mask: dict[str, "Mask"] | None = None,
                  filename: str | None = None) -> None:
-        logger.trace("Initializing %s: (image: %s, left: %s, width: %s, top: %s, "  # type: ignore
-                     "height: %s, landmarks_xy: %s, mask: %s, filename: %s)",
+        logger.trace("Initializing %s: (image: %s, left: %s, "  # type:ignore[attr-defined]
+                     "width: %s, top: %s, height: %s, landmarks_xy: %s, mask: %s, filename: %s)",
                      self.__class__.__name__,
                      image.shape if image is not None and image.any() else image, left, width, top,
                      height, landmarks_xy, mask, filename)
@@ -105,7 +105,7 @@ class DetectedFace():
         self._training_masks: tuple[bytes, tuple[int, int, int]] | None = None
 
         self._aligned: AlignedFace | None = None
-        logger.trace("Initialized %s", self.__class__.__name__)  # type: ignore
+        logger.trace("Initialized %s", self.__class__.__name__)  # type:ignore[attr-defined]
 
     @property
     def aligned(self) -> AlignedFace:
@@ -167,7 +167,7 @@ class DetectedFace():
             The centering to store the mask at. One of `"legacy"`, `"face"`, `"head"`.
             Default: `"face"`
         """
-        logger.trace("name: '%s', mask shape: %s, affine_matrix: %s, "  # type: ignore
+        logger.trace("name: '%s', mask shape: %s, affine_matrix: %s, "  # type:ignore[attr-defined]
                      "interpolator: %s, storage_size: %s, storage_centering: %s)", name,
                      mask.shape, affine_matrix, interpolator, storage_size, storage_centering)
         fsmask = Mask(storage_size=storage_size, storage_centering=storage_centering)
@@ -183,7 +183,7 @@ class DetectedFace():
         landmarks: :class:`numpy.ndarray`
             The 68 point face landmarks to add for the face
         """
-        logger.trace("landmarks shape: '%s'", landmarks.shape)  # type: ignore
+        logger.trace("landmarks shape: '%s'", landmarks.shape)  # type:ignore[attr-defined]
         self._landmarks_xy = landmarks
 
     def add_identity(self, name: str, embedding: np.ndarray, ) -> None:
@@ -197,7 +197,7 @@ class DetectedFace():
         embedding: numpy.ndarray
             The identity embedding
         """
-        logger.trace("name: '%s', embedding shape: %s",  # type: ignore
+        logger.trace("name: '%s', embedding shape: %s",  # type:ignore[attr-defined]
                      name, embedding.shape)
         assert name == "vggface2"
         assert embedding.shape[0] == 512
@@ -210,7 +210,7 @@ class DetectedFace():
     def get_landmark_mask(self,
                           area: T.Literal["eye", "face", "mouth"],
                           blur_kernel: int,
-                          dilation: int) -> np.ndarray:
+                          dilation: float) -> np.ndarray:
         """ Add a :class:`LandmarksMask` to this detected face
 
         Landmark based masks are generated from face Aligned Face landmark points. An aligned
@@ -224,8 +224,8 @@ class DetectedFace():
             specific areas
         blur_kernel: int
             The size of the kernel for blurring the mask edges
-        dilation: int
-            The amount of dilation to apply to the mask. `0` for none. Default: `0`
+        dilation: float
+            The amount of dilation to apply to the mask. as a percentage of the mask size
 
         Returns
         -------
@@ -233,7 +233,7 @@ class DetectedFace():
             The generated landmarks mask for the selected area
         """
         # TODO Face mask generation from landmarks
-        logger.trace("area: %s, dilation: %s", area, dilation)  # type: ignore
+        logger.trace("area: %s, dilation: %s", area, dilation)  # type:ignore[attr-defined]
         areas = {"mouth": [slice(48, 60)], "eye": [slice(36, 42), slice(42, 48)]}
         points = [self.aligned.landmarks[zone]
                   for zone in areas[area]]
@@ -307,7 +307,7 @@ class DetectedFace():
                                             for name, mask in self.mask.items()},
                                       identity={k: v.tolist() for k, v in self._identity.items()},
                                       thumb=self.thumbnail)
-        logger.trace("Returning: %s", alignment)  # type: ignore
+        logger.trace("Returning: %s", alignment)  # type:ignore[attr-defined]
         return alignment
 
     def from_alignment(self, alignment: AlignmentFileDict,
@@ -332,8 +332,8 @@ class DetectedFace():
             Default: ``False``
         """
 
-        logger.trace("Creating from alignment: (alignment: %s, has_image: %s)",  # type: ignore
-                     alignment, bool(image is not None))
+        logger.trace("Creating from alignment: (alignment: %s,"  # type:ignore[attr-defined]
+                     " has_image: %s)", alignment, bool(image is not None))
         self.left = alignment["x"]
         self.width = alignment["w"]
         self.top = alignment["y"]
@@ -358,9 +358,9 @@ class DetectedFace():
                 self.mask[name].from_dict(mask_dict)
         if image is not None and image.any():
             self._image_to_face(image)
-        logger.trace("Created from alignment: (left: %s, width: %s, top: %s, "  # type: ignore
-                     "height: %s, landmarks: %s, mask: %s)", self.left, self.width, self.top,
-                     self.height, self.landmarks_xy, self.mask)
+        logger.trace("Created from alignment: (left: %s, width: %s, "  # type:ignore[attr-defined]
+                     "top: %s, height: %s, landmarks: %s, mask: %s)",
+                     self.left, self.width, self.top, self.height, self.landmarks_xy, self.mask)
 
     def to_png_meta(self) -> PNGHeaderAlignmentsDict:
         """ Return the detected face formatted for insertion into a png itxt header.
@@ -403,14 +403,14 @@ class DetectedFace():
         for key, val in alignment.get("identity", {}).items():
             assert key in ["vggface2"]
             self._identity[T.cast(T.Literal["vggface2"], key)] = np.array(val, dtype="float32")
-        logger.trace("Created from png exif header: (left: %s, width: %s, top: %s "  # type: ignore
-                     " height: %s, landmarks: %s, mask: %s, identity: %s)", self.left, self.width,
-                     self.top, self.height, self.landmarks_xy, self.mask,
+        logger.trace("Created from png exif header: (left: %s, "  # type:ignore[attr-defined]
+                     "width: %s, top: %s  height: %s, landmarks: %s, mask: %s, identity: %s)",
+                     self.left, self.width, self.top, self.height, self.landmarks_xy, self.mask,
                      {k: v.shape for k, v in self._identity.items()})
 
     def _image_to_face(self, image: np.ndarray) -> None:
         """ set self.image to be the cropped face from detected bounding box """
-        logger.trace("Cropping face from image")  # type: ignore
+        logger.trace("Cropping face from image")  # type:ignore[attr-defined]
         self.image = image[self.top: self.bottom,
                            self.left: self.right]
 
@@ -467,10 +467,11 @@ class DetectedFace():
         """
         if self._aligned and not force:
             # Don't reload an already aligned face
-            logger.trace("Skipping alignment calculation for already aligned face")  # type: ignore
+            logger.trace("Skipping alignment calculation for already "  # type:ignore[attr-defined]
+                         "aligned face")
         else:
-            logger.trace("Loading aligned face: (size: %s, dtype: %s)",  # type: ignore
-                         size, dtype)
+            logger.trace("Loading aligned face: (size: %s, "  # type:ignore[attr-defined]
+                         "dtype: %s)", size, dtype)
             self._aligned = AlignedFace(self.landmarks_xy,
                                         image=image,
                                         centering=centering,
@@ -507,7 +508,8 @@ class Mask():
     def __init__(self,
                  storage_size: int = 128,
                  storage_centering: CenteringType = "face") -> None:
-        logger.trace("Initializing: %s (storage_size: %s, storage_centering: %s)",  # type: ignore
+        logger.trace("Initializing: %s (storage_size: %s, "  # type:ignore[attr-defined]
+                     "storage_centering: %s)",
                      self.__class__.__name__, storage_size, storage_centering)
         self.stored_size = storage_size
         self.stored_centering = storage_centering
@@ -520,19 +522,21 @@ class Mask():
         self._blur_passes: int = 0
         self._blur_kernel: float | int = 0
         self._threshold = 0.0
+        self._dilation: tuple[T.Literal["erode", "dilate"], np.ndarray | None] = ("erode", None)
         self._sub_crop_size = 0
         self._sub_crop_slices: dict[T.Literal["in", "out"], list[slice]] = {}
 
         self.set_blur_and_threshold()
-        logger.trace("Initialized: %s", self.__class__.__name__)  # type: ignore
+        logger.trace("Initialized: %s", self.__class__.__name__)  # type:ignore[attr-defined]
 
     @property
     def mask(self) -> np.ndarray:
         """ :class:`numpy.ndarray`: The mask at the size of :attr:`stored_size` with any requested
         blurring, threshold amount and centering applied."""
         mask = self.stored_mask
-        if self._threshold != 0.0 or self._blur_kernel != 0:
+        if self._dilation[-1] is not None or self._threshold != 0.0 or self._blur_kernel != 0:
             mask = mask.copy()
+        self._dilate_mask(mask)
         if self._threshold != 0.0:
             mask[mask < self._threshold] = 0.0
             mask[mask > 255.0 - self._threshold] = 255.0
@@ -546,7 +550,7 @@ class Mask():
             slice_in, slice_out = self._sub_crop_slices["in"], self._sub_crop_slices["out"]
             out[slice_out[0], slice_out[1], :] = mask[slice_in[0], slice_in[1], :]
             mask = out
-        logger.trace("mask shape: %s", mask.shape)  # type: ignore
+        logger.trace("mask shape: %s", mask.shape)  # type:ignore[attr-defined]
         return mask
 
     @property
@@ -556,7 +560,7 @@ class Mask():
         assert self._mask is not None
         dims = (self.stored_size, self.stored_size, 1)
         mask = np.frombuffer(decompress(self._mask), dtype="uint8").reshape(dims)
-        logger.trace("stored mask shape: %s", mask.shape)  # type: ignore
+        logger.trace("stored mask shape: %s", mask.shape)  # type:ignore[attr-defined]
         return mask
 
     @property
@@ -567,9 +571,9 @@ class Mask():
                            [0, self.stored_size - 1],
                            [self.stored_size - 1, self.stored_size - 1],
                            [self.stored_size - 1, 0]], np.int32).reshape((-1, 1, 2))
-        matrix = cv2.invertAffineTransform(self._affine_matrix)
+        matrix = cv2.invertAffineTransform(self.affine_matrix)
         roi = cv2.transform(points, matrix).reshape((4, 2))
-        logger.trace("Returning: %s", roi)  # type: ignore
+        logger.trace("Returning: %s", roi)  # type:ignore[attr-defined]
         return roi
 
     @property
@@ -583,6 +587,22 @@ class Mask():
         """ int: The cv2 interpolator required to transpose the mask to a full frame. """
         assert self._interpolator is not None
         return self._interpolator
+
+    def _dilate_mask(self, mask: np.ndarray) -> None:
+        """ Erode/Dilate the mask. The action is performed in-place on the given mask.
+
+        No action is performed if a dilation amount has not been set
+
+        Parameters
+        ----------
+        mask: :class:`numpy.ndarray`
+            The mask to be eroded/dilated
+        """
+        if self._dilation[-1] is None:
+            return
+
+        func = cv2.erode if self._dilation[0] == "erode" else cv2.dilate
+        func(mask, self._dilation[-1], dst=mask, iterations=1)
 
     def get_full_frame_mask(self, width: int, height: int) -> np.ndarray:
         """ Return the stored mask in a full size frame of the given dimensions
@@ -600,13 +620,13 @@ class Mask():
         """
         frame = np.zeros((width, height, 1), dtype="uint8")
         mask = cv2.warpAffine(self.mask,
-                              self._affine_matrix,
+                              self.affine_matrix,
                               (width, height),
                               frame,
-                              flags=cv2.WARP_INVERSE_MAP | self._interpolator,
+                              flags=cv2.WARP_INVERSE_MAP | self.interpolator,
                               borderMode=cv2.BORDER_CONSTANT)
-        logger.trace("mask shape: %s, mask dtype: %s, mask min: %s, mask max: %s",  # type: ignore
-                     mask.shape, mask.dtype, mask.min(), mask.max())
+        logger.trace("mask shape: %s, mask dtype: %s, mask min: %s, "  # type:ignore[attr-defined]
+                     "mask max: %s", mask.shape, mask.dtype, mask.min(), mask.max())
         return mask
 
     def add(self, mask: np.ndarray, affine_matrix: np.ndarray, interpolator: int) -> None:
@@ -624,9 +644,9 @@ class Mask():
         interpolator, int:
             The CV2 interpolator required to transform this mask to it's original frame
         """
-        logger.trace("mask shape: %s, mask dtype: %s, mask min: %s, mask max: %s, "  # type: ignore
-                     "affine_matrix: %s, interpolator: %s)", mask.shape, mask.dtype, mask.min(),
-                     affine_matrix, mask.max(), interpolator)
+        logger.trace("mask shape: %s, mask dtype: %s, mask min: %s, "  # type:ignore[attr-defined]
+                     "mask max: %s, affine_matrix: %s, interpolator: %s)",
+                     mask.shape, mask.dtype, mask.min(), affine_matrix, mask.max(), interpolator)
         self._affine_matrix = self._adjust_affine_matrix(mask.shape[0], affine_matrix)
         self._interpolator = interpolator
         self.replace_mask(mask)
@@ -644,6 +664,26 @@ class Mask():
                            (self.stored_size, self.stored_size),
                            interpolation=cv2.INTER_AREA) * 255.0).astype("uint8")
         self._mask = compress(mask.tobytes())
+
+    def set_dilation(self, amount: float) -> None:
+        """ Set the internal dilation object for returned masks
+
+        Parameters
+        ----------
+        amount: float
+            The amount of erosion/dilation to apply as a percentage of the total mask size.
+            Negative values erode the mask. Positive values dilate the mask
+        """
+        if amount == 0:
+            self._dilation = ("erode", None)
+            return
+
+        action: T.Literal["erode", "dilate"] = "erode" if amount < 0 else "dilate"
+        kernel = int(round(self.stored_size * abs(amount / 100.), 0))
+        self._dilation = (action, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel, kernel)))
+
+        logger.trace("action: '%s', amount: %s, kernel: %s, ",  # type:ignore[attr-defined]
+                     action, amount, kernel)
 
     def set_blur_and_threshold(self,
                                blur_kernel: int = 0,
@@ -666,8 +706,9 @@ class Mask():
             The threshold amount to minimize/maximize mask values to 0 and 100. Percentage value.
             Default: 0
         """
-        logger.trace("blur_kernel: %s, blur_type: %s, blur_passes: %s, "  # type: ignore
-                     "threshold: %s", blur_kernel, blur_type, blur_passes, threshold)
+        logger.trace("blur_kernel: %s, blur_type: %s, "  # type:ignore[attr-defined]
+                     "blur_passes: %s, threshold: %s",
+                     blur_kernel, blur_type, blur_passes, threshold)
         if blur_type is not None:
             blur_kernel += 0 if blur_kernel == 0 or blur_kernel % 2 == 1 else 1
             self._blur_kernel = blur_kernel
@@ -719,9 +760,9 @@ class Mask():
             slice(max(roi[0] * -1, 0),
                   crop_size - min(crop_size, max(0, roi[2] - self.stored_size)))]
 
-        logger.trace("src_size: %s, coverage_ratio: %s, sub_crop_size: %s, "  # type: ignore
-                     "sub_crop_slices: %s", roi, coverage_ratio, self._sub_crop_size,
-                     self._sub_crop_slices)
+        logger.trace("src_size: %s, coverage_ratio: %s, "  # type:ignore[attr-defined]
+                     "sub_crop_size: %s, sub_crop_slices: %s",
+                     roi, coverage_ratio, self._sub_crop_size, self._sub_crop_slices)
 
     def _adjust_affine_matrix(self, mask_size: int, affine_matrix: np.ndarray) -> np.ndarray:
         """ Adjust the affine matrix for the mask's storage size
@@ -741,7 +782,7 @@ class Mask():
         zoom = self.stored_size / mask_size
         zoom_mat = np.array([[zoom, 0, 0.], [0, zoom, 0.]])
         adjust_mat = np.dot(zoom_mat, np.concatenate((affine_matrix, np.array([[0., 0., 1.]]))))
-        logger.trace("storage_size: %s, mask_size: %s, zoom: %s, "  # type: ignore
+        logger.trace("storage_size: %s, mask_size: %s, zoom: %s, "  # type:ignore[attr-defined]
                      "original matrix: %s, adjusted_matrix: %s", self.stored_size, mask_size, zoom,
                      affine_matrix.shape, adjust_mat.shape)
         return adjust_mat
@@ -768,7 +809,8 @@ class Mask():
                                         interpolator=self.interpolator,
                                         stored_size=self.stored_size,
                                         stored_centering=self.stored_centering)
-        logger.trace({k: v if k != "mask" else type(v) for k, v in retval.items()})  # type: ignore
+        logger.trace({k: v if k != "mask" else type(v)  # type:ignore[attr-defined]
+                      for k, v in retval.items()})
         return retval
 
     def to_png_meta(self) -> MaskAlignmentsFileDict:
@@ -799,7 +841,7 @@ class Mask():
         self.stored_size = mask_dict["stored_size"]
         centering = mask_dict.get("stored_centering")
         self.stored_centering = "face" if centering is None else centering
-        logger.trace({k: v if k != "mask" else type(v)  # type: ignore
+        logger.trace({k: v if k != "mask" else type(v)  # type:ignore[attr-defined]
                       for k, v in mask_dict.items()})
 
 
@@ -826,17 +868,17 @@ class LandmarksMask(Mask):
     storage_centering, str (optional):
         The centering to store the mask at. One of `"legacy"`, `"face"`, `"head"`.
         Default: `"face"`
-    dilation: int, optional
-        The amount of dilation to apply to the mask. `0` for none. Default: `0`
+    dilation: float, optional
+        The amount of dilation to apply to the mask. as a percentage of the mask size. Default: 0.0
     """
     def __init__(self,
                  points: list[np.ndarray],
                  storage_size: int = 128,
                  storage_centering: CenteringType = "face",
-                 dilation: int = 0) -> None:
+                 dilation: float = 0.0) -> None:
         super().__init__(storage_size=storage_size, storage_centering=storage_centering)
         self._points = points
-        self._dilation = dilation
+        self.set_dilation(dilation)
 
     @property
     def mask(self) -> np.ndarray:
@@ -862,17 +904,15 @@ class LandmarksMask(Mask):
         for landmarks in self._points:
             lms = np.rint(landmarks).astype("int")
             cv2.fillConvexPoly(mask, cv2.convexHull(lms), 1.0, lineType=cv2.LINE_AA)
-        if self._dilation != 0:
-            mask = cv2.dilate(mask,
-                              cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
-                                                        (self._dilation, self._dilation)),
-                              iterations=1)
+        if self._dilation[-1] is not None:
+            self._dilate_mask(mask)
         if self._blur_kernel != 0 and self._blur_type is not None:
             mask = BlurMask(self._blur_type,
                             mask,
                             self._blur_kernel,
                             passes=self._blur_passes).blurred
-        logger.trace("mask: (shape: %s, dtype: %s)", mask.shape, mask.dtype)  # type: ignore
+        logger.trace("mask: (shape: %s, dtype: %s)",  # type:ignore[attr-defined]
+                     mask.shape, mask.dtype)
         self.add(mask, affine_matrix, interpolator)
 
 
@@ -911,15 +951,16 @@ class BlurMask():  # pylint:disable=too-few-public-methods
                  kernel: int | float,
                  is_ratio: bool = False,
                  passes: int = 1) -> None:
-        logger.trace("Initializing %s: (blur_type: '%s', mask_shape: %s, "  # type: ignore
-                     "kernel: %s, is_ratio: %s, passes: %s)", self.__class__.__name__, blur_type,
+        logger.trace("Initializing %s: (blur_type: '%s', "  # type:ignore[attr-defined]
+                     "mask_shape: %s, kernel: %s, is_ratio: %s, passes: %s)",
+                     self.__class__.__name__, blur_type,
                      mask.shape, kernel, is_ratio, passes)
         self._blur_type = blur_type
         self._mask = mask
         self._passes = passes
         kernel_size = self._get_kernel_size(kernel, is_ratio)
         self._kernel_size = self._get_kernel_tuple(kernel_size)
-        logger.trace("Initialized %s", self.__class__.__name__)  # type: ignore
+        logger.trace("Initialized %s", self.__class__.__name__)  # type:ignore[attr-defined]
 
     @property
     def blurred(self) -> np.ndarray:
@@ -930,12 +971,14 @@ class BlurMask():  # pylint:disable=too-few-public-methods
         for i in range(self._passes):
             assert isinstance(kwargs["ksize"], tuple)
             ksize = int(kwargs["ksize"][0])
-            logger.trace("Pass: %s, kernel_size: %s", i + 1, (ksize, ksize))  # type: ignore
+            logger.trace("Pass: %s, kernel_size: %s",  # type:ignore[attr-defined]
+                         i + 1, (ksize, ksize))
             blurred = func(blurred, **kwargs)
             ksize = int(round(ksize * self._multipass_factor))
             kwargs["ksize"] = self._get_kernel_tuple(ksize)
         blurred = blurred[..., None]
-        logger.trace("Returning blurred mask. Shape: %s", blurred.shape)  # type: ignore
+        logger.trace("Returning blurred mask. Shape: %s",  # type:ignore[attr-defined]
+                     blurred.shape)
         return blurred
 
     @property
@@ -991,7 +1034,7 @@ class BlurMask():  # pylint:disable=too-few-public-methods
         mask_diameter = np.sqrt(np.sum(self._mask))
         radius = round(max(1., mask_diameter * kernel / 100.))
         kernel_size = int(radius * 2 + 1)
-        logger.trace("kernel_size: %s", kernel_size)  # type: ignore
+        logger.trace("kernel_size: %s", kernel_size)  # type:ignore[attr-defined]
         return kernel_size
 
     @staticmethod
@@ -1010,14 +1053,14 @@ class BlurMask():  # pylint:disable=too-few-public-methods
         """
         kernel_size += 1 if kernel_size % 2 == 0 else 0
         retval = (kernel_size, kernel_size)
-        logger.trace(retval)  # type: ignore
+        logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     def _get_kwargs(self) -> dict[str, int | tuple[int, int]]:
         """ dict: the valid keyword arguments for the requested :attr:`_blur_type` """
         retval = {kword: self._kwarg_mapping[kword]
                   for kword in self._kwarg_requirements[self._blur_type]}
-        logger.trace("BlurMask kwargs: %s", retval)  # type: ignore
+        logger.trace("BlurMask kwargs: %s", retval)  # type:ignore[attr-defined]
         return retval
 
 

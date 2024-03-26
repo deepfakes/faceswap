@@ -634,11 +634,25 @@ class Config(FaceswapConfig):
                 "performance."))
         self.add_item(
             section=section,
+            title="mask_dilation",
+            datatype=float,
+            min_max=(-5.0, 5.0),
+            rounding=1,
+            default=0,
+            fixed=False,
+            group=_("mask"),
+            info=_(
+                "Dilate or erode the mask. Negative values erode the mask (make it smaller). "
+                "Positive values dilate the mask (make it larger). The value given is a "
+                "percentage of the total mask size."))
+        self.add_item(
+            section=section,
             title="mask_blur_kernel",
             datatype=int,
             min_max=(0, 9),
             rounding=1,
             default=3,
+            fixed=False,
             group=_("mask"),
             info=_(
                 "Apply gaussian blur to the mask input. This has the effect of smoothing the "
@@ -653,6 +667,7 @@ class Config(FaceswapConfig):
             default=4,
             min_max=(0, 50),
             rounding=1,
+            fixed=False,
             group=_("mask"),
             info=_(
                 "Sets pixels that are near white to white and near black to black. Set to 0 for "

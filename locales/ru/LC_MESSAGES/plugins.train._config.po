@@ -7,15 +7,15 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-08-20 14:54+0100\n"
-"PO-Revision-Date: 2023-08-20 14:58+0100\n"
+"POT-Creation-Date: 2024-03-26 17:37+0000\n"
+"PO-Revision-Date: 2024-03-26 17:40+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ru_RU\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Poedit 3.3.2\n"
+"X-Generator: Poedit 3.4.2\n"
 
 #: plugins/train/_config.py:17
 msgid ""
@@ -851,8 +851,9 @@ msgstr ""
 "время как область лица с маской является приоритетной. Может повысить общее "
 "качество за счет концентрации внимания на основной области лица."
 
-#: plugins/train/_config.py:600 plugins/train/_config.py:642
-#: plugins/train/_config.py:656 plugins/train/_config.py:665
+#: plugins/train/_config.py:600 plugins/train/_config.py:643
+#: plugins/train/_config.py:656 plugins/train/_config.py:671
+#: plugins/train/_config.py:680
 msgid "mask"
 msgstr "маска"
 
@@ -928,7 +929,16 @@ msgstr ""
 "сообщества и для дальнейшего описания нуждается в тестировании. Профильные "
 "лица могут иметь низкую производительность."
 
-#: plugins/train/_config.py:644
+#: plugins/train/_config.py:645
+msgid ""
+"Dilate or erode the mask. Negative values erode the mask (make it smaller). "
+"Positive values dilate the mask (make it larger). The value given is a "
+"percentage of the total mask size."
+msgstr ""
+"Расширяет или сужает маску. Отрицательные значения сужают маску (делают её "
+"меньше). Положительные значения расширяют маску (делают её больше). "
+
+#: plugins/train/_config.py:658
 msgid ""
 "Apply gaussian blur to the mask input. This has the effect of smoothing the "
 "edges of the mask, which can help with poorly calculated masks and give less "
@@ -944,7 +954,7 @@ msgstr ""
 "должно быть нечетным, если передано четное число, то оно будет округлено до "
 "следующего нечетного числа."
 
-#: plugins/train/_config.py:658
+#: plugins/train/_config.py:673
 msgid ""
 "Sets pixels that are near white to white and near black to black. Set to 0 "
 "for off."
@@ -952,7 +962,7 @@ msgstr ""
 "Устанавливает пиксели, которые почти белые - в белые и которые почти черные "
 "- в черные. Установите 0, чтобы выключить."
 
-#: plugins/train/_config.py:667
+#: plugins/train/_config.py:682
 msgid ""
 "Dedicate a portion of the model to learning how to duplicate the input mask. "
 "Increases VRAM usage in exchange for learning a quick ability to try to "
