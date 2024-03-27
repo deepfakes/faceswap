@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-08-20 14:54+0100\n"
+"POT-Creation-Date: 2024-03-26 17:37+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -539,8 +539,9 @@ msgid ""
 "attention on the core face area."
 msgstr ""
 
-#: plugins/train/_config.py:600 plugins/train/_config.py:642
-#: plugins/train/_config.py:656 plugins/train/_config.py:665
+#: plugins/train/_config.py:600 plugins/train/_config.py:643
+#: plugins/train/_config.py:656 plugins/train/_config.py:671
+#: plugins/train/_config.py:680
 msgid "mask"
 msgstr ""
 
@@ -582,7 +583,14 @@ msgid ""
 "performance."
 msgstr ""
 
-#: plugins/train/_config.py:644
+#: plugins/train/_config.py:645
+msgid ""
+"Dilate or erode the mask. Negative values erode the mask (make it smaller). "
+"Positive values dilate the mask (make it larger). The value given is a "
+"percentage of the total mask size."
+msgstr ""
+
+#: plugins/train/_config.py:658
 msgid ""
 "Apply gaussian blur to the mask input. This has the effect of smoothing the "
 "edges of the mask, which can help with poorly calculated masks and give less "
@@ -592,13 +600,13 @@ msgid ""
 "number."
 msgstr ""
 
-#: plugins/train/_config.py:658
+#: plugins/train/_config.py:673
 msgid ""
 "Sets pixels that are near white to white and near black to black. Set to 0 "
 "for off."
 msgstr ""
 
-#: plugins/train/_config.py:667
+#: plugins/train/_config.py:682
 msgid ""
 "Dedicate a portion of the model to learning how to duplicate the input mask. "
 "Increases VRAM usage in exchange for learning a quick ability to try to "

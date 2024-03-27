@@ -428,8 +428,10 @@ class _Cache():
                 f"The masks that exist for this face are: {list(detected_face.mask)}")
 
         mask = detected_face.mask[str(self._config["mask_type"])]
+        assert isinstance(self._config["mask_dilation"], float)
         assert isinstance(self._config["mask_blur_kernel"], int)
         assert isinstance(self._config["mask_threshold"], int)
+        mask.set_dilation(self._config["mask_dilation"])
         mask.set_blur_and_threshold(blur_kernel=self._config["mask_blur_kernel"],
                                     threshold=self._config["mask_threshold"])
 
@@ -467,7 +469,7 @@ class _Cache():
         assert isinstance(multiplier, int)
         if not self._config["penalized_mask_loss"] or multiplier <= 1:
             return None
-        mask = detected_face.get_landmark_mask(area, self._size // 16, self._size // 32)
+        mask = detected_face.get_landmark_mask(area, self._size // 16, 2.5)
         logger.trace("Caching localized '%s' mask for: %s %s",  # type: ignore
                      area, filename, mask.shape)
         return mask
