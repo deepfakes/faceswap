@@ -552,9 +552,9 @@ class _SpatialFilters():
 
         weights = np.array([self._generate_weights(mapping[channel], domain)
                             for channel in ("A", "RG", "BY")])
-        weights = Variable(np.moveaxis(weights, 0, -1), dtype="float32", trainable=False)
+        vweights = Variable(np.moveaxis(weights, 0, -1), dtype="float32", trainable=False)
 
-        return weights, radius
+        return vweights, radius
 
     def _get_evaluation_domain(self,
                                b1_a: float,

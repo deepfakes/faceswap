@@ -198,5 +198,5 @@ class AppleSiliconStats(_GPUStats):
         devices: list[int]
             The GPU device IDS to be excluded
         """
-        self._logger.warning("Apple Silicon does not support excluding GPUs. This option has been "
+        self._log("warning", "Apple Silicon does not support excluding GPUs. This option has been "
                              "ignored")

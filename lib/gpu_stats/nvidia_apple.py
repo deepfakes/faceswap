@@ -149,7 +149,7 @@ class NvidiaAppleStats(_GPUStats):
         """
         if not devices:
             return
-        self._logger.debug("Excluding GPU indicies: %s", devices)
+        self._log("debug", f"Excluding GPU indicies: {devices}")
 
         _EXCLUDE_DEVICES.extend(devices)
 
@@ -158,6 +158,5 @@ class NvidiaAppleStats(_GPUStats):
         os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(str(d) for d in active
                                                       if d not in _EXCLUDE_DEVICES)
 
-        self._logger.debug("Cuda environmet variables: %s",
-                           [f"{k}: {v}" for k, v in os.environ.items()
-                            if k.lower().startswith("cuda")])
+        env_vars = [f"{k}: {v}" for k, v in os.environ.items() if k.lower().startswith("cuda")]
+        self._log("debug", f"Cuda environmet variables: {env_vars}")

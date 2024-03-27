@@ -105,4 +105,4 @@ class CPUStats(_GPUStats):
         devices: list[int]
             The GPU device IDS to be excluded
         """
-        self._logger.warning("CPU does not support excluding GPUs. This option has been ignored")
+        self._log("warning", "CPU does not support excluding GPUs. This option has been ignored")

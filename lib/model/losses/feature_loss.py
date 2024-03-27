@@ -60,7 +60,10 @@ class _LPIPSTrunkNet():
     load_weights: bool
         ``True`` if pretrained trunk network weights should be loaded, otherwise ``False``
     """
-    def __init__(self, net_name: str, eval_mode: bool, load_weights: bool) -> None:
+    def __init__(self,
+                 net_name: T.Literal["alex", "squeeze", "vgg16"],
+                 eval_mode: bool,
+                 load_weights: bool) -> None:
         logger.debug(parse_class_init(locals()))
         self._eval_mode = eval_mode
         self._load_weights = load_weights
@@ -162,7 +165,7 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):
         ``True`` if a dropout layer should be used in the Linear network otherwise ``False``
     """
     def __init__(self,
-                 net_name: str,
+                 net_name: T.Literal["alex", "squeeze", "vgg16"],
                  eval_mode: bool,
                  load_weights: bool,
                  trunk_net: Model,
@@ -276,7 +279,7 @@ class LPIPSLoss(keras.losses.Loss):
         Default: ``False``
     """
     def __init__(self,  # pylint:disable=too-many-arguments
-                 trunk_network: str,
+                 trunk_network: T.Literal["alex", "squeeze", "vgg16"],
                  trunk_pretrained: bool = True,
                  trunk_eval_mode: bool = True,
                  linear_pretrained: bool = True,

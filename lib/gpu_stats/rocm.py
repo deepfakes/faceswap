@@ -460,7 +460,7 @@ class ROCm(_GPUStats):
         """
         if not devices:
             return
-        self._logger.debug("Excluding GPU indicies: %s", devices)
+        self._log("debug", f"Excluding GPU indicies: {devices}")
 
         _EXCLUDE_DEVICES.extend(devices)
 
@@ -469,6 +469,5 @@ class ROCm(_GPUStats):
         os.environ["HIP_VISIBLE_DEVICES"] = ",".join(str(d) for d in active
                                                      if d not in _EXCLUDE_DEVICES)
 
-        self._logger.debug("HIP environmet variables: %s",
-                           [f"{k}: {v}" for k, v in os.environ.items()
-                            if k.lower().startswith("hip")])
+        env_vars = [f"{k}: {v}" for k, v in os.environ.items() if k.lower().startswith("hip")]
+        self._log("debug", f"HIP environmet variables: {env_vars}")
