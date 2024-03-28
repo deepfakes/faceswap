@@ -11,9 +11,9 @@ import sys
 
 from dataclasses import dataclass
 
-import keras
-from keras import layers, backend as K
+from keras import layers, Model, ops, Variable
 from keras.saving import get_custom_objects
+import numpy as np
 import torch
 
 from lib.model.layers import QuickGELU
@@ -270,10 +270,9 @@ class EmbeddingLayer(layers.Layer):
         input_shape: tuple[int, ...
             The input shape of the incoming tensor
         """
-        self._var = tf.Variable(self._scale * tf.random.normal(self._input_shape,
-                                                               dtype=self.dtype),
-                                trainable=True,
-                                dtype=self.dtype)
+        self._var = Variable(self._scale * np.random.normal(size=(self._input_shape)),
+                             trainable=True,
+                             dtype=self.dtype)
         super().build(input_shape)
 
     def get_config(self) -> dict[str, T.Any]:
@@ -305,7 +304,7 @@ class ClassEmbedding(EmbeddingLayer):
         :class:`tensorflow.Tensor`
             The class embedding layer shaped for the input tensor
         """
-        return K.tile(self._var[None, None], [K.shape(inputs)[0], 1, 1])
+        return ops.tile(self._var[None, None], [inputs.shape[0], 1, 1])
 
 
 class PositionalEmbedding(EmbeddingLayer):
@@ -323,7 +322,7 @@ class PositionalEmbedding(EmbeddingLayer):
         :class:`tensorflow.Tensor`
             The positional embedding layer shaped for the input tensor
         """
-        return K.tile(self._var[None], [K.shape(inputs)[0], 1, 1])
+        return ops.tile(self._var[None], [inputs.shape[0], 1, 1])
 
 
 class Projection(EmbeddingLayer):
@@ -341,7 +340,7 @@ class Projection(EmbeddingLayer):
         :class:`tensorflow.Tensor`
             The Projection layer expanded to the batch dimension and transposed for matmul
         """
-        return K.tile(K.transpose(self._var)[None], [K.shape(inputs)[0], 1, 1])
+        return ops.tile(ops.transpose(self._var)[None], [inputs.shape[0], 1, 1])
 
 
 class VisualTransformer():
@@ -390,7 +389,7 @@ class VisualTransformer():
         self._name = name
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def __call__(self) -> keras.models.Model:
+    def __call__(self) -> Model:
         """ Builds and returns the Visual Transformer model.
 
         Returns
@@ -428,7 +427,7 @@ class VisualTransformer():
                           self._width ** -0.5,
                           name=f"{self._name}.proj")(var_x)
         var_x = layers.Dot(axes=-1)([var_x, proj])
-        return keras.models.Model(inputs=inputs, outputs=[var_x], name=self._name)
+        return Model(inputs=inputs, outputs=[var_x], name=self._name)
 
 
 # ################ #
@@ -581,8 +580,8 @@ class AttentionPool2d():
         """
         var_x: torch.Tensor
         var_x = layers.Reshape((-1, inputs.shape[-1]))(inputs)  # NHWC -> N(HW)C
-        var_x = layers.Concatenate(axis=1)([K.mean(var_x, axis=1,  # N(HW)C -> N(HW+1)C
-                                                   keepdims=True), var_x])
+        var_x = layers.Concatenate(axis=1)([ops.mean(var_x, axis=1,  # N(HW)C -> N(HW+1)C
+                                                     keepdims=True), var_x])
         pos_embed = PositionalEmbedding((self._spatial_dim ** 2 + 1, self._embed_dim),  # N(HW+1)C
                                         self._embed_dim ** 0.5,
                                         name=f"{self._name}.positional_embedding")(var_x)
@@ -702,7 +701,7 @@ class ModifiedResNet():
                                 name=f"{name}.{i}")(retval)
         return retval
 
-    def __call__(self) -> keras.models.Model:
+    def __call__(self) -> Model:
         """ Implements the forward pass of the ModifiedResNet model.
 
         Returns
@@ -726,7 +725,7 @@ class ModifiedResNet():
                                 self._heads,
                                 self._output_dim,
                                 name=f"{self._name}.attnpool")(var_x)
-        return keras.models.Model(inputs, outputs=[var_x], name=self._name)
+        return Model(inputs, outputs=[var_x], name=self._name)
 
 
 # ### #
@@ -779,7 +778,7 @@ class ViT():
                         width: int,
                         embed_dim: int,
                         resolution: int,
-                        patch_size: int) -> keras.models.Model:
+                        patch_size: int) -> Model:
         """ Obtain the network for the vision layets
 
         Parameters
@@ -818,7 +817,7 @@ class ViT():
                                  patch_size=patch_size,
                                  name="visual")
 
-    def __call__(self) -> keras.Model:
+    def __call__(self) -> Model:
         """ Get the configured ViT model
 
         Returns
@@ -826,7 +825,7 @@ class ViT():
         :class:`keras.models.Model`
             The requested Visual Transformer model
         """
-        net: keras.models.Model = self._net()
+        net: Model = self._net()
         if self._load_weights and not self._git_id:
             logger.warning("Trained weights are not available for '%s'", self._name)
             return net
