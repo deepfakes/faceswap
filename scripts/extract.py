@@ -17,7 +17,7 @@ from lib.align.alignments import PNGHeaderDict
 
 from lib.image import encode_image, generate_thumbnail, ImagesLoader, ImagesSaver, read_image_meta
 from lib.multithreading import MultiThread
-from lib.utils import get_folder, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
+from lib.utils import get_folder, handle_deprecated_cliopts, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 from plugins.extract.pipeline import Extractor, ExtractMedia
 from scripts.fsmedia import Alignments, PostProcess, finalize
 
@@ -48,7 +48,7 @@ class Extract():
     """
     def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (args: %s", self.__class__.__name__, arguments)
-        self._args = arguments
+        self._args = handle_deprecated_cliopts(arguments)
         self._input_locations = self._get_input_locations()
         self._validate_batchmode()
 

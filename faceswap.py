@@ -10,6 +10,8 @@ if sys.platform.startswith("win"):
     os.environ["LANG"], _ = locale.getdefaultlocale()
 
 from lib.cli import args as cli_args  # pylint:disable=wrong-import-position
+from lib.cli.args_train import TrainArgs  # pylint:disable=wrong-import-position
+from lib.cli.args_extract_convert import ConvertArgs, ExtractArgs  # noqa:E501 pylint:disable=wrong-import-position
 from lib.config import generate_configs  # pylint:disable=wrong-import-position
 
 # LOCALES
@@ -41,11 +43,11 @@ def _main() -> None:
     generate_configs()
 
     subparser = _PARSER.add_subparsers()
-    cli_args.ExtractArgs(subparser, "extract", _("Extract the faces from pictures or a video"))
-    cli_args.TrainArgs(subparser, "train", _("Train a model for the two faces A and B"))
-    cli_args.ConvertArgs(subparser,
-                         "convert",
-                         _("Convert source pictures or video to a new one with the face swapped"))
+    ExtractArgs(subparser, "extract", _("Extract the faces from pictures or a video"))
+    TrainArgs(subparser, "train", _("Train a model for the two faces A and B"))
+    ConvertArgs(subparser,
+                "convert",
+                _("Convert source pictures or video to a new one with the face swapped"))
     cli_args.GuiArgs(subparser, "gui", _("Launch the Faceswap Graphical User Interface"))
     _PARSER.set_defaults(func=_bad_args)
     arguments = _PARSER.parse_args()

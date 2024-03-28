@@ -22,6 +22,7 @@ import numpy as np
 from tqdm import tqdm
 
 if T.TYPE_CHECKING:
+    from argparse import Namespace
     from http.client import HTTPResponse
 
 # Global variables
@@ -418,6 +419,43 @@ def deprecation_warning(function: str, additional_info: str | None = None) -> No
     if additional_info is not None:
         msg += f" {additional_info}"
     logger.warning(msg)
+
+
+def handle_deprecated_cliopts(arguments: Namespace) -> Namespace:
+    """ Handle deprecated command line arguments and update to correct argument.
+
+    Deprecated cli opts will be provided in the following format:
+    `"depr_<option_key>_<deprecated_opt>_<new_opt>"`
+
+    Parameters
+    ----------
+    arguments: :class:`argpares.Namespace`
+        The passed in faceswap cli arguments
+
+    Returns
+    -------
+    :class:`argpares.Namespace`
+        The cli arguments with deprecated values mapped to the correct entry
+    """
+    logger = logging.getLogger(__name__)
+
+    for key, selected in vars(arguments).items():
+        if not key.startswith("depr_") or key.startswith("depr_") and selected is None:
+            continue  # Not a deprecated opt
+        if isinstance(selected, bool) and not selected:
+            continue  # store-true opt with default value
+
+        opt, old, new = key.replace("depr_", "").rsplit("_", maxsplit=2)
+        deprecation_warning(f"Command line option '-{old}'", f"Use '-{new}, --{opt}' instead")
+
+        exist = getattr(arguments, opt)
+        if exist == selected:
+            logger.debug("Keeping existing '%s' value of '%s'", opt, exist)
+        else:
+            logger.debug("Updating arg '%s' from '%s' to '%s' from deprecated opt",
+                         opt, exist, selected)
+
+    return arguments
 
 
 def camel_case_split(identifier: str) -> list[str]:

@@ -533,7 +533,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             preds = [self.predict(feed) for feed in batch.refeeds]
             try:
                 batch.prediction = np.array(preds)
-                logger.trace("Aligner out: %s", batch.prediction.shape)
+                logger.trace("Aligner out: %s",  # type:ignore[attr-defined]
+                             batch.prediction.shape)
             except ValueError as err:
                 # If refeed batches are different sizes, Numpy will error, so we need to explicitly
                 # set the dtype to 'object' rather than let it infer
