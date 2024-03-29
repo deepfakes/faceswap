@@ -372,8 +372,8 @@ class Train():
             logger.info("  Using live preview")
         if sys.stdout.isatty():
             logger.info("  Press '%s' to save and quit",
-                        "Stop" if self._args.redirect_gui or self._args.colab else "ENTER")
-        if not self._args.redirect_gui and not self._args.colab and sys.stdout.isatty():
+                        "Stop" if self._args.redirect_gui else "ENTER")
+        if not self._args.redirect_gui and sys.stdout.isatty():
             logger.info("  Press 'S' to save model weights immediately")
         logger.info("===================================================")
 

@@ -225,12 +225,6 @@ class FaceSwapArgs():
             "dest": "redirect_gui",
             "default": False,
             "help": argparse.SUPPRESS})
-        global_args.append({
-            "opts": ("-colab", "--colab"),
-            "action": "store_true",
-            "dest": "colab",
-            "default": False,
-            "help": argparse.SUPPRESS})
         # Deprecated multi-character switches
         global_args.append({
             "opts": ("-LF",),
