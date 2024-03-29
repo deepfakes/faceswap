@@ -847,8 +847,7 @@ class Predict():
     def _get_model_name(self, model_dir: str) -> str:
         """ Return the name of the Faceswap model used.
 
-        If a "trainer" option has been selected in the command line arguments, use that value,
-        otherwise retrieve the name of the model from the model's state file.
+        Retrieve the name of the model from the model's state file.
 
         Parameters
         ----------
@@ -861,24 +860,18 @@ class Predict():
             The name of the Faceswap model being used.
 
         """
-        if hasattr(self._args, "trainer") and self._args.trainer:
-            logger.debug("Trainer name provided: '%s'", self._args.trainer)
-            return self._args.trainer
-
         statefiles = [fname for fname in os.listdir(str(model_dir))
                       if fname.endswith("_state.json")]
         if len(statefiles) != 1:
             raise FaceswapError("There should be 1 state file in your model folder. "
-                                f"{len(statefiles)} were found. Specify a trainer with the '-t', "
-                                "'--trainer' option.")
+                                f"{len(statefiles)} were found.")
         statefile = os.path.join(str(model_dir), statefiles[0])
 
         state = self._serializer.load(statefile)
         trainer = state.get("name", None)
 
         if not trainer:
-            raise FaceswapError("Trainer name could not be read from state file. "
-                                "Specify a trainer with the '-t', '--trainer' option.")
+            raise FaceswapError("Trainer name could not be read from state file.")
         logger.debug("Trainer from state file: '%s'", trainer)
         return trainer
 

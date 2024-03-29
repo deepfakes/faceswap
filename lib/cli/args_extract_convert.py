@@ -680,14 +680,6 @@ class ConvertArgs(ExtractConvertArgs):
                 "attempt to use more processes than are available on your system. If "
                 "singleprocess is enabled this setting will be ignored.")})
         argument_list.append({
-            "opts": ("-t", "--trainer"),
-            "type": str.lower,
-            "choices": PluginLoader.get_available_models(),
-            "group": _("settings"),
-            "help": _(
-                "[LEGACY] This only needs to be selected if a legacy model is being loaded or if "
-                "there are multiple models in the model folder")})
-        argument_list.append({
             "opts": ("-T", "--on-the-fly"),
             "action": "store_true",
             "dest": "on_the_fly",
