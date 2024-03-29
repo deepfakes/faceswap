@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-02-24 00:27+0000\n"
-"PO-Revision-Date: 2023-02-24 00:34+0000\n"
+"POT-Creation-Date: 2024-03-28 23:49+0000\n"
+"PO-Revision-Date: 2024-03-29 00:05+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -16,15 +16,15 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Poedit 3.0.1\n"
+"X-Generator: Poedit 3.4.2\n"
 
-#: tools/alignments/cli.py:17
+#: tools/alignments/cli.py:16
 msgid ""
 "This command lets you perform various tasks pertaining to an alignments file."
 msgstr ""
 "이 명령을 사용하여 alignments 파일과 관련된 다양한 작ㅇ를 수행할 수 있습니다."
 
-#: tools/alignments/cli.py:32
+#: tools/alignments/cli.py:31
 msgid ""
 "Alignments tool\n"
 "This tool allows you to perform numerous actions on or using an alignments "
@@ -34,16 +34,16 @@ msgstr ""
 "이 도구를 사용하면 해당 얼굴 세트/프레임 원본에 해당하는 alignments 파일을 사"
 "용하거나 여러 작업을 수행할 수 있습니다."
 
-#: tools/alignments/cli.py:44
+#: tools/alignments/cli.py:43
 msgid " Must Pass in a frames folder/source video file (-fr)."
 msgstr ""
 " 프레임들이 저장된 폴더나 원본 비디오 파일을 무조건 전달해야 합니다 (-fr)."
 
-#: tools/alignments/cli.py:45
+#: tools/alignments/cli.py:44
 msgid " Must Pass in a faces folder (-fc)."
 msgstr " 얼굴 폴더를 무조건 전달해야 합니다 (-fc)."
 
-#: tools/alignments/cli.py:46
+#: tools/alignments/cli.py:45
 msgid ""
 " Must Pass in either a frames folder/source video file OR a faces folder (-"
 "fr or -fc)."
@@ -51,7 +51,7 @@ msgstr ""
 " 프레임 폴더나 원본 비디오 파일 또는 얼굴 폴더중 하나를 무조건 전달해야 합니"
 "다 (-fr and -fc)."
 
-#: tools/alignments/cli.py:48
+#: tools/alignments/cli.py:47
 msgid ""
 " Must Pass in a frames folder/source video file AND a faces folder (-fr and -"
 "fc)."
@@ -59,11 +59,11 @@ msgstr ""
 " 프레임 폴더나 원본 비디오 파일 그리고 얼굴 폴더를 무조건 전달해야 합니다 (-"
 "fr and -fc)."
 
-#: tools/alignments/cli.py:50
+#: tools/alignments/cli.py:49
 msgid " Use the output option (-o) to process results."
 msgstr " 결과를 진행하려면 (-o) 출력 옵션을 사용하세요."
 
-#: tools/alignments/cli.py:58 tools/alignments/cli.py:97
+#: tools/alignments/cli.py:57 tools/alignments/cli.py:97
 msgid "processing"
 msgstr "처리"
 
@@ -131,7 +131,7 @@ msgstr ""
 "L| 'spatial': 공간 및 시간 필터링을 수행하여 alignments를 원활하게 수행합니다"
 "(실험적!)."
 
-#: tools/alignments/cli.py:99
+#: tools/alignments/cli.py:100
 msgid ""
 "R|How to output discovered items ('faces' and 'frames' only):\n"
 "L|'console': Print the list of frames to the screen. (DEFAULT)\n"
@@ -145,12 +145,12 @@ msgstr ""
 "L|'파일': 프레임 목록을 텍스트 파일(소스 디렉토리에 저장)로 출력합니다.\n"
 "L|'이동': 검색된 항목을 원본 디렉토리 내의 하위 폴더로 이동합니다."
 
-#: tools/alignments/cli.py:110 tools/alignments/cli.py:123
-#: tools/alignments/cli.py:130 tools/alignments/cli.py:137
+#: tools/alignments/cli.py:111 tools/alignments/cli.py:134
+#: tools/alignments/cli.py:141
 msgid "data"
 msgstr "데이터"
 
-#: tools/alignments/cli.py:114
+#: tools/alignments/cli.py:118
 msgid ""
 "Full path to the alignments file to be processed. If you have input a "
 "'frames_dir' and don't provide this option, the process will try to find the "
@@ -163,15 +163,11 @@ msgstr ""
 "다. 지정된 얼굴 폴더에 alignments 파일이 생성될 때 모든 작업은 'from-"
 "faces'를 제외한 alignments 파일이 필요로 합니다."
 
-#: tools/alignments/cli.py:124
-msgid "Directory containing extracted faces."
-msgstr "추출된 얼굴들이 저장된 디렉토리."
-
-#: tools/alignments/cli.py:131
+#: tools/alignments/cli.py:135
 msgid "Directory containing source frames that faces were extracted from."
 msgstr "얼굴 추출의 소스로 쓰인 원본 프레임이 저장된 디렉토리."
 
-#: tools/alignments/cli.py:138
+#: tools/alignments/cli.py:143
 msgid ""
 "R|Run the aligmnents tool on multiple sources. The following jobs support "
 "batch mode:\n"
@@ -207,12 +203,12 @@ msgstr ""
 "지의 하위 폴더여야 합니다. 에. 정렬 파일은 기본 위치에 있어야 합니다. 다른 모"
 "든 작업의 경우 이 옵션은 무시됩니다."
 
-#: tools/alignments/cli.py:164 tools/alignments/cli.py:175
-#: tools/alignments/cli.py:185
+#: tools/alignments/cli.py:169 tools/alignments/cli.py:181
+#: tools/alignments/cli.py:191
 msgid "extract"
 msgstr "추출"
 
-#: tools/alignments/cli.py:165
+#: tools/alignments/cli.py:171
 msgid ""
 "[Extract only] Extract every 'nth' frame. This option will skip frames when "
 "extracting faces. For example a value of 1 will extract faces from every "
@@ -222,11 +218,11 @@ msgstr ""
 "프레임을 건너뜁니다. 예를 들어, 값이 1이면 모든 프레임에서 얼굴이 추출되고, "
 "값이 10이면 모든 10번째 프레임에서 얼굴이 추출됩니다."
 
-#: tools/alignments/cli.py:176
+#: tools/alignments/cli.py:182
 msgid "[Extract only] The output size of extracted faces."
 msgstr "[Extract only] 추출된 얼굴들의 결과 크기입니다."
 
-#: tools/alignments/cli.py:186
+#: tools/alignments/cli.py:193
 msgid ""
 "[Extract only] Only extract faces that have been resized by this percent or "
 "more to meet the specified extract size (`-sz`, `--size`). Useful for "
@@ -242,3 +238,6 @@ msgstr ""
 "512px인 경우, 50으로 설정하면 크기가 256px 이상인 면만 포함됩니다. 100으로 설"
 "정하면 512px 이상에서 크기가 조정된 얼굴만 추출됩니다. 200으로 설정하면 "
 "1024px 이상에서 축소된 얼굴만 추출됩니다."
+
+#~ msgid "Directory containing extracted faces."
+#~ msgstr "추출된 얼굴들이 저장된 디렉토리."

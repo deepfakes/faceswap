@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-06-28 14:05+0100\n"
-"PO-Revision-Date: 2022-11-27 01:32+0900\n"
+"POT-Creation-Date: 2024-03-28 23:51+0000\n"
+"PO-Revision-Date: 2024-03-29 00:05+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -16,7 +16,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Poedit 3.2\n"
+"X-Generator: Poedit 3.4.2\n"
 
 #: tools/model/cli.py:13
 msgid "This tool lets you perform actions on saved Faceswap models."
@@ -27,13 +27,13 @@ msgstr ""
 msgid "A tool for performing actions on Faceswap trained model files"
 msgstr "_Faceswap 훈련을 받은 모델 파일에서 작업을 수행하기 위한 도구"
 
-#: tools/model/cli.py:33
+#: tools/model/cli.py:34
 msgid ""
 "Model directory. A directory containing the model you wish to perform an "
 "action on."
 msgstr "모델 디렉토리. 작업을 수행할 모델이 들어 있는 디렉토리입니다."
 
-#: tools/model/cli.py:41
+#: tools/model/cli.py:43
 msgid ""
 "R|Choose which action you want to perform.\n"
 "L|'inference' - Create an inference only copy of the model. Strips any "
@@ -52,11 +52,11 @@ msgstr ""
 "L|'nan-scan' - 모델 파일에서 NaN 또는 Infs(잘못된 데이터)를 검색합니다.\n"
 "L|'restore' - 백업에서 모델을 복원합니다."
 
-#: tools/model/cli.py:55 tools/model/cli.py:66
+#: tools/model/cli.py:57 tools/model/cli.py:69
 msgid "inference"
 msgstr "추론"
 
-#: tools/model/cli.py:56
+#: tools/model/cli.py:59
 msgid ""
 "R|The format to save the model as. Note: Only used for 'inference' job.\n"
 "L|'h5' - Standard Keras H5 format. Does not store any custom layer "
@@ -70,9 +70,13 @@ msgstr ""
 "L| 'saved-model' - 텐서플로의 저장된 모델 형식. Faceswap 외부에서 모델을 로"
 "드하는 데 필요한 모든 정보를 포함합니다."
 
-#: tools/model/cli.py:67
+#: tools/model/cli.py:71
+#, fuzzy
+#| msgid ""
+#| "Only used for 'inference' job. Generate the inference model for B -> A "
+#| "instead of A -> B."
 msgid ""
-"Only used for 'inference' job. Generate the inference model for B -> A "
+"Only used for 'inference' job. Generate the inference model for B -> A  "
 "instead of A -> B."
 msgstr ""
 "'추론' 작업에만 쓰입니다. A -> B 대신 B -> A에 대한 추론 모델을 생성합니다."

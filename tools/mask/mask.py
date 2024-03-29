@@ -10,7 +10,7 @@ from multiprocessing import Process
 
 from lib.align import Alignments
 
-from lib.utils import VIDEO_EXTENSIONS
+from lib.utils import handle_deprecated_cliopts, VIDEO_EXTENSIONS
 from plugins.extract.pipeline import ExtractMedia
 
 from .loader import Loader
@@ -142,7 +142,7 @@ class _Mask:
     """
     def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-
+        arguments = handle_deprecated_cliopts(arguments)
         self._update_type = arguments.processing
         self._input_is_faces = arguments.input_type == "faces"
         self._check_input(arguments.input)

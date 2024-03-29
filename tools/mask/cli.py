@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
+import argparse
 import gettext
 
 from lib.cli.args import FaceSwapArgs
@@ -10,7 +11,6 @@ from plugins.plugin_loader import PluginLoader
 # LOCALES
 _LANG = gettext.translation("tools.mask.cli", localedir="locales", fallback=True)
 _ = _LANG.gettext
-
 
 _HELPTEXT = _("This tool allows you to generate, import, export or preview masks for existing "
               "alignments.")
@@ -50,7 +50,7 @@ class MaskArgs(FaceSwapArgs):
             "help": _(
                 "Directory containing extracted faces, source frames, or a video file.")})
         argument_list.append({
-            "opts": ("-it", "--input-type"),
+            "opts": ("-I", "--input-type"),
             "action": Radio,
             "type": str.lower,
             "choices": ("faces", "frames"),
@@ -234,5 +234,10 @@ class MaskArgs(FaceSwapArgs):
             "help": _(
                 "R|Whether to output the whole frame or only the face box when using "
                 "output processing. Only has an effect when using frames as input.")})
-
+        # Deprecated multi-character switches
+        argument_list.append({
+            "opts": ("-it", ),
+            "type": str,
+            "dest": "depr_input_type_it_I",
+            "help": argparse.SUPPRESS})
         return argument_list

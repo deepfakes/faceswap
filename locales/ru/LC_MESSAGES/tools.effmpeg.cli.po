@@ -5,8 +5,9 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: \n"
-"POT-Creation-Date: 2021-02-18 23:34-0000\n"
-"PO-Revision-Date: 2023-04-11 15:18+0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-03-28 23:50+0000\n"
+"PO-Revision-Date: 2024-03-29 00:08+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ru\n"
@@ -16,17 +17,17 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 3.2.2\n"
+"X-Generator: Poedit 3.4.2\n"
 
 #: tools/effmpeg/cli.py:15
 msgid "This command allows you to easily execute common ffmpeg tasks."
 msgstr "Эта команда позволяет легко выполнять общие задачи ffmpeg."
 
-#: tools/effmpeg/cli.py:24
+#: tools/effmpeg/cli.py:52
 msgid "A wrapper for ffmpeg for performing image <> video converting."
 msgstr "Обертка для ffmpeg для выполнения конвертации изображений <> видео."
 
-#: tools/effmpeg/cli.py:51
+#: tools/effmpeg/cli.py:64
 msgid ""
 "R|Choose which action you want ffmpeg ffmpeg to do.\n"
 "L|'extract': turns videos into images \n"
@@ -48,15 +49,15 @@ msgstr ""
 "L|'rotate' вращение видео.\n"
 "L|'slice' вырезает часть видео в отдельный видеофайл."
 
-#: tools/effmpeg/cli.py:65
+#: tools/effmpeg/cli.py:78
 msgid "Input file."
 msgstr "Входной файл."
 
-#: tools/effmpeg/cli.py:66 tools/effmpeg/cli.py:73 tools/effmpeg/cli.py:87
+#: tools/effmpeg/cli.py:79 tools/effmpeg/cli.py:86 tools/effmpeg/cli.py:100
 msgid "data"
 msgstr "данные"
 
-#: tools/effmpeg/cli.py:76
+#: tools/effmpeg/cli.py:89
 msgid ""
 "Output file. If no output is specified then: if the output is meant to be a "
 "video then a video called 'out.mkv' will be created in the input directory; "
@@ -70,16 +71,16 @@ msgstr ""
 "создан каталог с именем 'out'. Примечание: выбранное расширение выходного "
 "файла определяет кодировку файла."
 
-#: tools/effmpeg/cli.py:89
+#: tools/effmpeg/cli.py:102
 msgid "Path to reference video if 'input' was not a video."
 msgstr "Путь к опорному видео, если 'input' не является видео."
 
-#: tools/effmpeg/cli.py:95 tools/effmpeg/cli.py:105 tools/effmpeg/cli.py:142
-#: tools/effmpeg/cli.py:171
+#: tools/effmpeg/cli.py:108 tools/effmpeg/cli.py:118 tools/effmpeg/cli.py:156
+#: tools/effmpeg/cli.py:185
 msgid "output"
 msgstr "выход"
 
-#: tools/effmpeg/cli.py:97
+#: tools/effmpeg/cli.py:110
 msgid ""
 "Provide video fps. Can be an integer, float or fraction. Negative values "
 "will will make the program try to get the fps from the input or reference "
@@ -89,7 +90,7 @@ msgstr ""
 "плавающей цифрой или дробью. Отрицательные значения заставят программу "
 "попытаться получить fps из входного или опорного видео."
 
-#: tools/effmpeg/cli.py:107
+#: tools/effmpeg/cli.py:120
 msgid ""
 "Image format that extracted images should be saved as. '.bmp' will offer the "
 "fastest extraction speed, but will take the most storage space. '.png' will "
@@ -99,11 +100,11 @@ msgstr ""
 "'.bmp' обеспечивает самую высокую скорость извлечения, но занимает больше "
 "всего места в памяти. '.png' будет медленнее, но займет меньше места."
 
-#: tools/effmpeg/cli.py:114 tools/effmpeg/cli.py:123 tools/effmpeg/cli.py:132
+#: tools/effmpeg/cli.py:127 tools/effmpeg/cli.py:136 tools/effmpeg/cli.py:145
 msgid "clip"
 msgstr "клип"
 
-#: tools/effmpeg/cli.py:116
+#: tools/effmpeg/cli.py:129
 msgid ""
 "Enter the start time from which an action is to be applied. Default: "
 "00:00:00, in HH:MM:SS format. You can also enter the time with or without "
@@ -113,7 +114,7 @@ msgstr ""
 "00:00:00, в формате ЧЧ:ММ:СС. Вы также можете ввести время с двоеточием или "
 "без него, например, 00:0000 или 026010."
 
-#: tools/effmpeg/cli.py:125
+#: tools/effmpeg/cli.py:138
 msgid ""
 "Enter the end time to which an action is to be applied. If both an end time "
 "and duration are set, then the end time will be used and the duration will "
@@ -124,7 +125,7 @@ msgstr ""
 "окончания, а продолжительность будет игнорироваться. По умолчанию: 00:00:00, "
 "в формате ЧЧ:ММ:СС."
 
-#: tools/effmpeg/cli.py:134
+#: tools/effmpeg/cli.py:147
 msgid ""
 "Enter the duration of the chosen action, for example if you enter 00:00:10 "
 "for slice, then the first 10 seconds after and including the start time will "
@@ -137,7 +138,7 @@ msgstr ""
 "СС. Вы также можете ввести время с двоеточием или без него, например, "
 "00:0000 или 026010."
 
-#: tools/effmpeg/cli.py:144
+#: tools/effmpeg/cli.py:158
 msgid ""
 "Mux the audio from the reference video into the input video. This option is "
 "only used for the 'gen-vid' action. 'mux-audio' action has this turned on "
@@ -146,11 +147,11 @@ msgstr ""
 "Mux аудио из опорного видео во входное видео. Эта опция используется только "
 "для действия 'gen-vid'. Действие 'mux-audio' включает эту опцию неявно."
 
-#: tools/effmpeg/cli.py:155 tools/effmpeg/cli.py:165
+#: tools/effmpeg/cli.py:169 tools/effmpeg/cli.py:179
 msgid "rotate"
 msgstr "поворот"
 
-#: tools/effmpeg/cli.py:157
+#: tools/effmpeg/cli.py:171
 msgid ""
 "Transpose the video. If transpose is set, then degrees will be ignored. For "
 "cli you can enter either the number or the long command name, e.g. to use "
@@ -161,19 +162,19 @@ msgstr ""
 "длинное имя команды, например, для использования (1, 90 по часовой стрелке) -"
 "tr 1 или -tr 90 по часовой стрелке"
 
-#: tools/effmpeg/cli.py:166
+#: tools/effmpeg/cli.py:180
 msgid "Rotate the video clockwise by the given number of degrees."
 msgstr "Поверните видео по часовой стрелке на заданное количество градусов."
 
-#: tools/effmpeg/cli.py:173
+#: tools/effmpeg/cli.py:187
 msgid "Set the new resolution scale if the chosen action is 'rescale'."
 msgstr "Установите новый масштаб разрешения, если выбрано действие 'rescale'."
 
-#: tools/effmpeg/cli.py:178 tools/effmpeg/cli.py:186
+#: tools/effmpeg/cli.py:192 tools/effmpeg/cli.py:200
 msgid "settings"
 msgstr "настройки"
 
-#: tools/effmpeg/cli.py:180
+#: tools/effmpeg/cli.py:194
 msgid ""
 "Reduces output verbosity so that only serious errors are printed. If both "
 "quiet and verbose are set, verbose will override quiet."
@@ -181,7 +182,7 @@ msgstr ""
 "Уменьшает многословность вывода, чтобы выводились только серьезные ошибки. "
 "Если заданы и quiet, и verbose, то verbose будет преобладать над quiet."
 
-#: tools/effmpeg/cli.py:188
+#: tools/effmpeg/cli.py:202
 msgid ""
 "Increases output verbosity. If both quiet and verbose are set, verbose will "
 "override quiet."

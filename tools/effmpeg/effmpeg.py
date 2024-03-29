@@ -17,7 +17,7 @@ import imageio_ffmpeg as im_ffm
 from ffmpy import FFmpeg, FFRuntimeError
 
 # faceswap imports
-from lib.utils import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
+from lib.utils import handle_deprecated_cliopts, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
@@ -149,7 +149,7 @@ class Effmpeg():
 
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.args = arguments
+        self.args = handle_deprecated_cliopts(arguments)
         self.exe = im_ffm.get_ffmpeg_exe()
         self.input = DataItem()
         self.output = DataItem()

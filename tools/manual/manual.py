@@ -18,7 +18,7 @@ from lib.gui.control_helper import ControlPanel
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.image import SingleFrameLoader, read_image_meta
 from lib.multithreading import MultiThread
-from lib.utils import VIDEO_EXTENSIONS
+from lib.utils import handle_deprecated_cliopts, VIDEO_EXTENSIONS
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
 from .detected_faces import DetectedFaces
@@ -52,6 +52,7 @@ class Manual(tk.Tk):
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s')", self.__class__.__name__, arguments)
         super().__init__()
+        arguments = handle_deprecated_cliopts(arguments)
         self._validate_non_faces(arguments.frames)
 
         self._initialize_tkinter()

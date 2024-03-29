@@ -1,29 +1,31 @@
 # SOME DESCRIPTIVE TITLE.
-# Copyright (C) YEAR ORGANIZATION
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
+#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2021-02-18 23:34-0000\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-03-28 23:50+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=cp1252\n"
+"Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: pygettext.py 1.5\n"
-
 
 #: tools/effmpeg/cli.py:15
 msgid "This command allows you to easily execute common ffmpeg tasks."
 msgstr ""
 
-#: tools/effmpeg/cli.py:24
+#: tools/effmpeg/cli.py:52
 msgid "A wrapper for ffmpeg for performing image <> video converting."
 msgstr ""
 
-#: tools/effmpeg/cli.py:51
+#: tools/effmpeg/cli.py:64
 msgid ""
 "R|Choose which action you want ffmpeg ffmpeg to do.\n"
 "L|'extract': turns videos into images \n"
@@ -36,80 +38,110 @@ msgid ""
 "L|'slice' cuts a portion of the video into a separate video file."
 msgstr ""
 
-#: tools/effmpeg/cli.py:65
+#: tools/effmpeg/cli.py:78
 msgid "Input file."
 msgstr ""
 
-#: tools/effmpeg/cli.py:66 tools/effmpeg/cli.py:73 tools/effmpeg/cli.py:87
+#: tools/effmpeg/cli.py:79 tools/effmpeg/cli.py:86 tools/effmpeg/cli.py:100
 msgid "data"
 msgstr ""
 
-#: tools/effmpeg/cli.py:76
-msgid "Output file. If no output is specified then: if the output is meant to be a video then a video called 'out.mkv' will be created in the input directory; if the output is meant to be a directory then a directory called 'out' will be created inside the input directory. Note: the chosen output file extension will determine the file encoding."
+#: tools/effmpeg/cli.py:89
+msgid ""
+"Output file. If no output is specified then: if the output is meant to be a "
+"video then a video called 'out.mkv' will be created in the input directory; "
+"if the output is meant to be a directory then a directory called 'out' will "
+"be created inside the input directory. Note: the chosen output file "
+"extension will determine the file encoding."
 msgstr ""
 
-#: tools/effmpeg/cli.py:89
+#: tools/effmpeg/cli.py:102
 msgid "Path to reference video if 'input' was not a video."
 msgstr ""
 
-#: tools/effmpeg/cli.py:95 tools/effmpeg/cli.py:105 tools/effmpeg/cli.py:142
-#: tools/effmpeg/cli.py:171
+#: tools/effmpeg/cli.py:108 tools/effmpeg/cli.py:118 tools/effmpeg/cli.py:156
+#: tools/effmpeg/cli.py:185
 msgid "output"
 msgstr ""
 
-#: tools/effmpeg/cli.py:97
-msgid "Provide video fps. Can be an integer, float or fraction. Negative values will will make the program try to get the fps from the input or reference videos."
+#: tools/effmpeg/cli.py:110
+msgid ""
+"Provide video fps. Can be an integer, float or fraction. Negative values "
+"will will make the program try to get the fps from the input or reference "
+"videos."
 msgstr ""
 
-#: tools/effmpeg/cli.py:107
-msgid "Image format that extracted images should be saved as. '.bmp' will offer the fastest extraction speed, but will take the most storage space. '.png' will be slower but will take less storage."
+#: tools/effmpeg/cli.py:120
+msgid ""
+"Image format that extracted images should be saved as. '.bmp' will offer the "
+"fastest extraction speed, but will take the most storage space. '.png' will "
+"be slower but will take less storage."
 msgstr ""
 
-#: tools/effmpeg/cli.py:114 tools/effmpeg/cli.py:123 tools/effmpeg/cli.py:132
+#: tools/effmpeg/cli.py:127 tools/effmpeg/cli.py:136 tools/effmpeg/cli.py:145
 msgid "clip"
 msgstr ""
 
-#: tools/effmpeg/cli.py:116
-msgid "Enter the start time from which an action is to be applied. Default: 00:00:00, in HH:MM:SS format. You can also enter the time with or without the colons, e.g. 00:0000 or 026010."
+#: tools/effmpeg/cli.py:129
+msgid ""
+"Enter the start time from which an action is to be applied. Default: "
+"00:00:00, in HH:MM:SS format. You can also enter the time with or without "
+"the colons, e.g. 00:0000 or 026010."
 msgstr ""
 
-#: tools/effmpeg/cli.py:125
-msgid "Enter the end time to which an action is to be applied. If both an end time and duration are set, then the end time will be used and the duration will be ignored. Default: 00:00:00, in HH:MM:SS."
+#: tools/effmpeg/cli.py:138
+msgid ""
+"Enter the end time to which an action is to be applied. If both an end time "
+"and duration are set, then the end time will be used and the duration will "
+"be ignored. Default: 00:00:00, in HH:MM:SS."
 msgstr ""
 
-#: tools/effmpeg/cli.py:134
-msgid "Enter the duration of the chosen action, for example if you enter 00:00:10 for slice, then the first 10 seconds after and including the start time will be cut out into a new video. Default: 00:00:00, in HH:MM:SS format. You can also enter the time with or without the colons, e.g. 00:0000 or 026010."
+#: tools/effmpeg/cli.py:147
+msgid ""
+"Enter the duration of the chosen action, for example if you enter 00:00:10 "
+"for slice, then the first 10 seconds after and including the start time will "
+"be cut out into a new video. Default: 00:00:00, in HH:MM:SS format. You can "
+"also enter the time with or without the colons, e.g. 00:0000 or 026010."
 msgstr ""
 
-#: tools/effmpeg/cli.py:144
-msgid "Mux the audio from the reference video into the input video. This option is only used for the 'gen-vid' action. 'mux-audio' action has this turned on implicitly."
+#: tools/effmpeg/cli.py:158
+msgid ""
+"Mux the audio from the reference video into the input video. This option is "
+"only used for the 'gen-vid' action. 'mux-audio' action has this turned on "
+"implicitly."
 msgstr ""
 
-#: tools/effmpeg/cli.py:155 tools/effmpeg/cli.py:165
+#: tools/effmpeg/cli.py:169 tools/effmpeg/cli.py:179
 msgid "rotate"
 msgstr ""
 
-#: tools/effmpeg/cli.py:157
-msgid "Transpose the video. If transpose is set, then degrees will be ignored. For cli you can enter either the number or the long command name, e.g. to use (1, 90Clockwise) -tr 1 or -tr 90Clockwise"
-msgstr ""
-
-#: tools/effmpeg/cli.py:166
-msgid "Rotate the video clockwise by the given number of degrees."
-msgstr ""
-
-#: tools/effmpeg/cli.py:173
-msgid "Set the new resolution scale if the chosen action is 'rescale'."
-msgstr ""
-
-#: tools/effmpeg/cli.py:178 tools/effmpeg/cli.py:186
-msgid "settings"
+#: tools/effmpeg/cli.py:171
+msgid ""
+"Transpose the video. If transpose is set, then degrees will be ignored. For "
+"cli you can enter either the number or the long command name, e.g. to use "
+"(1, 90Clockwise) -tr 1 or -tr 90Clockwise"
 msgstr ""
 
 #: tools/effmpeg/cli.py:180
-msgid "Reduces output verbosity so that only serious errors are printed. If both quiet and verbose are set, verbose will override quiet."
+msgid "Rotate the video clockwise by the given number of degrees."
 msgstr ""
 
-#: tools/effmpeg/cli.py:188
-msgid "Increases output verbosity. If both quiet and verbose are set, verbose will override quiet."
+#: tools/effmpeg/cli.py:187
+msgid "Set the new resolution scale if the chosen action is 'rescale'."
 msgstr ""
 
+#: tools/effmpeg/cli.py:192 tools/effmpeg/cli.py:200
+msgid "settings"
+msgstr ""
+
+#: tools/effmpeg/cli.py:194
+msgid ""
+"Reduces output verbosity so that only serious errors are printed. If both "
+"quiet and verbose are set, verbose will override quiet."
+msgstr ""
+
+#: tools/effmpeg/cli.py:202
+msgid ""
+"Increases output verbosity. If both quiet and verbose are set, verbose will "
+"override quiet."
+msgstr ""

@@ -5,8 +5,9 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: \n"
-"POT-Creation-Date: 2022-11-24 14:17+0900\n"
-"PO-Revision-Date: 2023-04-11 15:30+0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-03-28 23:55+0000\n"
+"PO-Revision-Date: 2024-03-29 00:07+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ru\n"
@@ -16,9 +17,9 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 3.2.2\n"
+"X-Generator: Poedit 3.4.2\n"
 
-#: tools/manual\cli.py:13
+#: tools/manual/cli.py:13
 msgid ""
 "This command lets you perform various actions on frames, faces and "
 "alignments files using visual tools."
@@ -26,7 +27,7 @@ msgstr ""
 "Эта команда позволяет выполнять различные действия с кадрами, гранями и "
 "файлами выравнивания с помощью визуальных инструментов."
 
-#: tools/manual\cli.py:23
+#: tools/manual/cli.py:23
 msgid ""
 "A tool to perform various actions on frames, faces and alignments files "
 "using visual tools"
@@ -34,18 +35,18 @@ msgstr ""
 "Инструмент для выполнения различных действий с кадрами, лицами и файлами "
 "выравнивания с помощью визуальных инструментов"
 
-#: tools/manual\cli.py:35 tools/manual\cli.py:43
+#: tools/manual/cli.py:35 tools/manual/cli.py:44
 msgid "data"
 msgstr "данные"
 
-#: tools/manual\cli.py:37
+#: tools/manual/cli.py:38
 msgid ""
 "Path to the alignments file for the input, if not at the default location"
 msgstr ""
 "Путь к файлу выравниваний для входных данных, если он не находится в месте "
 "по умолчанию"
 
-#: tools/manual\cli.py:44
+#: tools/manual/cli.py:46
 msgid ""
 "Video file or directory containing source frames that faces were extracted "
 "from."
@@ -53,11 +54,11 @@ msgstr ""
 "Видеофайл или папка, содержащая исходные кадры, из которых были извлечены "
 "лица."
 
-#: tools/manual\cli.py:51 tools/manual\cli.py:59
+#: tools/manual/cli.py:53 tools/manual/cli.py:62
 msgid "options"
 msgstr "опции"
 
-#: tools/manual\cli.py:52
+#: tools/manual/cli.py:55
 msgid ""
 "Force regeneration of the low resolution jpg thumbnails in the alignments "
 "file."
@@ -65,7 +66,7 @@ msgstr ""
 "Принудительное восстановление миниатюр jpg низкого разрешения в файле "
 "выравнивания."
 
-#: tools/manual\cli.py:60
+#: tools/manual/cli.py:64
 msgid ""
 "The process attempts to speed up generation of thumbnails by extracting from "
 "the video in parallel threads. For some videos, this causes the caching "

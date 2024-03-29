@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
+import argparse
 import gettext
 
 from lib.cli.args import FaceSwapArgs
@@ -10,7 +11,6 @@ from lib.utils import IMAGE_EXTENSIONS
 # LOCALES
 _LANG = gettext.translation("tools.effmpeg.cli", localedir="locales", fallback=True)
 _ = _LANG.gettext
-
 
 _HELPTEXT = _("This command allows you to easily execute common ffmpeg tasks.")
 
@@ -102,7 +102,7 @@ class EffmpegArgs(FaceSwapArgs):
             "help": _("Path to reference video if 'input' was not a video."),
             "filetypes": "video"})
         argument_list.append({
-            "opts": ('-fps', '--fps'),
+            "opts": ('-R', '--fps'),
             "type": str,
             "dest": "fps",
             "group": _("output"),
@@ -111,7 +111,7 @@ class EffmpegArgs(FaceSwapArgs):
                       "will will make the program try to get the fps from the input or reference "
                       "videos.")})
         argument_list.append({
-            "opts": ("-ef", "--extract-filetype"),
+            "opts": ("-E", "--extract-filetype"),
             "action": Radio,
             "choices": IMAGE_EXTENSIONS,
             "dest": "extract_ext",
@@ -159,7 +159,7 @@ class EffmpegArgs(FaceSwapArgs):
                       "is only used for the 'gen-vid' action. 'mux-audio' action has this turned "
                       "on implicitly.")})
         argument_list.append({
-            "opts": ('-tr', '--transpose'),
+            "opts": ('-T', '--transpose'),
             "choices": ("(0, 90CounterClockwise&VerticalFlip)",
                         "(1, 90Clockwise)",
                         "(2, 90CounterClockwise)",
@@ -172,14 +172,14 @@ class EffmpegArgs(FaceSwapArgs):
                       "For cli you can enter either the number or the long command name, e.g. to "
                       "use (1, 90Clockwise) -tr 1 or -tr 90Clockwise")})
         argument_list.append({
-            "opts": ('-de', '--degrees'),
+            "opts": ('-D', '--degrees'),
             "type": str,
             "dest": "degrees",
             "default": None,
             "group": _("rotate"),
             "help": _("Rotate the video clockwise by the given number of degrees.")})
         argument_list.append({
-            "opts": ('-sc', '--scale'),
+            "opts": ('-S', '--scale'),
             "type": str,
             "dest": "scale",
             "group": _("output"),
@@ -201,4 +201,35 @@ class EffmpegArgs(FaceSwapArgs):
             "default": False,
             "help": _("Increases output verbosity. If both quiet and verbose are set, verbose "
                       "will override quiet.")})
+        # Deprecated multi-character switches
+        argument_list.append({
+            "opts": ('-fps', ),
+            "type": str,
+            "dest": "depr_fps_fps_R",
+            "help": argparse.SUPPRESS})
+        argument_list.append({
+            "opts": ("-ef", ),
+            "type": str,
+            "choices": IMAGE_EXTENSIONS,
+            "dest": "depr_extract_ext_et_E",
+            "help": argparse.SUPPRESS})
+        argument_list.append({
+            "opts": ('-tr', ),
+            "choices": ("(0, 90CounterClockwise&VerticalFlip)",
+                        "(1, 90Clockwise)",
+                        "(2, 90CounterClockwise)",
+                        "(3, 90Clockwise&VerticalFlip)"),
+            "type": lambda v: __parse_transpose(v),  # pylint:disable=unnecessary-lambda
+            "dest": "depr_transpose_tr_T",
+            "help": argparse.SUPPRESS})
+        argument_list.append({
+            "opts": ('-de', ),
+            "type": str,
+            "dest": "depr_degrees_de_D",
+            "help": argparse.SUPPRESS})
+        argument_list.append({
+            "opts": ('-sc', ),
+            "type": str,
+            "dest": "depr_scale_sc_S",
+            "help": argparse.SUPPRESS})
         return argument_list

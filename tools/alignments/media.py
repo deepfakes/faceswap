@@ -245,8 +245,8 @@ class MediaLoader():
         output_file = os.path.splitext(output_file)[0] + ".png"
         logger.trace("Saving image: '%s'", output_file)  # type: ignore
         if metadata:
-            encoded_image = cv2.imencode(".png", image)[1]
-            encoded_image = png_write_meta(encoded_image.tobytes(), metadata)
+            encoded = cv2.imencode(".png", image)[1]
+            encoded_image = png_write_meta(encoded.tobytes(), metadata)
             with open(output_file, "wb") as out_file:
                 out_file.write(encoded_image)
         else:

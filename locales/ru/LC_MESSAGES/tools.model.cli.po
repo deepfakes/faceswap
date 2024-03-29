@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-06-28 14:05+0100\n"
-"PO-Revision-Date: 2023-04-11 16:02+0700\n"
+"POT-Creation-Date: 2024-03-28 23:51+0000\n"
+"PO-Revision-Date: 2024-03-29 00:07+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ru\n"
@@ -17,7 +17,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
-"X-Generator: Poedit 3.2.2\n"
+"X-Generator: Poedit 3.4.2\n"
 
 #: tools/model/cli.py:13
 msgid "This tool lets you perform actions on saved Faceswap models."
@@ -30,7 +30,7 @@ msgid "A tool for performing actions on Faceswap trained model files"
 msgstr ""
 "Инструмент для выполнения действий над файлами обученных моделей Faceswap"
 
-#: tools/model/cli.py:33
+#: tools/model/cli.py:34
 msgid ""
 "Model directory. A directory containing the model you wish to perform an "
 "action on."
@@ -38,7 +38,7 @@ msgstr ""
 "Папка модели. Папка, содержащая модель, над которой вы хотите выполнить "
 "действие."
 
-#: tools/model/cli.py:41
+#: tools/model/cli.py:43
 msgid ""
 "R|Choose which action you want to perform.\n"
 "L|'inference' - Create an inference only copy of the model. Strips any "
@@ -50,20 +50,20 @@ msgid ""
 "L|'restore' - Restore a model from backup."
 msgstr ""
 "R|Выберите действие, которое вы хотите выполнить.\n"
-"L|'inference' - Создать копию модели только для проведения расчетов. "
-"Удаляет из модели все слои, которые нужны только для обучения. Примечание: "
-"Эта функция предназначена для экспорта модели для использования во внешних "
-"приложениях. Модели, созданные в режиме вывода, не могут быть использованы "
-"в Faceswap. См. опцию 'format' для указания формата вывода модели.\n"
+"L|'inference' - Создать копию модели только для проведения расчетов. Удаляет "
+"из модели все слои, которые нужны только для обучения. Примечание: Эта "
+"функция предназначена для экспорта модели для использования во внешних "
+"приложениях. Модели, созданные в режиме вывода, не могут быть использованы в "
+"Faceswap. См. опцию 'format' для указания формата вывода модели.\n"
 "L|'nan-scan' - Проверить файл модели на наличие NaNs или Infs (недопустимых "
 "данных).\n"
 "L|'restore' - Восстановить модель из резервной копии."
 
-#: tools/model/cli.py:55 tools/model/cli.py:66
+#: tools/model/cli.py:57 tools/model/cli.py:69
 msgid "inference"
 msgstr "вывод"
 
-#: tools/model/cli.py:56
+#: tools/model/cli.py:59
 msgid ""
 "R|The format to save the model as. Note: Only used for 'inference' job.\n"
 "L|'h5' - Standard Keras H5 format. Does not store any custom layer "
@@ -79,10 +79,14 @@ msgstr ""
 "L|'saved-model' - формат сохраненной модели Tensorflow. Содержит всю "
 "информацию, необходимую для загрузки модели вне Faceswap."
 
-#: tools/model/cli.py:67
+#: tools/model/cli.py:71
+#, fuzzy
+#| msgid ""
+#| "Only used for 'inference' job. Generate the inference model for B -> A "
+#| "instead of A -> B."
 msgid ""
-"Only used for 'inference' job. Generate the inference model for B -> A "
+"Only used for 'inference' job. Generate the inference model for B -> A  "
 "instead of A -> B."
 msgstr ""
-"Используется только для задания 'inference'. Создайте модель вывода для B -"
-"> A вместо A -> B."
+"Используется только для задания 'inference'. Создайте модель вывода для B -> "
+"A вместо A -> B."

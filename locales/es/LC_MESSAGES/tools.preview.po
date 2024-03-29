@@ -5,25 +5,26 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
-"POT-Creation-Date: 2021-02-18 23:09-0000\n"
-"PO-Revision-Date: 2021-03-19 14:28+0000\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-03-28 23:53+0000\n"
+"PO-Revision-Date: 2024-03-29 00:00+0000\n"
+"Last-Translator: \n"
 "Language-Team: tokafondo\n"
+"Language: es_ES\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 2.3\n"
-"Last-Translator: \n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"Language: es_ES\n"
+"Generated-By: pygettext.py 1.5\n"
+"X-Generator: Poedit 3.4.2\n"
 
-#: tools/preview/cli.py:14
+#: tools/preview/cli.py:15
 msgid "This command allows you to preview swaps to tweak convert settings."
 msgstr ""
 "Este comando permite previsualizar los intercambios para ajustar la "
 "configuración de la conversión."
 
-#: tools/preview/cli.py:23
+#: tools/preview/cli.py:30
 msgid ""
 "Preview tool\n"
 "Allows you to configure your convert settings with a live preview"
@@ -31,11 +32,11 @@ msgstr ""
 "Herramienta de vista previa\n"
 "Permite configurar los ajustes de conversión con una vista previa en directo"
 
-#: tools/preview/cli.py:33 tools/preview/cli.py:42 tools/preview/cli.py:49
+#: tools/preview/cli.py:47 tools/preview/cli.py:57 tools/preview/cli.py:65
 msgid "data"
 msgstr "datos"
 
-#: tools/preview/cli.py:35
+#: tools/preview/cli.py:50
 msgid ""
 "Input directory or video. Either a directory containing the image files you "
 "wish to process or path to a video file."
@@ -43,14 +44,14 @@ msgstr ""
 "Directorio o vídeo de entrada. Un directorio que contenga los archivos de "
 "imagen que desea procesar o la ruta a un archivo de vídeo."
 
-#: tools/preview/cli.py:44
+#: tools/preview/cli.py:60
 msgid ""
 "Path to the alignments file for the input, if not at the default location"
 msgstr ""
-"Ruta del archivo de alineaciones para la entrada, si no está en la "
-"ubicación por defecto"
+"Ruta del archivo de alineaciones para la entrada, si no está en la ubicación "
+"por defecto"
 
-#: tools/preview/cli.py:51
+#: tools/preview/cli.py:68
 msgid ""
 "Model directory. A directory containing the trained model you wish to "
 "process."
@@ -58,31 +59,35 @@ msgstr ""
 "Directorio del modelo. Un directorio que contiene el modelo entrenado que "
 "desea procesar."
 
-#: tools/preview/cli.py:58
+#: tools/preview/cli.py:74
 msgid "Swap the model. Instead of A -> B, swap B -> A"
-msgstr ""
-"Intercambiar el modelo. En lugar de convertir A en B, convierte B en A"
+msgstr "Intercambiar el modelo. En lugar de convertir A en B, convierte B en A"
 
-#: tools/preview\preview.py:1303
+#: tools/preview/control_panels.py:510
 msgid "Save full config"
 msgstr "Guardar la configuración completa"
 
-#: tools/preview\preview.py:1306
+#: tools/preview/control_panels.py:513
 msgid "Reset full config to default values"
 msgstr "Restablecer la configuración completa a los valores por defecto"
 
-#: tools/preview\preview.py:1309
+#: tools/preview/control_panels.py:516
 msgid "Reset full config to saved values"
 msgstr "Restablecer la configuración completa a los valores guardados"
 
-#: tools/preview\preview.py:1453
-msgid "Save {} config"
-msgstr "Guardar la configuración de {}"
+#: tools/preview/control_panels.py:667
+#, python-brace-format
+msgid "Save {title} config"
+msgstr "Guardar la configuración de {title}"
 
-#: tools/preview\preview.py:1456
-msgid "Reset {} config to default values"
-msgstr "Restablecer la configuración completa de {} a los valores por defecto"
+#: tools/preview/control_panels.py:670
+#, python-brace-format
+msgid "Reset {title} config to default values"
+msgstr ""
+"Restablecer la configuración completa de {title} a los valores por defecto"
 
-#: tools/preview\preview.py:1459
-msgid "Reset {} config to saved values"
-msgstr "Restablecer la configuración completa de {} a los valores guardados"
+#: tools/preview/control_panels.py:673
+#, python-brace-format
+msgid "Reset {title} config to saved values"
+msgstr ""
+"Restablecer la configuración completa de {title} a los valores guardados"

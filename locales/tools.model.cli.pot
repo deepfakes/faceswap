@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-06-28 14:05+0100\n"
+"POT-Creation-Date: 2024-03-28 23:51+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -25,13 +25,13 @@ msgstr ""
 msgid "A tool for performing actions on Faceswap trained model files"
 msgstr ""
 
-#: tools/model/cli.py:33
+#: tools/model/cli.py:34
 msgid ""
 "Model directory. A directory containing the model you wish to perform an "
 "action on."
 msgstr ""
 
-#: tools/model/cli.py:41
+#: tools/model/cli.py:43
 msgid ""
 "R|Choose which action you want to perform.\n"
 "L|'inference' - Create an inference only copy of the model. Strips any "
@@ -43,11 +43,11 @@ msgid ""
 "L|'restore' - Restore a model from backup."
 msgstr ""
 
-#: tools/model/cli.py:55 tools/model/cli.py:66
+#: tools/model/cli.py:57 tools/model/cli.py:69
 msgid "inference"
 msgstr ""
 
-#: tools/model/cli.py:56
+#: tools/model/cli.py:59
 msgid ""
 "R|The format to save the model as. Note: Only used for 'inference' job.\n"
 "L|'h5' - Standard Keras H5 format. Does not store any custom layer "
@@ -56,8 +56,8 @@ msgid ""
 "required to load the model outside of Faceswap."
 msgstr ""
 
-#: tools/model/cli.py:67
+#: tools/model/cli.py:71
 msgid ""
-"Only used for 'inference' job. Generate the inference model for B -> A "
+"Only used for 'inference' job. Generate the inference model for B -> A  "
 "instead of A -> B."
 msgstr ""

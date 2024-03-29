@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-09-23 14:16+0100\n"
-"PO-Revision-Date: 2022-09-23 14:16+0100\n"
+"POT-Creation-Date: 2024-03-28 23:53+0000\n"
+"PO-Revision-Date: 2024-03-29 00:03+0000\n"
 "Last-Translator: \n"
 "Language-Team: tokafondo\n"
 "Language: es_ES\n"
@@ -16,14 +16,14 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 3.0.1\n"
+"X-Generator: Poedit 3.4.2\n"
 
-#: tools/sort/cli.py:14
+#: tools/sort/cli.py:15
 msgid "This command lets you sort images using various methods."
 msgstr ""
 "Este comando le permite ordenar las imágenes utilizando varios métodos."
 
-#: tools/sort/cli.py:20
+#: tools/sort/cli.py:21
 msgid ""
 " Adjust the '-t' ('--threshold') parameter to control the strength of "
 "grouping."
@@ -31,7 +31,7 @@ msgstr ""
 " Ajuste el parámetro '-t' ('--threshold') para controlar la fuerza de la "
 "agrupación."
 
-#: tools/sort/cli.py:21
+#: tools/sort/cli.py:22
 msgid ""
 " Adjust the '-b' ('--bins') parameter to control the number of bins for "
 "grouping. Each image is allocated to a bin by the percentage of color pixels "
@@ -41,7 +41,7 @@ msgstr ""
 "contenedores para agrupar. Cada imagen se asigna a un contenedor por el "
 "porcentaje de píxeles de color que aparecen en la imagen."
 
-#: tools/sort/cli.py:24
+#: tools/sort/cli.py:25
 msgid ""
 " Adjust the '-b' ('--bins') parameter to control the number of bins for "
 "grouping. Each image is allocated to a bin by the number of degrees the face "
@@ -51,7 +51,7 @@ msgstr ""
 "contenedores para agrupar. Cada imagen se asigna a un contenedor por el "
 "número de grados que la cara está orientada desde el centro."
 
-#: tools/sort/cli.py:27
+#: tools/sort/cli.py:28
 msgid ""
 " Adjust the '-b' ('--bins') parameter to control the number of bins for "
 "grouping. The minimum and maximum values are taken for the chosen sort "
@@ -62,15 +62,15 @@ msgstr ""
 "métrica de clasificación elegida. Luego, los contenedores se llenan con los "
 "resultados de la clasificación de grupos."
 
-#: tools/sort/cli.py:31
+#: tools/sort/cli.py:32
 msgid "faces by blurriness."
 msgstr "rostros por desenfoque."
 
-#: tools/sort/cli.py:32
+#: tools/sort/cli.py:33
 msgid "faces by fft filtered blurriness."
 msgstr "caras por borrosidad filtrada fft."
 
-#: tools/sort/cli.py:33
+#: tools/sort/cli.py:34
 msgid ""
 "faces by the estimated distance of the alignments from an 'average' face. "
 "This can be useful for eliminating misaligned faces. Sorts from most like an "
@@ -80,7 +80,7 @@ msgstr ""
 "'promedio'. Esto puede ser útil para eliminar caras desalineadas. Ordena de "
 "más parecido a un rostro promedio a menos parecido a un rostro promedio."
 
-#: tools/sort/cli.py:36
+#: tools/sort/cli.py:37
 msgid ""
 "faces using VGG Face2 by face similarity. This uses a pairwise clustering "
 "algorithm to check the distances between 512 features on every face in your "
@@ -90,23 +90,23 @@ msgstr ""
 "agrupamiento por pares para verificar las distancias entre 512 "
 "características en cada cara de su conjunto y ordenarlas apropiadamente."
 
-#: tools/sort/cli.py:39
+#: tools/sort/cli.py:40
 msgid "faces by their landmarks."
 msgstr "caras por sus puntos de referencia."
 
-#: tools/sort/cli.py:40
+#: tools/sort/cli.py:41
 msgid "Like 'face-cnn' but sorts by dissimilarity."
 msgstr "Como 'face-cnn' pero ordenada por la similitud."
 
-#: tools/sort/cli.py:41
+#: tools/sort/cli.py:42
 msgid "faces by Yaw (rotation left to right)."
 msgstr "caras por guiñada (rotación de izquierda a derecha)."
 
-#: tools/sort/cli.py:42
+#: tools/sort/cli.py:43
 msgid "faces by Pitch (rotation up and down)."
 msgstr "caras por Pitch (rotación arriba y abajo)."
 
-#: tools/sort/cli.py:43
+#: tools/sort/cli.py:44
 msgid ""
 "faces by Roll (rotation). Aligned faces should have a roll value close to "
 "zero. The further the Roll value from zero the higher liklihood the face is "
@@ -116,22 +116,22 @@ msgstr ""
 "balanceo cercano a cero. Cuanto más lejos esté el valor de Roll de cero, "
 "mayor será la probabilidad de que la cara esté desalineada."
 
-#: tools/sort/cli.py:45
+#: tools/sort/cli.py:46
 msgid "faces by their color histogram."
 msgstr "caras por su histograma de color."
 
-#: tools/sort/cli.py:46
+#: tools/sort/cli.py:47
 msgid "Like 'hist' but sorts by dissimilarity."
 msgstr "Como 'hist' pero ordenada por la disimilitud."
 
-#: tools/sort/cli.py:47
+#: tools/sort/cli.py:48
 msgid ""
 "images by the average intensity of the converted grayscale color channel."
 msgstr ""
 "imágenes por la intensidad media del canal de color en escala de grises "
 "convertido."
 
-#: tools/sort/cli.py:48
+#: tools/sort/cli.py:49
 msgid ""
 "images by their number of black pixels. Useful when faces are near borders "
 "and a large part of the image is black."
@@ -139,7 +139,7 @@ msgstr ""
 "imágenes por su número de píxeles negros. Útil cuando las caras están cerca "
 "de los bordes y una gran parte de la imagen es negra."
 
-#: tools/sort/cli.py:50
+#: tools/sort/cli.py:51
 msgid ""
 "images by the average intensity of the converted Y color channel. Bright "
 "lighting and oversaturated images will be ranked first."
@@ -148,7 +148,7 @@ msgstr ""
 "iluminación brillante y las imágenes sobresaturadas se clasificarán en "
 "primer lugar."
 
-#: tools/sort/cli.py:52
+#: tools/sort/cli.py:53
 msgid ""
 "images by the average intensity of the converted Cg color channel. Green "
 "images will be ranked first and red images will be last."
@@ -157,7 +157,7 @@ msgstr ""
 "imágenes verdes se clasificarán primero y las imágenes rojas serán las "
 "últimas."
 
-#: tools/sort/cli.py:54
+#: tools/sort/cli.py:55
 msgid ""
 "images by the average intensity of the converted Co color channel. Orange "
 "images will be ranked first and blue images will be last."
@@ -166,7 +166,7 @@ msgstr ""
 "imágenes naranjas se clasificarán en primer lugar y las imágenes azules en "
 "último lugar."
 
-#: tools/sort/cli.py:56
+#: tools/sort/cli.py:57
 msgid ""
 "images by their size in the original frame. Faces further from the camera "
 "and from lower resolution sources will be sorted first, whilst faces closer "
@@ -177,24 +177,16 @@ msgstr ""
 "las caras más cercanas a la cámara y de fuentes de mayor resolución se "
 "ordenarán en último lugar."
 
-#: tools/sort/cli.py:59
-msgid " option is deprecated. Use 'yaw'"
-msgstr " la opción está en desuso. Usa 'yaw'"
-
-#: tools/sort/cli.py:60
-msgid " option is deprecated. Use 'color-black'"
-msgstr " la opción está en desuso. Usa 'color-black'"
-
-#: tools/sort/cli.py:82
+#: tools/sort/cli.py:81
 msgid "Sort faces using a number of different techniques"
 msgstr "Clasificar los rostros mediante diferentes técnicas"
 
-#: tools/sort/cli.py:92 tools/sort/cli.py:99 tools/sort/cli.py:110
-#: tools/sort/cli.py:148
+#: tools/sort/cli.py:91 tools/sort/cli.py:98 tools/sort/cli.py:110
+#: tools/sort/cli.py:150
 msgid "data"
 msgstr "datos"
 
-#: tools/sort/cli.py:93
+#: tools/sort/cli.py:92
 msgid "Input directory of aligned faces."
 msgstr "Directorio de entrada de caras alineadas."
 
@@ -212,7 +204,7 @@ msgstr ""
 "selecciona 'keep', las imágenes se ordenarán en el lugar, sobrescribiendo el "
 "contenido original de 'input_dir'"
 
-#: tools/sort/cli.py:111
+#: tools/sort/cli.py:112
 msgid ""
 "R|If selected then the input_dir should be a parent folder containing "
 "multiple folders of faces you wish to sort. The faces will be output to "
@@ -222,11 +214,11 @@ msgstr ""
 "varias carpetas de caras que desea ordenar. Las caras se enviarán a "
 "subcarpetas separadas en output_dir"
 
-#: tools/sort/cli.py:120
+#: tools/sort/cli.py:121
 msgid "sort settings"
 msgstr "ajustes de ordenación"
 
-#: tools/sort/cli.py:122
+#: tools/sort/cli.py:124
 msgid ""
 "R|Choose how images are sorted. Selecting a sort method gives the images a "
 "new filename based on the order the image appears within the given method.\n"
@@ -244,17 +236,25 @@ msgstr ""
 "nombres de archivo originales. Seleccionar 'none' para 'sort-by' y 'group-"
 "by' no hará nada"
 
-#: tools/sort/cli.py:135 tools/sort/cli.py:162 tools/sort/cli.py:191
+#: tools/sort/cli.py:136 tools/sort/cli.py:164 tools/sort/cli.py:184
 msgid "group settings"
 msgstr "ajustes de grupo"
 
-#: tools/sort/cli.py:137
+#: tools/sort/cli.py:139
+#, fuzzy
+#| msgid ""
+#| "R|Selecting a group by method will move/copy files into numbered bins "
+#| "based on the selected method.\n"
+#| "L|'none': Don't bin the images. Folders will be sorted by the selected "
+#| "'sort-by' but will not be binned, instead they will be sorted into a "
+#| "single folder.  Selecting 'none' for both 'sort-by' and 'group-by' will "
+#| "do nothing"
 msgid ""
 "R|Selecting a group by method will move/copy files into numbered bins based "
 "on the selected method.\n"
 "L|'none': Don't bin the images. Folders will be sorted by the selected 'sort-"
 "by' but will not be binned, instead they will be sorted into a single "
-"folder.  Selecting 'none' for both 'sort-by' and 'group-by' will do nothing"
+"folder. Selecting 'none' for both 'sort-by' and 'group-by' will do nothing"
 msgstr ""
 "R|Al seleccionar un grupo por método, los archivos se moverán/copiarán en "
 "contenedores numerados según el método seleccionado.\n"
@@ -262,7 +262,7 @@ msgstr ""
 "by' seleccionado, pero no se agruparán, sino que se ordenarán en una sola "
 "carpeta. Seleccionar 'none' para 'sort-by' y 'group-by' no hará nada"
 
-#: tools/sort/cli.py:149
+#: tools/sort/cli.py:152
 msgid ""
 "Whether to keep the original files in their original location. Choosing a "
 "'sort-by' method means that the files have to be renamed. Selecting 'keep' "
@@ -279,7 +279,7 @@ msgstr ""
 "moverán y cambiarán de nombre en función de los criterios de clasificación/"
 "grupo seleccionados."
 
-#: tools/sort/cli.py:164
+#: tools/sort/cli.py:167
 msgid ""
 "R|Float value. Minimum threshold to use for grouping comparison with 'face-"
 "cnn' 'hist' and 'face' methods.\n"
@@ -306,20 +306,29 @@ msgstr ""
 "de muchas carpetas. Valores predeterminados: face-cnn 7.2, hist 0.3, face "
 "0.25"
 
-#: tools/sort/cli.py:181
-msgid "output"
-msgstr "salida"
-
-#: tools/sort/cli.py:182
-msgid ""
-"Deprecated and no longer used. The final processing will be dictated by the "
-"sort/group by methods and whether 'keep_original' is selected."
-msgstr ""
-"En desuso y ya no se usa. El procesamiento final será dictado por los "
-"métodos de ordenación/agrupación y si se selecciona 'keepl'."
-
-#: tools/sort/cli.py:193
-#, python-format
+#: tools/sort/cli.py:187
+#, fuzzy, python-format
+#| msgid ""
+#| "R|Integer value. Used to control the number of bins created for grouping "
+#| "by: any 'blur' methods, 'color' methods or 'face metric' methods "
+#| "('distance', 'size') and 'orientation; methods ('yaw', 'pitch'). For any "
+#| "other grouping methods see the '-t' ('--threshold') option.\n"
+#| "L|For 'face metric' methods the bins are filled, according the the "
+#| "distribution of faces between the minimum and maximum chosen metric.\n"
+#| "L|For 'color' methods the number of bins represents the divider of the "
+#| "percentage of colored pixels. Eg. For a bin number of '5': The first "
+#| "folder will have the faces with 0%% to 20%% colored pixels, second 21%% "
+#| "to 40%%, etc. Any empty bins will be deleted, so you may end up with "
+#| "fewer bins than selected.\n"
+#| "L|For 'blur' methods folder 0 will be the least blurry, while the last "
+#| "folder will be the blurriest.\n"
+#| "L|For 'orientation' methods the number of bins is dictated by how much "
+#| "180 degrees is divided. Eg. If 18 is selected, then each folder will be a "
+#| "10 degree increment. Folder 0 will contain faces looking the most to the "
+#| "left/down whereas the last folder will contain the faces looking the most "
+#| "to the right/up. NB: Some bins may be empty if faces do not fit the "
+#| "criteria.\n"
+#| "Default value: 5"
 msgid ""
 "R|Integer value. Used to control the number of bins created for grouping by: "
 "any 'blur' methods, 'color' methods or 'face metric' methods ('distance', "
@@ -338,7 +347,7 @@ msgid ""
 "degrees is divided. Eg. If 18 is selected, then each folder will be a 10 "
 "degree increment. Folder 0 will contain faces looking the most to the left/"
 "down whereas the last folder will contain the faces looking the most to the "
-"right/up. NB: Some bins may be empty if faces do not fit the criteria.\n"
+"right/up. NB: Some bins may be empty if faces do not fit the criteria. \n"
 "Default value: 5"
 msgstr ""
 "R|Valor entero. Se utiliza para controlar el número de contenedores creados "
@@ -364,11 +373,11 @@ msgstr ""
 "pueden estar vacíos si las caras no se ajustan a los criterios.\n"
 "Valor predeterminado: 5"
 
-#: tools/sort/cli.py:215 tools/sort/cli.py:225
+#: tools/sort/cli.py:207 tools/sort/cli.py:217
 msgid "settings"
 msgstr "ajustes"
 
-#: tools/sort/cli.py:217
+#: tools/sort/cli.py:210
 msgid ""
 "Logs file renaming changes if grouping by renaming, or it logs the file "
 "copying/movement if grouping by folders. If no log file is specified  with "
@@ -380,7 +389,7 @@ msgstr ""
 "se especifica ningún archivo de registro con '--log-file', se creará un "
 "archivo 'sort_log.json' en el directorio de entrada."
 
-#: tools/sort/cli.py:228
+#: tools/sort/cli.py:221
 msgid ""
 "Specify a log file to use for saving the renaming or grouping information. "
 "If specified extension isn't 'json' or 'yaml', then json will be used as the "
@@ -390,6 +399,22 @@ msgstr ""
 "información de renombrado o agrupación. Si la extensión especificada no es "
 "'json' o 'yaml', se utilizará json como serializador, con el nombre de "
 "archivo suministrado. Por defecto: sort_log.json"
+
+#~ msgid " option is deprecated. Use 'yaw'"
+#~ msgstr " la opción está en desuso. Usa 'yaw'"
+
+#~ msgid " option is deprecated. Use 'color-black'"
+#~ msgstr " la opción está en desuso. Usa 'color-black'"
+
+#~ msgid "output"
+#~ msgstr "salida"
+
+#~ msgid ""
+#~ "Deprecated and no longer used. The final processing will be dictated by "
+#~ "the sort/group by methods and whether 'keep_original' is selected."
+#~ msgstr ""
+#~ "En desuso y ya no se usa. El procesamiento final será dictado por los "
+#~ "métodos de ordenación/agrupación y si se selecciona 'keepl'."
 
 #~ msgid "Output directory for sorted aligned faces."
 #~ msgstr "Directorio de salida para las caras alineadas ordenadas."
