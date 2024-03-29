@@ -39,7 +39,9 @@ class Mask(Masker):
 
     def init_model(self) -> None:
         assert self.name is not None and isinstance(self.model_path, str)
+        logging.disable(logging.WARNING)  # Disable compile warning from Keras
         self.model = load_model(self.model_path)
+        logging.disable(logging.NOTSET)
         self.model.make_predict_function()
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")

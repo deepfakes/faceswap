@@ -40,7 +40,9 @@ class Align(Aligner):
         """ Initialize FAN model """
         assert isinstance(self.name, str)
         assert isinstance(self.model_path, str)
+        logging.disable(logging.WARNING)  # Disable compile warning from Keras
         self.model = load_model(self.model_path, compile=False)
+        logging.disable(logging.NOTSET)
         self.model.make_predict_function()
         # Feed a placeholder so Aligner is primed for Manual tool
         placeholder_shape = (self.batchsize, self.input_size, self.input_size, 3)
