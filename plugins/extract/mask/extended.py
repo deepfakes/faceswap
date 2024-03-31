@@ -41,9 +41,9 @@ class Mask(Masker):
         for mask, face in zip(feed, faces):
             parts = self.parse_parts(np.array(face.landmarks))
             for item in parts:
-                item = np.rint(np.concatenate(item)).astype("int32")
-                hull = cv2.convexHull(item)
-                cv2.fillConvexPoly(mask, hull, 1.0, lineType=cv2.LINE_AA)
+                a_item = np.rint(np.concatenate(item)).astype("int32")
+                hull = cv2.convexHull(a_item)
+                cv2.fillConvexPoly(mask, hull, [1.0], lineType=cv2.LINE_AA)
         return feed
 
     def process_output(self, batch: BatchType) -> None:

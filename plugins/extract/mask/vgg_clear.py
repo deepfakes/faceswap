@@ -15,7 +15,7 @@ from lib.logger import parse_class_init
 from ._base import BatchType, Masker, MaskerBatch
 
 if T.TYPE_CHECKING:
-    from torch import Tensor
+    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
@@ -181,17 +181,17 @@ class _ConvBlock():
         self._filters = filters
         self._iterator = range(1, iterations + 1)
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the convolutional loop.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input tensor to the block
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output tensor from the convolutional block
         """
         var_x = inputs

@@ -11,7 +11,7 @@ import typing as T
 import numpy as np
 
 import keras.backend as K
-from keras.layers import (  # pylint:disable=import-error
+from keras.layers import (
     Activation, Add, BatchNormalization, Concatenate, Conv2D, GlobalAveragePooling2D, Input,
     MaxPooling2D, Multiply, Reshape, UpSampling2D, ZeroPadding2D)
 from keras.models import Model
@@ -21,7 +21,7 @@ from plugins.extract._base import _get_config
 from ._base import BatchType, Masker, MaskerBatch
 
 if T.TYPE_CHECKING:
-    from torch import Tensor
+    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ class Mask(Masker):
         batch.feed = ((np.array([T.cast(np.ndarray, feed.face)[..., :3]
                                  for feed in batch.feed_faces],
                                 dtype="float32") / 255.0) - mean) / std
-        logger.trace("feed shape: %s", batch.feed.shape)  # type:ignore
+        logger.trace("feed shape: %s", batch.feed.shape)  # type:ignore[attr-defined]
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions """
@@ -231,17 +231,17 @@ class ConvBn():
         self._prefix = f"{prefix}." if prefix else prefix
         self._start_idx = start_idx
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the Convolutional Batch Normalization block.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         var_x = inputs
@@ -271,12 +271,16 @@ class ResNet18():
     def __init__(self):
         self._feature_index = 1 if K.image_data_format() == "channels_first" else -1
 
-    def _basic_block(self, inputs: Tensor, prefix: str, filters: int, strides: int = 1) -> Tensor:
+    def _basic_block(self,
+                     inputs: KerasTensor,
+                     prefix: str,
+                     filters: int,
+                     strides: int = 1) -> KerasTensor:
         """ The basic building block for ResNet 18.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
         prefix: str
             The prefix to name the layers within the block
@@ -288,7 +292,7 @@ class ResNet18():
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         res = ConvBn(filters, strides=strides, padding=1, prefix=prefix)(inputs)
@@ -310,16 +314,16 @@ class ResNet18():
         return var_x
 
     def _basic_layer(self,
-                     inputs: Tensor,
+                     inputs: KerasTensor,
                      prefix: str,
                      filters: int,
                      num_blocks: int,
-                     strides: int = 1) -> Tensor:
+                     strides: int = 1) -> KerasTensor:
         """ The basic layer for ResNet 18. Recursively builds from :func:`_basic_block`.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
         prefix: str
             The prefix to name the layers within the block
@@ -333,7 +337,7 @@ class ResNet18():
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         var_x = self._basic_block(inputs, f"{prefix}.0", filters, strides=strides)
@@ -341,17 +345,17 @@ class ResNet18():
             var_x = self._basic_block(var_x, f"{prefix}.{i + 1}", filters, strides=1)
         return var_x
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the ResNet 18 block.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         var_x = ConvBn(64, kernel_size=7, strides=2, padding=3, prefix="cp.resnet")(inputs)
@@ -378,19 +382,19 @@ class AttentionRefinementModule():
     def __init__(self, filters: int) -> None:
         self._filters = filters
 
-    def __call__(self, inputs: Tensor, feats: int) -> Tensor:
+    def __call__(self, inputs: KerasTensor, feats: int) -> KerasTensor:
         """ Call the Attention Refinement block.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
         feats: int
             The number of features. Used for naming.
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         prefix = f"cp.arm{feats}"
@@ -409,17 +413,17 @@ class ContextPath():
     def __init__(self):
         self._resnet = ResNet18()
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the Context Path block.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         feat8, feat16, feat32 = self._resnet(inputs)
@@ -455,17 +459,17 @@ class FeatureFusionModule():
     def __init__(self, filters: int) -> None:
         self._filters = filters
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the Feature Fusion block.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         feat = Concatenate(name="ffm.concat")(inputs)
@@ -505,17 +509,17 @@ class BiSeNetOutput():
         self._num_classes = num_classes
         self._label = label
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the BiSeNet Output block.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         var_x = ConvBn(self._filters, prefix=f"conv_out{self._label}.conv", start_idx=-1)(inputs)
@@ -553,7 +557,7 @@ class BiSeNet():
         self._model = self._load_model(weights_path)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _load_model(self, weights_path: str) -> Model:  # pylint:disable=too-many-locals
+    def _load_model(self, weights_path: str) -> Model:
         """ Definition of the BiSeNet-FP  Model.
 
         Parameters
@@ -571,23 +575,16 @@ class BiSeNet():
         features = self._cp(input_)  # res8, cp8, cp16
         feat_fuse = FeatureFusionModule(256)([features[0], features[1]])
 
-        feat_out = BiSeNetOutput(256, self._num_classes)(feat_fuse)
-        feat_out16 = BiSeNetOutput(64, self._num_classes, label="16")(features[1])
-        feat_out32 = BiSeNetOutput(64, self._num_classes, label="32")(features[2])
+        feats = [BiSeNetOutput(256, self._num_classes)(feat_fuse),
+                 BiSeNetOutput(64, self._num_classes, label="16")(features[1]),
+                 BiSeNetOutput(64, self._num_classes, label="32")(features[2])]
 
         height, width = input_.shape[1:3]
-        f_h, f_w = feat_out.shape[1:3]
-        f_h16, f_w16 = feat_out16.shape[1:3]
-        f_h32, f_w32 = feat_out32.shape[1:3]
+        output = [UpSampling2D(size=(height // feat.shape[1], width // feat.shape[2]),
+                               interpolation="bilinear")(feat)
+                  for feat in feats]
 
-        feat_out = UpSampling2D(size=(height // f_h, width // f_w),
-                                interpolation="bilinear")(feat_out)
-        feat_out16 = UpSampling2D(size=(height // f_h16, width // f_w16),
-                                  interpolation="bilinear")(feat_out16)
-        feat_out32 = UpSampling2D(size=(height // f_h32, width // f_w32),
-                                  interpolation="bilinear")(feat_out32)
-
-        retval = Model(input_, [feat_out, feat_out16, feat_out32])
+        retval = Model(input_, output)
         retval.load_weights(weights_path)
         retval.make_predict_function()
         return retval

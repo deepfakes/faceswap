@@ -2,6 +2,7 @@
 """ MTCNN Face detection plugin """
 from __future__ import annotations
 import logging
+import typing as T
 
 import cv2
 import numpy as np
@@ -28,19 +29,26 @@ class Detect(Detector):
         self.vram = 128 if not self.config["cpu"] else 0  # 66 in testing
         self.vram_per_batch = 64 if not self.config["cpu"] else 0  # ~50 in testing
         self.batchsize = self.config["batch-size"]
-        self.kwargs = self._validate_kwargs()
+        self._kwargs = self._validate_kwargs()
         self.color_format = "RGB"
 
-    def _validate_kwargs(self) -> dict[str, int | float | list[float]]:
+    def _validate_kwargs(self) -> dict[T.Literal["minsize", "threshold", "factor", "input_size"],
+                                       int | float | list[float]]:
         """ Validate that config options are correct. If not reset to default """
         valid = True
         threshold = [self.config["threshold_1"],
                      self.config["threshold_2"],
                      self.config["threshold_3"]]
-        kwargs = {"minsize": self.config["minsize"],
-                  "threshold": threshold,
-                  "factor": self.config["scalefactor"],
-                  "input_size": self.input_size}
+        kwargs: dict[T.Literal["minsize", "threshold", "factor", "input_size"],
+                     int | float | list[float]] = {"minsize": self.config["minsize"],
+                                                   "threshold": threshold,
+                                                   "factor": self.config["scalefactor"],
+                                                   "input_size": self.input_size}
+
+        assert isinstance(kwargs["input_size"], int)
+        assert isinstance(kwargs["minsize"], int)
+        assert isinstance(kwargs["threshold"], list)
+        assert isinstance(kwargs["factor"], float)
 
         if kwargs["minsize"] < 10:
             valid = False
@@ -62,8 +70,18 @@ class Detect(Detector):
         placeholder_shape = (self.batchsize, self.input_size, self.input_size, 3)
         placeholder = np.zeros(placeholder_shape, dtype="float32")
 
+        assert isinstance(self._kwargs["input_size"], int)
+        assert isinstance(self._kwargs["minsize"], int)
+        assert isinstance(self._kwargs["threshold"], list)
+        assert isinstance(self._kwargs["factor"], float)
+
         with self.get_device_context(self.config["cpu"]):
-            self.model = MTCNN(self.model_path, self.batchsize, **self.kwargs)
+            self.model = MTCNN(self.model_path,
+                               self.batchsize,
+                               input_size=self._kwargs["input_size"],
+                               minsize=self._kwargs["minsize"],
+                               threshold=self._kwargs["threshold"],
+                               factor=self._kwargs["factor"])
             self.model.detect_faces(placeholder)
 
     def process_input(self, batch: BatchType) -> None:
@@ -92,7 +110,7 @@ class Detect(Detector):
         assert isinstance(self.model, MTCNN)
         with self.get_device_context(self.config["cpu"]):
             prediction, points = self.model.detect_faces(feed)
-        logger.trace("prediction: %s, mtcnn_points: %s",  # type:ignore
+        logger.trace("prediction: %s, mtcnn_points: %s",  # type:ignore[attr-defined]
                      prediction, points)
         return prediction
 
@@ -229,7 +247,7 @@ class PNet():
             scales += [var_m * np.power(factor, factor_count)]
             minl = minl * factor
             factor_count += 1
-        logger.trace(scales)  # type:ignore
+        logger.trace(scales)  # type:ignore[attr-defined]
         return scales
 
     def _detect_face_12net(self,

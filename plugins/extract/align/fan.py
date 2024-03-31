@@ -220,8 +220,6 @@ class Align(Aligner):
             The predictions from the aligner
         """
         logger.trace("Predicting Landmarks")  # type:ignore[attr-defined]
-        # TODO Remove lazy transpose and change points from predict to use the correct
-        # order
         retval = self.model.predict(feed,
                                     verbose=False,
                                     batch_size=self.batchsize)[-1].transpose(0, 3, 1, 2)

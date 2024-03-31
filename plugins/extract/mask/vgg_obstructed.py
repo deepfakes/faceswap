@@ -15,7 +15,7 @@ from lib.logger import parse_class_init
 from ._base import BatchType, Masker, MaskerBatch
 
 if T.TYPE_CHECKING:
-    from torch import Tensor
+    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class Mask(Masker):
         assert isinstance(batch, MaskerBatch)
         input_ = [T.cast(np.ndarray, feed.face)[..., :3] for feed in batch.feed_faces]
         batch.feed = input_ - np.mean(input_, axis=(1, 2))[:, None, None, :]
-        logger.trace("feed shape: %s", batch.feed.shape)  # type:ignore
+        logger.trace("feed shape: %s", batch.feed.shape)  # type:ignore[attr-defined]
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions """
@@ -180,17 +180,17 @@ class _ConvBlock():
         self._filters = filters
         self._iterator = range(1, iterations + 1)
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the convolutional loop.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input tensor to the block
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output tensor from the convolutional block
         """
         var_x = inputs
@@ -224,17 +224,17 @@ class _ScorePool():
         self._cropping = ((crop, crop), (crop, crop))
         self._scale = scale
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Score pool block.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input tensor to the block
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output tensor from the score pool block
         """
         var_x = Lambda(lambda x: x * self._scale, name="scale" + self._name)(inputs)

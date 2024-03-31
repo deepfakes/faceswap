@@ -11,6 +11,7 @@ import keras
 import numpy as np
 import torch
 
+from lib.logger import parse_class_init
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
 from lib.utils import GetModel
@@ -28,7 +29,6 @@ if T.TYPE_CHECKING:
     from .recognition._base import RecogBatch
 
 logger = logging.getLogger(__name__)
-# TODO Run with warnings mode
 
 
 def _get_config(plugin_name: str, configfile: str | None = None) -> dict[str, T.Any]:
@@ -84,6 +84,43 @@ class ExtractorBatch:
     feed: np.ndarray = np.array([])
     prediction: np.ndarray = np.array([])
     data: list[dict[str, T.Any]] = field(default_factory=list)
+
+
+@dataclass
+class PluginInfo:
+    """ Dataclass to hold information about a plugin instance
+
+    Parameters
+    ----------
+    instance: int
+        The instance id of the plugin
+    plugin_type: Literal["align", "detect", "mask", "recognition"] | None, optional
+        The plugin type that the plugin instance is. Default: ``None``
+    is_initialized: bool, optional
+        ``True`` if the plugin is initialized. Default: ``False``
+    """
+    instance: int
+    plugin_type: T.Literal["align", "detect", "mask", "recognition"] | None = None
+    is_initialized: bool = False
+
+
+@dataclass
+class SplitTracker:
+    """ Dataclass to hold objects for splitting frame's detected faces and rejoining them for
+    post-detector pliugins
+
+    Parameters
+    ----------
+    faces_per_filename: dict[str, int]
+        Tracking of faces per filename for recompiling batches
+    rollover: :class:`ExtractMedia` | None
+        Batch rollover items
+    output_faces: list[:class:`~lib.align.detected_face.DetectedFace`]
+        Recompiled output faces from the plugin
+    """
+    faces_per_filename: dict[str, int]
+    rollover: ExtractMedia | None
+    output_faces: list[DetectedFace]
 
 
 class Extractor():
@@ -148,11 +185,11 @@ class Extractor():
                  model_filename: str | list[str] | None = None,
                  configfile: str | None = None,
                  instance: int = 0) -> None:
-        logger.debug("Initializing %s: (git_model_id: %s, model_filename: %s, configfile: %s, "
-                     "instance: %s, )", self.__class__.__name__, git_model_id, model_filename,
-                     configfile, instance)
-        self._is_initialized = False
-        self._instance = instance
+        logger.debug(parse_class_init(locals()))
+
+        self._info = PluginInfo(instance=instance)
+        """:class:`PluginInfo`: holds information about the plugin instance"""
+
         self.config = _get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
         """ dict: Config for this plugin, loaded from ``extract.ini`` configfile """
 
@@ -168,9 +205,6 @@ class Extractor():
         self.vram_per_batch = 0
 
         # << THE FOLLOWING ARE SET IN self.initialize METHOD >> #
-        self.queue_size = 1
-        """ int: Queue size for all internal queues. Set in :func:`initialize()` """
-
         self.model: T.Any = None
         """varies: The model for this plugin. Set in the plugin's :func:`init_model()` method """
 
@@ -191,15 +225,9 @@ class Extractor():
         processed. Stored at input for pairing back up on output of extractor process """
 
         # << THE FOLLOWING PROTECTED ATTRIBUTES ARE SET IN PLUGIN TYPE _base.py >>> #
-        self._plugin_type: T.Literal["align", "detect", "recognition", "mask"] | None = None
-        """ str: Plugin type. ``detect`, ``align``, ``recognise`` or ``mask`` set in
-        ``<plugin_type>._base`` """
-
-        # << Objects for splitting frame's detected faces and rejoining them >>
-        # << for post-detector pliugins                                      >>
-        self._faces_per_filename: dict[str, int] = {}  # Tracking for recompiling batches
-        self._rollover: ExtractMedia | None = None  # batch rollover items
-        self._output_faces: list[DetectedFace] = []  # Recompiled output faces from plugin
+        self._tracker = SplitTracker({}, None, [])
+        """:class:`SplitTracker`: Holds objects for splitting frame's detected faces and
+        rejoining them for post-detector pliugins """
 
         logger.debug("Initialized _base %s", self.__class__.__name__)
 
@@ -424,8 +452,8 @@ class Extractor():
         batch size mean that faces will need to be split/re-joined with frames. The rollover
         collector can be used to rollover items that don't fit in a batch.
 
-        Collect the item from the :attr:`_rollover` dict or from the queue. Add face count per
-        frame to self._faces_per_filename for joining batches back up in finalize
+        Collect the item from the :attr:`_tracker.rollover` dict or from the queue. Add face count
+        per frame to :attr:`_tracker.faces_per_filename` for joining batches back up in finalize
 
         Parameters
         ----------
@@ -438,20 +466,23 @@ class Extractor():
         :class:`~plugins.extract.pipeline.ExtractMedia` or EOF
             The next extract media object, or EOF if pipe has ended
         """
-        if self._rollover is not None:
-            logger.trace("Getting from _rollover: (filename: `%s`, faces: %s)",  # type:ignore
-                         self._rollover.filename, len(self._rollover.detected_faces))
-            item: T.Literal["EOF"] | ExtractMedia = self._rollover
-            self._rollover = None
+        if self._tracker.rollover is not None:
+            logger.trace("Getting from _tracker.rollover: "  # type:ignore[attr-defined]
+                         "(filename: `%s`, faces: %s)",
+                         self._tracker.rollover.filename,
+                         len(self._tracker.rollover.detected_faces))
+            item: T.Literal["EOF"] | ExtractMedia = self._tracker.rollover
+            self._tracker.rollover = None
         else:
             next_item = self._get_item(queue)
             # Rollover collector should only be used at entry to plugin
             assert isinstance(next_item, (ExtractMedia, str))
             item = next_item
             if item != "EOF":
-                logger.trace("Getting from queue: (filename: %s, faces: %s)",  # type:ignore
+                logger.trace("Getting from queue: (filename: %s, "  # type:ignore[attr-defined]
+                             "faces: %s)",
                              item.filename, len(item.detected_faces))
-                self._faces_per_filename[item.filename] = len(item.detected_faces)
+                self._tracker.faces_per_filename[item.filename] = len(item.detected_faces)
         return item
 
     # <<< PROTECTED ACCESS METHODS >>> #
@@ -478,24 +509,23 @@ class Extractor():
         """
         logger.debug("initialize %s: (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
-        assert self._plugin_type is not None and self.name is not None
-        if self._is_initialized:
+        assert self._info.plugin_type is not None and self.name is not None
+        if self._info.is_initialized:
             # When batch processing, plugins will be initialized on first job in batch
             logger.debug("Plugin already initialized: %s (%s)",
-                         self.name, self._plugin_type.title())
+                         self.name, self._info.plugin_type.title())
             return
 
-        logger.info("Initializing %s (%s)...", self.name, self._plugin_type.title())
-        self.queue_size = 1
+        logger.info("Initializing %s (%s)...", self.name, self._info.plugin_type.title())
         name = self.name.replace(" ", "_").lower()
         self._add_queues(kwargs["in_queue"],
                          kwargs["out_queue"],
                          [f"predict_{name}", f"post_{name}"])
         self._compile_threads()
         self.init_model()
-        self._is_initialized = True
+        self._info.is_initialized = True
         logger.info("Initialized %s (%s) with batchsize of %s",
-                    self.name, self._plugin_type.title(), self.batchsize)
+                    self.name, self._info.plugin_type.title(), self.batchsize)
 
     def _add_queues(self,
                     in_queue: Queue,
@@ -508,16 +538,16 @@ class Extractor():
         self._queues["out"] = out_queue
         for q_name in queues:
             self._queues[q_name] = queue_manager.get_queue(
-                name=f"{self._plugin_type}{self._instance}_{q_name}",
-                maxsize=self.queue_size)
+                name=f"{self._info.plugin_type}{self._info.instance}_{q_name}",
+                maxsize=1)
 
     # <<< THREAD METHODS >>> #
     def _compile_threads(self) -> None:
         """ Compile the threads into self._threads list """
         assert self.name is not None
-        logger.debug("Compiling %s threads", self._plugin_type)
+        logger.debug("Compiling %s threads", self._info.plugin_type)
         name = self.name.replace(" ", "_").lower()
-        base_name = f"{self._plugin_type}_{name}"
+        base_name = f"{self._info.plugin_type}_{name}"
         self._add_thread(f"{base_name}_input",
                          self._process_input,
                          self._queues["in"],
@@ -530,7 +560,7 @@ class Extractor():
                          self._process_output,
                          self._queues[f"post_{name}"],
                          self._queues["out"])
-        logger.debug("Compiled %s threads: %s", self._plugin_type, self._threads)
+        logger.debug("Compiled %s threads: %s", self._info.plugin_type, self._threads)
 
     def _add_thread(self,
                     name: str,
@@ -622,10 +652,10 @@ class Extractor():
         """ Yield one item from a queue """
         item = queue.get()
         if isinstance(item, ExtractMedia):
-            logger.trace("filename: '%s', image shape: %s, detected_faces: %s, "  # type:ignore
-                         "queue: %s, item: %s",
+            logger.trace("filename: '%s', image shape: %s, "  # type:ignore[attr-defined]
+                         "detected_faces: %s, queue: %s, item: %s",
                          item.filename, item.image_shape, item.detected_faces, queue, item)
             self._extract_media[item.filename] = item
         else:
-            logger.trace("item: %s, queue: %s", item, queue)  # type:ignore
+            logger.trace("item: %s, queue: %s", item, queue)  # type:ignore[attr-defined]
         return item

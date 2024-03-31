@@ -19,10 +19,10 @@ from lib.utils import FaceswapError
 from ._base import BatchType, RecogBatch, Identity
 
 if T.TYPE_CHECKING:
-    import torch
+    from keras import KerasTensor
     from collections.abc import Generator
 
-logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class Recognition(Identity):
@@ -42,7 +42,7 @@ class Recognition(Identity):
     https://creativecommons.org/licenses/by-nc/4.0/
     """
 
-    def __init__(self, *args, **kwargs) -> None:  # pylint:disable=unused-argument
+    def __init__(self, **kwargs) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         git_model_id = 10
         model_filename = "vggface2_resnet50_v2.h5"
@@ -77,7 +77,7 @@ class Recognition(Identity):
         batch.feed = np.array([T.cast(np.ndarray, feed.face)[..., :3]
                                for feed in batch.feed_faces],
                               dtype="float32") - self._average_img
-        logger.trace("feed shape: %s", batch.feed.shape)  # type:ignore
+        logger.trace("feed shape: %s", batch.feed.shape)  # type:ignore[attr-defined]
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Return encodings for given image from vgg_face2.
@@ -144,16 +144,16 @@ class ResNet50:
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _identity_block(self,
-                        inputs: torch.Tensor,
+                        inputs: KerasTensor,
                         kernel_size: int,
                         filters: tuple[int, int, int],
                         stage: int,
-                        block: int) -> torch.Tensor:
+                        block: int) -> KerasTensor:
         """ The identity block is the block that has no conv layer at shortcut.
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor
         kernel_size: int
             The kernel size of middle conv layer of the block
@@ -166,7 +166,7 @@ class ResNet50:
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             Output tensor for the block
         """
         assert len(filters) == 3
@@ -194,17 +194,17 @@ class ResNet50:
         return var_x
 
     def _conv_block(self,
-                    inputs: torch.Tensor,
+                    inputs: KerasTensor,
                     kernel_size: int,
                     filters: tuple[int, int, int],
                     stage: int,
                     block: int,
-                    strides: tuple[int, int] = (2, 2)) -> torch.Tensor:
+                    strides: tuple[int, int] = (2, 2)) -> KerasTensor:
         """ A block that has a conv layer at shortcut.
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor
         kernel_size: int
             The kernel size of middle conv layer of the block
@@ -219,7 +219,7 @@ class ResNet50:
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             Output tensor for the block
 
         Notes
@@ -265,17 +265,17 @@ class ResNet50:
         var_x = Activation("relu")(var_x)
         return var_x
 
-    def __call__(self, inputs: torch.Tensor) -> torch.Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the resnet50 Network
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class::class:`keras.KerasTensor`
             Output tensor from resnet50
         """
         var_x = Conv2D(64,
@@ -450,7 +450,7 @@ class Cluster():
                      int(free_ram), int(linkage_required), int(vector_required))
 
         if linkage_required < free_ram:
-            logger.verbose("Using linkage method")  # type:ignore
+            logger.verbose("Using linkage method")  # type:ignore[attr-defined]
             retval = False
         elif vector_required < free_ram:
             logger.warning("Not enough RAM to perform linkage clustering. Using vector "

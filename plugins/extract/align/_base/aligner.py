@@ -154,7 +154,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                          configfile=configfile,
                          instance=instance,
                          **kwargs)
-        self._plugin_type = "align"
+        self._info.plugin_type = "align"
         self.realign_centering: CenteringType = "face"  # overide for plugin specific centering
         self._eof_seen = False
         self._normalize_method: T.Literal["clahe", "hist", "mean"] | None = None
@@ -301,14 +301,15 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                 if idx == self.batchsize:
                     frame_faces = len(item.detected_faces)
                     if f_idx + 1 != frame_faces:
-                        self._rollover = ExtractMedia(
+                        self._tracker.rollover = ExtractMedia(
                             item.filename,
                             item.image,
                             detected_faces=item.detected_faces[f_idx + 1:],
                             is_aligned=item.is_aligned)
                         logger.trace("Rolled over %s faces of %s to "  # type: ignore[attr-defined]
-                                     "next batch for '%s'", len(self._rollover.detected_faces),
-                                     frame_faces, item.filename)
+                                     "next batch for '%s'",
+                                     len(self._tracker.rollover.detected_faces), frame_faces,
+                                     item.filename)
                     break
         if batch.filename:
             logger.trace("Returning batch: %s", batch)  # type: ignore[attr-defined]
@@ -370,16 +371,17 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         logger.trace("Item out: %s", batch)  # type: ignore[attr-defined]
 
         for frame, filename, face in zip(batch.image, batch.filename, batch.detected_faces):
-            self._output_faces.append(face)
-            if len(self._output_faces) != self._faces_per_filename[filename]:
+            self._tracker.output_faces.append(face)
+            if len(self._tracker.output_faces) != self._tracker.faces_per_filename[filename]:
                 continue
 
-            self._output_faces, folders = self._filter(self._output_faces, min(frame.shape[:2]))
+            self._tracker.output_faces, folders = self._filter(self._tracker.output_faces,
+                                                               min(frame.shape[:2]))
 
             output = self._extract_media.pop(filename)
-            output.add_detected_faces(self._output_faces)
+            output.add_detected_faces(self._tracker.output_faces)
             output.add_sub_folders(folders)
-            self._output_faces = []
+            self._tracker.output_faces = []
 
             logger.trace("Final Output: (filename: '%s', image "  # type: ignore[attr-defined]
                          "shape: %s, detected_faces: %s, item: %s)", output.filename,

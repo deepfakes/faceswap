@@ -20,7 +20,7 @@ from lib.logger import parse_class_init
 from ._base import BatchType, Detector
 
 if T.TYPE_CHECKING:
-    from torch import Tensor
+    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
@@ -87,39 +87,23 @@ class L2Norm(Layer):  # pylint:disable=too-many-ancestors,abstract-method
                                       initializer=initializers.Constant(value=self._scale),
                                       dtype="float32")
 
-    def call(self, inputs: Tensor) -> Tensor:  # pylint:disable=arguments-differ
+    def call(self, inputs: KerasTensor, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """ Call the L2 Normalization Layer.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the L2 Normalization Layer
 
         Returns
         -------
-        tensor:
+        :class:`keras.KerasTensor`:
             The output from the L2 Normalization Layer
         """
         norm = ops.sqrt(ops.sum(ops.power(inputs, 2), axis=-1, keepdims=True)) + 1e-10
         var_x = inputs / norm * self.weight
         return var_x
-
-    def compute_output_shape(self,  # pylint:disable=arguments-differ
-                             input_shape: tuple[None, int, int, int]
-                             ) -> tuple[None, int, int, int]:
-        """ Input shape and output shape are the same
-
-        Parameters
-        ----------
-        input_shape: tuple[None, int, int, int]
-            Shape of the input tensor
-
-        Returns
-        -------
-        tuple[None, int, int, int]
-            The shape of the output tensor
-        """
-        return input_shape
 
     def get_config(self) -> dict:
         """ Returns the config of the layer.
@@ -259,12 +243,16 @@ class S3fd():
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @classmethod
-    def conv_block(cls, inputs: Tensor, filters: int, idx: int, recursions: int) -> Tensor:
+    def conv_block(cls,
+                   inputs: KerasTensor,
+                   filters: int,
+                   idx: int,
+                   recursions: int) -> KerasTensor:
         """ First round convolutions with zero padding added.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input tensor to the convolution block
         filters: int
             The number of filters
@@ -275,7 +263,7 @@ class S3fd():
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output tensor from the convolution block
         """
         name = f"conv{idx}"
@@ -291,12 +279,12 @@ class S3fd():
         return var_x
 
     @classmethod
-    def conv_up(cls, inputs: Tensor, filters: int, idx: int) -> Tensor:
+    def conv_up(cls, inputs: KerasTensor, filters: int, idx: int) -> KerasTensor:
         """ Convolution up filter blocks with zero padding added.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input tensor to the convolution block
         filters: int
             The initial number of filters
@@ -305,7 +293,7 @@ class S3fd():
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output tensor from the convolution block
         """
         name = f"conv{idx}"
@@ -322,7 +310,7 @@ class S3fd():
                            name=rec_name)(var_x)
         return var_x
 
-    def _load_model(self, weights_path: str) -> Model:  # pylint:disable=too-many-locals
+    def _load_model(self, weights_path: str) -> Model:
         """ Keras S3FD Model Definition, adapted from FAN pytorch implementation.
 
         Parameters
@@ -366,41 +354,55 @@ class S3fd():
         f4_3 = L2Norm(512, scale=8, name="conv4_3_norm")(f4_3)
         f5_3 = L2Norm(512, scale=5, name="conv5_3_norm")(f5_3)
 
+        classes = []
+        regs = []
+
         f3_3 = ZeroPadding2D(1)(f3_3)
-        cls1 = Conv2D(4, kernel_size=3, strides=1, name="conv3_3_norm_mbox_conf")(f3_3)
-        reg1 = Conv2D(4, kernel_size=3, strides=1, name="conv3_3_norm_mbox_loc")(f3_3)
+        classes.append(Conv2D(4, kernel_size=3, strides=1, name="conv3_3_norm_mbox_conf")(f3_3))
+        regs.append(Conv2D(4, kernel_size=3, strides=1, name="conv3_3_norm_mbox_loc")(f3_3))
 
         f4_3 = ZeroPadding2D(1)(f4_3)
-        cls2 = Conv2D(2, kernel_size=3, strides=1, name="conv4_3_norm_mbox_conf")(f4_3)
-        reg2 = Conv2D(4, kernel_size=3, strides=1, name="conv4_3_norm_mbox_loc")(f4_3)
+        classes.append(Conv2D(2, kernel_size=3, strides=1, name="conv4_3_norm_mbox_conf")(f4_3))
+        regs.append(Conv2D(4, kernel_size=3, strides=1, name="conv4_3_norm_mbox_loc")(f4_3))
 
         f5_3 = ZeroPadding2D(1)(f5_3)
-        cls3 = Conv2D(2, kernel_size=3, strides=1, name="conv5_3_norm_mbox_conf")(f5_3)
-        reg3 = Conv2D(4, kernel_size=3, strides=1, name="conv5_3_norm_mbox_loc")(f5_3)
+        classes.append(Conv2D(2, kernel_size=3, strides=1, name="conv5_3_norm_mbox_conf")(f5_3))
+        regs.append(Conv2D(4, kernel_size=3, strides=1, name="conv5_3_norm_mbox_loc")(f5_3))
 
         ffc7 = ZeroPadding2D(1)(ffc7)
-        cls4 = Conv2D(2, kernel_size=3, strides=1, name="fc7_mbox_conf")(ffc7)
-        reg4 = Conv2D(4, kernel_size=3, strides=1, name="fc7_mbox_loc")(ffc7)
+        classes.append(Conv2D(2, kernel_size=3, strides=1, name="fc7_mbox_conf")(ffc7))
+        regs.append(Conv2D(4, kernel_size=3, strides=1, name="fc7_mbox_loc")(ffc7))
 
         f6_2 = ZeroPadding2D(1)(f6_2)
-        cls5 = Conv2D(2, kernel_size=3, strides=1, name="conv6_2_mbox_conf")(f6_2)
-        reg5 = Conv2D(4, kernel_size=3, strides=1, name="conv6_2_mbox_loc")(f6_2)
+        classes.append(Conv2D(2, kernel_size=3, strides=1, name="conv6_2_mbox_conf")(f6_2))
+        regs.append(Conv2D(4, kernel_size=3, strides=1, name="conv6_2_mbox_loc")(f6_2))
 
         f7_2 = ZeroPadding2D(1)(f7_2)
-        cls6 = Conv2D(2, kernel_size=3, strides=1, name="conv7_2_mbox_conf")(f7_2)
-        reg6 = Conv2D(4, kernel_size=3, strides=1, name="conv7_2_mbox_loc")(f7_2)
+        classes.append(Conv2D(2, kernel_size=3, strides=1, name="conv7_2_mbox_conf")(f7_2))
+        regs.append(Conv2D(4, kernel_size=3, strides=1, name="conv7_2_mbox_loc")(f7_2))
 
         # max-out background label
-        chunks = [SliceO2K(starts=[0], ends=[1], axes=[3], steps=None)(cls1),
-                  SliceO2K(starts=[1], ends=[2], axes=[3], steps=None)(cls1),
-                  SliceO2K(starts=[2], ends=[3], axes=[3], steps=None)(cls1),
-                  SliceO2K(starts=[3], ends=[4], axes=[3], steps=None)(cls1)]
+        chunks = [SliceO2K(starts=[0], ends=[1], axes=[3], steps=None)(classes[0]),
+                  SliceO2K(starts=[1], ends=[2], axes=[3], steps=None)(classes[0]),
+                  SliceO2K(starts=[2], ends=[3], axes=[3], steps=None)(classes[0]),
+                  SliceO2K(starts=[3], ends=[4], axes=[3], steps=None)(classes[0])]
 
         bmax = Maximum()([chunks[0], chunks[1], chunks[2]])
-        cls1 = Concatenate()([bmax, chunks[3]])
+        classes[0] = Concatenate()([bmax, chunks[3]])
 
         retval = Model(input_,
-                       [cls1, reg1, cls2, reg2, cls3, reg3, cls4, reg4, cls5, reg5, cls6, reg6])
+                       [classes[0],
+                        regs[0],
+                        classes[1],
+                        regs[1],
+                        classes[2],
+                        regs[2],
+                        classes[3],
+                        regs[3],
+                        classes[4],
+                        regs[4],
+                        classes[5],
+                        regs[5]])
         retval.load_weights(weights_path)
         retval.make_predict_function()
         return retval
@@ -440,7 +442,10 @@ class S3fd():
             ret.append(finallist)
         return np.array(ret, dtype="object")
 
-    def _process_bbox(self, ocls: np.ndarray, oreg: np.ndarray, stride: int) -> list[np.ndarray]:
+    def _process_bbox(self,
+                      ocls: np.ndarray,
+                      oreg: np.ndarray,
+                      stride: int) -> list[list[np.ndarray]]:
         """ Process a bounding box """
         retval = []
         for pos in zip(*np.where(ocls[:, :, :, 1] > 0.05)):

@@ -114,7 +114,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
         self.rotation = self._get_rotation_angles(rotation)
         self.min_size = min_size
 
-        self._plugin_type = "detect"
+        self._info.plugin_type = "detect"
 
         logger.debug("Initialized _base %s", self.__class__.__name__)
 
@@ -315,15 +315,6 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                        "CLI: Edit the file faceswap/config/extract.ini)."
                        "\n3) Enable 'Single Process' mode.")
                 raise FaceswapError(msg) from err
-
-            if angle == 0:
-                batch.prediction = pred
-            else:
-                batch.prediction = np.array([b if b.any() else p
-                                             for b, p in zip(batch.prediction, pred)])
-            logger.trace("angle: %s, filenames: %s, "  # type:ignore[attr-defined]
-                         "prediction: %s",
-                         angle, batch.filename, pred)
 
             if angle != 0 and any(face.any() for face in batch.prediction):
                 logger.verbose("found face(s) by rotating image %s "  # type:ignore[attr-defined]

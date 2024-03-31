@@ -30,7 +30,7 @@ if T.TYPE_CHECKING:
     from plugins.extract.mask._base import Masker
     from plugins.extract.recognition._base import Identity
 
-logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+logger = logging.getLogger(__name__)
 _INSTANCES = -1  # Tracking for multiple instances of pipeline
 
 
@@ -117,9 +117,6 @@ class Extractor():
                    masker)] if not isinstance(masker, list) else T.cast(list[str | None],
                                                                         masker)
         self._flow = self._set_flow(detector, aligner, maskers, recognition)
-        # We only ever need 1 item in each queue. This is 2 items cached (1 in queue 1 waiting
-        # for queue) at each point. Adding more just stacks RAM with no speed benefit.
-        self._queue_size = 1
         # TODO Calculate scaling for more plugins than currently exist in _parallel_scaling
         self._scaling_fallback = 0.4
         self._vram_stats = self._get_vram_stats()
@@ -132,7 +129,6 @@ class Extractor():
                                        disable_filter)
         self._recognition = self._load_recognition(recognition, configfile)
         self._mask = [self._load_mask(mask, configfile) for mask in maskers]
-        self._is_parallel = self._set_parallel_processing(multiprocess)
         self._phases = self._set_phases(multiprocess)
         self._phase_index = 0
         self._set_extractor_batchsize()
@@ -468,7 +464,7 @@ class Extractor():
         tasks.append(f"extract{self._instance}_{self._final_phase}_out")
         for task in tasks:
             # Limit queue size to avoid stacking ram
-            queue_manager.add_queue(task, maxsize=self._queue_size)
+            queue_manager.add_queue(task, maxsize=1)
             queues[task] = queue_manager.get_queue(task)
         logger.debug("Queues: %s", queues)
         return queues
@@ -938,7 +934,7 @@ class ExtractMedia():
         metadata: dict
             The contents of the 'source' field in the PNG header
         """
-        logger.trace("Adding PNG Source data for '%s': %s",  # type:ignore
+        logger.trace("Adding PNG Source data for '%s': %s",  # type:ignore[attr-defined]
                      self._filename, metadata)
         dims = T.cast(tuple[int, int], metadata["source_frame_dims"])
         self._image_shape = (*dims, 3)
