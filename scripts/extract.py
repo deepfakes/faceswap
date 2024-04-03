@@ -24,7 +24,7 @@ if T.TYPE_CHECKING:
     from lib.align.alignments import PNGHeaderAlignmentsDict
 
 # tqdm.monitor_interval = 0  # workaround for TqdmSynchronisationWarning  # TODO?
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class Extract():  # pylint:disable=too-few-public-methods

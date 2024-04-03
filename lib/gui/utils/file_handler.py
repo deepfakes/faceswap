@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import filedialog
 import typing as T
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 _FILETYPE = T.Literal["default", "alignments", "config_project", "config_task",
                       "config_all", "csv", "image", "ini", "state", "log", "video"]
 _HANDLETYPE = T.Literal["open", "save", "filename", "filename_multi", "save_filename",

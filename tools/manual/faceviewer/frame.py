@@ -17,7 +17,7 @@ from lib.image import hex_to_rgb, rgb_to_hex
 
 from .viewport import Viewport
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 # LOCALES
 _LANG = gettext.translation("tools.manual", localedir="locales", fallback=True)

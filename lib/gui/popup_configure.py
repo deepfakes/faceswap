@@ -22,7 +22,7 @@ from .utils import FileHandler, get_config, get_images, PATHCACHE
 if T.TYPE_CHECKING:
     from lib.config import FaceswapConfig
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 # LOCALES
 _LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)

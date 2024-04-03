@@ -10,7 +10,7 @@ from lib.gui import (TaskBar, CliOptions, CommandNotebook, ConsoleOut, DisplayNo
                      get_images, initialize_images, initialize_config, LastSession,
                      MainMenuBar, preview_trigger, ProcessWrapper, StatusBar)
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class FaceswapGui(tk.Tk):

@@ -20,7 +20,7 @@ if T.TYPE_CHECKING:
     from lib.gui.command import CommandNotebook
     from lib.gui.command import ToolsNotebook
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 PATHCACHE = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])), "lib", "gui", ".cache")
 _CONFIG: Config | None = None

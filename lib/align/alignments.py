@@ -16,7 +16,7 @@ if T.TYPE_CHECKING:
     from collections.abc import Generator
     from .aligned_face import CenteringType
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 _VERSION = 2.3
 # VERSION TRACKING
 # 1.0 - Never really existed. Basically any alignments file prior to version 2.0

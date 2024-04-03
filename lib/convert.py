@@ -23,7 +23,7 @@ if T.TYPE_CHECKING:
     from plugins.convert.mask.mask_blend import Mask as MaskAdjust
     from plugins.convert.scaling._base import Adjustment as ScalingAdjust
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 @dataclass

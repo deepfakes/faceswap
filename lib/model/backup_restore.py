@@ -10,7 +10,7 @@ from shutil import copyfile, copytree, rmtree
 from lib.serializer import get_serializer
 from lib.utils import get_folder
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class Backup():

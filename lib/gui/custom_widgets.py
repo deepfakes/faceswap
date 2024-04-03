@@ -13,7 +13,7 @@ import numpy as np
 
 from .utils import get_config
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class ContextMenu(tk.Menu):  # pylint: disable=too-many-ancestors

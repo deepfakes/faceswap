@@ -15,7 +15,7 @@ from .display_graph import SessionGraph
 from .analysis import Calculations, Session
 from .utils import FileHandler, get_images, LongRunningTask
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 # LOCALES
 _LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)

@@ -13,7 +13,7 @@ from types import TracebackType
 if T.TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 _ErrorType: T.TypeAlias = tuple[type[BaseException],
                                 BaseException,
                                 TracebackType] | tuple[T.Any, T.Any, T.Any] | None

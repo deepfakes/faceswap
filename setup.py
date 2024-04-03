@@ -19,7 +19,7 @@ from pkg_resources import parse_requirements
 
 from lib.logger import log_setup
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 backend_type: T.TypeAlias = T.Literal['nvidia', 'apple_silicon', 'directml', 'cpu', 'rocm', "all"]
 
 _INSTALL_FAILED = False

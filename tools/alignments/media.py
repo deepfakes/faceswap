@@ -24,7 +24,7 @@ if T.TYPE_CHECKING:
     import numpy as np
     from lib.align.alignments import AlignmentFileDict, PNGHeaderDict
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class AlignmentData(Alignments):

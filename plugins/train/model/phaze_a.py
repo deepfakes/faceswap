@@ -20,7 +20,7 @@ from lib.utils import get_tf_version, FaceswapError
 
 from ._base import ModelBase, get_all_sub_models
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 K = tf.keras.backend
 kapp = tf.keras.applications

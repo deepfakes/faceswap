@@ -16,7 +16,7 @@ from .control import Navigation, BackgroundImage
 from .editor import (BoundingBox, ExtractBox, Landmarks, Mask,  # noqa pylint:disable=unused-import
                      Mesh, View)
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 # LOCALES
 _LANG = gettext.translation("tools.manual", localedir="locales", fallback=True)

@@ -16,7 +16,7 @@ from .config import get_config, PATHCACHE
 if T.TYPE_CHECKING:
     from collections.abc import Sequence
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 _IMAGES: "Images" | None = None
 _PREVIEW_TRIGGER: "PreviewTrigger" | None = None
 TRAININGPREVIEW = ".gui_training_preview.png"

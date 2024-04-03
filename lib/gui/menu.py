@@ -22,7 +22,7 @@ from .utils import get_config, get_images
 if T.TYPE_CHECKING:
     from scripts.gui import FaceswapGui
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 # LOCALES
 _LANG = gettext.translation("gui.menu", localedir="locales", fallback=True)

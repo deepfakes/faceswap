@@ -23,7 +23,7 @@ _ = _LANG.gettext
 OrderedDictSectionType = OrderedDict[str, "ConfigSection"]
 OrderedDictItemType = OrderedDict[str, "ConfigItem"]
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 ConfigValueType = bool | int | float | list[str] | str | None
 
 

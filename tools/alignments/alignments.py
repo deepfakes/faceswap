@@ -15,7 +15,7 @@ from .jobs_faces import FromFaces, RemoveFaces, Rename  # noqa pylint: disable=u
 from .jobs_frames import Draw, Extract  # noqa pylint: disable=unused-import
 
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class Alignments():  # pylint:disable=too-few-public-methods

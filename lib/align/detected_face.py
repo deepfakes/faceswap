@@ -21,7 +21,7 @@ if T.TYPE_CHECKING:
     from collections.abc import Callable
     from .aligned_face import CenteringType
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class DetectedFace():

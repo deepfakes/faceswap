@@ -17,7 +17,7 @@ from ._base import BatchType, RecogBatch, Identity
 if T.TYPE_CHECKING:
     from collections.abc import Generator
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class Recognition(Identity):

@@ -30,7 +30,7 @@ if T.TYPE_CHECKING:
     from plugins.extract.mask._base import Masker
     from plugins.extract.recognition._base import Identity
 
-logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+logger = logging.getLogger(__name__)
 _INSTANCES = -1  # Tracking for multiple instances of pipeline
 
 

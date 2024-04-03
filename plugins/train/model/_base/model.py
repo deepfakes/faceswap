@@ -32,7 +32,7 @@ keras = tf.keras
 K = tf.keras.backend
 
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 _CONFIG: dict[str, ConfigValueType] = {}
 
 

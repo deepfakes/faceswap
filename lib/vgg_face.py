@@ -14,7 +14,7 @@ from fastcluster import linkage
 
 from lib.utils import GetModel
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class VGGFace():

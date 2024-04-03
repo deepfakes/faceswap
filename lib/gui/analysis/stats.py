@@ -22,7 +22,7 @@ from lib.serializer import get_serializer
 
 from .event_reader import TensorBoardLogs
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class GlobalSession():

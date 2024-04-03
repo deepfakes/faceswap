@@ -13,7 +13,7 @@ from lib.cli import actions, args as cli
 from .utils import get_images
 from .control_helper import ControlPanelOption
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class CliOptions():

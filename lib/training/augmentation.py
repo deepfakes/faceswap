@@ -15,7 +15,7 @@ from lib.image import batch_convert_color
 if T.TYPE_CHECKING:
     from lib.config import ConfigValueType
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 @dataclass

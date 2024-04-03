@@ -16,7 +16,7 @@ from .display_analysis import Analysis
 from .display_command import GraphDisplay, PreviewExtract, PreviewTrain
 from .utils import get_config
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 # LOCALES
 _LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)

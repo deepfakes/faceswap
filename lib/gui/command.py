@@ -10,7 +10,7 @@ from .control_helper import ControlPanel
 from .custom_widgets import Tooltip
 from .utils import get_images, get_config
 
-logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+logger = logging.getLogger(__name__)
 
 # LOCALES
 _LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)

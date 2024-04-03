@@ -12,7 +12,7 @@ from tensorflow.keras.models import Model as KModel  # pylint:disable=import-err
 from lib.model.nn_blocks import Conv2DOutput, UpscaleBlock, ResidualBlock
 from .original import Model as OriginalModel
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class Model(OriginalModel):

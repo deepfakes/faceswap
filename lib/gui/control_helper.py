@@ -15,7 +15,7 @@ from _tkinter import Tcl_Obj, TclError
 from .custom_widgets import ContextMenu, MultiOption, ToggledFrame, Tooltip
 from .utils import FileHandler, get_config, get_images
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 # LOCALES
 _LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)

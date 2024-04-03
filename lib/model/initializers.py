@@ -13,7 +13,7 @@ keras = tf.keras
 K = keras.backend
 
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 def compute_fans(shape, data_format='channels_last'):

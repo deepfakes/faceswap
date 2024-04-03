@@ -10,7 +10,7 @@ import numpy as np
 
 from plugins.convert._config import Config
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 def get_config(plugin_name: str, configfile: str | None = None) -> dict:

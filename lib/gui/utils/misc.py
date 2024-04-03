@@ -16,7 +16,7 @@ if T.TYPE_CHECKING:
     from lib.multithreading import _ErrorType
 
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class LongRunningTask(Thread):

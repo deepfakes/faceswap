@@ -10,7 +10,7 @@ from PIL import Image, ImageTk
 
 from lib.align import AlignedFace
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class Viewport():

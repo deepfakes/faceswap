@@ -19,7 +19,7 @@ from .actions import (DirFullPaths, DirOrFileFullPaths, DirOrFilesFullPaths, Fil
                       FilesFullPaths, MultiOption, Radio, SaveFileFullPaths, Slider)
 from .launcher import ScriptExecutor
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 _GPUS = GPUStats().cli_devices
 
 # LOCALES

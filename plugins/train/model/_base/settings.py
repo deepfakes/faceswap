@@ -36,7 +36,7 @@ if T.TYPE_CHECKING:
 keras = tf.keras
 K = keras.backend
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 @dataclass

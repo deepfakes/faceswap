@@ -10,7 +10,7 @@ import threading
 from queue import Queue, Empty as QueueEmpty  # pylint: disable=unused-import; # noqa
 from time import sleep
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class EventQueue(Queue):

@@ -21,7 +21,7 @@ from lib.serializer import get_serializer
 if T.TYPE_CHECKING:
     from collections.abc import Generator, Iterator
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 @dataclass

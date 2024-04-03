@@ -9,7 +9,7 @@ from matplotlib import font_manager
 
 from lib.config import FaceswapConfig
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class Config(FaceswapConfig):

@@ -14,7 +14,7 @@ from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, Upscal
 
 from ._base import ModelBase
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class Model(ModelBase):

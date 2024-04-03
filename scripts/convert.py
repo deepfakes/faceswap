@@ -35,7 +35,7 @@ if T.TYPE_CHECKING:
     from lib.queue_manager import EventQueue
 
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 @dataclass

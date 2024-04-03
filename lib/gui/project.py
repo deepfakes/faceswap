@@ -8,7 +8,7 @@ from tkinter import messagebox
 
 from lib.serializer import get_serializer
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class _GuiSession():  # pylint:disable=too-few-public-methods

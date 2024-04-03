@@ -18,7 +18,7 @@ if T.TYPE_CHECKING:
     import argparse
     from collections.abc import Callable
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class ScriptExecutor():  # pylint:disable=too-few-public-methods

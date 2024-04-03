@@ -16,7 +16,7 @@ if T.TYPE_CHECKING:
     from plugins.train.model._base import ModelBase
     from plugins.train.trainer._base import TrainerBase
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class PluginLoader():

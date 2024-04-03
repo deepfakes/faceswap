@@ -31,7 +31,7 @@ if T.TYPE_CHECKING:
     from lib.align.detected_face import Mask
     from lib.queue_manager import EventQueue
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 TypeManualExtractor = T.Literal["FAN", "cv2-dnn", "mask"]
 

@@ -19,7 +19,7 @@ from .analysis import Calculations, Session
 from .control_helper import set_slider_rounding
 from .utils import FileHandler, get_config, get_images, preview_trigger
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 # LOCALES
 _LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)

@@ -9,7 +9,7 @@ from threading import Lock
 import cv2
 import numpy as np
 
-logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+logger = logging.getLogger(__name__)
 CenteringType = T.Literal["face", "head", "legacy"]
 
 _MEAN_FACE = np.array([[0.010086, 0.106454], [0.085135, 0.038915], [0.191003, 0.018748],

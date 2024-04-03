@@ -27,7 +27,7 @@ if T.TYPE_CHECKING:
     from lib.align import AlignedFace
     from plugins.extract.pipeline import ExtractMedia
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 def finalize(images_found: int, num_faces_detected: int, verify_output: bool) -> None:

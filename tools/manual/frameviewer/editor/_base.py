@@ -11,7 +11,7 @@ import numpy as np
 
 from lib.gui.control_helper import ControlPanelOption
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 # LOCALES
 _LANG = gettext.translation("tools.manual", localedir="locales", fallback=True)

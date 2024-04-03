@@ -16,7 +16,7 @@ from .popup_session import SessionPopUp
 from .analysis import Session
 from .utils import FileHandler, get_config, get_images, LongRunningTask
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 
 # LOCALES
 _LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)
