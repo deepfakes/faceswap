@@ -9,7 +9,7 @@ from threading import Lock
 import cv2
 import numpy as np
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 CenteringType = T.Literal["face", "head", "legacy"]
 
 _MEAN_FACE = np.array([[0.010086, 0.106454], [0.085135, 0.038915], [0.191003, 0.018748],
@@ -809,6 +809,25 @@ class AlignedFace():
                              "sub roi: %s", centering, center, padding, roi)
                 self._cache.cropped_roi[centering] = roi
         return self._cache.cropped_roi[centering]
+
+    def split_mask(self) -> np.ndarray:
+        """ Remove the mask from the alpha channel of :attr:`face` and return the mask
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The mask that was stored in the :attr:`face`'s alpha channel
+
+        Raises
+        ------
+        AssertionError
+            If :attr:`face` does not contain a mask in the alpha channel
+        """
+        assert self._face is not None
+        assert self._face.shape[-1] == 4, "No mask stored in the alpha channel"
+        mask = self._face[..., 3]
+        self._face = self._face[..., :3]
+        return mask
 
 
 def _umeyama(source: np.ndarray, destination: np.ndarray, estimate_scale: bool) -> np.ndarray:

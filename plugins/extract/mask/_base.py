@@ -166,8 +166,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                 assert feed_face.face is not None
                 if not item.is_aligned:
                     # Split roi mask from feed face alpha channel
-                    roi_mask = feed_face.face[..., 3]
-                    feed_face._face = feed_face.face[..., :3]  # pylint:disable=protected-access
+                    roi_mask = feed_face.split_mask()
                 else:
                     # We have to do the warp here as AlignedFace did not perform it
                     roi_mask = transform_image(roi,
