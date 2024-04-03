@@ -11,7 +11,7 @@ from lib.serializer import get_serializer
 logger = logging.getLogger(__name__)
 
 
-class _GuiSession():  # pylint:disable=too-few-public-methods
+class _GuiSession():
     """ Parent class for GUI Session Handlers.
 
     Parameters
