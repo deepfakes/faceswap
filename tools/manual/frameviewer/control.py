@@ -157,7 +157,7 @@ class Navigation():
         self._globals.tk_transport_index.set(frame_count - 1)
 
 
-class BackgroundImage():  # pylint:disable=too-few-public-methods
+class BackgroundImage():
     """ The background image of the canvas """
     def __init__(self, canvas):
         self._canvas = canvas

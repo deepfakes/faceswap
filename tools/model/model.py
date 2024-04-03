@@ -23,7 +23,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Model():  # pylint:disable=too-few-public-methods
+class Model():
     """ Tool to perform actions on a model file.
 
     Parameters
@@ -105,7 +105,7 @@ class Model():  # pylint:disable=too-few-public-methods
         self._job.process()
 
 
-class Inference():  # pylint:disable=too-few-public-methods
+class Inference():
     """ Save an inference model from a trained Faceswap model.
 
     Parameters
@@ -153,7 +153,7 @@ class Inference():  # pylint:disable=too-few-public-methods
         inference.save(self._output_file)
 
 
-class NaNScan():  # pylint:disable=too-few-public-methods
+class NaNScan():
     """ Tool to scan for NaN and Infs in model weights.
 
     Parameters
@@ -245,7 +245,7 @@ class NaNScan():  # pylint:disable=too-few-public-methods
         self._parse_output(errors)
 
 
-class Restore():  # pylint:disable=too-few-public-methods
+class Restore():
     """ Restore a model from backup.
 
     Parameters

@@ -636,7 +636,7 @@ class VisibleObjects():
         return True
 
 
-class HoverBox():  # pylint:disable=too-few-public-methods
+class HoverBox():
     """ Handle the current mouse location when over the :class:`Viewport`.
 
     Highlights the face currently underneath the cursor and handles actions when clicking

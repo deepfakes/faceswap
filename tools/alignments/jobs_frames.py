@@ -25,7 +25,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Draw():  # pylint:disable=too-few-public-methods
+class Draw():
     """ Draws annotations onto original frames and saves into a sub-folder next to the original
     frames.
 
@@ -171,7 +171,7 @@ class Draw():  # pylint:disable=too-few-public-methods
         cv2.line(image, tuple(center), tuple(points[2]), (0, 0, 255), 2)
 
 
-class Extract():  # pylint:disable=too-few-public-methods
+class Extract():
     """ Re-extract faces from source frames based on Alignment data
 
     Parameters

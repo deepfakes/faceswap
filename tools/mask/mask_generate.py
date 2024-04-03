@@ -21,7 +21,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class MaskGenerator:  # pylint:disable=too-few-public-methods
+class MaskGenerator:
     """ Uses faceswap's extract pipeline to generate masks and update them into the alignments file
     and/or extracted face PNG Headers
 
