@@ -46,6 +46,7 @@ class Align(Aligner):
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
 
         self.model: cv2.dnn.Net
+        self.model_path: str
         self.name = "cv2-DNN Aligner"
         self.input_size = 128
         self.color_format = "RGB"
@@ -56,8 +57,8 @@ class Align(Aligner):
 
     def init_model(self) -> None:
         """ Initialize CV2 DNN Detector Model"""
-        self.model = cv2.dnn.readNetFromTensorflow(self.model_path)  # pylint:disable=no-member
-        self.model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint:disable=no-member
+        self.model = cv2.dnn.readNetFromTensorflow(self.model_path)
+        self.model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
     def faces_to_feed(self, faces: np.ndarray) -> np.ndarray:
         """ Convert a batch of face images from UINT8 (0-255) to fp32 (0.0-255.0)
@@ -136,7 +137,7 @@ class Align(Aligner):
         offsets: list
             List of offsets for the faces
         """
-        logger.trace("Aligning image around center")  # type:ignore
+        logger.trace("Aligning image around center")  # type:ignore[attr-defined]
         sizes = (self.input_size, self.input_size)
         rois = []
         faces = []
@@ -247,7 +248,7 @@ class Align(Aligner):
         pad_t = 1 - box[1] if box[1] < 0 else 0
         pad_r = box[2] - width if box[2] > width else 0
         pad_b = box[3] - height if box[3] > height else 0
-        logger.trace("Padding: (l: %s, t: %s, r: %s, b: %s)",  # type:ignore
+        logger.trace("Padding: (l: %s, t: %s, r: %s, b: %s)",  # type:ignore[attr-defined]
                      pad_l, pad_t, pad_r, pad_b)
         padded_image = cv2.copyMakeBorder(image.copy(),
                                           pad_t,
@@ -257,7 +258,8 @@ class Align(Aligner):
                                           cv2.BORDER_CONSTANT,
                                           value=(0, 0, 0))
         offsets = (pad_l - pad_r, pad_t - pad_b)
-        logger.trace("image_shape: %s, Padded shape: %s, box: %s, offsets: %s",  # type:ignore
+        logger.trace("image_shape: %s, Padded shape: %s, box: %s, "  # type:ignore[attr-defined]
+                     "offsets: %s",
                      image.shape, padded_image.shape, box, offsets)
         return padded_image, offsets
 
@@ -311,4 +313,4 @@ class Align(Aligner):
                 points[:, 1] += (roi[1] - offset[1])
                 landmarks.append(points)
             batch.landmarks = np.array(landmarks)
-        logger.trace("Predicted Landmarks: %s", batch.landmarks)  # type:ignore
+        logger.trace("Predicted Landmarks: %s", batch.landmarks)  # type:ignore[attr-defined]

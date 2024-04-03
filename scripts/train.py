@@ -18,7 +18,7 @@ from lib.keypress import KBHit
 from lib.multithreading import MultiThread, FSThread
 from lib.training import Preview, PreviewBuffer, TriggerType
 from lib.utils import (get_folder, get_image_paths,
-                       FaceswapError, _image_extensions)
+                       FaceswapError, IMAGE_EXTENSIONS)
 from plugins.plugin_loader import PluginLoader
 
 if T.TYPE_CHECKING:
@@ -31,7 +31,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Train():  # pylint:disable=too-few-public-methods
+class Train():
     """ The Faceswap Training Process.
 
     The training process is responsible for training a model on a set of source faces and a set of
@@ -174,7 +174,7 @@ class Train():  # pylint:disable=too-few-public-methods
                 continue  # Time-lapse folder is training folder
 
             filenames = [fname for fname in os.listdir(folder)
-                         if os.path.splitext(fname)[-1].lower() in _image_extensions]
+                         if os.path.splitext(fname)[-1].lower() in IMAGE_EXTENSIONS]
             if not filenames:
                 raise FaceswapError(f"The Timelapse path '{folder}' does not contain any valid "
                                     "images")

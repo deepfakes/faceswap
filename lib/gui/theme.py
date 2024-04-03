@@ -370,7 +370,7 @@ class _Widgets():
                     ("disabled", images[f"img_{lookup}_disabled"]),
                     ("pressed !disabled", images[f"img_{lookup}_active"]),
                     ("active !disabled", images[f"img_{lookup}_active"]))
-            kwargs = dict(border=1, sticky="ns") if element == "thumb" else {}
+            kwargs = {"border": 1, "sticky": "ns"} if element == "thumb" else {}
             self._style.element_create(*args, **kwargs)
 
         # Get a configurable trough
@@ -487,7 +487,7 @@ class _TkImage():
         crop_size = (square_size // 16) * 16
         draw_rows = int(6 * crop_size / 16)
         start_row = dimensions[1] // 2 - draw_rows // 2
-        initial_indent = (2 * (crop_size // 16) + (dimensions[0] - crop_size) // 2)
+        initial_indent = 2 * (crop_size // 16) + (dimensions[0] - crop_size) // 2
 
         retval = np.zeros((dimensions[1], dimensions[0]), dtype="uint8")
         for i in range(start_row, start_row + draw_rows):

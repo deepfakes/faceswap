@@ -350,7 +350,6 @@ class GraphDisplay(DisplayOptionalPage):  # pylint:disable=too-many-ancestors
             self.after(1000, self.display_item_process)
             return
 
-        logger.debug("Adding graph")
         existing = list(self.subnotebook_get_titles_ids().keys())
 
         loss_keys = self.display_item.get_loss_keys(Session.session_ids[-1])
@@ -367,6 +366,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint:disable=too-many-ancestors
             tabname = loss_key.replace("_", " ").title()
             if tabname in existing:
                 continue
+            logger.debug("Adding graph '%s'", tabname)
 
             display_keys = [key for key in loss_keys if key.startswith(loss_key)]
             data = Calculations(session_id=Session.session_ids[-1],

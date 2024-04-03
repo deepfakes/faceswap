@@ -50,17 +50,17 @@ _HELPTEXT = (
 )
 
 
-_DEFAULTS = dict(
-    confidence=dict(
-        default=50,
-        info="The confidence level at which the detector has succesfully found a face.\nHigher "
-             "levels will be more discriminating, lower levels will have more false positives.",
-        datatype=int,
-        rounding=5,
-        min_max=(25, 100),
-        choices=[],
-        group="settings",
-        gui_radio=False,
-        fixed=True,
-    ),
-)
+_DEFAULTS = {
+    "confidence": {
+        "default": 50,
+        "info": "The confidence level at which the detector has succesfully found a face.\nHigher "
+                "levels will be more discriminating, lower levels will have more false positives.",
+        "datatype": int,
+        "rounding": 5,
+        "min_max": (25, 100),
+        "choices": [],
+        "group": "settings",
+        "gui_radio": False,
+        "fixed": True,
+    },
+}

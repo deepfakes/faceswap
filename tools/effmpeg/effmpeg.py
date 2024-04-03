@@ -17,7 +17,7 @@ import imageio_ffmpeg as im_ffm
 from ffmpy import FFmpeg, FFRuntimeError
 
 # faceswap imports
-from lib.utils import _image_extensions, _video_extensions
+from lib.utils import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +27,10 @@ class DataItem():
     A simple class used for storing the media data items and directories that
     Effmpeg uses for 'input', 'output' and 'ref_vid'.
     """
-    vid_ext = _video_extensions
+    vid_ext = VIDEO_EXTENSIONS
     # future option in effmpeg to use audio file for muxing
     audio_ext = ['.aiff', '.flac', '.mp3', '.wav']
-    img_ext = _image_extensions
+    img_ext = IMAGE_EXTENSIONS
 
     def __init__(self, path=None, name=None, item_type=None, ext=None,
                  fps=None):

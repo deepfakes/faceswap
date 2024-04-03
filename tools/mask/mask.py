@@ -10,7 +10,7 @@ from multiprocessing import Process
 
 from lib.align import Alignments
 
-from lib.utils import _video_extensions
+from lib.utils import VIDEO_EXTENSIONS
 from plugins.extract.pipeline import ExtractMedia
 
 from .loader import Loader
@@ -64,7 +64,7 @@ class Mask:  # pylint:disable=too-few-public-methods
         retval = [os.path.join(self._args.input, fname)
                   for fname in os.listdir(self._args.input)
                   if os.path.isdir(os.path.join(self._args.input, fname))
-                  or os.path.splitext(fname)[-1].lower() in _video_extensions]
+                  or os.path.splitext(fname)[-1].lower() in VIDEO_EXTENSIONS]
         logger.info("Batch mode selected. Processing locations: %s", retval)
         return retval
 

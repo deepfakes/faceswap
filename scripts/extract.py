@@ -16,7 +16,7 @@ from lib.align.alignments import PNGHeaderDict
 
 from lib.image import encode_image, generate_thumbnail, ImagesLoader, ImagesSaver, read_image_meta
 from lib.multithreading import MultiThread
-from lib.utils import get_folder, _image_extensions, _video_extensions
+from lib.utils import get_folder, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 from plugins.extract.pipeline import Extractor, ExtractMedia
 from scripts.fsmedia import Alignments, PostProcess, finalize
 
@@ -90,9 +90,9 @@ class Extract():  # pylint:disable=too-few-public-methods
         retval = [os.path.join(self._args.input_dir, fname)
                   for fname in os.listdir(self._args.input_dir)
                   if (os.path.isdir(os.path.join(self._args.input_dir, fname))  # folder images
-                      and any(os.path.splitext(iname)[-1].lower() in _image_extensions
+                      and any(os.path.splitext(iname)[-1].lower() in IMAGE_EXTENSIONS
                               for iname in os.listdir(os.path.join(self._args.input_dir, fname))))
-                  or os.path.splitext(fname)[-1].lower() in _video_extensions]  # video
+                  or os.path.splitext(fname)[-1].lower() in VIDEO_EXTENSIONS]  # video
 
         logger.debug("Input locations: %s", retval)
         return retval
@@ -268,7 +268,7 @@ class Filter():
 
         retval = [os.path.join(test_folder, fname)
                   for fname in os.listdir(test_folder)
-                  if os.path.splitext(fname)[-1].lower() in _image_extensions]
+                  if os.path.splitext(fname)[-1].lower() in IMAGE_EXTENSIONS]
         logger.info("Collected files from folder '%s': %s", test_folder,
                     [os.path.basename(f) for f in retval])
         return retval
@@ -299,7 +299,7 @@ class Filter():
             filt_files = [] if files is None else self._files_from_folder(files)
             for file in filt_files:
                 if (not os.path.isfile(file) or
-                        os.path.splitext(file)[-1].lower() not in _image_extensions):
+                        os.path.splitext(file)[-1].lower() not in IMAGE_EXTENSIONS):
                     logger.warning("Filter file '%s' does not exist or is not an image file", file)
                     error = True
             retval.append(filt_files)

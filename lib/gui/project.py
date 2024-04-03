@@ -90,8 +90,8 @@ class _GuiSession():
     def _selected_to_choices(self):
         """ dict: The selected value and valid choices for multi-option, radio or combo options.
         """
-        valid_choices = {cmd: {opt: dict(choices=val["cpanel_option"].choices,
-                                         is_multi=val["cpanel_option"].is_multi_option)
+        valid_choices = {cmd: {opt: {"choices": val["cpanel_option"].choices,
+                                     "is_multi": val["cpanel_option"].is_multi_option}
                                for opt, val in data.items()
                                if isinstance(val, dict) and "cpanel_option" in val
                                and val["cpanel_option"].choices is not None}
@@ -600,9 +600,9 @@ class Tasks(_GuiSession):
             The tab that pertains to the currently active task
 
         """
-        self._tasks[command] = dict(filename=self._filename,
-                                    options=self._options,
-                                    is_project=self._is_project)
+        self._tasks[command] = {"filename": self._filename,
+                                "options": self._options,
+                                "is_project": self._is_project}
 
     def clear_tasks(self):
         """ Clears all of the stored tasks.
@@ -629,7 +629,7 @@ class Tasks(_GuiSession):
         options: dict
             The options for this task loaded from the project
         """
-        self._tasks[command] = dict(filename=filename, options=options, is_project=True)
+        self._tasks[command] = {"filename": filename, "options": options, "is_project": True}
 
     def _set_active_task(self, command=None):
         """ Set the active :attr:`_filename` and :attr:`_options` to currently selected tab's

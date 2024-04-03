@@ -26,14 +26,14 @@ class Detect(Detector):
     def init_model(self) -> None:
         """ Initialize CV2 DNN Detector Model"""
         assert isinstance(self.model_path, list)
-        self.model = cv2.dnn.readNetFromCaffe(self.model_path[1],  # pylint:disable=no-member
+        self.model = cv2.dnn.readNetFromCaffe(self.model_path[1],
                                               self.model_path[0])
-        self.model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint:disable=no-member
+        self.model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detection image(s) for prediction """
         assert isinstance(batch, DetectorBatch)
-        batch.feed = cv2.dnn.blobFromImages(batch.image,  # pylint:disable=no-member
+        batch.feed = cv2.dnn.blobFromImages(batch.image,
                                             scalefactor=1.0,
                                             size=(self.input_size, self.input_size),
                                             mean=[104, 117, 123],
@@ -53,13 +53,13 @@ class Detect(Detector):
         for i in range(predictions.shape[2]):
             confidence = predictions[0, 0, i, 2]
             if confidence >= self.confidence:
-                logger.trace("Accepting due to confidence %s >= %s",  # type:ignore
+                logger.trace("Accepting due to confidence %s >= %s",  # type:ignore[attr-defined]
                              confidence, self.confidence)
                 faces.append([(predictions[0, 0, i, 3] * self.input_size),
                               (predictions[0, 0, i, 4] * self.input_size),
                               (predictions[0, 0, i, 5] * self.input_size),
                               (predictions[0, 0, i, 6] * self.input_size)])
-        logger.trace("faces: %s", faces)  # type:ignore
+        logger.trace("faces: %s", faces)  # type:ignore[attr-defined]
         return np.array(faces)[None, ...]
 
     def process_output(self, batch: BatchType) -> None:

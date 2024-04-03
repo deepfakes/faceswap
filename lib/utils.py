@@ -24,9 +24,9 @@ if T.TYPE_CHECKING:
     from http.client import HTTPResponse
 
 # Global variables
-_image_extensions = [  # pylint:disable=invalid-name
+IMAGE_EXTENSIONS = [  # pylint:disable=invalid-name
     ".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
-_video_extensions = [  # pylint:disable=invalid-name
+VIDEO_EXTENSIONS = [  # pylint:disable=invalid-name
     ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
     ".ts", ".vob"]
 _TF_VERS: tuple[int, int] | None = None
@@ -249,7 +249,7 @@ def get_image_paths(directory: str, extension: str | None = None) -> list[str]:
     ['/path/to/directory/image1.jpg']
     """
     logger = logging.getLogger(__name__)
-    image_extensions = _image_extensions if extension is None else [extension]
+    image_extensions = IMAGE_EXTENSIONS if extension is None else [extension]
     dir_contents = []
 
     if not os.path.exists(directory):

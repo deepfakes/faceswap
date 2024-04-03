@@ -8,7 +8,7 @@ import typing as T
 from argparse import Namespace
 from multiprocessing import Process
 
-from lib.utils import _video_extensions, FaceswapError
+from lib.utils import VIDEO_EXTENSIONS, FaceswapError
 from .media import AlignmentData
 from .jobs import Check, Sort, Spatial  # noqa pylint: disable=unused-import
 from .jobs_faces import FromFaces, RemoveFaces, Rename  # noqa pylint: disable=unused-import
@@ -117,7 +117,7 @@ class Alignments():  # pylint:disable=too-few-public-methods
         candidates = [os.path.join(self._args.frames_dir, fname)
                       for fname in os.listdir(self._args.frames_dir)
                       if os.path.isdir(os.path.join(self._args.frames_dir, fname))
-                      or os.path.splitext(fname)[-1].lower() in _video_extensions]
+                      or os.path.splitext(fname)[-1].lower() in VIDEO_EXTENSIONS]
         logger.debug("Frame candidates: %s", candidates)
 
         for candidate in candidates:
@@ -289,7 +289,7 @@ class _Alignments():  # pylint:disable=too-few-public-methods
         if os.path.isdir(frames) and os.path.exists(os.path.join(frames, fname)):
             return fname
 
-        if os.path.isdir(frames) or os.path.splitext(frames)[-1] not in _video_extensions:
+        if os.path.isdir(frames) or os.path.splitext(frames)[-1] not in VIDEO_EXTENSIONS:
             logger.error("Can't find a valid alignments file in location: %s", frames)
             sys.exit(1)
 

@@ -4,7 +4,7 @@ import gettext
 
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import ContextFullPaths, FileFullPaths, Radio
-from lib.utils import _image_extensions
+from lib.utils import IMAGE_EXTENSIONS
 
 
 # LOCALES
@@ -100,7 +100,7 @@ class EffmpegArgs(FaceSwapArgs):
         argument_list.append(dict(
             opts=("-ef", "--extract-filetype"),
             action=Radio,
-            choices=_image_extensions,
+            choices=IMAGE_EXTENSIONS,
             dest="extract_ext",
             group=_("output"),
             default=".png",

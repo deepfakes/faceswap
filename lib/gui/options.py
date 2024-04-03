@@ -129,9 +129,9 @@ class CliOptions():
                 helptext=opt["help"],
                 track_modified=True,
                 command=command)
-            gui_options[title] = dict(cpanel_option=cpanel_option,
-                                      opts=opt["opts"],
-                                      nargs=opt.get("nargs", None))
+            gui_options[title] = {"cpanel_option": cpanel_option,
+                                  "opts": opt["opts"],
+                                  "nargs": opt.get("nargs", None)}
             logger.trace("Processed: %s", gui_options)
         return gui_options
 

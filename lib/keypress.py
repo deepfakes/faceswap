@@ -43,7 +43,7 @@ class KBHit:
             self.old_term = termios.tcgetattr(self.file_desc)
 
             # New terminal setting unbuffered
-            self.new_term[3] = (self.new_term[3] & ~termios.ICANON & ~termios.ECHO)
+            self.new_term[3] = self.new_term[3] & ~termios.ICANON & ~termios.ECHO
             termios.tcsetattr(self.file_desc, termios.TCSAFLUSH, self.new_term)
 
             # Support normal-terminal reset at exit

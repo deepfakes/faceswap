@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager, QueueEmpty
-from lib.utils import convert_to_secs, FaceswapError, _video_extensions, get_image_paths
+from lib.utils import convert_to_secs, FaceswapError, VIDEO_EXTENSIONS, get_image_paths
 
 if T.TYPE_CHECKING:
     from lib.align.alignments import PNGHeaderDict
@@ -1148,7 +1148,7 @@ class ImagesLoader(ImageIO):
         """
         if not isinstance(self.location, str) or os.path.isdir(self.location):
             retval = False
-        elif os.path.splitext(self.location)[1].lower() in _video_extensions:
+        elif os.path.splitext(self.location)[1].lower() in VIDEO_EXTENSIONS:
             retval = True
         else:
             raise FaceswapError("The input file '{}' is not a valid video".format(self.location))

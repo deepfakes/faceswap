@@ -173,7 +173,7 @@ class FaceswapGui(tk.Tk):
         return True
 
 
-class Gui():  # pylint:disable=too-few-public-methods
+class Gui():
     """ The GUI process. """
     def __init__(self, arguments):
         self.root = FaceswapGui(arguments.debug)
