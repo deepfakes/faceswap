@@ -7,7 +7,7 @@
 import logging
 import threading
 
-from queue import Queue, Empty as QueueEmpty  # pylint: disable=unused-import; # noqa
+from queue import Queue, Empty as QueueEmpty  # pylint:disable=unused-import; # noqa
 from time import sleep
 
 logger = logging.getLogger(__name__)
@@ -174,4 +174,4 @@ class _QueueManager():
             sleep(update_interval)
 
 
-queue_manager = _QueueManager()  # pylint: disable=invalid-name
+queue_manager = _QueueManager()  # pylint:disable=invalid-name

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ Phaze-A Model by TorzDF with thanks to BirbFakes and the myriad of testers. """
 
-# pylint: disable=too-many-lines
+# pylint:disable=too-many-lines
 from __future__ import annotations
 import logging
 import typing as T
@@ -979,7 +979,7 @@ class FullyConnected():  # pylint:disable=too-few-public-methods
         return keras.models.Model(input_, var_x, name=f"fc_{self._side}")
 
 
-class UpscaleBlocks():  # pylint: disable=too-few-public-methods
+class UpscaleBlocks():  # pylint:disable=too-few-public-methods
     """ Obtain a block of upscalers.
 
     This class exists outside of the :class:`Decoder` model, as it is possible to place some of

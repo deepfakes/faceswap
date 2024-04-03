@@ -83,7 +83,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._canvas.yview(*event)
         self._canvas.viewport.update()
 
-    def _update_viewport(self, event):  # pylint: disable=unused-argument
+    def _update_viewport(self, event):  # pylint:disable=unused-argument
         """ Update the faces viewport and scrollbar.
 
         Parameters

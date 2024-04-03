@@ -16,7 +16,7 @@ from .utils import get_config
 logger = logging.getLogger(__name__)
 
 
-class ContextMenu(tk.Menu):  # pylint: disable=too-many-ancestors
+class ContextMenu(tk.Menu):  # pylint:disable=too-many-ancestors
     """ A Pop up menu to be triggered when right clicking on widgets that this menu has been
     applied to.
 
@@ -72,7 +72,7 @@ class ContextMenu(tk.Menu):  # pylint: disable=too-many-ancestors
             self._widget.select_range(0, tk.END)
 
 
-class RightClickMenu(tk.Menu):  # pylint: disable=too-many-ancestors
+class RightClickMenu(tk.Menu):  # pylint:disable=too-many-ancestors
     """ A Pop up menu that can be bound to a right click mouse event to bring up a context menu
 
     Parameters
@@ -118,7 +118,7 @@ class RightClickMenu(tk.Menu):  # pylint: disable=too-many-ancestors
         self.tk_popup(event.x_root, event.y_root)
 
 
-class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
+class ConsoleOut(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ The Console out section of the GUI.
 
     A Read only text box for displaying the output from stdout/stderr.
@@ -195,7 +195,7 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
             sys.stderr = _SysOutRouter(self._console, "stderr")
         logger.debug("Redirected console")
 
-    def _clear(self, *args):  # pylint: disable=unused-argument
+    def _clear(self, *args):  # pylint:disable=unused-argument
         """ Clear the console output screen """
         logger.debug("Clear console")
         if not self._console_clear.get():
@@ -206,7 +206,7 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("Cleared console")
 
 
-class _ReadOnlyText(tk.Text):  # pylint: disable=too-many-ancestors
+class _ReadOnlyText(tk.Text):  # pylint:disable=too-many-ancestors
     """ A read only text widget.
 
     Standard tkinter Text widgets are read/write by default. As we want to make the console
@@ -417,7 +417,7 @@ class _OriginalCommand:
         return self.tk_call(self.orig_and_operation + args)
 
 
-class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
+class StatusBar(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Status Bar for displaying the Status Message and  Progress Bar at the bottom of the GUI.
 
     Parameters
@@ -725,7 +725,7 @@ class Tooltip:  # pylint:disable=too-few-public-methods
         self._topwidget = None
 
 
-class MultiOption(ttk.Checkbutton):  # pylint: disable=too-many-ancestors
+class MultiOption(ttk.Checkbutton):  # pylint:disable=too-many-ancestors
     """ Similar to the standard :class:`ttk.Radio` widget, but with the ability to select
     multiple pre-defined options. Selected options are generated as `nargs` for the argument
     parser to consume.
@@ -767,7 +767,7 @@ class MultiOption(ttk.Checkbutton):  # pylint: disable=too-many-ancestors
         logger.trace(retval)
         return retval
 
-    def _on_update(self, *args):  # pylint: disable=unused-argument
+    def _on_update(self, *args):  # pylint:disable=unused-argument
         """ Update the master variable on a check button change.
 
         The value for this checked option is added or removed from the :attr:`_master_variable`
@@ -788,7 +788,7 @@ class MultiOption(ttk.Checkbutton):  # pylint: disable=too-many-ancestors
         logger.trace("Setting master variable to: %s", val)
         self._master_variable.set(val)
 
-    def _on_master_update(self, *args):  # pylint: disable=unused-argument
+    def _on_master_update(self, *args):  # pylint:disable=unused-argument
         """ Update the check button on a master variable change (e.g. load .fsw file in the GUI).
 
         The value for this option is set to ``True`` or ``False`` depending on it's existence in

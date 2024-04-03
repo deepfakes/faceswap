@@ -390,7 +390,7 @@ class DataGenerator():
                            casting="unsafe")
 
 
-class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-methods
+class TrainingDataGenerator(DataGenerator):
     """ A Training Data Generator for compiling data for feeding to a model.
 
     This class is called from :mod:`plugins.train.trainer._base` and launches a background

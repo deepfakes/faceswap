@@ -82,7 +82,7 @@ class Writer(Output):
             self._set_dimensions(image.shape[:2])
             self._writer = self._get_writer()
         if (image.shape[1], image.shape[0]) != self._output_dimensions:
-            image = cv2.resize(image, self._output_dimensions)  # pylint: disable=no-member
+            image = cv2.resize(image, self._output_dimensions)  # pylint:disable=no-member
         self.cache_frame(filename, image)
         self._save_from_cache()
 

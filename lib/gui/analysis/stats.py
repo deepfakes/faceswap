@@ -280,7 +280,7 @@ class GlobalSession():
 _SESSION = GlobalSession()
 
 
-class SessionsSummary():  # pylint:disable=too-few-public-methods
+class SessionsSummary():
     """ Performs top level summary calculations for each session ID within the loaded or currently
     training Session for display in the Analysis tree view.
 
@@ -853,7 +853,7 @@ class Calculations():
         return trend
 
 
-class _ExponentialMovingAverage():  # pylint:disable=too-few-public-methods
+class _ExponentialMovingAverage():
     """ Reshapes data before calculating exponential moving average, then iterates once over the
     rows to calculate the offset without precision issues.
 

@@ -14,7 +14,7 @@ from lib.utils import FaceswapError
 logger = logging.getLogger(__name__)
 
 
-class Style():  # pylint:disable=too-few-public-methods
+class Style():
     """ Set the overarching theme and customize widgets.
 
     Parameters
@@ -439,7 +439,7 @@ class _Widgets():
                               troughcolor=trough_color)
 
 
-class _TkImage():  # pylint:disable=too-few-public-methods
+class _TkImage():
     """ Create a tk image for a given pattern and shape.
     """
     def __init__(self):

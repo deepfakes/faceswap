@@ -252,13 +252,13 @@ class _CompressedSerializer(Serializer):
 
     def _marshal(self, data):
         """ Pickle and compress data """
-        data = self._child._marshal(data)  # pylint: disable=protected-access
+        data = self._child._marshal(data)  # pylint:disable=protected-access
         return zlib.compress(data)
 
     def _unmarshal(self, data):
         """ Decompress and unpicke data """
         data = zlib.decompress(data)
-        return self._child._unmarshal(data)  # pylint: disable=protected-access
+        return self._child._unmarshal(data)  # pylint:disable=protected-access
 
 
 def get_serializer(serializer):

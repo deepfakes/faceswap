@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 
 
-class AutoClipper():  # pylint:disable=too-few-public-methods
+class AutoClipper():
     """ AutoClip: Adaptive Gradient Clipping for Source Separation Networks
 
     Parameters

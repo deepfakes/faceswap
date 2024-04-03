@@ -32,7 +32,7 @@ class LRStrength(Enum):
     EXTREME = 2.5
 
 
-class LearningRateFinder:  # pylint:disable=too-few-public-methods
+class LearningRateFinder:
     """ Learning Rate Finder
 
     Parameters

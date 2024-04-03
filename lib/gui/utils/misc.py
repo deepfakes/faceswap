@@ -71,7 +71,7 @@ class LongRunningTask(Thread):
             if self._target is not None:
                 retval = self._target(*self._args, **self._kwargs)
                 self._queue.put(retval)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint:disable=broad-except
             self.err = T.cast(tuple[type[BaseException], BaseException, "TracebackType"],
                               sys.exc_info())
             assert self.err is not None

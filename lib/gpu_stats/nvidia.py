@@ -53,7 +53,7 @@ class NvidiaStats(_GPUStats):
                    "remove and reinstall your Nvidia drivers before reporting. Original "
                    f"Error: {str(err)}")
             raise FaceswapError(msg) from err
-        except Exception as err:  # pylint: disable=broad-except
+        except Exception as err:  # pylint:disable=broad-except
             msg = ("An unhandled exception occured reading from the Nvidia Machine Learning "
                    f"Library. Original error: {str(err)}")
             raise FaceswapError(msg) from err

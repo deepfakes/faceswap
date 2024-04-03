@@ -72,7 +72,7 @@ class Writer(Output):
             try:
                 with open(fname, "wb") as outfile:
                     outfile.write(img)
-            except Exception as err:  # pylint: disable=broad-except
+            except Exception as err:  # pylint:disable=broad-except
                 logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
 
     def pre_encode(self, image: np.ndarray, **kwargs) -> list[bytes]:

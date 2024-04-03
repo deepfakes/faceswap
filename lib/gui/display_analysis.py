@@ -23,7 +23,7 @@ _LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
 
-class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
+class Analysis(DisplayPage):  # pylint:disable=too-many-ancestors
     """ Session Analysis Tab.
 
     The area of the GUI that holds the session summary stats for model training sessions.
@@ -366,7 +366,7 @@ class _Options():  # pylint:disable=too-few-public-methods
             button.state([state])
 
 
-class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
+class StatsData(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Stats frame of analysis tab.
 
     Holds the tree-view containing the summarized session statistics in the Analysis tab.

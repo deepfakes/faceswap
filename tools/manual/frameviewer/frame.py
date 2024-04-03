@@ -498,7 +498,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._globals.tk_update.trace("w", self._disable_enable_reload_button)
         return buttons
 
-    def _disable_enable_copy_buttons(self, *args):  # pylint: disable=unused-argument
+    def _disable_enable_copy_buttons(self, *args):  # pylint:disable=unused-argument
         """ Disable or enable the static buttons """
         position = self._globals.frame_index
         face_count_per_index = self._det_faces.face_count_per_index
@@ -511,7 +511,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         for direction in ("prev", "next"):
             self._static_buttons["copy_{}".format(direction)].state(states[direction])
 
-    def _disable_enable_reload_button(self, *args):  # pylint: disable=unused-argument
+    def _disable_enable_reload_button(self, *args):  # pylint:disable=unused-argument
         """ Disable or enable the static buttons """
         position = self._globals.frame_index
         state = ["!disabled"] if (position != -1 and

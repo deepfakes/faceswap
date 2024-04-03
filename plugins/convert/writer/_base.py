@@ -166,7 +166,7 @@ class Output():
         """
         raise NotImplementedError
 
-    def pre_encode(self, image: np.ndarray, **kwargs) -> T.Any:  # pylint: disable=unused-argument
+    def pre_encode(self, image: np.ndarray, **kwargs) -> T.Any:  # pylint:disable=unused-argument
         """ Some writer plugins support the pre-encoding of images prior to saving out. As
         patching is done in multiple threads, but writing is done in a single thread, it can
         speed up the process to do any pre-encoding as part of the converter process.

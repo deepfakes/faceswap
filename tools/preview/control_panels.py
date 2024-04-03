@@ -249,7 +249,7 @@ class BusyProgressBar():
         self._progress_bar.start(25)
 
 
-class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
+class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Frame that holds the left hand side options panel containing the command line options.
 
     Parameters
@@ -589,7 +589,7 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
                 tk_var.trace("w", patch_callback)
 
 
-class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
+class ConfigFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Holds the configuration options for a convert plugin inside the :class:`OptionsBook`.
 
     Parameters

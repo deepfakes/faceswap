@@ -26,7 +26,7 @@ _LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
 
-class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
+class PreviewExtract(DisplayOptionalPage):  # pylint:disable=too-many-ancestors
     """ Tab to display output preview images for extract and convert """
     def __init__(self, *args, **kwargs) -> None:
         logger.debug(parse_class_init(locals()))
@@ -80,7 +80,7 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         print(f"Saved preview to {filename}")
 
 
-class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
+class PreviewTrain(DisplayOptionalPage):  # pylint:disable=too-many-ancestors
     """ Training preview image(s) """
     def __init__(self, *args, **kwargs) -> None:
         logger.debug(parse_class_init(locals()))
@@ -163,7 +163,7 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         self._display.save(location)
 
 
-class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
+class GraphDisplay(DisplayOptionalPage):  # pylint:disable=too-many-ancestors
     """ The Graph Tab of the Display section """
     def __init__(self,
                  parent: ttk.Notebook,

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class Config(FaceswapConfig):
     """ Config File for GUI """
-    # pylint: disable=too-many-statements
+    # pylint:disable=too-many-statements
     def set_defaults(self):
         """ Set the default values for config """
         logger.debug("Setting defaults")

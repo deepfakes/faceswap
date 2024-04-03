@@ -275,7 +275,7 @@ class Landmarks(Editor):
             self._drag_callback = None
             self._reset_selection(event)
 
-    def _drag_stop(self, event):  # pylint: disable=unused-argument
+    def _drag_stop(self, event):  # pylint:disable=unused-argument
         """ In select mode, call the select mode callback.
 
         In point mode: trigger a viewport thumbnail update on click + drag release

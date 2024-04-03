@@ -56,8 +56,8 @@ class Align(Aligner):
 
     def init_model(self) -> None:
         """ Initialize CV2 DNN Detector Model"""
-        self.model = cv2.dnn.readNetFromTensorflow(self.model_path)  # pylint: disable=no-member
-        self.model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
+        self.model = cv2.dnn.readNetFromTensorflow(self.model_path)  # pylint:disable=no-member
+        self.model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint:disable=no-member
 
     def faces_to_feed(self, faces: np.ndarray) -> np.ndarray:
         """ Convert a batch of face images from UINT8 (0-255) to fp32 (0.0-255.0)

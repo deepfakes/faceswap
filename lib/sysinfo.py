@@ -17,7 +17,7 @@ from lib.utils import get_backend
 from setup import CudaCheck
 
 
-class _SysInfo():  # pylint:disable=too-few-public-methods
+class _SysInfo():
     """ Obtain information about the System, Python and GPU """
     def __init__(self) -> None:
         self._state_file = _State().state_file
@@ -251,7 +251,7 @@ def get_sysinfo() -> str:
     """
     try:
         retval = _SysInfo().full_info()
-    except Exception as err:  # pylint: disable=broad-except
+    except Exception as err:  # pylint:disable=broad-except
         retval = f"Exception occured trying to retrieve sysinfo: {str(err)}"
         raise
     return retval
@@ -420,4 +420,4 @@ class _State():  # pylint:disable=too-few-public-methods
         return retval
 
 
-sysinfo = get_sysinfo()  # pylint: disable=invalid-name
+sysinfo = get_sysinfo()  # pylint:disable=invalid-name

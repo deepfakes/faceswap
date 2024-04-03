@@ -12,7 +12,7 @@ import typing as T
 
 # << FILE HANDLING >>
 
-class _FullPaths(argparse.Action):  # pylint: disable=too-few-public-methods
+class _FullPaths(argparse.Action):
     """ Parent class for various file type and file path handling classes.
 
     Expands out given paths to their full absolute paths. This class should not be
@@ -42,8 +42,7 @@ class DirFullPaths(_FullPaths):
     >>>        opts=("-f", "--folder_location"),
     >>>        action=DirFullPaths)),
     """
-    # pylint: disable=too-few-public-methods,unnecessary-pass
-    pass
+    pass  # pylint:disable=unnecessary-pass
 
 
 class FileFullPaths(_FullPaths):
@@ -68,7 +67,6 @@ class FileFullPaths(_FullPaths):
     >>>        action=FileFullPaths,
     >>>        filetypes="video))"
     """
-    # pylint: disable=too-few-public-methods
     def __init__(self, *args, filetypes: str | None = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.filetypes = filetypes
@@ -87,7 +85,7 @@ class FileFullPaths(_FullPaths):
         return [(name, getattr(self, name)) for name in names]
 
 
-class FilesFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
+class FilesFullPaths(FileFullPaths):
     """ Adds support for a File browser to select multiple files in the GUI.
 
     This extends the standard :class:`argparse.Action` and adds an additional parameter
@@ -118,7 +116,7 @@ class FilesFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
         super().__init__(*args, **kwargs)
 
 
-class DirOrFileFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
+class DirOrFileFullPaths(FileFullPaths):
     """ Adds support to the GUI to launch either a file browser or a folder browser.
 
     Some inputs (for example source frames) can come from a folder of images or from a
@@ -147,7 +145,7 @@ class DirOrFileFullPaths(FileFullPaths):  # pylint: disable=too-few-public-metho
     """
 
 
-class DirOrFilesFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
+class DirOrFilesFullPaths(FileFullPaths):
     """ Adds support to the GUI to launch either a file browser for selecting multiple files
     or a folder browser.
 
@@ -213,8 +211,7 @@ class SaveFileFullPaths(FileFullPaths):
     >>>        action=SaveFileFullPaths,
     >>>        filetypes="video"))
     """
-    # pylint: disable=too-few-public-methods,unnecessary-pass
-    pass
+    pass  # pylint:disable=unnecessary-pass
 
 
 class ContextFullPaths(FileFullPaths):
@@ -247,7 +244,7 @@ class ContextFullPaths(FileFullPaths):
     >>>        filetypes="video",
     >>>        action_option="-a"))
     """
-    # pylint: disable=too-few-public-methods, too-many-arguments
+    # pylint:disable=too-many-arguments
     def __init__(self,
                  *args,
                  filetypes: str | None = None,
@@ -280,7 +277,7 @@ class ContextFullPaths(FileFullPaths):
 
 # << GUI DISPLAY OBJECTS >>
 
-class Radio(argparse.Action):  # pylint: disable=too-few-public-methods
+class Radio(argparse.Action):
     """ Adds support for a GUI Radio options box.
 
     This is a standard :class:`argparse.Action` (with stock parameters) which indicates to the GUI
@@ -309,7 +306,7 @@ class Radio(argparse.Action):  # pylint: disable=too-few-public-methods
         setattr(namespace, self.dest, values)
 
 
-class MultiOption(argparse.Action):  # pylint: disable=too-few-public-methods
+class MultiOption(argparse.Action):
     """ Adds support for multiple option checkboxes in the GUI.
 
     This is a standard :class:`argparse.Action` (with stock parameters) which indicates to the GUI
@@ -337,7 +334,7 @@ class MultiOption(argparse.Action):  # pylint: disable=too-few-public-methods
         setattr(namespace, self.dest, values)
 
 
-class Slider(argparse.Action):  # pylint: disable=too-few-public-methods
+class Slider(argparse.Action):
     """ Adds support for a slider in the GUI.
 
     The standard :class:`argparse.Action` is extended with the additional parameters listed below.

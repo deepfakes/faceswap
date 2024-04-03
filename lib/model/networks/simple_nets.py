@@ -40,7 +40,7 @@ class _net():  # pylint:disable=too-few-public-methods
         logger.debug("Initialized: %s", self.__class__.__name__)
 
 
-class AlexNet(_net):  # pylint:disable=too-few-public-methods
+class AlexNet(_net):
     """ AlexNet ported from torchvision version.
 
     Notes
@@ -136,7 +136,7 @@ class AlexNet(_net):  # pylint:disable=too-few-public-methods
         return Model(inputs=inputs, outputs=[var_x])
 
 
-class SqueezeNet(_net):  # pylint:disable=too-few-public-methods
+class SqueezeNet(_net):
     """ SqueezeNet ported from torchvision version.
 
     Notes

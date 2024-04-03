@@ -16,7 +16,7 @@ _LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
 
-class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
+class DisplayPage(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Parent frame holder for each tab.
         Defines uniform structure for each tab to inherit from """
     def __init__(self, parent, tab_name, helptext):
@@ -159,7 +159,7 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
         return self.subnotebook.children[tab_name]
 
 
-class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
+class DisplayOptionalPage(DisplayPage):  # pylint:disable=too-many-ancestors
     """ Parent Context Sensitive Display Tab """
 
     def __init__(self, parent, tab_name, helptext, wait_time, command=None):

@@ -21,7 +21,7 @@ import sys
 
 # Windows
 if os.name == "nt":
-    import msvcrt  # pylint: disable=import-error
+    import msvcrt  # pylint:disable=import-error
 
 # Posix (Linux, OS X)
 else:

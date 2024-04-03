@@ -200,7 +200,7 @@ class ImageAugmentation():
         grid_sizes = (grid_bases * (base_contrast // 2)) + base_contrast
         logger.trace("Adjusting Contrast. Grid Sizes: %s", grid_sizes)  # type: ignore
 
-        clahes = [cv2.createCLAHE(clipLimit=2.0,  # pylint: disable=no-member
+        clahes = [cv2.createCLAHE(clipLimit=2.0,  # pylint:disable=no-member
                                   tileGridSize=(grid_size, grid_size))
                   for grid_size in grid_sizes]
 

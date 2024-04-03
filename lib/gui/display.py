@@ -23,7 +23,7 @@ _LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
 
-class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
+class DisplayNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
     """ The tkinter Notebook that holds the display items.
 
     Parameters
@@ -152,7 +152,7 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
             child_object.close()  # Call the OptionalDisplayPage close() method
             self.forget(child)
 
-    def _update_displaybook(self, *args):  # pylint: disable=unused-argument
+    def _update_displaybook(self, *args):  # pylint:disable=unused-argument
         """ Callback to be executed when the global tkinter variable `display`
         (:attr:`wrapper_var`) is updated when a Faceswap task is executed.
 

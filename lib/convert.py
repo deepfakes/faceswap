@@ -201,7 +201,7 @@ class Converter():
                              item.inbound.filename)
                 try:
                     image = self._patch_image(item)
-                except Exception as err:  # pylint: disable=broad-except
+                except Exception as err:  # pylint:disable=broad-except
                     # Log error and output original frame
                     logger.error("Failed to convert image: '%s'. Reason: %s",
                                  item.inbound.filename, str(err))

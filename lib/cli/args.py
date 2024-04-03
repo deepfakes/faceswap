@@ -83,7 +83,7 @@ class SmartFormatter(argparse.HelpFormatter):
                     txt = f"  - {txt[2:]}"
                 output.extend(textwrap.wrap(txt, width, subsequent_indent=indent))
             return output
-        return argparse.HelpFormatter._split_lines(self,  # pylint: disable=protected-access
+        return argparse.HelpFormatter._split_lines(self,  # pylint:disable=protected-access
                                                    text,
                                                    width)
 

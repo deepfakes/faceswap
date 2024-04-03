@@ -21,7 +21,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class ScriptExecutor():  # pylint:disable=too-few-public-methods
+class ScriptExecutor():
     """ Loads the relevant script modules and executes the script.
 
         This class is initialized in each of the argparsers for the relevant
@@ -227,11 +227,11 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         except FaceswapError as err:
             for line in str(err).splitlines():
                 logger.error(line)
-        except KeyboardInterrupt:  # pylint: disable=try-except-raise
+        except KeyboardInterrupt:  # pylint:disable=try-except-raise
             raise
         except SystemExit:
             pass
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint:disable=broad-except
             crash_file = crash_log()
             logger.exception("Got Exception on main handler:")
             logger.critical("An unexpected crash has occurred. Crash report written to '%s'. "

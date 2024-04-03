@@ -355,7 +355,7 @@ class SessionPopUp(tk.Toplevel):
             csvout.writerow(fieldnames)
             csvout.writerows(zip(*[save_data[key] for key in fieldnames]))
 
-    def _option_button_reload(self, *args) -> None:  # pylint: disable=unused-argument
+    def _option_button_reload(self, *args) -> None:  # pylint:disable=unused-argument
         """ Action for reset button press and checkbox changes.
 
         Parameters
@@ -376,7 +376,7 @@ class SessionPopUp(tk.Toplevel):
                             self._vars.scale.get())
         logger.debug("Refreshed Graph")
 
-    def _graph_scale(self, *args) -> None:  # pylint: disable=unused-argument
+    def _graph_scale(self, *args) -> None:  # pylint:disable=unused-argument
         """ Action for changing graph scale.
 
         Parameters

@@ -428,7 +428,7 @@ class PostProcess():  # pylint:disable=too-few-public-methods
             action.process(extract_media)
 
 
-class PostProcessAction():  # pylint: disable=too-few-public-methods
+class PostProcessAction():  # pylint:disable=too-few-public-methods
     """ Parent class for Post Processing Actions.
 
     Usable in Extract or Convert or both depending on context. Any post-processing actions should
@@ -465,7 +465,7 @@ class PostProcessAction():  # pylint: disable=too-few-public-methods
         raise NotImplementedError
 
 
-class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-methods
+class DebugLandmarks(PostProcessAction):  # pylint:disable=too-few-public-methods
     """ Draw debug landmarks on face output. Extract Only """
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(self, *args, **kwargs)

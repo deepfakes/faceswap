@@ -48,7 +48,7 @@ class NetInfo:
     outputs: list[Layer] = field(default_factory=list)
 
 
-class _LPIPSTrunkNet():  # pylint:disable=too-few-public-methods
+class _LPIPSTrunkNet():
     """ Trunk neural network loader for LPIPS Loss function.
 
     Parameters
@@ -145,7 +145,7 @@ class _LPIPSTrunkNet():  # pylint:disable=too-few-public-methods
         return model
 
 
-class _LPIPSLinearNet(_LPIPSTrunkNet):  # pylint:disable=too-few-public-methods
+class _LPIPSLinearNet(_LPIPSTrunkNet):
     """ The Linear Network to be applied to the difference between the true and predicted outputs
     of the trunk network.
 
@@ -232,7 +232,7 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):  # pylint:disable=too-few-public-methods
         return model
 
 
-class LPIPSLoss():  # pylint:disable=too-few-public-methods
+class LPIPSLoss():
     """ LPIPS Loss Function.
 
     A perceptual loss function that uses linear outputs from pretrained CNNs feature layers.

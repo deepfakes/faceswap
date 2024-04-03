@@ -515,7 +515,7 @@ class DiskIO():
         logger.debug("Started thread: '%s'", task)
 
     # Loading tasks
-    def _load(self, *args) -> None:  # pylint: disable=unused-argument
+    def _load(self, *args) -> None:  # pylint:disable=unused-argument
         """ Load frames from disk.
 
         In a background thread:

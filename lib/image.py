@@ -159,7 +159,7 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):  # type:ignore
         correct frame for all videos. Navigating to the previous keyframe then discarding frames
         until the correct frame is reached appears to work well.
         """
-        # pylint: disable-all
+        # pylint:disable-all
         if self._read_gen is not None:
             self._read_gen.close()
 
@@ -1567,7 +1567,7 @@ class ImagesSaver(ImageIO):
             else:
                 cv2.imwrite(filename, image)
             logger.trace("Saved image: '%s'", filename)  # type:ignore
-        except Exception as err:  # pylint: disable=broad-except
+        except Exception as err:  # pylint:disable=broad-except
             logger.error("Failed to save image '%s'. Original Error: %s", filename, str(err))
         del image
         del filename

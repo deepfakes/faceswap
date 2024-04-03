@@ -107,7 +107,7 @@ class VendorID(Enum):
 
 
 # STRUCTS
-class StructureRepr(Structure):  # pylint:disable=too-few-public-methods
+class StructureRepr(Structure):
     """ Override the standard structure class to add a useful __repr__ for logging """
     def __repr__(self) -> str:
         """ Output the class name and the structure contents """
@@ -155,7 +155,7 @@ class DXGIAdapterDesc1(StructureRepr):  # pylint:disable=too-few-public-methods
         ("DedicatedSystemMemory", ctypes.c_size_t),
         ("SharedSystemMemory", ctypes.c_size_t),
         ("AdapterLuid", LUID),
-        ("Flags", DXGIAdapterFlag.ctype)]  # type:ignore[attr-defined] # pylint: disable=no-member
+        ("Flags", DXGIAdapterFlag.ctype)]  # type:ignore[attr-defined] # pylint:disable=no-member
 
 
 class DXGIQueryVideoMemoryInfo(StructureRepr):  # pylint:disable=too-few-public-methods

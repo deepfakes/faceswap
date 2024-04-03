@@ -506,7 +506,7 @@ class FaceswapError(Exception):
     pass  # pylint:disable=unnecessary-pass
 
 
-class GetModel():  # pylint:disable=too-few-public-methods
+class GetModel():
     """ Check for models in the cache path.
 
     If available, return the path, if not available, get, unzip and install model

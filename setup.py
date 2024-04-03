@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """ Install packages for faceswap.py """
-# pylint: disable=too-many-lines
+# pylint:disable=too-many-lines
 
 import logging
 import ctypes
@@ -1434,7 +1434,7 @@ class Installer():
         self._seen_lines.add(text)
 
 
-class PexpectInstaller(Installer):  # pylint: disable=too-few-public-methods
+class PexpectInstaller(Installer):  # pylint:disable=too-few-public-methods
     """ Package installer for Linux/macOS using Pexpect
 
     Uses Pexpect for installing packages allowing access to realtime feedback
@@ -1472,7 +1472,7 @@ class PexpectInstaller(Installer):  # pylint: disable=too-few-public-methods
         return proc.exitstatus
 
 
-class WinPTYInstaller(Installer):  # pylint: disable=too-few-public-methods
+class WinPTYInstaller(Installer):  # pylint:disable=too-few-public-methods
     """ Package installer for Windows using WinPTY
 
     Spawns a pseudo PTY for installing packages allowing access to realtime feedback

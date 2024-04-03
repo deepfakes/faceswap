@@ -618,7 +618,7 @@ class TensorBoardLogs():
         return retval
 
 
-class _EventParser():  # pylint:disable=too-few-public-methods
+class _EventParser():
     """ Parses Tensorflow event and populates data to :class:`_Cache`.
 
     Parameters

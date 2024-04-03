@@ -75,7 +75,7 @@ class SettingsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
 
     def _build(self) -> None:
         """ Add the settings menu to the menu bar """
-        # pylint: disable=cell-var-from-loop
+        # pylint:disable=cell-var-from-loop
         logger.debug("Building settings menu")
         self.add_command(label=_("Configure Settings..."),
                          underline=0,
@@ -464,7 +464,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
 
     def _build_recources_menu(self) -> None:
         """ Build resources menu """
-        # pylint: disable=cell-var-from-loop
+        # pylint:disable=cell-var-from-loop
         logger.debug("Building Resources Files menu")
         for resource in _RESOURCES:
             self.recources_menu.add_command(
@@ -478,7 +478,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         get_config().tk_vars.console_clear.set(True)
 
 
-class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
+class TaskBar(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ Task bar buttons
 
     Parameters
@@ -597,7 +597,7 @@ class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
 
     def _settings_btns(self) -> None:
         """ Place the settings buttons """
-        # pylint: disable=cell-var-from-loop
+        # pylint:disable=cell-var-from-loop
         frame = ttk.Frame(self._btn_frame)
         frame.pack(side=tk.LEFT, anchor=tk.W, expand=False, padx=2)
         for name in ("extract", "train", "convert"):

@@ -475,7 +475,7 @@ class _Cache():
         return mask
 
 
-class RingBuffer():  # pylint: disable=too-few-public-methods
+class RingBuffer():
     """ Rolling buffer for holding training/preview batches
 
     Parameters

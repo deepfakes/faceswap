@@ -136,7 +136,7 @@ class MediaLoader():
                 os.path.isfile(self.folder) and
                 os.path.splitext(self.folder)[1].lower() in _video_extensions):
             logger.verbose("Video exists at: '%s'", self.folder)  # type: ignore
-            retval = cv2.VideoCapture(self.folder)  # pylint: disable=no-member
+            retval = cv2.VideoCapture(self.folder)  # pylint:disable=no-member
             # TODO ImageIO single frame seek seems slow. Look into this
             # retval = imageio.get_reader(self.folder, "ffmpeg")
         else:
@@ -203,7 +203,7 @@ class MediaLoader():
         frame = os.path.splitext(filename)[0]
         logger.trace("Loading video frame: '%s'", frame)  # type: ignore
         frame_no = int(frame[frame.rfind("_") + 1:]) - 1
-        self._vid_reader.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # pylint: disable=no-member
+        self._vid_reader.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # pylint:disable=no-member
 
         _, image = self._vid_reader.read()
         # TODO imageio single frame seek seems slow. Look into this
@@ -250,7 +250,7 @@ class MediaLoader():
             with open(output_file, "wb") as out_file:
                 out_file.write(encoded_image)
         else:
-            cv2.imwrite(output_file, image)  # pylint: disable=no-member
+            cv2.imwrite(output_file, image)  # pylint:disable=no-member
 
 
 class Faces(MediaLoader):

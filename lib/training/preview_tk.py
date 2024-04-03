@@ -133,7 +133,7 @@ class _Taskbar():
         logger.debug("Added scale combo: '%s'", scale)
         return scale
 
-    def _clear_combo_focus(self, *args) -> None:  # pylint: disable=unused-argument
+    def _clear_combo_focus(self, *args) -> None:  # pylint:disable=unused-argument
         """ Remove the highlighting and stealing of focus that the combobox annoyingly
         implements. """
         logger.debug("Clearing scale combo focus")
@@ -316,7 +316,7 @@ class _PreviewCanvas(tk.Canvas):  # pylint:disable=too-many-ancestors
         self.configure(xscrollcommand=x_scrollbar.set, yscrollcommand=y_scrollbar.set)
         logger.debug("Configured scrollbars. x: '%s', y: '%s'", x_scrollbar, y_scrollbar)
 
-    def _resize(self, event: tk.Event) -> None:  # pylint: disable=unused-argument
+    def _resize(self, event: tk.Event) -> None:  # pylint:disable=unused-argument
         """ Place the image in center of canvas on resize event and move to top left
 
         Parameters
@@ -518,7 +518,7 @@ class _Image():
             self._save_var.set(False)
 
 
-class _Bindings():  # pylint: disable=too-few-public-methods
+class _Bindings():  # pylint:disable=too-few-public-methods
     """ Handle Mouse and Keyboard bindings for the canvas.
 
     Parameters
@@ -654,7 +654,7 @@ class _Bindings():  # pylint: disable=too-few-public-methods
         logger.debug("Bound key events")
 
 
-class PreviewTk(PreviewBase):  # pylint:disable=too-few-public-methods
+class PreviewTk(PreviewBase):
     """ Holds a preview window for displaying the pop out preview.
 
     Parameters

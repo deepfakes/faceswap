@@ -133,7 +133,7 @@ class FaceswapGui(tk.Tk):
             self._last_session.from_dict(session_state)
         logger.debug("GUI Redrawn")
 
-    def close_app(self, *args):  # pylint: disable=unused-argument
+    def close_app(self, *args):  # pylint:disable=unused-argument
         """ Close Python. This is here because the graph
             animation function continues to run even when
             tkinter has gone away """
@@ -173,7 +173,7 @@ class FaceswapGui(tk.Tk):
         return True
 
 
-class Gui():  # pylint: disable=too-few-public-methods
+class Gui():  # pylint:disable=too-few-public-methods
     """ The GUI process. """
     def __init__(self, arguments):
         self.root = FaceswapGui(arguments.debug)

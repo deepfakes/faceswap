@@ -596,7 +596,7 @@ class ONet(KSession):
         return np.concatenate([results[..., :4], scores[..., None]], axis=-1), results[..., 4:].T
 
 
-class MTCNN():  # pylint: disable=too-few-public-methods
+class MTCNN():  # pylint:disable=too-few-public-methods
     """ MTCNN Detector for face alignment
 
     Parameters

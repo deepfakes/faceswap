@@ -98,7 +98,7 @@ class FSThread(threading.Thread):
         try:
             if self._target is not None:
                 self._target(*self._args, **self._kwargs)
-        except Exception as err:  # pylint: disable=broad-except
+        except Exception as err:  # pylint:disable=broad-except
             self.err = sys.exc_info()
             logger.debug("Error in thread (%s): %s", self._name, str(err))
         finally:
@@ -216,11 +216,11 @@ class MultiThread():
         """
         logger.debug("Joining Threads: '%s'", self._name)
         for thread in self._threads:
-            logger.debug("Joining Thread: '%s'", thread._name)  # pylint: disable=protected-access
+            logger.debug("Joining Thread: '%s'", thread._name)  # pylint:disable=protected-access
             thread.join()
             if thread.err:
                 logger.error("Caught exception in thread: '%s'",
-                             thread._name)  # pylint: disable=protected-access
+                             thread._name)  # pylint:disable=protected-access
                 raise thread.err[1].with_traceback(thread.err[2])
         del self._threads
         self._threads = []

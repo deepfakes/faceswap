@@ -617,7 +617,7 @@ class SubPixelUpscaling(tf.keras.layers.Layer):
             Keras tensor (future input to layer) or ``list``/``tuple`` of Keras tensors to
             reference for weight shape computations.
         """
-        pass  # pylint: disable=unnecessary-pass
+        pass  # pylint:disable=unnecessary-pass
 
     def call(self, inputs: tf.Tensor, *args, **kwargs) -> tf.Tensor:
         """This is where the layer's logic lives.

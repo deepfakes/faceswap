@@ -99,7 +99,7 @@ class Recognition(Identity):
         return
 
 
-class Cluster():  # pylint: disable=too-few-public-methods
+class Cluster():  # pylint:disable=too-few-public-methods
     """ Cluster the outputs from a VGG-Face 2 Model
 
     Parameters

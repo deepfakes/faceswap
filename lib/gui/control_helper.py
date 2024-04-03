@@ -543,7 +543,7 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         self.mainframe.bind("<Configure>", self.update_scrollbar)
         logger.debug("Added Config Scrollbar")
 
-    def update_scrollbar(self, event):  # pylint: disable=unused-argument
+    def update_scrollbar(self, event):  # pylint:disable=unused-argument
         """ Update the options frame scrollbar """
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
 
@@ -908,7 +908,7 @@ class ControlBuilder():
     blank_nones: bool
         Sets selected values to an empty string rather than None if this is true.
     """
-    def __init__(self, parent, option, option_columns,  # pylint: disable=too-many-arguments
+    def __init__(self, parent, option, option_columns,  # pylint:disable=too-many-arguments
                  label_width, checkbuttons_frame, style, blank_nones):
         logger.debug("Initializing %s: (parent: %s, option: %s, option_columns: %s, "
                      "label_width: %s, checkbuttons_frame: %s, style: %s, blank_nones: %s)",

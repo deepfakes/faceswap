@@ -339,7 +339,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         return filedialog.asksaveasfilename(**self._kwargs)  # type: ignore
 
     @staticmethod
-    def _nothing() -> None:  # pylint: disable=useless-return
+    def _nothing() -> None:  # pylint:disable=useless-return
         """ Method that does nothing, used for disabling open/save pop up.  """
         logger.debug("Popping Nothing browser")
         return

@@ -389,7 +389,7 @@ class Editor():
         """
         self._canvas.bind("<Motion>", self._update_cursor)
 
-    def _update_cursor(self, event):  # pylint: disable=unused-argument
+    def _update_cursor(self, event):  # pylint:disable=unused-argument
         """ The mouse cursor display as bound to the mouse's <Motion> event..
 
         The default is to always return a standard cursor, so this method should be overridden for

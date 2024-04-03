@@ -28,7 +28,7 @@ def initialize_images() -> None:
     This should only be called once on first GUI startup. Future access to :class:`Images`
     handler should only be executed through :func:`get_images`.
     """
-    global _IMAGES  # pylint: disable=global-statement
+    global _IMAGES  # pylint:disable=global-statement
     if _IMAGES is not None:
         return
     logger.debug("Initializing images")
