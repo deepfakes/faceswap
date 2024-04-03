@@ -20,7 +20,7 @@ if T.TYPE_CHECKING:
     from tensorflow import Tensor
 
 
-logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 _CONFIG: dict = {}

@@ -24,7 +24,7 @@ from ._base import ModelBase, get_all_sub_models
 if T.TYPE_CHECKING:
     from torch import Tensor
 
-logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 @dataclass

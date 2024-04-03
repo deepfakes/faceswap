@@ -25,7 +25,7 @@ if T.TYPE_CHECKING:
     from .model import ModelBase
     from keras.optimizers import Optimizer
 
-logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 def get_all_sub_models(

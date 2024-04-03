@@ -19,7 +19,7 @@ from ffmpy import FFmpeg, FFRuntimeError
 # faceswap imports
 from lib.utils import handle_deprecated_cliopts, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
 
-logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class DataItem():

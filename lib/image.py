@@ -28,7 +28,7 @@ from lib.utils import convert_to_secs, FaceswapError, VIDEO_EXTENSIONS, get_imag
 if T.TYPE_CHECKING:
     from lib.align.alignments import PNGHeaderDict
 
-logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+logger = logging.getLogger(__name__)
 
 # ################### #
 # <<< IMAGE UTILS >>> #
