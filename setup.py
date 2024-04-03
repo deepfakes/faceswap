@@ -803,7 +803,7 @@ def _check_ld_config(lib: str) -> str:
         return retval
 
     for path in os.environ["LD_LIBRARY_PATH"].split(":"):
-        if not path:
+        if not path or not os.path.exists(path):
             continue
 
         retval = next((fname.strip() for fname in reversed(os.listdir(path))
