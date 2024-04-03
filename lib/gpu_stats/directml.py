@@ -155,7 +155,7 @@ class DXGIAdapterDesc1(StructureRepr):  # pylint:disable=too-few-public-methods
         ("DedicatedSystemMemory", ctypes.c_size_t),
         ("SharedSystemMemory", ctypes.c_size_t),
         ("AdapterLuid", LUID),
-        ("Flags", DXGIAdapterFlag.ctype)]  # type:ignore[attr-defined] # pylint: disable=no-member
+        ("Flags", DXGIAdapterFlag.ctype)]  # type:ignore[attr-defined] # pylint:disable=no-member
 
 
 class DXGIQueryVideoMemoryInfo(StructureRepr):  # pylint:disable=too-few-public-methods
