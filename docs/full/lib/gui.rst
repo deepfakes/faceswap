@@ -111,6 +111,13 @@ menu module
    :undoc-members:
    :show-inheritance:
 
+options module
+==============
+.. automodule:: lib.gui.options
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 popup_configure module
 ======================
 .. automodule:: lib.gui.popup_configure

@@ -95,19 +95,20 @@ class FaceSwapArgs():
 
     Parameters
     ----------
-    subparser: :class:`argparse._SubParsersAction`
-        The subparser for the given command
+    subparser: :class:`argparse._SubParsersAction` | None
+        The subparser for the given command. ``None`` if the class is being called for reading
+        rather than processing
     command: str
         The faceswap command that is to be executed
     description: str, optional
         The description for the given command. Default: "default"
     """
     def __init__(self,
-                 subparser: argparse._SubParsersAction,
+                 subparser: argparse._SubParsersAction | None,
                  command: str,
                  description: str = "default") -> None:
         self.global_arguments = self._get_global_arguments()
-        self.info = self.get_info()
+        self.info: str = self.get_info()
         self.argument_list = self.get_argument_list()
         self.optional_arguments = self.get_optional_arguments()
         self._process_suppressions()
