@@ -16,10 +16,10 @@ from threading import Event, Lock, Thread
 import numpy as np
 
 from lib.align import DetectedFace
-from lib.cli.args import ConvertArgs
+from lib.cli.args_extract_convert import ConvertArgs
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.convert import Converter
-from lib.utils import FaceswapError
+from lib.utils import FaceswapError, handle_deprecated_cliopts
 from lib.queue_manager import queue_manager
 from scripts.fsmedia import Alignments, Images
 from scripts.convert import Predict, ConvertItem
@@ -41,7 +41,7 @@ _LANG = gettext.translation("tools.preview", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
 
-class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
+class Preview(tk.Tk):
     """ This tool is part of the Faceswap Tools suite and should be called from
     ``python tools.py preview`` command.
 
@@ -59,6 +59,7 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
     def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         super().__init__()
+        arguments = handle_deprecated_cliopts(arguments)
         self._config_tools = ConfigTools()
         self._lock = Lock()
         self._dispatcher = Dispatcher(self)
@@ -455,7 +456,7 @@ class Samples():
         logger.debug("Predicted faces")
 
 
-class Patch():  # pylint:disable=too-few-public-methods
+class Patch():
     """ The Patch pipeline
 
     Runs in it's own thread. Takes the output from the Faceswap model predictor and runs the faces

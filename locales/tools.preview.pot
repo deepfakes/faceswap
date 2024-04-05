@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-01-16 12:27+0000\n"
+"POT-Creation-Date: 2024-03-28 23:53+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,64 +17,64 @@ msgstr ""
 "Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: tools/preview/cli.py:14
+#: tools/preview/cli.py:15
 msgid "This command allows you to preview swaps to tweak convert settings."
 msgstr ""
 
-#: tools/preview/cli.py:29
+#: tools/preview/cli.py:30
 msgid ""
 "Preview tool\n"
 "Allows you to configure your convert settings with a live preview"
 msgstr ""
 
-#: tools/preview/cli.py:46 tools/preview/cli.py:55 tools/preview/cli.py:62
+#: tools/preview/cli.py:47 tools/preview/cli.py:57 tools/preview/cli.py:65
 msgid "data"
 msgstr ""
 
-#: tools/preview/cli.py:48
+#: tools/preview/cli.py:50
 msgid ""
 "Input directory or video. Either a directory containing the image files you "
 "wish to process or path to a video file."
 msgstr ""
 
-#: tools/preview/cli.py:57
+#: tools/preview/cli.py:60
 msgid ""
 "Path to the alignments file for the input, if not at the default location"
 msgstr ""
 
-#: tools/preview/cli.py:64
+#: tools/preview/cli.py:68
 msgid ""
 "Model directory. A directory containing the trained model you wish to "
 "process."
 msgstr ""
 
-#: tools/preview/cli.py:71
+#: tools/preview/cli.py:74
 msgid "Swap the model. Instead of A -> B, swap B -> A"
 msgstr ""
 
-#: tools/preview/control_panels.py:496
+#: tools/preview/control_panels.py:510
 msgid "Save full config"
 msgstr ""
 
-#: tools/preview/control_panels.py:499
+#: tools/preview/control_panels.py:513
 msgid "Reset full config to default values"
 msgstr ""
 
-#: tools/preview/control_panels.py:502
+#: tools/preview/control_panels.py:516
 msgid "Reset full config to saved values"
 msgstr ""
 
-#: tools/preview/control_panels.py:653
+#: tools/preview/control_panels.py:667
 #, python-brace-format
 msgid "Save {title} config"
 msgstr ""
 
-#: tools/preview/control_panels.py:656
+#: tools/preview/control_panels.py:670
 #, python-brace-format
 msgid "Reset {title} config to default values"
 msgstr ""
 
-#: tools/preview/control_panels.py:659
+#: tools/preview/control_panels.py:673
 #, python-brace-format
 msgid "Reset {title} config to saved values"
 msgstr ""

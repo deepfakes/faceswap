@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 # faceswap imports
 from lib.serializer import Serializer, get_serializer_from_filename
-from lib.utils import deprecation_warning
+from lib.utils import handle_deprecated_cliopts
 
 from .sort_methods import SortBlur, SortColor, SortFace, SortHistogram, SortMultiMethod
 from .sort_methods_aligned import SortDistance, SortFaceCNN, SortPitch, SortSize, SortYaw, SortRoll
@@ -26,7 +26,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Sort():  # pylint:disable=too-few-public-methods
+class Sort():
     """ Sorts folders of faces based on input criteria
 
     Wrapper for the sort process to run in either batch mode or single use mode
@@ -39,31 +39,9 @@ class Sort():  # pylint:disable=too-few-public-methods
     """
     def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing: %s (args: %s)", self.__class__.__name__, arguments)
-        self._args = arguments
-        self._handle_deprecations()
+        self._args = handle_deprecated_cliopts(arguments)
         self._input_locations = self._get_input_locations()
         logger.debug("Initialized: %s", self.__class__.__name__)
-
-    def _handle_deprecations(self):
-        """ Warn that 'final_process' is deprecated and remove from arguments """
-        if self._args.final_process:
-            deprecation_warning("`-fp`, `--final-process`", "This option will be ignored")
-            logger.warning("Final processing is dictated by your choice of 'sort-by' and "
-                           "'group-by' options and whether 'keep' has been selected.")
-            del self._args.final_process
-        if "face-yaw" in (self._args.sort_method, self._args.group_method):
-            deprecation_warning("`face-yaw` sort option", "Please use option 'yaw' going forward.")
-            sort_ = self._args.sort_method
-            group_ = self._args.group_method
-            self._args.sort_method = "yaw" if sort_ == "face-yaw" else sort_
-            self._args.group_method = "yaw" if group_ == "face-yaw" else group_
-        if "black-pixels" in (self._args.sort_method, self._args.group_method):
-            deprecation_warning("`black-pixels` sort option",
-                                "Please use option 'color-black' going forward.")
-            sort_ = self._args.sort_method
-            group_ = self._args.group_method
-            self._args.sort_method = "color-black" if sort_ == "black-pixels" else sort_
-            self._args.group_method = "color-black" if group_ == "black-pixels" else group_
 
     def _get_input_locations(self) -> list[str]:
         """ Obtain the full path to input locations. Will be a list of locations if batch mode is
@@ -123,7 +101,7 @@ class Sort():  # pylint:disable=too-few-public-methods
             sort.process()
 
 
-class _Sort():  # pylint:disable=too-few-public-methods
+class _Sort():
     """ Sorts folders of faces based on input criteria """
     def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: arguments: %s", self.__class__.__name__, arguments)

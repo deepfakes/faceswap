@@ -22,7 +22,7 @@ from lib.gpu_stats import GPUStats
 from lib.image import read_image_meta_batch, ImagesLoader
 from lib.multithreading import MultiThread, total_cpus
 from lib.queue_manager import queue_manager
-from lib.utils import FaceswapError, get_folder, get_image_paths
+from lib.utils import FaceswapError, get_folder, get_image_paths, handle_deprecated_cliopts
 from plugins.extract.pipeline import Extractor, ExtractMedia
 from plugins.plugin_loader import PluginLoader
 
@@ -62,7 +62,7 @@ class ConvertItem:
     swapped_faces: np.ndarray = np.array([])
 
 
-class Convert():  # pylint:disable=too-few-public-methods
+class Convert():
     """ The Faceswap Face Conversion Process.
 
     The conversion process is responsible for swapping the faces on source frames with the output
@@ -82,7 +82,7 @@ class Convert():  # pylint:disable=too-few-public-methods
     """
     def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (args: %s)", self.__class__.__name__, arguments)
-        self._args = arguments
+        self._args = handle_deprecated_cliopts(arguments)
 
         self._images = ImagesLoader(self._args.input_dir, fast_count=True)
         self._alignments = Alignments(self._args, False, self._images.is_video)
@@ -847,8 +847,7 @@ class Predict():
     def _get_model_name(self, model_dir: str) -> str:
         """ Return the name of the Faceswap model used.
 
-        If a "trainer" option has been selected in the command line arguments, use that value,
-        otherwise retrieve the name of the model from the model's state file.
+        Retrieve the name of the model from the model's state file.
 
         Parameters
         ----------
@@ -861,24 +860,18 @@ class Predict():
             The name of the Faceswap model being used.
 
         """
-        if hasattr(self._args, "trainer") and self._args.trainer:
-            logger.debug("Trainer name provided: '%s'", self._args.trainer)
-            return self._args.trainer
-
         statefiles = [fname for fname in os.listdir(str(model_dir))
                       if fname.endswith("_state.json")]
         if len(statefiles) != 1:
             raise FaceswapError("There should be 1 state file in your model folder. "
-                                f"{len(statefiles)} were found. Specify a trainer with the '-t', "
-                                "'--trainer' option.")
+                                f"{len(statefiles)} were found.")
         statefile = os.path.join(str(model_dir), statefiles[0])
 
         state = self._serializer.load(statefile)
         trainer = state.get("name", None)
 
         if not trainer:
-            raise FaceswapError("Trainer name could not be read from state file. "
-                                "Specify a trainer with the '-t', '--trainer' option.")
+            raise FaceswapError("Trainer name could not be read from state file.")
         logger.debug("Trainer from state file: '%s'", trainer)
         return trainer
 
@@ -1100,7 +1093,7 @@ class Predict():
         logger.trace("Queued out batch. Batchsize: %s", len(batch))  # type:ignore
 
 
-class OptionalActions():  # pylint:disable=too-few-public-methods
+class OptionalActions():
     """ Process specific optional actions for Convert.
 
     Currently only handles skip faces. This class should probably be (re)moved.

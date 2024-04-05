@@ -170,7 +170,7 @@ class ScriptExecutor():
             If tkinter cannot be imported
         """
         try:
-            import tkinter  # noqa pylint: disable=unused-import,import-outside-toplevel
+            import tkinter  # noqa pylint:disable=unused-import,import-outside-toplevel
         except ImportError as err:
             logger.error("It looks like TkInter isn't installed for your OS, so the GUI has been "
                          "disabled. To enable the GUI please install the TkInter application. You "

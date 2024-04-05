@@ -600,6 +600,7 @@ class DebugLandmarks(PostProcessAction):
             logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s",  # type:ignore[attr-defined]
                          frame, idx)
             # Landmarks
+            assert face.aligned.face is not None
             for (pos_x, pos_y) in face.aligned.landmarks.astype("int32"):
                 cv2.circle(face.aligned.face, (pos_x, pos_y), 1, (0, 255, 255), -1)
             # Pose

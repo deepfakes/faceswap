@@ -11,7 +11,7 @@ from lib.serializer import get_serializer
 logger = logging.getLogger(__name__)
 
 
-class _GuiSession():
+class _GuiSession():  # pylint:disable=too-few-public-methods
     """ Parent class for GUI Session Handlers.
 
     Parameters
@@ -90,11 +90,12 @@ class _GuiSession():
     def _selected_to_choices(self):
         """ dict: The selected value and valid choices for multi-option, radio or combo options.
         """
-        valid_choices = {cmd: {opt: {"choices": val["cpanel_option"].choices,
-                                     "is_multi": val["cpanel_option"].is_multi_option}
+        valid_choices = {cmd: {opt: {"choices": val.cpanel_option.choices,
+                                     "is_multi": val.cpanel_option.is_multi_option}
                                for opt, val in data.items()
-                               if isinstance(val, dict) and "cpanel_option" in val
-                               and val["cpanel_option"].choices is not None}
+                               if hasattr(val, "cpanel_option")  # Filter out helptext
+                               and val.cpanel_option.choices is not None
+                               }
                          for cmd, data in self._config.cli_opts.opts.items()}
         logger.trace("valid_choices: %s", valid_choices)
         retval = {command: {option: {"value": value,

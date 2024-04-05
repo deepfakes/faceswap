@@ -8,11 +8,11 @@ import typing as T
 from argparse import Namespace
 from multiprocessing import Process
 
-from lib.utils import VIDEO_EXTENSIONS, FaceswapError
+from lib.utils import FaceswapError, handle_deprecated_cliopts, VIDEO_EXTENSIONS
 from .media import AlignmentData
-from .jobs import Check, Sort, Spatial  # noqa pylint: disable=unused-import
-from .jobs_faces import FromFaces, RemoveFaces, Rename  # noqa pylint: disable=unused-import
-from .jobs_frames import Draw, Extract  # noqa pylint: disable=unused-import
+from .jobs import Check, Sort, Spatial  # noqa pylint:disable=unused-import
+from .jobs_faces import FromFaces, RemoveFaces, Rename  # noqa pylint:disable=unused-import
+from .jobs_frames import Draw, Extract  # noqa pylint:disable=unused-import
 
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class Alignments():
                                  "missing-frames",
                                  "no-faces"]
 
-        self._args = arguments
+        self._args = handle_deprecated_cliopts(arguments)
         self._batch_mode = self._validate_batch_mode()
         self._locations = self._get_locations()
 

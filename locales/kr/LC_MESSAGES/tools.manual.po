@@ -5,8 +5,9 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: \n"
-"POT-Creation-Date: 2022-11-24 14:17+0900\n"
-"PO-Revision-Date: 2022-11-26 23:49+0900\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-03-28 23:55+0000\n"
+"PO-Revision-Date: 2024-03-29 00:05+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -15,9 +16,9 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 3.2\n"
+"X-Generator: Poedit 3.4.2\n"
 
-#: tools/manual\cli.py:13
+#: tools/manual/cli.py:13
 msgid ""
 "This command lets you perform various actions on frames, faces and "
 "alignments files using visual tools."
@@ -25,7 +26,7 @@ msgstr ""
 "이 명령어는 visual 도구들을 사용하여 프레임, 얼굴, alignments 파일들에 대한 "
 "다양한 작업을 수행할 수 있도록 해줍니다."
 
-#: tools/manual\cli.py:23
+#: tools/manual/cli.py:23
 msgid ""
 "A tool to perform various actions on frames, faces and alignments files "
 "using visual tools"
@@ -33,33 +34,33 @@ msgstr ""
 "프레임, 얼굴, alignments 파일들에 대한 다양한 작업을 수행할 수 있도록 해주는 "
 "도구"
 
-#: tools/manual\cli.py:35 tools/manual\cli.py:43
+#: tools/manual/cli.py:35 tools/manual/cli.py:44
 msgid "data"
 msgstr "데이터"
 
-#: tools/manual\cli.py:37
+#: tools/manual/cli.py:38
 msgid ""
 "Path to the alignments file for the input, if not at the default location"
 msgstr ""
 "입력에 대한 alignments 파일의 경로, 만약 설정되지 않았다면 기본 경로입니다"
 
-#: tools/manual\cli.py:44
+#: tools/manual/cli.py:46
 msgid ""
 "Video file or directory containing source frames that faces were extracted "
 "from."
 msgstr "얼굴이 추출된 소스 프레임을 가지고 있는 비디오 파일 또는 디렉토리."
 
-#: tools/manual\cli.py:51 tools/manual\cli.py:59
+#: tools/manual/cli.py:53 tools/manual/cli.py:62
 msgid "options"
 msgstr "설정"
 
-#: tools/manual\cli.py:52
+#: tools/manual/cli.py:55
 msgid ""
 "Force regeneration of the low resolution jpg thumbnails in the alignments "
 "file."
 msgstr "_alignments 파일에서 저해상도 jpg 미리 보기를 강제로 재생성합니다."
 
-#: tools/manual\cli.py:60
+#: tools/manual/cli.py:64
 msgid ""
 "The process attempts to speed up generation of thumbnails by extracting from "
 "the video in parallel threads. For some videos, this causes the caching "

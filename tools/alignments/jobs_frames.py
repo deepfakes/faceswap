@@ -104,6 +104,8 @@ class Draw():
             face = DetectedFace()
             face.from_alignment(alignment, image=image)
             # Bounding Box
+            assert face.left is not None
+            assert face.top is not None
             cv2.rectangle(image, (face.left, face.top), (face.right, face.bottom), (255, 0, 0), 1)
             self._annotate_landmarks(image, np.rint(face.landmarks_xy).astype("int32"))
             self._annotate_extract_boxes(image, face, idx)

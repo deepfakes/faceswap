@@ -17,7 +17,7 @@ from lib.image import read_image_meta
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread, FSThread
 from lib.training import Preview, PreviewBuffer, TriggerType
-from lib.utils import (get_folder, get_image_paths,
+from lib.utils import (get_folder, get_image_paths, handle_deprecated_cliopts,
                        FaceswapError, IMAGE_EXTENSIONS)
 from plugins.plugin_loader import PluginLoader
 
@@ -48,8 +48,7 @@ class Train():
     """
     def __init__(self, arguments: argparse.Namespace) -> None:
         logger.debug("Initializing %s: (args: %s", self.__class__.__name__, arguments)
-        self._args = arguments
-        self._handle_deprecations()
+        self._args = handle_deprecated_cliopts(arguments)
 
         if self._args.summary:
             # If just outputting summary we don't need to initialize everything
@@ -67,10 +66,6 @@ class Train():
         self._preview = PreviewInterface(self._args.preview)
 
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    def _handle_deprecations(self) -> None:
-        """ Handle the update of deprecated arguments and output warnings. """
-        return
 
     def _get_images(self) -> dict[T.Literal["a", "b"], list[str]]:
         """ Check the image folders exist and contains valid extracted faces. Obtain image paths.
@@ -381,8 +376,8 @@ class Train():
             logger.info("  Using live preview")
         if sys.stdout.isatty():
             logger.info("  Press '%s' to save and quit",
-                        "Stop" if self._args.redirect_gui or self._args.colab else "ENTER")
-        if not self._args.redirect_gui and not self._args.colab and sys.stdout.isatty():
+                        "Stop" if self._args.redirect_gui else "ENTER")
+        if not self._args.redirect_gui and sys.stdout.isatty():
             logger.info("  Press 'S' to save model weights immediately")
         logger.info("===================================================")
 

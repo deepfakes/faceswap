@@ -1,5 +1,6 @@
 #!/usr/bin/python
 """ Logging Functions for Faceswap. """
+# NOTE: Don't import non stdlib packages. This module is accessed by setup.py
 import collections
 import logging
 from logging.handlers import RotatingFileHandler
@@ -144,7 +145,7 @@ class ColoredFormatter(logging.Formatter):
     def _get_sample_time_string(self) -> int:
         """ Obtain a sample time string and calculate correct padding.
 
-        This may be inaccurate wheb ticking over an integer from single to double digits, but that
+        This may be inaccurate when ticking over an integer from single to double digits, but that
         shouldn't be a huge issue.
 
         Returns
@@ -563,7 +564,7 @@ def _process_value(value: T.Any) -> T.Any:
         return f'[type: "{type(value).__name__}" len: {len(value)}'
 
     try:
-        import numpy as np
+        import numpy as np  # pylint:disable=import-outside-toplevel
     except ImportError:
         return value
 

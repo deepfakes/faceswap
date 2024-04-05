@@ -5,7 +5,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
-"POT-Creation-Date: 2021-06-08 19:24+0100\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-03-28 23:55+0000\n"
 "PO-Revision-Date: \n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -13,9 +14,9 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Poedit 2.4.3\n"
+"X-Generator: Poedit 3.4.2\n"
 
-#: tools/manual\cli.py:13
+#: tools/manual/cli.py:13
 msgid ""
 "This command lets you perform various actions on frames, faces and "
 "alignments files using visual tools."
@@ -23,7 +24,7 @@ msgstr ""
 "Este comando le permite realizar varias acciones en los archivos de "
 "fotogramas, caras y alineaciones utilizando herramientas visuales."
 
-#: tools/manual\cli.py:23
+#: tools/manual/cli.py:23
 msgid ""
 "A tool to perform various actions on frames, faces and alignments files "
 "using visual tools"
@@ -31,18 +32,18 @@ msgstr ""
 "Una herramienta que permite realizar diversas acciones en archivos de "
 "fotogramas, caras y alineaciones mediante herramientas visuales"
 
-#: tools/manual\cli.py:35 tools/manual\cli.py:43
+#: tools/manual/cli.py:35 tools/manual/cli.py:44
 msgid "data"
 msgstr "datos"
 
-#: tools/manual\cli.py:37
+#: tools/manual/cli.py:38
 msgid ""
 "Path to the alignments file for the input, if not at the default location"
 msgstr ""
 "Ruta del archivo de alineaciones para la entrada, si no está en la ubicación "
 "por defecto"
 
-#: tools/manual\cli.py:44
+#: tools/manual/cli.py:46
 msgid ""
 "Video file or directory containing source frames that faces were extracted "
 "from."
@@ -50,11 +51,11 @@ msgstr ""
 "Archivo o directorio de vídeo que contiene los fotogramas de origen de los "
 "que se extrajeron las caras."
 
-#: tools/manual\cli.py:51 tools/manual\cli.py:59
+#: tools/manual/cli.py:53 tools/manual/cli.py:62
 msgid "options"
 msgstr "opciones"
 
-#: tools/manual\cli.py:52
+#: tools/manual/cli.py:55
 msgid ""
 "Force regeneration of the low resolution jpg thumbnails in the alignments "
 "file."
@@ -62,7 +63,7 @@ msgstr ""
 "Forzar la regeneración de las miniaturas jpg de baja resolución en el "
 "archivo de alineaciones."
 
-#: tools/manual\cli.py:60
+#: tools/manual/cli.py:64
 msgid ""
 "The process attempts to speed up generation of thumbnails by extracting from "
 "the video in parallel threads. For some videos, this causes the caching "

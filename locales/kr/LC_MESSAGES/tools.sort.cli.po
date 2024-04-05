@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-11-24 14:19+0900\n"
-"PO-Revision-Date: 2022-11-27 03:43+0900\n"
+"POT-Creation-Date: 2024-03-28 23:53+0000\n"
+"PO-Revision-Date: 2024-03-29 00:04+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -16,19 +16,19 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Poedit 3.2\n"
+"X-Generator: Poedit 3.4.2\n"
 
-#: tools/sort/cli.py:14
+#: tools/sort/cli.py:15
 msgid "This command lets you sort images using various methods."
 msgstr "이 명령어는 다양한 메소드를 이용하여 이미지를 정렬해줍니다."
 
-#: tools/sort/cli.py:20
+#: tools/sort/cli.py:21
 msgid ""
 " Adjust the '-t' ('--threshold') parameter to control the strength of "
 "grouping."
 msgstr " 그룹화의 강도를 제어하기 위해 '-t' ('--threshold') 인자를 조정하세요."
 
-#: tools/sort/cli.py:21
+#: tools/sort/cli.py:22
 msgid ""
 " Adjust the '-b' ('--bins') parameter to control the number of bins for "
 "grouping. Each image is allocated to a bin by the percentage of color pixels "
@@ -37,7 +37,7 @@ msgstr ""
 " '-b'('--bins') 매개 변수를 조정하여 그룹화할 bins의 수를 제어합니다. 각 이미"
 "지는 이미지에 나타나는 색상 픽셀의 백분율에 따라 bin에 할당됩니다."
 
-#: tools/sort/cli.py:24
+#: tools/sort/cli.py:25
 msgid ""
 " Adjust the '-b' ('--bins') parameter to control the number of bins for "
 "grouping. Each image is allocated to a bin by the number of degrees the face "
@@ -46,7 +46,7 @@ msgstr ""
 " '-b'('--bins') 매개 변수를 조정하여 그룹화할 bins의 수를 제어합니다. 각 이미"
 "지는 얼굴이 이미지 중심에서 떨어진 각도에 따라 bin에 할당됩니다."
 
-#: tools/sort/cli.py:27
+#: tools/sort/cli.py:28
 msgid ""
 " Adjust the '-b' ('--bins') parameter to control the number of bins for "
 "grouping. The minimum and maximum values are taken for the chosen sort "
@@ -56,15 +56,15 @@ msgstr ""
 "정렬 방법에 대해 최소값과 최대값이 사용됩니다. 그런 다음 bins가 그룹 정렬의 "
 "결과로 채워집니다."
 
-#: tools/sort/cli.py:31
+#: tools/sort/cli.py:32
 msgid "faces by blurriness."
 msgstr "흐릿한 얼굴."
 
-#: tools/sort/cli.py:32
+#: tools/sort/cli.py:33
 msgid "faces by fft filtered blurriness."
 msgstr "fft 필터링된 흐릿한 얼굴."
 
-#: tools/sort/cli.py:33
+#: tools/sort/cli.py:34
 msgid ""
 "faces by the estimated distance of the alignments from an 'average' face. "
 "This can be useful for eliminating misaligned faces. Sorts from most like an "
@@ -74,7 +74,7 @@ msgstr ""
 "된 얼굴을 제거하는 데 유용할 수 있습니다. 가장 평균 얼굴에서 가장 덜 평균 얼"
 "굴순으로 정렬합니다."
 
-#: tools/sort/cli.py:36
+#: tools/sort/cli.py:37
 msgid ""
 "faces using VGG Face2 by face similarity. This uses a pairwise clustering "
 "algorithm to check the distances between 512 features on every face in your "
@@ -84,23 +84,23 @@ msgstr ""
 "알고리즘을 사용하여 세트의 모든 얼굴에서 512개의 특징 사이의 거리를 확인하고 "
 "적절하게 정렬합니다."
 
-#: tools/sort/cli.py:39
+#: tools/sort/cli.py:40
 msgid "faces by their landmarks."
 msgstr "특징점이 있는 얼굴."
 
-#: tools/sort/cli.py:40
+#: tools/sort/cli.py:41
 msgid "Like 'face-cnn' but sorts by dissimilarity."
 msgstr "'face-cnn'과 비슷하지만 비유사성에 따라 정렬된."
 
-#: tools/sort/cli.py:41
+#: tools/sort/cli.py:42
 msgid "faces by Yaw (rotation left to right)."
 msgstr "yaw (왼쪽에서 오른쪽으로 회전)에 의한 얼굴."
 
-#: tools/sort/cli.py:42
+#: tools/sort/cli.py:43
 msgid "faces by Pitch (rotation up and down)."
 msgstr "pitch (위에서 아래로 회전)에 의한 얼굴."
 
-#: tools/sort/cli.py:43
+#: tools/sort/cli.py:44
 msgid ""
 "faces by Roll (rotation). Aligned faces should have a roll value close to "
 "zero. The further the Roll value from zero the higher liklihood the face is "
@@ -109,20 +109,20 @@ msgstr ""
 "이동 (회전)에 의한 얼굴. 정렬된 얼굴들은 0에 가까운 이동 값을 가져야 한다. 이"
 "동 값이 0에서 멀수록 얼굴들이 잘못 정렬되었을 가능성이 높습니다."
 
-#: tools/sort/cli.py:45
+#: tools/sort/cli.py:46
 msgid "faces by their color histogram."
 msgstr "색상 히스토그램에 의한 얼굴."
 
-#: tools/sort/cli.py:46
+#: tools/sort/cli.py:47
 msgid "Like 'hist' but sorts by dissimilarity."
 msgstr "'hist' 같지만 비유사성에 따라 정렬된."
 
-#: tools/sort/cli.py:47
+#: tools/sort/cli.py:48
 msgid ""
 "images by the average intensity of the converted grayscale color channel."
 msgstr "변환된 회색 계열 색상 채널의 평균 강도에 따른 이미지."
 
-#: tools/sort/cli.py:48
+#: tools/sort/cli.py:49
 msgid ""
 "images by their number of black pixels. Useful when faces are near borders "
 "and a large part of the image is black."
@@ -130,7 +130,7 @@ msgstr ""
 "검은색 픽셀의 개수에 따른 이미지들. 얼굴이 테두리 근처에 있고 이미지의 대부분"
 "이 검은색일 때 유용합니다."
 
-#: tools/sort/cli.py:50
+#: tools/sort/cli.py:51
 msgid ""
 "images by the average intensity of the converted Y color channel. Bright "
 "lighting and oversaturated images will be ranked first."
@@ -138,7 +138,7 @@ msgstr ""
 "변환된 Y 색상 채널의 평균 강도를 기준으로 한 이미지. 밝은 조명과 과포화 이미"
 "지가 1위를 차지할 것이다."
 
-#: tools/sort/cli.py:52
+#: tools/sort/cli.py:53
 msgid ""
 "images by the average intensity of the converted Cg color channel. Green "
 "images will be ranked first and red images will be last."
@@ -146,7 +146,7 @@ msgstr ""
 "변환된 Cg 컬러 채널의 평균 강도를 기준으로 한 이미지. 녹색 이미지가 먼저 순위"
 "가 매겨지고 빨간색 이미지가 마지막 순위가 됩니다."
 
-#: tools/sort/cli.py:54
+#: tools/sort/cli.py:55
 msgid ""
 "images by the average intensity of the converted Co color channel. Orange "
 "images will be ranked first and blue images will be last."
@@ -154,7 +154,7 @@ msgstr ""
 "변환된 Co 색상 채널의 평균 강도를 기준으로 한 이미지. 주황색 이미지가 먼저 순"
 "위가 매겨지고 파란색 이미지가 마지막 순위가 됩니다."
 
-#: tools/sort/cli.py:56
+#: tools/sort/cli.py:57
 msgid ""
 "images by their size in the original frame. Faces further from the camera "
 "and from lower resolution sources will be sorted first, whilst faces closer "
@@ -164,24 +164,16 @@ msgstr ""
 "해상도 원본에서 온 얼굴이 먼저 정렬되고, 카메라에 더 가까이 있고 고해상도 원"
 "본에서 온 얼굴이 마지막으로 정렬됩니다."
 
-#: tools/sort/cli.py:59
-msgid " option is deprecated. Use 'yaw'"
-msgstr " 이 옵션은 더 이상 사용되지 않습니다. 'yaw'를 사용하세요"
-
-#: tools/sort/cli.py:60
-msgid " option is deprecated. Use 'color-black'"
-msgstr " 이 옵션은 더 이상 사용되지 않습니다. 'color-black'을 사용하세요"
-
-#: tools/sort/cli.py:82
+#: tools/sort/cli.py:81
 msgid "Sort faces using a number of different techniques"
 msgstr "얼굴을 정렬하는데 사용되는 서로 다른 기술들의 개수"
 
-#: tools/sort/cli.py:92 tools/sort/cli.py:99 tools/sort/cli.py:110
-#: tools/sort/cli.py:148
+#: tools/sort/cli.py:91 tools/sort/cli.py:98 tools/sort/cli.py:110
+#: tools/sort/cli.py:150
 msgid "data"
 msgstr "데이터"
 
-#: tools/sort/cli.py:93
+#: tools/sort/cli.py:92
 msgid "Input directory of aligned faces."
 msgstr "정렬된 얼굴들의 입력 디렉토리."
 
@@ -198,7 +190,7 @@ msgstr ""
 "다. 제공되지 않고 'keep'을 선택하지 않으면 이미지가 제자리에 정렬되어 "
 "'input_dir'의 원래 내용을 덮어씁니다."
 
-#: tools/sort/cli.py:111
+#: tools/sort/cli.py:112
 msgid ""
 "R|If selected then the input_dir should be a parent folder containing "
 "multiple folders of faces you wish to sort. The faces will be output to "
@@ -207,11 +199,11 @@ msgstr ""
 "R|선택되면 input_dir는 정렬할 여러 개의 얼굴 폴더를 포함하는 상위 폴더여야 합"
 "니다. 얼굴은 output_dir의 별도 하위 폴더로 출력됩니다"
 
-#: tools/sort/cli.py:120
+#: tools/sort/cli.py:121
 msgid "sort settings"
 msgstr "정렬 설정"
 
-#: tools/sort/cli.py:122
+#: tools/sort/cli.py:124
 msgid ""
 "R|Choose how images are sorted. Selecting a sort method gives the images a "
 "new filename based on the order the image appears within the given method.\n"
@@ -227,17 +219,25 @@ msgstr ""
 "유지합니다. 'sort-by' 및 'group-by' 모두에 대해 'none'을 선택해도 아무 효과"
 "가 없습니다"
 
-#: tools/sort/cli.py:135 tools/sort/cli.py:162 tools/sort/cli.py:191
+#: tools/sort/cli.py:136 tools/sort/cli.py:164 tools/sort/cli.py:184
 msgid "group settings"
 msgstr "그룹 설정"
 
-#: tools/sort/cli.py:137
+#: tools/sort/cli.py:139
+#, fuzzy
+#| msgid ""
+#| "R|Selecting a group by method will move/copy files into numbered bins "
+#| "based on the selected method.\n"
+#| "L|'none': Don't bin the images. Folders will be sorted by the selected "
+#| "'sort-by' but will not be binned, instead they will be sorted into a "
+#| "single folder.  Selecting 'none' for both 'sort-by' and 'group-by' will "
+#| "do nothing"
 msgid ""
 "R|Selecting a group by method will move/copy files into numbered bins based "
 "on the selected method.\n"
 "L|'none': Don't bin the images. Folders will be sorted by the selected 'sort-"
 "by' but will not be binned, instead they will be sorted into a single "
-"folder.  Selecting 'none' for both 'sort-by' and 'group-by' will do nothing"
+"folder. Selecting 'none' for both 'sort-by' and 'group-by' will do nothing"
 msgstr ""
 "R|방법별로 그룹을 선택하면 선택한 방법에 따라 파일이 번호가 매겨진 빈으로 이"
 "동/복사됩니다.\n"
@@ -245,7 +245,7 @@ msgstr ""
 "만 버려지진 않고 단일 폴더로 정렬됩니다. 'sort-by' 및 'group-by' 모두에 대해 "
 "'none'을 선택해도 아무 효과가 없습니다"
 
-#: tools/sort/cli.py:149
+#: tools/sort/cli.py:152
 msgid ""
 "Whether to keep the original files in their original location. Choosing a "
 "'sort-by' method means that the files have to be renamed. Selecting 'keep' "
@@ -259,7 +259,7 @@ msgstr ""
 "된 파일이 지정된 출력 폴더에 생성됩니다. keep을 선택취소하면 선택한 정렬/그"
 "룹 기준에 따라 원래 파일이 이동되고 이름이 변경됩니다."
 
-#: tools/sort/cli.py:164
+#: tools/sort/cli.py:167
 msgid ""
 "R|Float value. Minimum threshold to use for grouping comparison with 'face-"
 "cnn' 'hist' and 'face' methods.\n"
@@ -284,20 +284,29 @@ msgstr ""
 "이미지가 많은 디렉터리에서 너무 극단적인 값을 설정하면 폴더가 많이 생성될 수 "
 "있으므로 주의하십시오. 기본값: face-cnn 7.2, hist 0.3, face 0.25"
 
-#: tools/sort/cli.py:181
-msgid "output"
-msgstr "출력"
-
-#: tools/sort/cli.py:182
-msgid ""
-"Deprecated and no longer used. The final processing will be dictated by the "
-"sort/group by methods and whether 'keep_original' is selected."
-msgstr ""
-"폐기되었고 더 이상 사용되지 않습니다. 최종 처리는 sort/group-by 메서드와 "
-"'keep_original'이 선택되었는지 여부에 의해 결정됩니다."
-
-#: tools/sort/cli.py:193
-#, python-format
+#: tools/sort/cli.py:187
+#, fuzzy, python-format
+#| msgid ""
+#| "R|Integer value. Used to control the number of bins created for grouping "
+#| "by: any 'blur' methods, 'color' methods or 'face metric' methods "
+#| "('distance', 'size') and 'orientation; methods ('yaw', 'pitch'). For any "
+#| "other grouping methods see the '-t' ('--threshold') option.\n"
+#| "L|For 'face metric' methods the bins are filled, according the the "
+#| "distribution of faces between the minimum and maximum chosen metric.\n"
+#| "L|For 'color' methods the number of bins represents the divider of the "
+#| "percentage of colored pixels. Eg. For a bin number of '5': The first "
+#| "folder will have the faces with 0%% to 20%% colored pixels, second 21%% "
+#| "to 40%%, etc. Any empty bins will be deleted, so you may end up with "
+#| "fewer bins than selected.\n"
+#| "L|For 'blur' methods folder 0 will be the least blurry, while the last "
+#| "folder will be the blurriest.\n"
+#| "L|For 'orientation' methods the number of bins is dictated by how much "
+#| "180 degrees is divided. Eg. If 18 is selected, then each folder will be a "
+#| "10 degree increment. Folder 0 will contain faces looking the most to the "
+#| "left/down whereas the last folder will contain the faces looking the most "
+#| "to the right/up. NB: Some bins may be empty if faces do not fit the "
+#| "criteria.\n"
+#| "Default value: 5"
 msgid ""
 "R|Integer value. Used to control the number of bins created for grouping by: "
 "any 'blur' methods, 'color' methods or 'face metric' methods ('distance', "
@@ -316,7 +325,7 @@ msgid ""
 "degrees is divided. Eg. If 18 is selected, then each folder will be a 10 "
 "degree increment. Folder 0 will contain faces looking the most to the left/"
 "down whereas the last folder will contain the faces looking the most to the "
-"right/up. NB: Some bins may be empty if faces do not fit the criteria.\n"
+"right/up. NB: Some bins may be empty if faces do not fit the criteria. \n"
 "Default value: 5"
 msgstr ""
 "R| 정수 값. 그룹화를 위해 생성된 bins의 수를 제어하는 데 사용됩니다. 임의의 "
@@ -337,11 +346,11 @@ msgstr ""
 "니다. 주의: 얼굴이 기준에 맞지 않으면 일부 bins가 비어 있을 수 있습니다.\n"
 "기본값: 5"
 
-#: tools/sort/cli.py:215 tools/sort/cli.py:225
+#: tools/sort/cli.py:207 tools/sort/cli.py:217
 msgid "settings"
 msgstr "설정"
 
-#: tools/sort/cli.py:217
+#: tools/sort/cli.py:210
 msgid ""
 "Logs file renaming changes if grouping by renaming, or it logs the file "
 "copying/movement if grouping by folders. If no log file is specified  with "
@@ -352,7 +361,7 @@ msgstr ""
 "로 그룹화하는 경우 파일 복사/이동을 기록합니다. '--log-file'로 로그 파일을 지"
 "정하지 않으면 'sort_log.json' 파일이 입력 디렉토리에 생성됩니다."
 
-#: tools/sort/cli.py:228
+#: tools/sort/cli.py:221
 msgid ""
 "Specify a log file to use for saving the renaming or grouping information. "
 "If specified extension isn't 'json' or 'yaml', then json will be used as the "
@@ -361,3 +370,19 @@ msgstr ""
 "_renaming 또는 grouping 정보를 저장하는 데 사용할 로그 파일을 지정합니다. 지"
 "정된 확장자가 'json' 또는 'yaml'이 아니면 json이 제공된 파일 이름과 함께 직렬"
 "화기로 사용됩니다. 기본값: sort_log.json"
+
+#~ msgid " option is deprecated. Use 'yaw'"
+#~ msgstr " 이 옵션은 더 이상 사용되지 않습니다. 'yaw'를 사용하세요"
+
+#~ msgid " option is deprecated. Use 'color-black'"
+#~ msgstr " 이 옵션은 더 이상 사용되지 않습니다. 'color-black'을 사용하세요"
+
+#~ msgid "output"
+#~ msgstr "출력"
+
+#~ msgid ""
+#~ "Deprecated and no longer used. The final processing will be dictated by "
+#~ "the sort/group by methods and whether 'keep_original' is selected."
+#~ msgstr ""
+#~ "폐기되었고 더 이상 사용되지 않습니다. 최종 처리는 sort/group-by 메서드와 "
+#~ "'keep_original'이 선택되었는지 여부에 의해 결정됩니다."

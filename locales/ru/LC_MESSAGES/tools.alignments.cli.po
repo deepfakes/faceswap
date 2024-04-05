@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-02-24 00:27+0000\n"
-"PO-Revision-Date: 2023-04-11 15:11+0700\n"
+"POT-Creation-Date: 2024-03-28 23:49+0000\n"
+"PO-Revision-Date: 2024-03-29 00:08+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ru\n"
@@ -17,16 +17,16 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
-"X-Generator: Poedit 3.2.2\n"
+"X-Generator: Poedit 3.4.2\n"
 
-#: tools/alignments/cli.py:17
+#: tools/alignments/cli.py:16
 msgid ""
 "This command lets you perform various tasks pertaining to an alignments file."
 msgstr ""
 "Эта команда позволяет выполнять различные задачи, относящиеся к файлу "
 "выравнивания."
 
-#: tools/alignments/cli.py:32
+#: tools/alignments/cli.py:31
 msgid ""
 "Alignments tool\n"
 "This tool allows you to perform numerous actions on or using an alignments "
@@ -37,15 +37,15 @@ msgstr ""
 "выравнивания или с его использованием против соответствующего набора лиц/"
 "кадров."
 
-#: tools/alignments/cli.py:44
+#: tools/alignments/cli.py:43
 msgid " Must Pass in a frames folder/source video file (-fr)."
 msgstr " Должен проходить в папке с кадрами/исходным видеофайлом (-fr)."
 
-#: tools/alignments/cli.py:45
+#: tools/alignments/cli.py:44
 msgid " Must Pass in a faces folder (-fc)."
 msgstr " Должен проходить в папке с лицами (-fc)."
 
-#: tools/alignments/cli.py:46
+#: tools/alignments/cli.py:45
 msgid ""
 " Must Pass in either a frames folder/source video file OR a faces folder (-"
 "fr or -fc)."
@@ -53,7 +53,7 @@ msgstr ""
 " Должно передаваться либо в папку с кадрами/исходным видеофайлом, либо в "
 "папку с лицами (-fr или -fc)."
 
-#: tools/alignments/cli.py:48
+#: tools/alignments/cli.py:47
 msgid ""
 " Must Pass in a frames folder/source video file AND a faces folder (-fr and -"
 "fc)."
@@ -61,11 +61,11 @@ msgstr ""
 " Должно передаваться либо в папку с кадрами/исходным видеофайлом И в папку с "
 "лицами (-fr и -fc)."
 
-#: tools/alignments/cli.py:50
+#: tools/alignments/cli.py:49
 msgid " Use the output option (-o) to process results."
 msgstr " Используйте опцию вывода (-o) для обработки результатов."
 
-#: tools/alignments/cli.py:58 tools/alignments/cli.py:97
+#: tools/alignments/cli.py:57 tools/alignments/cli.py:97
 msgid "processing"
 msgstr "обработка"
 
@@ -139,7 +139,7 @@ msgstr ""
 "L|'spatial': Выполнить пространственную и временную фильтрацию для "
 "сглаживания выравниваний (ЭКСПЕРИМЕНТАЛЬНО!)."
 
-#: tools/alignments/cli.py:99
+#: tools/alignments/cli.py:100
 msgid ""
 "R|How to output discovered items ('faces' and 'frames' only):\n"
 "L|'console': Print the list of frames to the screen. (DEFAULT)\n"
@@ -154,12 +154,12 @@ msgstr ""
 "каталоге).\n"
 "L|'move': Переместить обнаруженные элементы в подпапку в исходном каталоге."
 
-#: tools/alignments/cli.py:110 tools/alignments/cli.py:123
-#: tools/alignments/cli.py:130 tools/alignments/cli.py:137
+#: tools/alignments/cli.py:111 tools/alignments/cli.py:134
+#: tools/alignments/cli.py:141
 msgid "data"
 msgstr "данные"
 
-#: tools/alignments/cli.py:114
+#: tools/alignments/cli.py:118
 msgid ""
 "Full path to the alignments file to be processed. If you have input a "
 "'frames_dir' and don't provide this option, the process will try to find the "
@@ -173,15 +173,11 @@ msgstr ""
 "задания 'from-faces', когда файл выравнивания будет создан в указанной папке "
 "с лицами."
 
-#: tools/alignments/cli.py:124
-msgid "Directory containing extracted faces."
-msgstr "Папка, содержащая извлеченные лица."
-
-#: tools/alignments/cli.py:131
+#: tools/alignments/cli.py:135
 msgid "Directory containing source frames that faces were extracted from."
 msgstr "Папка, содержащая исходные кадры, из которых были извлечены лица."
 
-#: tools/alignments/cli.py:138
+#: tools/alignments/cli.py:143
 msgid ""
 "R|Run the aligmnents tool on multiple sources. The following jobs support "
 "batch mode:\n"
@@ -224,12 +220,12 @@ msgstr ""
 "выравнивания должен существовать в месте по умолчанию. Для всех остальных "
 "заданий этот параметр игнорируется."
 
-#: tools/alignments/cli.py:164 tools/alignments/cli.py:175
-#: tools/alignments/cli.py:185
+#: tools/alignments/cli.py:169 tools/alignments/cli.py:181
+#: tools/alignments/cli.py:191
 msgid "extract"
 msgstr "извлечение"
 
-#: tools/alignments/cli.py:165
+#: tools/alignments/cli.py:171
 msgid ""
 "[Extract only] Extract every 'nth' frame. This option will skip frames when "
 "extracting faces. For example a value of 1 will extract faces from every "
@@ -239,11 +235,11 @@ msgstr ""
 "кадры при извлечении лиц. Например, значение 1 будет извлекать лица из "
 "каждого кадра, значение 10 будет извлекать лица из каждого 10-го кадра."
 
-#: tools/alignments/cli.py:176
+#: tools/alignments/cli.py:182
 msgid "[Extract only] The output size of extracted faces."
 msgstr "[Только извлечение] Выходной размер извлеченных лиц."
 
-#: tools/alignments/cli.py:186
+#: tools/alignments/cli.py:193
 msgid ""
 "[Extract only] Only extract faces that have been resized by this percent or "
 "more to meet the specified extract size (`-sz`, `--size`). Useful for "
@@ -262,3 +258,6 @@ msgstr ""
 "значении 100 будут извлечены только лица, размер которых был изменен с 512px "
 "или выше. При значении 200 будут извлечены только лица, уменьшенные с 1024px "
 "или выше."
+
+#~ msgid "Directory containing extracted faces."
+#~ msgstr "Папка, содержащая извлеченные лица."
