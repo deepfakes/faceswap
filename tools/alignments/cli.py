@@ -52,8 +52,9 @@ class AlignmentsArgs(FaceSwapArgs):
             "opts": ("-j", "--job"),
             "action": Radio,
             "type": str,
-            "choices": ("draw", "extract", "from-faces", "missing-alignments", "missing-frames",
-                        "multi-faces", "no-faces", "remove-faces", "rename", "sort", "spatial"),
+            "choices": ("draw", "extract", "export", "from-faces", "missing-alignments",
+                        "missing-frames", "multi-faces", "no-faces", "remove-faces", "rename",
+                        "sort", "spatial"),
             "group": _("processing"),
             "required": True,
             "help": _(
@@ -61,6 +62,12 @@ class AlignmentsArgs(FaceSwapArgs):
                 "alignments file (-a) to be passed in."
                 "\nL|'draw': Draw landmarks on frames in the selected folder/video. A "
                 "subfolder will be created within the frames folder to hold the output.{0}"
+                "\nL|'export': Export the contents of an alignments file to a json file. Can be "
+                "used for editing alignment information in external tools and then re-importing "
+                "by using Faceswap's Extract 'Import' plugins. Note: masks and identity vectors "
+                "will not be included in the exported file, so will be re-generated when the json "
+                "file is imported back into Faceswap. All data is exported with the origin (0, 0) "
+                "at the top left of the canvas."
                 "\nL|'extract': Re-extract faces from the source frames/video based on "
                 "alignment data. This is a lot quicker than re-detecting faces. Can pass in "
                 "the '-een' (--extract-every-n) parameter to only extract every nth frame.{1}"
