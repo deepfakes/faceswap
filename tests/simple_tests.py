@@ -94,7 +94,7 @@ def train_args(model, model_path, faces, iterations=1, batchsize=2, extra_args="
     """ Train command """
     py_exe = sys.executable
     args = (f"{py_exe} faceswap.py train -A {faces} -B {faces} -m {model_path} -t {model} "
-            f"-bs {batchsize} -it {iterations} {extra_args}")
+            f"-b {batchsize} -it {iterations} {extra_args}")
     return args.split()
 
 
@@ -191,7 +191,7 @@ def main():
             (
                 py_exe, "tools.py", "alignments", "-j", "rename",
                 "-a", pathjoin(vid_base, "test_alignments.fsa"),
-                "-fc", pathjoin(vid_base, "faces_sorted"),
+                "-c", pathjoin(vid_base, "faces_sorted"),
             )
         )
         set_train_config(True)
@@ -202,7 +202,7 @@ def main():
                        pathjoin(vid_base, "faces"),
                        iterations=1,
                        batchsize=1,
-                       extra_args="-wl"))
+                       extra_args="-M"))
 
         set_train_config(False)
         was_trained = run_test(
