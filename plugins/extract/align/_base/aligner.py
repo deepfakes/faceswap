@@ -81,20 +81,13 @@ class AlignerBatch(ExtractorBatch):
 
     def __repr__(self):
         """ Prettier repr for debug printing """
-        data = [{k: v.shape if isinstance(v, np.ndarray) else v for k, v in dat.items()}
-                for dat in self.data]
-        return ("AlignerBatch("
-                f"batch_id={self.batch_id}, "
-                f"image={[img.shape for img in self.image]}, "
-                f"detected_faces={self.detected_faces}, "
-                f"filename={self.filename}, "
-                f"feed={self.feed.shape}, "
-                f"prediction={self.prediction.shape}, "
-                f"data={data}, "
-                f"landmarks={self.landmarks.shape}, "
-                f"refeeds={[feed.shape for feed in self.refeeds]}, "
-                f"second_pass={self.second_pass}, "
-                f"second_pass_masks={self.second_pass_masks})")
+        retval = super().__repr__()
+        retval += (f", batch_id={self.batch_id}, "
+                   f"landmarks=[({self.landmarks.shape}, {self.landmarks.dtype})], "
+                   f"refeeds={[(f.shape, f.dtype) for f in self.refeeds]}, "
+                   f"second_pass={self.second_pass}, "
+                   f"second_pass_masks={self.second_pass_masks})")
+        return retval
 
     def __post_init__(self):
         """ Make sure that we have been given a non-zero ID """

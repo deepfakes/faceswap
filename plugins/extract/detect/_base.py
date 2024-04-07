@@ -62,6 +62,15 @@ class DetectorBatch(ExtractorBatch):
     pad: list[tuple[int, int]] = field(default_factory=list)
     initial_feed: np.ndarray = np.array([])
 
+    def __repr__(self):
+        """ Prettier repr for debug printing """
+        retval = super().__repr__()
+        retval += (f", rotation_matrix={self.rotation_matrix}, "
+                   f"scale={self.scale}, "
+                   f"pad={self.pad}, "
+                   f"initial_feed=({self.initial_feed.shape}, {self.initial_feed.dtype})")
+        return retval
+
 
 class Detector(Extractor):  # pylint:disable=abstract-method
     """ Detector Object

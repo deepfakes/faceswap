@@ -86,6 +86,18 @@ class ExtractorBatch:
     prediction: np.ndarray = np.array([])
     data: list[dict[str, T.Any]] = field(default_factory=list)
 
+    def __repr__(self) -> str:
+        """ Prettier repr for debug printing """
+        data = [{k: (v.shape, v.dtype) if isinstance(v, np.ndarray) else v for k, v in dat.items()}
+                for dat in self.data]
+        return (f"{self.__class__.__name__}("
+                f"image={[(img.shape, img.dtype) for img in self.image]}, "
+                f"detected_faces={self.detected_faces}, "
+                f"filename={self.filename}, "
+                f"feed={[(f.shape, f.dtype) for f in self.feed]}, "
+                f"prediction=({self.prediction.shape}, {self.prediction.dtype}), "
+                f"data={data}")
+
 
 class Extractor():
     """ Extractor Plugin Object
