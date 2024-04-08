@@ -10,13 +10,16 @@ plugins either in parallel or in series, giving easy access to input and output.
 """
 from __future__ import annotations
 import logging
+import os
 import typing as T
 
 import cv2
 
 from lib.gpu_stats import GPUStats
+from lib.logger import parse_class_init
 from lib.queue_manager import EventQueue, queue_manager, QueueEmpty
-from lib.utils import get_backend
+from lib.serializer import get_serializer
+from lib.utils import get_backend, FaceswapError
 from plugins.plugin_loader import PluginLoader
 
 if T.TYPE_CHECKING:
@@ -26,7 +29,9 @@ if T.TYPE_CHECKING:
     from lib.align.detected_face import DetectedFace
     from plugins.extract._base import Extractor as PluginExtractor
     from plugins.extract.detect._base import Detector
+    from plugins.extract.detect.external import Detect as DetectImport
     from plugins.extract.align._base import Aligner
+    from plugins.extract.align.external import Align as AlignImport
     from plugins.extract.mask._base import Masker
     from plugins.extract.recognition._base import Identity
 
@@ -110,12 +115,7 @@ class Extractor():
                  re_feed: int = 0,
                  re_align: bool = False,
                  disable_filter: bool = False) -> None:
-        logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, recognition: %s, "
-                     "configfile: %s, multiprocess: %s, exclude_gpus: %s, rotate_images: %s, "
-                     "min_size: %s, normalize_method: %s, re_feed: %s, re_align: %s, "
-                     "disable_filter: %s)", self.__class__.__name__, detector, aligner, masker,
-                     recognition, configfile, multiprocess, exclude_gpus, rotate_images, min_size,
-                     normalize_method, re_feed, re_align, disable_filter)
+        logger.debug(parse_class_init(locals()))
         self._instance = _get_instance()
         maskers = [T.cast(str | None,
                    masker)] if not isinstance(masker, list) else T.cast(list[str | None],
@@ -304,6 +304,48 @@ class Extractor():
         else:
             self._phase_index += 1
             logger.debug("Switching to phase: %s", self._current_phase)
+
+    def import_data(self, input_location: str) -> None:
+        """ Import json data to the detector and/or aligner if 'import' plugin has been selected
+
+        Parameters
+        ----------
+        input_location: str
+            Full path to the input location for the extract process
+        """
+        import_plugins: list[DetectImport | AlignImport] = [p
+                                                            for p in (self._detect, self._align)
+                                                            if p.name.lower() == "external"]
+        if not import_plugins:
+            return
+
+        align_origin = None
+        if self._align.name.lower() == "external":
+            align_origin = self._align.config["origin"]
+
+        logger.info("Importing external data for %s from json file...",
+                    " and ".join([p.__class__.__name__ for p in import_plugins]))
+
+        folder = input_location
+        folder = folder if os.path.isdir(folder) else os.path.dirname(folder)
+
+        last_fname = ""
+        for plugin in import_plugins:
+            plugin_type = plugin.__class__.__name__
+            path = os.path.join(folder, plugin.config["file_name"])
+            if not os.path.isfile(path):
+                raise FaceswapError(f"{plugin_type} import file could not be found at '{path}'")
+
+            if path != last_fname:  # Different import file for aligner data
+                last_fname = path
+                data = get_serializer("json").load(path)
+
+            if plugin_type == "Detect":
+                plugin.import_data(data, align_origin)
+            else:
+                plugin.import_data(data)
+
+        logger.info("Imported external data")
 
     # <<< INTERNAL METHODS >>> #
     @property
@@ -801,9 +843,7 @@ class ExtractMedia():
                  image: np.ndarray,
                  detected_faces: list[DetectedFace] | None = None,
                  is_aligned: bool = False) -> None:
-        logger.trace("Initializing %s: (filename: '%s', image shape: %s, "  # type: ignore
-                     "detected_faces: %s, is_aligned: %s)", self.__class__.__name__, filename,
-                     image.shape, detected_faces, is_aligned)
+        logger.trace(parse_class_init(locals()))  # type:ignore=[attr-defined]
         self._filename = filename
         self._image: np.ndarray | None = image
         self._image_shape = T.cast(tuple[int, int, int], image.shape)

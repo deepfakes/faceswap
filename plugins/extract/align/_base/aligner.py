@@ -577,7 +577,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                 if not all_filtered:
                     feed = batch.refeeds[selected_idx]
                     pred = batch.prediction[selected_idx]
-                    data = batch.data[selected_idx]
+                    data = batch.data[selected_idx] if batch.data else {}
                     selected_idx += 1
                 else:  # All resuts have been filtered out
                     feed = pred = np.array([])
@@ -597,14 +597,15 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
                 retval.append(subbatch)
         else:
-            for feed, pred, data in zip(batch.refeeds, batch.prediction, batch.data):
+            b_data = batch.data if batch.data else [{}]
+            for feed, pred, dat in zip(batch.refeeds, batch.prediction, b_data):
                 subbatch = AlignerBatch(batch_id=batch.batch_id,
                                         image=batch.image,
                                         detected_faces=batch.detected_faces,
                                         filename=batch.filename,
                                         feed=feed,
                                         prediction=pred,
-                                        data=[data],
+                                        data=[dat],
                                         second_pass=batch.second_pass)
                 self.process_output(subbatch)
                 retval.append(subbatch)

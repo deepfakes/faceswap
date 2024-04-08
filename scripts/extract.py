@@ -643,6 +643,7 @@ class _Extract():
 
         self._alignments = Alignments(self._args, True, self._loader.is_video)
         self._extractor = extractor
+        self._extractor.import_data(self._args.input_dir)
 
         self._existing_count = 0
         self._set_skip_list()
