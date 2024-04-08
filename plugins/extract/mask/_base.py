@@ -94,6 +94,9 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         self.input_size = 256  # Override for model specific input_size
         self.coverage_ratio = 1.0  # Override for model specific coverage_ratio
 
+        # Override if a specific type of landmark data is required:
+        self.landmark_type: T.Literal["2d_68"] | None = None
+
         self._plugin_type = "mask"
         self._storage_name = self.__module__.rsplit(".", maxsplit=1)[-1].replace("_", "-")
         self._storage_centering: CenteringType = "face"  # Centering to store the mask at

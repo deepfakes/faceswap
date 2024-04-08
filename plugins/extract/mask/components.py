@@ -26,6 +26,7 @@ class Mask(Masker):
         self.vram = 0  # Doesn't use GPU
         self.vram_per_batch = 0
         self.batchsize = 1
+        self.landmark_type = "2d_68"
 
     def init_model(self) -> None:
         logger.debug("No mask model to initialize")

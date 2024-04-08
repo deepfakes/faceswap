@@ -150,6 +150,10 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                          **kwargs)
         self._plugin_type = "align"
         self.realign_centering: CenteringType = "face"  # overide for plugin specific centering
+
+        # Override for specific landmark type:
+        self.landmark_type: T.Literal["2d_68", "2d_4"] = "2d_68"
+
         self._eof_seen = False
         self._normalize_method: T.Literal["clahe", "hist", "mean"] | None = None
         self._re_feed = re_feed

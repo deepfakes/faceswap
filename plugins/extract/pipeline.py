@@ -212,7 +212,7 @@ class Extractor():
         >>>         extractor.input_queue.put(extract_media)
         """
         retval = self._phase_index == len(self._phases) - 1
-        logger.trace(retval)  # type: ignore
+        logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     @property
@@ -305,6 +305,31 @@ class Extractor():
             self._phase_index += 1
             logger.debug("Switching to phase: %s", self._current_phase)
 
+    def _disable_lm_maskers(self) -> None:
+        """ Disable any 68 point landmark based maskers if alignment data is not 2D 68
+        point landmarks and update the process flow/phases accordingly """
+        logger.warning("Alignment data is not 68 point 2D landmarks. Some Faceswap functionality "
+                       "will be unavailable for these faces")
+
+        rem_maskers = [m.name for m in self._mask if m is not None and m.landmark_type == "2d_68"]
+        self._mask = [m for m in self._mask if m is None or m.name not in rem_maskers]
+
+        self._flow = [
+            item for item in self._flow
+            if not item.startswith("mask")
+            or item.startswith("mask") and int(item.rsplit("_", maxsplit=1)[-1]) < len(self._mask)]
+
+        self._phases = [[s for s in p if s in self._flow] for p in self._phases
+                        if any(t in p for t in self._flow)]
+
+        for queue in self._queues:
+            queue_manager.del_queue(queue)
+        del self._queues
+        self._queues = self._add_queues()
+
+        logger.warning("The following maskers have been disabled due to unsupported landmarks: %s",
+                       rem_maskers)
+
     def import_data(self, input_location: str) -> None:
         """ Import json data to the detector and/or aligner if 'import' plugin has been selected
 
@@ -313,15 +338,18 @@ class Extractor():
         input_location: str
             Full path to the input location for the extract process
         """
-        import_plugins: list[DetectImport | AlignImport] = [p
-                                                            for p in (self._detect, self._align)
-                                                            if p.name.lower() == "external"]
+        assert self._detect is not None
+        import_plugins: list[DetectImport | AlignImport] = [
+            p for p in (self._detect, self.aligner)  # type:ignore[misc]
+            if T.cast(str, p.name).lower() == "external"]
+
         if not import_plugins:
             return
 
         align_origin = None
-        if self._align.name.lower() == "external":
-            align_origin = self._align.config["origin"]
+        assert self.aligner.name is not None
+        if self.aligner.name.lower() == "external":
+            align_origin = self.aligner.config["origin"]
 
         logger.info("Importing external data for %s from json file...",
                     " and ".join([p.__class__.__name__ for p in import_plugins]))
@@ -330,6 +358,7 @@ class Extractor():
         folder = folder if os.path.isdir(folder) else os.path.dirname(folder)
 
         last_fname = ""
+        is_68_point = True
         for plugin in import_plugins:
             plugin_type = plugin.__class__.__name__
             path = os.path.join(folder, plugin.config["file_name"])
@@ -341,9 +370,13 @@ class Extractor():
                 data = get_serializer("json").load(path)
 
             if plugin_type == "Detect":
-                plugin.import_data(data, align_origin)
+                plugin.import_data(data, align_origin)  # type:ignore[call-arg]
             else:
-                plugin.import_data(data)
+                plugin.import_data(data)  # type:ignore[call-arg]
+                is_68_point = plugin.landmark_type == "2d_68"  # type:ignore[union-attr]
+
+        if not is_68_point:
+            self._disable_lm_maskers()
 
         logger.info("Imported external data")
 
@@ -843,7 +876,7 @@ class ExtractMedia():
                  image: np.ndarray,
                  detected_faces: list[DetectedFace] | None = None,
                  is_aligned: bool = False) -> None:
-        logger.trace(parse_class_init(locals()))  # type:ignore=[attr-defined]
+        logger.trace(parse_class_init(locals()))  # type:ignore[attr-defined]
         self._filename = filename
         self._image: np.ndarray | None = image
         self._image_shape = T.cast(tuple[int, int, int], image.shape)
@@ -978,7 +1011,7 @@ class ExtractMedia():
         metadata: dict
             The contents of the 'source' field in the PNG header
         """
-        logger.trace("Adding PNG Source data for '%s': %s",  # type:ignore
+        logger.trace("Adding PNG Source data for '%s': %s",  # type:ignore[attr-defined]
                      self._filename, metadata)
         dims = T.cast(tuple[int, int], metadata["source_frame_dims"])
         self._image_shape = (*dims, 3)

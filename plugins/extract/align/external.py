@@ -25,8 +25,8 @@ class Align(Aligner):
         self.vram = 0  # Doesn't use GPU
         self.batchsize = 16
 
-        self._imported: dict[str, list[int | np.ndarray]] = {}
-        """dict[str, list[int, np.ndarray]]: filename as key, value of [number of faces remaining
+        self._imported: dict[str, tuple[int, np.ndarray]] = {}
+        """dict[str, tuple[int, np.ndarray]]: filename as key, value of [number of faces remaining
         for the frame, all landmarks in the frame] """
         self._missing = 0
 
@@ -76,11 +76,17 @@ class Align(Aligner):
         for key, faces in data.items():
             try:
                 lms = np.array([self._import_face(face) for face in faces], dtype="float32")
-                self._imported[key] = [lms.shape[0], lms]
+                self._imported[key] = (lms.shape[0], lms)
             except FaceswapError as err:
                 logger.error(str(err))
                 msg = f"The imported frame key that failed was '{key}'"
                 raise FaceswapError(msg) from err
+        lm_shape = set(v[1].shape[1:] for v in self._imported.values() if v[0] > 0)
+        if len(lm_shape) > 1:
+            raise FaceswapError("All external data should have the same number of landmarks. "
+                                f"Found landmarks of shape: {lm_shape}")
+        if (4, 2) in lm_shape:
+            self.landmark_type = "2d_4"
 
     def process_input(self, batch: BatchType) -> None:
         """ Put the filenames into `batch.feed` so they can be collected for mapping in `.predict`
@@ -132,15 +138,12 @@ class Align(Aligner):
                 continue
 
             remaining, all_lms = self._imported[key]
-
-            assert isinstance(remaining, int)
-            assert isinstance(all_lms, np.ndarray)
             preds.append(all_lms[all_lms.shape[0] - remaining])
 
             if remaining == 1:
                 del self._imported[key]
             else:
-                self._imported[key][0] = remaining - 1
+                self._imported[key] = (remaining - 1, all_lms)
 
         return np.array(preds, dtype="float32")
 
