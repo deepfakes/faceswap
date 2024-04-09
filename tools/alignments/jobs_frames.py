@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from lib.align import DetectedFace, _EXTRACT_RATIOS
+from lib.align import DetectedFace, EXTRACT_RATIOS
 from lib.align.alignments import _VERSION, PNGHeaderDict
 from lib.image import encode_image, generate_thumbnail, ImagesSaver
 from plugins.extract.pipeline import Extractor, ExtractMedia
@@ -462,9 +462,9 @@ class Extract():
                 continue
             old_mask = mask.mask.astype("float32") / 255.0
             size = old_mask.shape[0]
-            new_size = int(size + (size * _EXTRACT_RATIOS["face"]) / 2)
+            new_size = int(size + (size * EXTRACT_RATIOS["face"]) / 2)
 
-            shift = np.rint(offset * (size - (size * _EXTRACT_RATIOS["face"]))).astype("int32")
+            shift = np.rint(offset * (size - (size * EXTRACT_RATIOS["face"]))).astype("int32")
             pos = np.array([(new_size // 2 - size // 2) - shift[1],
                             (new_size // 2) + (size // 2) - shift[1],
                             (new_size // 2 - size // 2) - shift[0],
