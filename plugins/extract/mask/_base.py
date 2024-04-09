@@ -23,7 +23,7 @@ import numpy as np
 
 from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module  # noqa
 
-from lib.align import AlignedFace, transform_image
+from lib.align import AlignedFace, LandmarkType, transform_image
 from lib.utils import FaceswapError
 from plugins.extract._base import BatchType, Extractor, ExtractorBatch, ExtractMedia
 
@@ -79,6 +79,8 @@ class Masker(Extractor):  # pylint:disable=abstract-method
     plugins.extract.align._base : Aligner parent class for extraction plugins.
     """
 
+    _logged_lm_count_once = False
+
     def __init__(self,
                  git_model_id: int | None = None,
                  model_filename: str | None = None,
@@ -102,6 +104,20 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         self._storage_centering: CenteringType = "face"  # Centering to store the mask at
         self._storage_size = 128  # Size to store masks at. Leave this at default
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _maybe_log_warning(self, face: AlignedFace) -> None:
+        """ Log a warning, once, if we do not have full facial landmarks
+
+        Parameters
+        ----------
+        face: :class:`~lib.align.aligned_face.AlignedFace`
+            The aligned face object to test the landmark type for
+        """
+        if face.landmark_type != LandmarkType.LM_2D_4 or self._logged_lm_count_once:
+            return
+        logger.warning("Extracted faces do not contain facial landmark data. '%s' "
+                       "masks are likely to be sub-standard.", self.name)
+        self._logged_lm_count_once = True
 
     def get_batch(self, queue: Queue) -> tuple[bool, MaskerBatch]:
         """ Get items for inputting into the masker from the queue in batches
@@ -165,6 +181,8 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                                         coverage_ratio=self.coverage_ratio,
                                         dtype="float32",
                                         is_aligned=item.is_aligned)
+
+                self._maybe_log_warning(feed_face)
 
                 assert feed_face.face is not None
                 if not item.is_aligned:

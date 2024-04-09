@@ -4,5 +4,5 @@ associated objects. """
 from .aligned_face import (AlignedFace, get_adjusted_center, get_matrix_scaling,
                            get_centered_size, transform_image)
 from .alignments import Alignments
-from .constants import EXTRACT_RATIOS
+from .constants import EXTRACT_RATIOS, LandmarkType
 from .detected_face import BlurMask, DetectedFace, Mask, update_legacy_png_header

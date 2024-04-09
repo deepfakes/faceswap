@@ -390,6 +390,11 @@ class AlignedFace():
             return self._cache.landmarks
 
     @property
+    def landmark_type(self) -> LandmarkType:
+        """:class:`~LandmarkType`: The type of landmarks that generated this aligned face """
+        return self._landmark_type
+
+    @property
     def normalized_landmarks(self) -> np.ndarray:
         """ :class:`numpy.ndarray`: The 68 point facial landmarks normalized to 0.0 - 1.0 as
         aligned by Umeyama. """
