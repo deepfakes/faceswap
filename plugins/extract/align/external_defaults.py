@@ -73,7 +73,23 @@ _DEFAULTS = {
                 "right corner.",
         "datatype": str,
         "choices": ["top-left", "bottom-left", "top-right", "bottom-right"],
-        "group": "output",
+        "group": "input",
+        "gui_radio": True
+    },
+    "4_point_centering": {
+        "default": "head",
+        "info": "4 point ROI landmarks only. The approximate centering for the location of the "
+                "corner points to be imported. Default faceswap extracts are generated at 'head' "
+                "centering, but it is possible to pass in ROI points at a tighter centering. "
+                "Refer to https://github.com/deepfakes/faceswap/pull/1095 for a visual guide"
+                "\n\t head: The ROI points represent a loose crop enclosing the whole head."
+                "\n\t face: The ROI points represent a medium crop enclosing the face."
+                "\n\t legacy: The ROI points represent a tight crop enclosing the central face "
+                "area.",
+        "datatype": str,
+        "choices": ["head", "face", "legacy"],
+        "group": "input",
         "gui_radio": True
     }
+
 }

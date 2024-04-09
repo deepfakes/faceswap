@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import typing as T
 
 import numpy as np
@@ -223,7 +224,7 @@ class Detect(Detector):
         batch: :class:`~plugins.extract.detect._base.DetectorBatch`
             The batch to be processed by the plugin
         """
-        batch.feed = np.array(batch.filename, dtype="object")
+        batch.feed = np.array([os.path.basename(f) for f in batch.filename], dtype="object")
 
     def predict(self, feed: np.ndarray) -> list[np.ndarray]:  # type:ignore[override]
         """ Pair the input filenames to the import file

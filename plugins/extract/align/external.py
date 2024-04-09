@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """ Import 68 point landmarks or ROI boxes from a json file """
 import logging
+import os
 
 import numpy as np
 
+from lib.align import EXTRACT_RATIOS
 from lib.utils import FaceswapError
 
 from ._base import BatchType, Aligner, AlignerBatch
@@ -28,7 +30,12 @@ class Align(Aligner):
         self._imported: dict[str, tuple[int, np.ndarray]] = {}
         """dict[str, tuple[int, np.ndarray]]: filename as key, value of [number of faces remaining
         for the frame, all landmarks in the frame] """
+
         self._missing = 0
+
+        self._adjustment: float = 1. - EXTRACT_RATIOS[self.config["4_point_centering"]]
+        """float: The amount to adjust 4 point ROI landmarks to standardize the points for a
+        'head' sized extracted face """
 
     def init_model(self) -> None:
         """ No initialization to perform """
@@ -62,6 +69,10 @@ class Align(Aligner):
         if retval.shape[-1] != 2:
             raise FaceswapError("Imported 'landmarks_2d' should be formatted as a list of (x, y) "
                                 "co-ordinates")
+        if retval.shape[0] == 4:  # Adjust ROI landmarks based on centering selected
+            center = np.mean(retval, axis=0)
+            retval = (retval - center) * self._adjustment + center
+
         return retval
 
     def import_data(self, data: dict[str, list[dict[str, list[int] | list[list[float]]]]]) -> None:
@@ -96,7 +107,7 @@ class Align(Aligner):
         batch: :class:`~plugins.extract.detect._base.AlignerBatch`
             The batch to be processed by the plugin
         """
-        batch.feed = np.array(batch.filename)
+        batch.feed = np.array([os.path.basename(f) for f in batch.filename], dtype="object")
 
     def faces_to_feed(self, faces: np.ndarray) -> np.ndarray:
         """ No action required for import plugin
@@ -113,8 +124,6 @@ class Align(Aligner):
         """
         return faces
 
-    # TODO override predict not _predict. There is no need for align. We will need feed to contain
-    # filename data
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Pair the input filenames to the import file
 
