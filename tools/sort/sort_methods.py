@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from lib.align import AlignedFace, DetectedFace
+from lib.align import AlignedFace, DetectedFace, LandmarkType
 from lib.image import FacesLoader, ImagesLoader, read_image_meta_batch, update_existing_metadata
 from lib.utils import FaceswapError
 from plugins.extract.recognition.vgg_face2 import Cluster, Recognition as VGGFace
@@ -217,6 +217,8 @@ class SortMethod():
         Set to ``True`` if this class is going to be called exclusively for binning.
         Default: ``False``
     """
+    _log_mask_once = False
+
     def __init__(self,
                  arguments: Namespace,
                  loader_type: T.Literal["face", "meta", "all"] = "meta",
@@ -454,12 +456,22 @@ class SortMethod():
                                centering="legacy",
                                size=256,
                                is_aligned=True)
-        mask = det_face.mask["components"]
+        assert aln_face.face is not None
+
+        mask = det_face.mask.get("components",  det_face.mask.get("extended", None))
+
+        if mask is None and not cls._log_mask_once:
+            logger.warning("No masks are available for masking the data. Results are likely to be "
+                           "sub-standard")
+            cls._log_mask_once = True
+
+        if mask is None:
+            return aln_face.face
+
         mask.set_sub_crop(aln_face.pose.offset[mask.stored_centering],
                           aln_face.pose.offset["legacy"],
                           centering="legacy")
         nmask = cv2.resize(mask.mask, (256, 256), interpolation=cv2.INTER_CUBIC)[..., None]
-        assert aln_face.face is not None
         return np.minimum(aln_face.face, nmask)
 
 
@@ -832,6 +844,11 @@ class SortFace(SortMethod):
         Set to ``True`` if this class is going to be called exclusively for binning.
         Default: ``False``
     """
+
+    _logged_lm_count_once = False
+    _warning = ("Extracted faces do not contain facial landmark data. Results sorted by this "
+                "method are likely to be sub-standard.")
+
     def __init__(self, arguments: Namespace, is_group: bool = False) -> None:
         super().__init__(arguments, loader_type="all", is_group=is_group)
         self._vgg_face = VGGFace(exclude_gpus=arguments.exclude_gpus)
@@ -872,6 +889,11 @@ class SortFace(SortMethod):
 
         if alignments.get("identity", {}).get("vggface2"):
             embedding = np.array(alignments["identity"]["vggface2"], dtype="float32")
+
+            if not self._logged_lm_count_once and len(alignments["landmarks_xy"]) == 4:
+                logger.warning(self._warning)
+                self._logged_lm_count_once = True
+
             self._result.append((filename, embedding))
             return
 
@@ -880,11 +902,17 @@ class SortFace(SortMethod):
                         "Sorting by this method will be quicker next time")
             self._output_update_info = False
 
-        face = AlignedFace(np.array(alignments["landmarks_xy"], dtype="float32"),
-                           image=image,
-                           centering="legacy",
-                           size=self._vgg_face.input_size,
-                           is_aligned=True).face
+        a_face = AlignedFace(np.array(alignments["landmarks_xy"], dtype="float32"),
+                             image=image,
+                             centering="legacy",
+                             size=self._vgg_face.input_size,
+                             is_aligned=True)
+
+        if a_face.landmark_type == LandmarkType.LM_2D_4 and not self._logged_lm_count_once:
+            logger.warning(self._warning)
+            self._logged_lm_count_once = True
+
+        face = a_face.face
         assert face is not None
         embedding = self._vgg_face.predict(face[None, ...])[0]
         alignments.setdefault("identity", {})["vggface2"] = embedding.tolist()

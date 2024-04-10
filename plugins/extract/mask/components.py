@@ -7,6 +7,8 @@ import typing as T
 import cv2
 import numpy as np
 
+from lib.align import LandmarkType
+
 from ._base import BatchType, Masker
 
 if T.TYPE_CHECKING:
@@ -26,7 +28,7 @@ class Mask(Masker):
         self.vram = 0  # Doesn't use GPU
         self.vram_per_batch = 0
         self.batchsize = 1
-        self.landmark_type = "2d_68"
+        self.landmark_type = LandmarkType.LM_2D_68
 
     def init_model(self) -> None:
         logger.debug("No mask model to initialize")

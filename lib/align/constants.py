@@ -92,3 +92,18 @@ _MEAN_FACE: dict[LandmarkType, np.ndarray] = {
         [-0.589441, -8.443925, 6.109526],   # 46 mouth bottom R
         [0.0, -8.601736, 6.097667],         # 45 mouth bottom C
         [0.589441, -8.443925, 6.109526]])}   # 44 mouth bottom L
+
+
+LANDMARK_PARTS: dict[LandmarkType, dict[str, tuple[int, int, bool]]] = {
+            LandmarkType.LM_2D_68: {"mouth_outer": (48, 60, True),
+                                    "mouth_inner": (60, 68, True),
+                                    "right_eyebrow": (17, 22, False),
+                                    "left_eyebrow": (22, 27, False),
+                                    "right_eye": (36, 42, True),
+                                    "left_eye": (42, 48, True),
+                                    "nose": (27, 36, False),
+                                    "jaw": (0, 17, False),
+                                    "chin": (8, 11, False)},
+            LandmarkType.LM_2D_4: {"face": (0, 4, True)}}
+""":dict[:class:`LandmarkType`, dict[str, tuple[int, int, bool]]: For each landmark type, stores
+the (start index, end index, is polygon) information about each part of the face. """

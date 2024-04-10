@@ -85,9 +85,11 @@ _DEFAULTS = {
                 "\n\t head: The ROI points represent a loose crop enclosing the whole head."
                 "\n\t face: The ROI points represent a medium crop enclosing the face."
                 "\n\t legacy: The ROI points represent a tight crop enclosing the central face "
-                "area.",
+                "area."
+                "\n\t none: Only required if importing 4 point ROI landmarks back into faceswap "
+                "having generated them from the 'alignments' tool 'export' job.",
         "datatype": str,
-        "choices": ["head", "face", "legacy"],
+        "choices": ["head", "face", "legacy", "none"],
         "group": "input",
         "gui_radio": True
     }

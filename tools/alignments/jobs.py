@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 from lib.logger import parse_class_init
 from lib.serializer import get_serializer
+from lib.utils import FaceswapError
 
 from .media import Faces, Frames
 from .jobs_faces import FaceToFile
@@ -546,7 +547,7 @@ class Spatial:
         Parameters
         ----------
         shaped_im_coords: :class:`numpy.ndarray`
-            The 68 point landmarks
+            The facial landmarks
 
         Returns
         -------
@@ -609,7 +610,15 @@ class Spatial:
         """ Compile all original and normalized alignments """
         logger.debug("Normalize")
         count = sum(1 for val in self._alignments.data.values() if val["faces"])
-        landmarks_all = np.zeros((68, 2, int(count)))
+
+        sample_lm = next((val["faces"][0]["landmarks_xy"]
+                          for val in self._alignments.data.values() if val["faces"]), 68)
+        assert isinstance(sample_lm, np.ndarray)
+        lm_count = sample_lm.shape[0]
+        if lm_count != 68:
+            raise FaceswapError("Spatial smoothing only supports 68 point facial landmarks")
+
+        landmarks_all = np.zeros((lm_count, 2, int(count)))
 
         end = 0
         for key in tqdm(sorted(self._alignments.data.keys()), desc="Compiling", leave=False):
@@ -618,7 +627,7 @@ class Spatial:
                 continue
             # We should only be normalizing a single face, so just take
             # the first landmarks found
-            landmarks = np.array(val[0]["landmarks_xy"]).reshape((68, 2, 1))
+            landmarks = np.array(val[0]["landmarks_xy"]).reshape((lm_count, 2, 1))
             start = end
             end = start + landmarks.shape[2]
             # Store in one big array

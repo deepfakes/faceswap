@@ -15,6 +15,7 @@ import typing as T
 
 import cv2
 
+from lib.align import LandmarkType
 from lib.gpu_stats import GPUStats
 from lib.logger import parse_class_init
 from lib.queue_manager import EventQueue, queue_manager, QueueEmpty
@@ -311,7 +312,8 @@ class Extractor():
         logger.warning("Alignment data is not 68 point 2D landmarks. Some Faceswap functionality "
                        "will be unavailable for these faces")
 
-        rem_maskers = [m.name for m in self._mask if m is not None and m.landmark_type == "2d_68"]
+        rem_maskers = [m.name for m in self._mask
+                       if m is not None and m.landmark_type == LandmarkType.LM_2D_68]
         self._mask = [m for m in self._mask if m is None or m.name not in rem_maskers]
 
         self._flow = [
@@ -373,7 +375,7 @@ class Extractor():
                 plugin.import_data(data, align_origin)  # type:ignore[call-arg]
             else:
                 plugin.import_data(data)  # type:ignore[call-arg]
-                is_68_point = plugin.landmark_type == "2d_68"  # type:ignore[union-attr]
+                is_68_point = plugin.landmark_type == LandmarkType.LM_2D_68  # type:ignore[union-attr]  # noqa:E501  # pylint:disable="line-too-long"
 
         if not is_68_point:
             self._disable_lm_maskers()

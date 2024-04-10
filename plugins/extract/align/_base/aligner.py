@@ -24,6 +24,7 @@ import numpy as np
 
 from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module # noqa
 
+from lib.align import LandmarkType
 from lib.utils import FaceswapError
 from plugins.extract._base import BatchType, Extractor, ExtractMedia, ExtractorBatch
 from .processing import AlignedFilter, ReAlign
@@ -152,7 +153,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         self.realign_centering: CenteringType = "face"  # overide for plugin specific centering
 
         # Override for specific landmark type:
-        self.landmark_type: T.Literal["2d_68", "2d_4"] = "2d_68"
+        self.landmark_type = LandmarkType.LM_2D_68
 
         self._eof_seen = False
         self._normalize_method: T.Literal["clahe", "hist", "mean"] | None = None

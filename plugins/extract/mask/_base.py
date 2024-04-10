@@ -97,13 +97,31 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         self.coverage_ratio = 1.0  # Override for model specific coverage_ratio
 
         # Override if a specific type of landmark data is required:
-        self.landmark_type: T.Literal["2d_68"] | None = None
+        self.landmark_type: LandmarkType | None = None
 
         self._plugin_type = "mask"
         self._storage_name = self.__module__.rsplit(".", maxsplit=1)[-1].replace("_", "-")
         self._storage_centering: CenteringType = "face"  # Centering to store the mask at
         self._storage_size = 128  # Size to store masks at. Leave this at default
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _maybe_error(self, face: AlignedFace) -> None:
+        """ Error out if the requested mask cannot be created with the available data
+
+        Parameters
+        ----------
+        face: :class:`~lib.align.aligned_face.AlignedFace`
+            The aligned face object to test the landmark type for
+
+        Raises
+        ------
+        FaceSwapError
+            If the mask plugin cannot be used with the given landmark data
+        """
+        if self.landmark_type is None:
+            return
+        if face.landmark_type != self.landmark_type:
+            raise FaceswapError(f"68 point facial landmarks are required for '{self.name}' masks.")
 
     def _maybe_log_warning(self, face: AlignedFace) -> None:
         """ Log a warning, once, if we do not have full facial landmarks
@@ -182,6 +200,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                                         dtype="float32",
                                         is_aligned=item.is_aligned)
 
+                self._maybe_error(feed_face)
                 self._maybe_log_warning(feed_face)
 
                 assert feed_face.face is not None

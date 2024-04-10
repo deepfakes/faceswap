@@ -401,7 +401,7 @@ class AlignedFace():
         with self._cache.lock("landmarks_normalized"):
             if self._cache.landmarks_normalized is None:
                 lms = np.expand_dims(self._frame_landmarks, axis=1)
-                lms = cv2.transform(lms, self._matrices["legacy"], lms.shape).squeeze()
+                lms = cv2.transform(lms, self._matrices["legacy"]).squeeze()
                 logger.trace("normalized landmarks: %s", lms)  # type:ignore[attr-defined]
                 self._cache.landmarks_normalized = lms
         return self._cache.landmarks_normalized
@@ -506,7 +506,7 @@ class AlignedFace():
         """
         retval = np.expand_dims(points, axis=1)
         mat = cv2.invertAffineTransform(self.adjusted_matrix) if invert else self.adjusted_matrix
-        retval = cv2.transform(retval, mat, retval.shape).squeeze()
+        retval = cv2.transform(retval, mat).squeeze()
         logger.trace(  # type:ignore[attr-defined]
             "invert: %s, Original points: %s, transformed points: %s", invert, points, retval)
         return retval

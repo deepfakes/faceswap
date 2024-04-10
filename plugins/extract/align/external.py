@@ -5,7 +5,7 @@ import os
 
 import numpy as np
 
-from lib.align import EXTRACT_RATIOS
+from lib.align import EXTRACT_RATIOS, LandmarkType
 from lib.utils import FaceswapError
 
 from ._base import BatchType, Aligner, AlignerBatch
@@ -33,7 +33,8 @@ class Align(Aligner):
 
         self._missing = 0
 
-        self._adjustment: float = 1. - EXTRACT_RATIOS[self.config["4_point_centering"]]
+        centering = self.config["4_point_centering"]
+        self._adjustment: float = 1. if centering is None else 1. - EXTRACT_RATIOS[centering]
         """float: The amount to adjust 4 point ROI landmarks to standardize the points for a
         'head' sized extracted face """
 
@@ -97,7 +98,7 @@ class Align(Aligner):
             raise FaceswapError("All external data should have the same number of landmarks. "
                                 f"Found landmarks of shape: {lm_shape}")
         if (4, 2) in lm_shape:
-            self.landmark_type = "2d_4"
+            self.landmark_type = LandmarkType.LM_2D_4
 
     def process_input(self, batch: BatchType) -> None:
         """ Put the filenames into `batch.feed` so they can be collected for mapping in `.predict`
@@ -141,7 +142,6 @@ class Align(Aligner):
         for key in feed:
             if key not in self._imported:
                 # TODO Handle filename missing in imported data
-                # TODO optimize?
                 # As this is will almost definitely be problematic as num detected_faces != preds
                 self._missing += 1
                 continue

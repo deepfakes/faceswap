@@ -660,9 +660,9 @@ class Mask():
             The mask that is to be added as output from :mod:`plugins.extract.mask`.
             It should be in the range 0.0 - 1.0 ideally with a ``dtype`` of ``float32``
         """
-        mask = (cv2.resize(mask,
+        mask = (cv2.resize(mask * 255.0,
                            (self.stored_size, self.stored_size),
-                           interpolation=cv2.INTER_AREA) * 255.0).astype("uint8")
+                           interpolation=cv2.INTER_AREA)).astype("uint8")
         self._mask = compress(mask.tobytes())
 
     def set_dilation(self, amount: float) -> None:
@@ -903,7 +903,7 @@ class LandmarksMask(Mask):
         mask = np.zeros((self.stored_size, self.stored_size, 1), dtype="float32")
         for landmarks in self._points:
             lms = np.rint(landmarks).astype("int")
-            cv2.fillConvexPoly(mask, cv2.convexHull(lms), 1.0, lineType=cv2.LINE_AA)
+            cv2.fillConvexPoly(mask, cv2.convexHull(lms), [1.0], lineType=cv2.LINE_AA)
         if self._dilation[-1] is not None:
             self._dilate_mask(mask)
         if self._blur_kernel != 0 and self._blur_type is not None:
