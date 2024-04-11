@@ -3,11 +3,12 @@
 import logging
 import typing as T
 import os
+import re
 
 import numpy as np
 
 from lib.align import EXTRACT_RATIOS, LandmarkType
-from lib.utils import FaceswapError
+from lib.utils import FaceswapError, IMAGE_EXTENSIONS
 
 from ._base import BatchType, Aligner, AlignerBatch
 
@@ -33,9 +34,11 @@ class Align(Aligner):
                                 "top-right",
                                 "bottom-right"] = self.config["origin"]
 
-        self._imported: dict[str, tuple[int, np.ndarray]] = {}
-        """dict[str, tuple[int, np.ndarray]]: filename as key, value of [number of faces remaining
-        for the frame, all landmarks in the frame] """
+        self._re_frame_no: re.Pattern = re.compile(r"\d+$")
+        self._is_video: bool = False
+        self._imported: dict[str | int, tuple[int, np.ndarray]] = {}
+        """dict[str | int, tuple[int, np.ndarray]]: filename as key, value of [number of faces
+        remaining for the frame, all landmarks in the frame] """
 
         self._missing = 0
 
@@ -47,6 +50,47 @@ class Align(Aligner):
     def init_model(self) -> None:
         """ No initialization to perform """
         logger.debug("No aligner model to initialize")
+
+    def _check_for_video(self, filename: str) -> None:
+        """ Check a sample filename from the import file for a file extension to set
+        :attr:`_is_video`
+
+        Parameters
+        ----------
+        filename: str
+            A sample file name from the imported data
+        """
+        logger.debug("Checking for video from '%s'", filename)
+        ext = os.path.splitext(filename)[-1]
+        if ext.lower() not in IMAGE_EXTENSIONS:
+            self._is_video = True
+        logger.debug("Set is_video to %s from extension '%s'", self._is_video, ext)
+
+    def _get_key(self, key: str) -> str | int:
+        """ Obtain the key for the item in the lookup table. If the input are images, the key will
+        be the image filename. If the input is a video, the key will be the frame number
+
+        Parameters
+        ----------
+        key: str
+            The initial key value from import data or an import image/frame
+
+        Returns
+        -------
+        str | int
+            The filename is the input data is images, otherwise the frame number of a video
+        """
+        if not self._is_video:
+            return key
+        original_name = os.path.splitext(key)[0]
+        matches = self._re_frame_no.findall(original_name)
+        if not matches or len(matches) > 1:
+            raise FaceswapError(f"Invalid import name: '{key}'. For video files, the key should "
+                                "end with the frame number.")
+        retval = int(matches[0])
+        logger.trace("Obtained frame number %s from key '%s'",  # type:ignore[attr-defined]
+                     retval, key)
+        return retval
 
     def _import_face(self, face: dict[str, list[int] | list[list[float]]]) -> np.ndarray:
         """ Import the landmarks from a single face
@@ -91,10 +135,12 @@ class Align(Aligner):
             The data to be imported
         """
         logger.debug("Data length: %s", len(data))
+        self._check_for_video(list(data)[0])
         for key, faces in data.items():
             try:
+                store_key = self._get_key(key)
                 lms = np.array([self._import_face(face) for face in faces], dtype="float32")
-                self._imported[key] = (lms.shape[0], lms)
+                self._imported[store_key] = (lms.shape[0], lms)
             except FaceswapError as err:
                 logger.error(str(err))
                 msg = f"The imported frame key that failed was '{key}'"
@@ -115,7 +161,7 @@ class Align(Aligner):
         batch: :class:`~plugins.extract.detect._base.AlignerBatch`
             The batch to be processed by the plugin
         """
-        batch.feed = np.array([(os.path.basename(f), i.shape[:2])
+        batch.feed = np.array([(self._get_key(os.path.basename(f)), i.shape[:2])
                                for f, i in zip(batch.filename, batch.image)], dtype="object")
 
     def faces_to_feed(self, faces: np.ndarray) -> np.ndarray:

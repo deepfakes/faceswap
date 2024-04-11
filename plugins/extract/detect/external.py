@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import typing as T
 
 import numpy as np
 
 from lib.align import AlignedFace
-from lib.utils import FaceswapError
+from lib.utils import FaceswapError, IMAGE_EXTENSIONS
 
 from ._base import Detector
 
@@ -38,10 +39,13 @@ class Detect(Detector):
                                 "bottom-left",
                                 "top-right",
                                 "bottom-right"] = self.config["origin"]
+
+        self._re_frame_no: re.Pattern = re.compile(r"\d+$")
         self._missing = 0
         self._log_once = True
-        self._imported: dict[str, np.ndarray] = {}
-        """dict: The imported data from external .json file"""
+        self._is_video = False
+        self._imported: dict[str | int, np.ndarray] = {}
+        """dict[str | int, np.ndarray]: The imported data from external .json file"""
 
     def init_model(self) -> None:
         """ No initialization to perform """
@@ -66,6 +70,47 @@ class Detect(Detector):
             The amount of padding applied to the image (0, 0)
         """
         return np.array(item.image_shape[:2], dtype="int64"), 1.0, (0, 0)
+
+    def _check_for_video(self, filename: str) -> None:
+        """ Check a sample filename from the import file for a file extension to set
+        :attr:`_is_video`
+
+        Parameters
+        ----------
+        filename: str
+            A sample file name from the imported data
+        """
+        logger.debug("Checking for video from '%s'", filename)
+        ext = os.path.splitext(filename)[-1]
+        if ext.lower() not in IMAGE_EXTENSIONS:
+            self._is_video = True
+        logger.debug("Set is_video to %s from extension '%s'", self._is_video, ext)
+
+    def _get_key(self, key: str) -> str | int:
+        """ Obtain the key for the item in the lookup table. If the input are images, the key will
+        be the image filename. If the input is a video, the key will be the frame number
+
+        Parameters
+        ----------
+        key: str
+            The initial key value from import data or an import image/frame
+
+        Returns
+        -------
+        str | int
+            The filename is the input data is images, otherwise the frame number of a video
+        """
+        if not self._is_video:
+            return key
+        original_name = os.path.splitext(key)[0]
+        matches = self._re_frame_no.findall(original_name)
+        if not matches or len(matches) > 1:
+            raise FaceswapError(f"Invalid import name: '{key}'. For video files, the key should "
+                                "end with the frame number.")
+        retval = int(matches[0])
+        logger.trace("Obtained frame number %s from key '%s'",  # type:ignore[attr-defined]
+                     retval, key)
+        return retval
 
     @classmethod
     def _bbox_from_detected(cls, bounding_box: list[int]) -> np.ndarray:
@@ -199,24 +244,26 @@ class Detect(Detector):
             from imported aligner data
         """
         logger.debug("Data length: %s, align_origin: %s", len(data), align_origin)
+        self._check_for_video(list(data)[0])
         for key, faces in data.items():
             try:
-                self._imported[key] = np.array([self._import_frame_face(face, align_origin)
-                                                for face in faces], dtype="int32")
+                store_key = self._get_key(key)
+                self._imported[store_key] = np.array([self._import_frame_face(face, align_origin)
+                                                      for face in faces], dtype="int32")
             except FaceswapError as err:
                 logger.error(str(err))
                 msg = f"The imported frame key that failed was '{key}'"
                 raise FaceswapError(msg) from err
 
     def process_input(self, batch: BatchType) -> None:
-        """ Put the filenames into `batch.feed` so they can be collected for mapping in `.predict`
+        """ Put the lookup key into `batch.feed` so they can be collected for mapping in `.predict`
 
         Parameters
         ----------
         batch: :class:`~plugins.extract.detect._base.DetectorBatch`
             The batch to be processed by the plugin
         """
-        batch.feed = np.array([(os.path.basename(f), i)
+        batch.feed = np.array([(self._get_key(os.path.basename(f)), i)
                                for f, i in zip(batch.filename, batch.image)], dtype="object")
 
     def _adjust_for_origin(self, box: np.ndarray, frame_dims: tuple[int, int]) -> np.ndarray:
