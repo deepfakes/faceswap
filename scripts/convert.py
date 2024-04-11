@@ -702,6 +702,7 @@ class DiskIO():
             # Write out preview image for the GUI every 10 frames if writing to stream
             if write_preview and idx % 10 == 0 and not os.path.exists(preview_image):
                 logger.debug("Writing GUI Preview image: '%s'", preview_image)
+                assert isinstance(image, np.ndarray)
                 cv2.imwrite(preview_image, image)
             self._writer.write(filename, image)
         self._writer.close()
