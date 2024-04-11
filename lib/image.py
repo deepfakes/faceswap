@@ -1253,7 +1253,8 @@ class ImagesLoader(ImageIO):
         reader.close()
 
     def _dummy_video_framename(self, index):
-        """ Return a dummy filename for video files
+        """ Return a dummy filename for video files. The file name is made up of:
+        <video_filename>_<frame_number>.<video_extension>
 
         Parameters
         ----------
@@ -1268,8 +1269,8 @@ class ImagesLoader(ImageIO):
         Returns
         -------
         str: A dummied filename for a video frame """
-        vidname = os.path.splitext(os.path.basename(self.location))[0]
-        return "{}_{:06d}.png".format(vidname, index + 1)
+        vidname, ext = os.path.splitext(os.path.basename(self.location))
+        return f"{vidname}_{index + 1:06d}{ext}"
 
     def _from_folder(self):
         """ Generator for loading images from a folder
