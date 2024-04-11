@@ -15,7 +15,7 @@ from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
 from lib.utils import GetModel, FaceswapError
 from ._config import Config
-from .pipeline import ExtractMedia
+from . import ExtractMedia
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
@@ -209,7 +209,7 @@ class Extractor():
         """ list: Internal threads for this plugin """
 
         self._extract_media: dict[str, ExtractMedia] = {}
-        """ dict: The :class:`plugins.extract.pipeline.ExtractMedia` objects currently being
+        """ dict: The :class:`~plugins.extract.extract_media.ExtractMedia` objects currently being
         processed. Stored at input for pairing back up on output of extractor process """
 
         # << THE FOLLOWING PROTECTED ATTRIBUTES ARE SET IN PLUGIN TYPE _base.py >>> #
@@ -374,7 +374,7 @@ class Extractor():
         :mod:`plugins.extract.detect._base`, :mod:`plugins.extract.align._base` or
         :mod:`plugins.extract.mask._base`) and should not be overridden within plugins themselves.
 
-        Get :class:`~plugins.extract.pipeline.ExtractMedia` items from the queue in batches of
+        Get :class:`~plugins.extract.extract_media.ExtractMedia` items from the queue in batches of
         :attr:`batchsize`
 
         Parameters
@@ -421,11 +421,11 @@ class Extractor():
         ----------
         queue: :class:`queue.Queue`
             The input queue to the aligner. Should contain
-            :class:`~plugins.extract.pipeline.ExtractMedia` objects
+            :class:`~plugins.extract.extract_media.ExtractMedia` objects
 
         Returns
         -------
-        :class:`~plugins.extract.pipeline.ExtractMedia` or EOF
+        :class:`~plugins.extract.extract_media.ExtractMedia` or EOF
             The next extract media object, or EOF if pipe has ended
         """
         if self._rollover is not None:

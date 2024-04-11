@@ -19,7 +19,7 @@ from lib.gui.utils import get_images, get_config, initialize_config, initialize_
 from lib.image import SingleFrameLoader, read_image_meta
 from lib.multithreading import MultiThread
 from lib.utils import handle_deprecated_cliopts, VIDEO_EXTENSIONS
-from plugins.extract.pipeline import Extractor, ExtractMedia
+from plugins.extract import ExtractMedia, Extractor
 
 from .detected_faces import DetectedFaces
 from .faceviewer.frame import FacesFrame
@@ -678,8 +678,8 @@ class Aligner():
 
     @property
     def _feed_face(self) -> ExtractMedia:
-        """ :class:`plugins.extract.pipeline.ExtractMedia`: The current face for feeding into the
-        aligner, formatted for the pipeline """
+        """ :class:`~plugins.extract.extract_media.ExtractMedia`: The current face for feeding into
+        the aligner, formatted for the pipeline """
         assert self._frame_index is not None
         assert self._face_index is not None
         assert self._detected_faces is not None

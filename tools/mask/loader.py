@@ -13,7 +13,7 @@ from tqdm import tqdm
 from lib.align import DetectedFace, update_legacy_png_header
 from lib.align.alignments import AlignmentFileDict
 from lib.image import FacesLoader, ImagesLoader
-from plugins.extract.pipeline import ExtractMedia
+from plugins.extract import ExtractMedia
 
 if T.TYPE_CHECKING:
     from lib.align import Alignments

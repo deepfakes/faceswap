@@ -11,7 +11,7 @@ from multiprocessing import Process
 from lib.align import Alignments
 
 from lib.utils import handle_deprecated_cliopts, VIDEO_EXTENSIONS
-from plugins.extract.pipeline import ExtractMedia
+from plugins.extract import ExtractMedia
 
 from .loader import Loader
 from .mask_import import Import
@@ -239,7 +239,7 @@ class _Mask:
 
         Parameters
         ----------
-        media: :class:`~plugins.extract.pipeline.ExtractMedia`
+        media: :class:`~plugins.extract.extract_media.ExtractMedia`
             The extract media holding the faces to output
         """
         filename = os.path.basename(media.frame_metadata["source_filename"]

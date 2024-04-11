@@ -9,14 +9,13 @@ import typing as T
 import numpy as np
 
 from lib.align import AlignedFace
-from lib.serializer import get_serializer
 from lib.utils import FaceswapError
 
 from ._base import Detector
 
 if T.TYPE_CHECKING:
     from lib.align import DetectedFace
-    from plugins.extract.pipeline import ExtractMedia
+    from plugins.extract import ExtractMedia
     from ._base import BatchType
 
 logger = logging.getLogger(__name__)
@@ -35,7 +34,6 @@ class Detect(Detector):
         self.vram_per_batch = 0
         self.batchsize = 16
 
-        self._serializer = get_serializer("json")
         self._origin: T.Literal["top-left",
                                 "bottom-left",
                                 "top-right",
@@ -51,11 +49,11 @@ class Detect(Detector):
 
     def _compile_detection_image(self, item: ExtractMedia
                                  ) -> tuple[np.ndarray, float, tuple[int, int]]:
-        """ Override _compile_detection_image method, as no compilation needs performing
+        """ Override _compile_detection_image method, to obtain the source frame dimensions
 
         Parameters
         ----------
-        item: :class:`plugins.extract.pipeline.ExtractMedia`
+        item: :class:`~plugins.extract.extract_media.ExtractMedia`
             The input item from the pipeline
 
         Returns
@@ -67,7 +65,7 @@ class Detect(Detector):
         pad: int
             The amount of padding applied to the image (0, 0)
         """
-        return np.empty([0], dtype="uint8"), 1.0, (0, 0)
+        return np.array(item.image_shape[:2], dtype="int64"), 1.0, (0, 0)
 
     @classmethod
     def _bbox_from_detected(cls, bounding_box: list[int]) -> np.ndarray:
@@ -133,16 +131,11 @@ class Detect(Detector):
         -------
         :class:`numpy.ndarray`
             The "left", "top", "right", "bottom" bounding box for the face
-
         """
-        # TODO we need to know the co-ordinate origin of the landmarks here
-        # TODO 4 point landmarks
         n_landmarks = self._validate_landmarks(landmarks)
-        if n_landmarks.shape[0] == 68:  # fairly tight crop of legacy original ROI
-            face = AlignedFace(n_landmarks, centering="legacy", coverage_ratio=0.75)
-            return np.concatenate([np.min(face.original_roi, axis=0),
-                                   np.max(face.original_roi, axis=0)])
-        raise NotImplementedError
+        face = AlignedFace(n_landmarks, centering="legacy", coverage_ratio=0.75)
+        return np.concatenate([np.min(face.original_roi, axis=0),
+                               np.max(face.original_roi, axis=0)])
 
     def _import_frame_face(self,
                            face: dict[str, list[int] | list[list[float]]],
@@ -170,7 +163,6 @@ class Detect(Detector):
         FaceSwapError
             If the required keys for the bounding boxes are not present for the face
         """
-        # TODO test calculated
         if "detected" in face:
             return self._bbox_from_detected(T.cast(list[int], face["detected"]))
         if "landmarks_2d" in face:
@@ -224,7 +216,32 @@ class Detect(Detector):
         batch: :class:`~plugins.extract.detect._base.DetectorBatch`
             The batch to be processed by the plugin
         """
-        batch.feed = np.array([os.path.basename(f) for f in batch.filename], dtype="object")
+        batch.feed = np.array([(os.path.basename(f), i)
+                               for f, i in zip(batch.filename, batch.image)], dtype="object")
+
+    def _adjust_for_origin(self, box: np.ndarray, frame_dims: tuple[int, int]) -> np.ndarray:
+        """ Adjust the bounding box to be top-left orientated based on the selected import origin
+
+        Parameters
+        ----------
+        box: :class:`np.ndarray`
+            The imported bounding box at original (0, 0) origin
+        frame_dims: tuple[int, int]
+            The (rows, columns) dimensions of the original frame
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The adjusted bounding box for a top-left origin
+        """
+        if not np.any(box) or self._origin == "top-left":
+            return box
+        if self._origin.startswith("bottom"):
+            box[:, [1, 3]] = frame_dims[0] - box[:, [1, 3]]
+        if self._origin.endswith("right"):
+            box[:, [0, 2]] = frame_dims[1] - box[:, [0, 2]]
+
+        return box
 
     def predict(self, feed: np.ndarray) -> list[np.ndarray]:  # type:ignore[override]
         """ Pair the input filenames to the import file
@@ -232,15 +249,17 @@ class Detect(Detector):
         Parameters
         ----------
         feed: :class:`numpy.ndarray`
-            The filenames to obtain the imported bounding boxes for
+            The filenames with original frame dimensions to obtain the imported bounding boxes for
 
         Returns
         -------
         list[]:class:`numpy.ndarray`]
             The bounding boxes for the given filenames
         """
-        self._missing += len([f for f in feed if f not in self._imported])
-        return [self._imported.pop(f, np.array([], dtype="int32")) for f in feed]
+        self._missing += len([f[0] for f in feed if f[0] not in self._imported])
+        return [self._adjust_for_origin(self._imported.pop(f[0], np.array([], dtype="int32")),
+                                        f[1])
+                for f in feed]
 
     def process_output(self, batch: BatchType) -> None:
         """ No output processing required for import plugin

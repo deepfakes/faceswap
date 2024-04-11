@@ -18,7 +18,7 @@ from lib.utils import get_image_paths
 if T.TYPE_CHECKING:
     import numpy as np
     from .loader import Loader
-    from plugins.extract.pipeline import ExtractMedia
+    from plugins.extract import ExtractMedia
     from lib.align import Alignments, DetectedFace
     from lib.align.alignments import PNGHeaderDict
     from lib.align.aligned_face import CenteringType
@@ -306,7 +306,7 @@ class Import:
 
         Parameters
         ----------
-        media: :class:`~plugins.extract.pipeline.ExtractMedia`
+        media: :class:`~plugins.extract.extract_media.ExtractMedia`
             The extract media object containing the face(s) to import the mask for
 
         mask: :class:`numpy.ndarray`
@@ -361,7 +361,7 @@ class Import:
 
         Parameters
         ----------
-        media: :class:`~plugins.extract.pipeline.ExtractMedia`
+        media: :class:`~plugins.extract.extract_media.ExtractMedia`
             The extract media object containing the face(s) to import the mask for
 
         mask: :class:`numpy.ndarray`
@@ -384,7 +384,7 @@ class Import:
 
         Parameters
         ----------
-        media: :class:`~plugins.extract.pipeline.ExtractMedia`
+        media: :class:`~plugins.extract.extract_media.ExtractMedia`
             The extract media object containing the face(s) to import the mask for
         """
         mask_file = self._mapping.get(os.path.basename(media.filename))

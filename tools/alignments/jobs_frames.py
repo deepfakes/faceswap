@@ -15,7 +15,7 @@ from tqdm import tqdm
 from lib.align import DetectedFace, EXTRACT_RATIOS, LANDMARK_PARTS, LandmarkType
 from lib.align.alignments import _VERSION, PNGHeaderDict
 from lib.image import encode_image, generate_thumbnail, ImagesSaver
-from plugins.extract.pipeline import Extractor, ExtractMedia
+from plugins.extract import ExtractMedia, Extractor
 from .media import ExtractedFaces, Frames
 
 if T.TYPE_CHECKING:

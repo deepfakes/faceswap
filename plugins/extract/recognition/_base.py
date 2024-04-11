@@ -4,7 +4,7 @@
 All Recognition Plugins should inherit from this class.
 See the override methods for which methods are required.
 
-The plugin will receive a :class:`~plugins.extract.pipeline.ExtractMedia` object.
+The plugin will receive a :class:`~plugins.extract.extract_media.ExtractMedia` object.
 
 For each source frame, the plugin must pass a dict to finalize containing:
 
@@ -27,8 +27,8 @@ from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disab
 from lib.align import AlignedFace, DetectedFace, LandmarkType
 from lib.image import read_image_meta
 from lib.utils import FaceswapError
-from plugins.extract._base import BatchType, Extractor, ExtractorBatch
-from plugins.extract.pipeline import ExtractMedia
+from plugins.extract import ExtractMedia
+from plugins.extract._base import BatchType, ExtractorBatch, Extractor
 
 if T.TYPE_CHECKING:
     from collections.abc import Generator
@@ -103,7 +103,7 @@ class Identity(Extractor):  # pylint:disable=abstract-method
 
         Parameters
         ----------
-        item: :class:`~plugins.extract.pipeline.ExtractMedia`
+        item: :class:`~plugins.extract.extract_media.ExtractMedia`
             The extract media to populate the detected face for
          """
         detected_face = DetectedFace()
@@ -135,8 +135,8 @@ class Identity(Extractor):  # pylint:disable=abstract-method
         Items are returned from the ``queue`` in batches of
         :attr:`~plugins.extract._base.Extractor.batchsize`
 
-        Items are received as :class:`~plugins.extract.pipeline.ExtractMedia` objects and converted
-        to :class:`RecogBatch` for internal processing.
+        Items are received as :class:`~plugins.extract.extract_media.ExtractMedia` objects and
+        converted to :class:`RecogBatch` for internal processing.
 
         To ensure consistent batch sizes for masker the items are split into separate items for
         each :class:`~lib.align.DetectedFace` object.
@@ -252,7 +252,7 @@ class Identity(Extractor):  # pylint:disable=abstract-method
 
         Yields
         ------
-        :class:`~plugins.extract.pipeline.ExtractMedia`
+        :class:`~plugins.extract.extract_media.ExtractMedia`
             The :attr:`DetectedFaces` list will be populated for this class with the bounding
             boxes, landmarks and masks for the detected faces found in the frame.
         """

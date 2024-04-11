@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ Import 68 point landmarks or ROI boxes from a json file """
 import logging
+import typing as T
 import os
 
 import numpy as np
@@ -26,6 +27,11 @@ class Align(Aligner):
         self.name = "External"
         self.vram = 0  # Doesn't use GPU
         self.batchsize = 16
+
+        self._origin: T.Literal["top-left",
+                                "bottom-left",
+                                "top-right",
+                                "bottom-right"] = self.config["origin"]
 
         self._imported: dict[str, tuple[int, np.ndarray]] = {}
         """dict[str, tuple[int, np.ndarray]]: filename as key, value of [number of faces remaining
@@ -101,14 +107,16 @@ class Align(Aligner):
             self.landmark_type = LandmarkType.LM_2D_4
 
     def process_input(self, batch: BatchType) -> None:
-        """ Put the filenames into `batch.feed` so they can be collected for mapping in `.predict`
+        """ Put the filenames and original frame dimensions into `batch.feed` so they can be
+        collected for mapping in `.predict`
 
         Parameters
         ----------
         batch: :class:`~plugins.extract.detect._base.AlignerBatch`
             The batch to be processed by the plugin
         """
-        batch.feed = np.array([os.path.basename(f) for f in batch.filename], dtype="object")
+        batch.feed = np.array([(os.path.basename(f), i.shape[:2])
+                               for f, i in zip(batch.filename, batch.image)], dtype="object")
 
     def faces_to_feed(self, faces: np.ndarray) -> np.ndarray:
         """ No action required for import plugin
@@ -125,6 +133,29 @@ class Align(Aligner):
         """
         return faces
 
+    def _adjust_for_origin(self, landmarks: np.ndarray, frame_dims: tuple[int, int]) -> np.ndarray:
+        """ Adjust the landmarks to be top-left orientated based on the selected import origin
+
+        Parameters
+        ----------
+        landmarks: :class:`np.ndarray`
+            The imported facial landmarks box at original (0, 0) origin
+        frame_dims: tuple[int, int]
+            The (rows, columns) dimensions of the original frame
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The adjusted landmarks box for a top-left origin
+        """
+        if not np.any(landmarks) or self._origin == "top-left":
+            return landmarks
+        if self._origin.startswith("bottom"):
+            landmarks[:, 1] = frame_dims[0] - landmarks[:, 1]
+        if self._origin.endswith("right"):
+            landmarks[:, 0] = frame_dims[1] - landmarks[:, 0]
+        return landmarks
+
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Pair the input filenames to the import file
 
@@ -139,7 +170,7 @@ class Align(Aligner):
             The predictions for the given filenames
         """
         preds = []
-        for key in feed:
+        for key, frame_dims in feed:
             if key not in self._imported:
                 # TODO Handle filename missing in imported data
                 # As this is will almost definitely be problematic as num detected_faces != preds
@@ -147,7 +178,8 @@ class Align(Aligner):
                 continue
 
             remaining, all_lms = self._imported[key]
-            preds.append(all_lms[all_lms.shape[0] - remaining])
+            preds.append(self._adjust_for_origin(all_lms[all_lms.shape[0] - remaining],
+                                                 frame_dims))
 
             if remaining == 1:
                 del self._imported[key]
