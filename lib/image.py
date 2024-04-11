@@ -1565,6 +1565,7 @@ class ImagesSaver(ImageIO):
                 with open(filename, "wb") as out_file:
                     out_file.write(image)
             else:
+                assert isinstance(image, np.ndarray)
                 cv2.imwrite(filename, image)
             logger.trace("Saved image: '%s'", filename)  # type:ignore
         except Exception as err:  # pylint:disable=broad-except

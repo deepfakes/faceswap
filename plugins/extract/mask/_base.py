@@ -275,7 +275,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                                                    batch.feed_faces,
                                                    batch.roi_masks):
             if self.name in ("Components", "Extended") and not np.any(mask):
-                # Components/Extended masks can return None when called from the manual tool with
+                # Components/Extended masks can return empty when called from the manual tool with
                 # 4 Point ROI landmarks
                 continue
             self._crop_out_of_bounds(mask, roi_mask)

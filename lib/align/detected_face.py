@@ -15,7 +15,7 @@ from lib.image import encode_image, read_image
 from lib.utils import FaceswapError
 from .alignments import (Alignments, AlignmentFileDict, MaskAlignmentsFileDict,
                          PNGHeaderAlignmentsDict, PNGHeaderDict, PNGHeaderSourceDict)
-from . import AlignedFace, get_adjusted_center, get_centered_size
+from . import AlignedFace, get_adjusted_center, get_centered_size, LANDMARK_PARTS
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
@@ -231,12 +231,26 @@ class DetectedFace():
         -------
         :class:`numpy.ndarray`
             The generated landmarks mask for the selected area
+
+        Raises
+        ------
+        FaceSwapError
+            If the aligned face does not contain the correct landmarks to generate a landmark mask
         """
         # TODO Face mask generation from landmarks
         logger.trace("area: %s, dilation: %s", area, dilation)  # type:ignore[attr-defined]
-        areas = {"mouth": [slice(48, 60)], "eye": [slice(36, 42), slice(42, 48)]}
-        points = [self.aligned.landmarks[zone]
-                  for zone in areas[area]]
+
+        lm_type = self.aligned.landmark_type
+        if lm_type not in LANDMARK_PARTS:
+            raise FaceswapError(f"Landmark based masks cannot be created for {lm_type.name}")
+
+        lm_parts = LANDMARK_PARTS[self.aligned.landmark_type]
+        mapped = {"mouth": ["mouth_outer"], "eye": ["right_eye", "left_eye"]}
+        if not all(part in lm_parts for parts in mapped.values() for part in parts):
+            raise FaceswapError(f"Landmark based masks cannot be created for {lm_type.name}")
+
+        areas = {key: [slice(*lm_parts[v][:2]) for v in val]for key, val in mapped.items()}
+        points = [self.aligned.landmarks[zone] for zone in areas[area]]
 
         lmmask = LandmarksMask(points,
                                storage_size=self.aligned.size,
