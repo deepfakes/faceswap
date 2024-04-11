@@ -43,6 +43,10 @@ class Mask(Masker):
         faces: list[AlignedFace] = feed[1]
         feed = feed[0]
         for mask, face in zip(feed, faces):
+            if LandmarkType.from_shape(face.landmarks.shape) != self.landmark_type:
+                # Called from the manual tool. # TODO This will only work with BS1
+                feed = np.zeros_like(feed)
+                continue
             parts = self.parse_parts(np.array(face.landmarks))
             for item in parts:
                 a_item = np.rint(np.concatenate(item)).astype("int32")

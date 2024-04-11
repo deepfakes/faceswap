@@ -105,24 +105,6 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         self._storage_size = 128  # Size to store masks at. Leave this at default
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _maybe_error(self, face: AlignedFace) -> None:
-        """ Error out if the requested mask cannot be created with the available data
-
-        Parameters
-        ----------
-        face: :class:`~lib.align.aligned_face.AlignedFace`
-            The aligned face object to test the landmark type for
-
-        Raises
-        ------
-        FaceSwapError
-            If the mask plugin cannot be used with the given landmark data
-        """
-        if self.landmark_type is None:
-            return
-        if face.landmark_type != self.landmark_type:
-            raise FaceswapError(f"68 point facial landmarks are required for '{self.name}' masks.")
-
     def _maybe_log_warning(self, face: AlignedFace) -> None:
         """ Log a warning, once, if we do not have full facial landmarks
 
@@ -133,8 +115,12 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         """
         if face.landmark_type != LandmarkType.LM_2D_4 or self._logged_lm_count_once:
             return
-        logger.warning("Extracted faces do not contain facial landmark data. '%s' "
-                       "masks are likely to be sub-standard.", self.name)
+
+        msg = "are likely to be sub-standard"
+        msg = "can not be be generated" if self.name in ("Components", "Extended") else msg
+
+        logger.warning("Extracted faces do not contain facial landmark data. '%s' masks %s.",
+                       self.name, msg)
         self._logged_lm_count_once = True
 
     def get_batch(self, queue: Queue) -> tuple[bool, MaskerBatch]:
@@ -200,7 +186,6 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                                         dtype="float32",
                                         is_aligned=item.is_aligned)
 
-                self._maybe_error(feed_face)
                 self._maybe_log_warning(feed_face)
 
                 assert feed_face.face is not None
@@ -289,6 +274,10 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                                                    batch.detected_faces,
                                                    batch.feed_faces,
                                                    batch.roi_masks):
+            if self.name in ("Components", "Extended") and not np.any(mask):
+                # Components/Extended masks can return None when called from the manual tool with
+                # 4 Point ROI landmarks
+                continue
             self._crop_out_of_bounds(mask, roi_mask)
             face.add_mask(self._storage_name,
                           mask,

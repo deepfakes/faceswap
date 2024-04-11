@@ -3,7 +3,7 @@
 import gettext
 import numpy as np
 
-from lib.align import AlignedFace
+from lib.align import AlignedFace, LANDMARK_PARTS, LandmarkType
 from ._base import Editor, logger
 
 # LOCALES
@@ -67,7 +67,7 @@ class Landmarks(Editor):
                                 outline="gray",
                                 state="hidden")
         self._canvas.coords(self._selection_box, 0, 0, 0, 0)
-        self._drag_data = dict()
+        self._drag_data = {}
         if event is not None:
             self._drag_start(event)
 
@@ -83,7 +83,7 @@ class Landmarks(Editor):
                 landmarks = aligned.landmarks + zoomed_offset
                 # Hide all landmarks and only display selected
                 self._canvas.itemconfig("lm_dsp", state="hidden")
-                self._canvas.itemconfig("lm_dsp_face_{}".format(face_index), state="normal")
+                self._canvas.itemconfig(f"lm_dsp_face_{face_index}", state="normal")
             else:
                 landmarks = self._scale_to_display(face.landmarks_xy)
             for lm_idx, landmark in enumerate(landmarks):
@@ -109,8 +109,8 @@ class Landmarks(Editor):
         color = self._control_color
         bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
                 bounding_box[0] + radius, bounding_box[1] + radius)
-        key = "lm_dsp_{}".format(landmark_index)
-        kwargs = dict(outline=color, fill=color, width=radius)
+        key = f"lm_dsp_{landmark_index}"
+        kwargs = {"outline": color, "fill": color, "width": radius}
         self._object_tracker(key, "oval", face_index, bbox, kwargs)
 
     def _label_landmark(self, bounding_box, face_index, landmark_index):
@@ -132,9 +132,9 @@ class Landmarks(Editor):
         # NB The text must be visible to be able to get the bounding box, so set to hidden
         # after the bounding box has been retrieved
 
-        keys = ["lm_lbl_{}".format(landmark_index), "lm_lbl_bg_{}".format(landmark_index)]
-        text_kwargs = dict(fill="black", font=("Default", 10), text=str(landmark_index + 1))
-        bg_kwargs = dict(fill="#ffffea", outline="black")
+        keys = [f"lm_lbl_{landmark_index}", f"lm_lbl_bg_{landmark_index}"]
+        text_kwargs = {"fill": "black", "font": ("Default", 10), "text": str(landmark_index + 1)}
+        bg_kwargs = {"fill": "#ffffea", "outline": "black"}
 
         text_id = self._object_tracker(keys[0], "text", face_index, top_left, text_kwargs)
         bbox = self._canvas.bbox(text_id)
@@ -162,11 +162,11 @@ class Landmarks(Editor):
         radius = 7
         bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
                 bounding_box[0] + radius, bounding_box[1] + radius)
-        key = "lm_grb_{}".format(landmark_index)
-        kwargs = dict(outline="",
-                      fill="",
-                      width=1,
-                      dash=(2, 4))
+        key = f"lm_grb_{landmark_index}"
+        kwargs = {"outline": "",
+                  "fill": "",
+                  "width": 1,
+                  "dash": (2, 4)}
         self._object_tracker(key, "oval", face_index, bbox, kwargs)
 
     # << MOUSE HANDLING >>
@@ -185,7 +185,7 @@ class Landmarks(Editor):
         if self._drag_data:
             self._update_cursor_select_mode(event)
         else:
-            objs = self._canvas.find_withtag("lm_grb_face_{}".format(self._globals.face_index)
+            objs = self._canvas.find_withtag(f"lm_grb_face_{self._globals.face_index}"
                                              if self._globals.is_zoomed else "lm_grb")
             item_ids = set(self._canvas.find_overlapping(event.x - 6,
                                                          event.y - 6,
@@ -226,7 +226,7 @@ class Landmarks(Editor):
 
         self._canvas.config(cursor="none")
         for prefix in ("lm_lbl_", "lm_lbl_bg_"):
-            tag = "{}{}_face_{}".format(prefix, lm_idx, face_idx)
+            tag = f"{prefix}{lm_idx}_face_{face_idx}"
             logger.trace("Displaying: %s tag: %s", self._canvas.type(tag), tag)
             self._canvas.itemconfig(tag, state="normal")
         self._mouse_location = obj_idx
@@ -271,7 +271,7 @@ class Landmarks(Editor):
             self._drag_data["start_location"] = (event.x, event.y)
             self._drag_callback = self._move_selection
         else:  # Reset
-            self._drag_data = dict()
+            self._drag_data = {}
             self._drag_callback = None
             self._reset_selection(event)
 
@@ -294,7 +294,7 @@ class Landmarks(Editor):
             self._det_faces.update.post_edit_trigger(self._globals.frame_index,
                                                      self._mouse_location[0])
             self._mouse_location = None
-            self._drag_data = dict()
+            self._drag_data = {}
         elif self._drag_data and self._drag_data.get("selected", False):
             self._drag_stop_selected()
         else:
@@ -429,15 +429,6 @@ class Mesh(Editor):
         The _detected_faces data for this manual session
     """
     def __init__(self, canvas, detected_faces):
-        self._landmark_mapping = dict(mouth_inner=(60, 68),
-                                      mouth_outer=(48, 60),
-                                      right_eyebrow=(17, 22),
-                                      left_eyebrow=(22, 27),
-                                      right_eye=(36, 42),
-                                      left_eye=(42, 48),
-                                      nose=(27, 36),
-                                      jaw=(0, 17),
-                                      chin=(8, 11))
         super().__init__(canvas, detected_faces, None)
 
     def update_annotation(self):
@@ -452,19 +443,23 @@ class Mesh(Editor):
                                       centering="face",
                                       size=min(self._globals.frame_display_dims))
                 landmarks = aligned.landmarks + zoomed_offset
+                landmark_mapping = LANDMARK_PARTS[aligned.landmark_type]
                 # Hide all meshes and only display selected
                 self._canvas.itemconfig("Mesh", state="hidden")
-                self._canvas.itemconfig("Mesh_face_{}".format(face_index), state="normal")
+                self._canvas.itemconfig(f"Mesh_face_{face_index}", state="normal")
             else:
                 landmarks = self._scale_to_display(face.landmarks_xy)
+                landmark_mapping = LANDMARK_PARTS[LandmarkType.from_shape(landmarks.shape)]
             logger.trace("Drawing Landmarks Mesh: (landmarks: %s, color: %s)", landmarks, color)
-            for idx, (segment, val) in enumerate(self._landmark_mapping.items()):
-                key = "mesh_{}".format(idx)
-                pts = landmarks[val[0]:val[1]].flatten()
-                if segment in ("right_eye", "left_eye", "mouth_inner", "mouth_outer"):
-                    kwargs = dict(fill="", outline=color, width=1)
-                    self._object_tracker(key, "polygon", face_index, pts, kwargs)
+            for idx, (start, end, fill) in enumerate(landmark_mapping.values()):
+                key = f"mesh_{idx}"
+                pts = landmarks[start:end].flatten()
+                if fill:
+                    kwargs = {"fill": "", "outline": color, "width": 1}
+                    asset = "polygon"
                 else:
-                    self._object_tracker(key, "line", face_index, pts, dict(fill=color, width=1))
+                    kwargs = {"fill": color, "width": 1}
+                    asset = "line"
+                self._object_tracker(key, asset, face_index, pts, kwargs)
         # Place mesh as bottom annotation
         self._canvas.tag_raise(self.__class__.__name__, "main_image")

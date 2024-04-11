@@ -684,7 +684,7 @@ class FaceUpdate():
                      width: int,
                      pnt_y: int,
                      height: int,
-                     aligner: T.Literal["cv2-dnn", "FAN"] = "FAN") -> None:
+                     aligner: manual.TypeManualExtractor = "FAN") -> None:
         """ Update the bounding box for the :class:`~lib.align.DetectedFace` object at the
         given frame and face indices, with the given dimensions and update the 68 point landmarks
         from the :class:`~tools.manual.manual.Aligner` for the updated bounding box.
