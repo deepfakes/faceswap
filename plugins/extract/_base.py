@@ -288,6 +288,11 @@ class Extractor():
         """
         raise NotImplementedError
 
+    def on_completion(self) -> None:
+        """ Override to perform an action when the extract process has completed. By default, no
+        action is undertaken """
+        return
+
     def _predict(self, batch: BatchType) -> BatchType:
         """ **Override method** (at `<plugin_type>` level)
 

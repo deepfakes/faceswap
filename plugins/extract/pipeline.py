@@ -297,6 +297,8 @@ class Extractor():
 
         self._join_threads()
         if self.final_pass:
+            for plugin in self._all_plugins:
+                plugin.on_completion()
             logger.debug("Detection Complete")
         else:
             self._phase_index += 1

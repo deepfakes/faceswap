@@ -40,7 +40,7 @@ class Align(Aligner):
         """dict[str | int, tuple[int, np.ndarray]]: filename as key, value of [number of faces
         remaining for the frame, all landmarks in the frame] """
 
-        self._missing = 0
+        self._missing: list[str] = []
 
         centering = self.config["4_point_centering"]
         self._adjustment: float = 1. if centering is None else 1. - EXTRACT_RATIOS[centering]
@@ -138,8 +138,12 @@ class Align(Aligner):
         self._check_for_video(list(data)[0])
         for key, faces in data.items():
             try:
-                store_key = self._get_key(key)
                 lms = np.array([self._import_face(face) for face in faces], dtype="float32")
+                if not np.any(lms):
+                    logger.trace("Skipping frame '%s' with no faces")
+                    continue
+
+                store_key = self._get_key(key)
                 self._imported[store_key] = (lms.shape[0], lms)
             except FaceswapError as err:
                 logger.error(str(err))
@@ -218,9 +222,7 @@ class Align(Aligner):
         preds = []
         for key, frame_dims in feed:
             if key not in self._imported:
-                # TODO Handle filename missing in imported data
-                # As this is will almost definitely be problematic as num detected_faces != preds
-                self._missing += 1
+                self._missing.append(key)
                 continue
 
             remaining, all_lms = self._imported[key]
@@ -245,3 +247,24 @@ class Align(Aligner):
         assert isinstance(batch, AlignerBatch)
         batch.landmarks = batch.prediction
         logger.trace("Imported landmarks: %s", batch.landmarks)  # type:ignore[attr-defined]
+
+    def on_completion(self) -> None:
+        """ Output information if:
+        - Imported items were not matched in input data
+        - Input data was not matched in imported items
+        """
+        super().on_completion()
+
+        if self._missing:
+            logger.warning("[ALIGN] %s input frames could not be matched in the import file "
+                           "'%s'. Run in verbose mode for a list of frames.",
+                           len(self._missing), self.config["file_name"])
+            logger.verbose(  # type:ignore[attr-defined]
+                "[ALIGN] Input frames not in import file: %s", self._missing)
+
+        if self._imported:
+            logger.warning("[ALIGN] %s items in the import file '%s' could not be matched to any "
+                           "input frames. Run in verbose mode for a list of items.",
+                           len(self._imported), self.config["file_name"])
+            logger.verbose(  # type:ignore[attr-defined]
+                "[ALIGN] import file items not in input frames: %s", list(self._imported))

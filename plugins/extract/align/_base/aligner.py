@@ -316,10 +316,6 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         else:
             logger.debug(item)
 
-        # TODO Move to end of process not beginning
-        if exhausted:
-            self._filter.output_counts()
-
         return exhausted, batch
 
     def faces_to_feed(self, faces: np.ndarray) -> np.ndarray:
@@ -386,6 +382,10 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                          output.image_shape, output.detected_faces, output)
             yield output
         self._re_align.untrack_batch(batch.batch_id)
+
+    def on_completion(self) -> None:
+        """ Output the filter counts when process has completed """
+        self._filter.output_counts()
 
     # <<< PROTECTED METHODS >>> #
     # << PROCESS_INPUT WRAPPER >>

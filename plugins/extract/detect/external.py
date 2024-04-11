@@ -41,7 +41,7 @@ class Detect(Detector):
                                 "bottom-right"] = self.config["origin"]
 
         self._re_frame_no: re.Pattern = re.compile(r"\d+$")
-        self._missing = 0
+        self._missing: list[str] = []
         self._log_once = True
         self._is_video = False
         self._imported: dict[str | int, np.ndarray] = {}
@@ -303,7 +303,7 @@ class Detect(Detector):
         list[]:class:`numpy.ndarray`]
             The bounding boxes for the given filenames
         """
-        self._missing += len([f[0] for f in feed if f[0] not in self._imported])
+        self._missing.extend(f[0] for f in feed if f[0] not in self._imported)
         return [self._adjust_for_origin(self._imported.pop(f[0], np.array([], dtype="int32")),
                                         f[1])
                 for f in feed]
@@ -333,3 +333,24 @@ class Detect(Detector):
             Original list of detected face objects
         """
         return batch_faces
+
+    def on_completion(self) -> None:
+        """ Output information if:
+        - Imported items were not matched in input data
+        - Input data was not matched in imported items
+        """
+        super().on_completion()
+
+        if self._missing:
+            logger.warning("[DETECT] %s input frames could not be matched in the import file "
+                           "'%s'. Run in verbose mode for a list of frames.",
+                           len(self._missing), self.config["file_name"])
+            logger.verbose(  # type:ignore[attr-defined]
+                "[DETECT] Input frames not in import file: %s", self._missing)
+
+        if self._imported:
+            logger.warning("[DETECT] %s items in the import file '%s' could not be matched to any "
+                           "input frames. Run in verbose mode for a list of items.",
+                           len(self._imported), self.config["file_name"])
+            logger.verbose(  # type:ignore[attr-defined]
+                "[DETECT] import file items not in input frames: %s", list(self._imported))
