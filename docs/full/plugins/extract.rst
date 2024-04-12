@@ -8,18 +8,16 @@ The Extract Package handles the various plugins available for extracting face se
    :local:
 
 
+extract\_media module
+=====================
+.. automodule:: plugins.extract.extract_media
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
 pipeline module
 ===============
-.. rubric:: Module Summary
-
-.. autosummary::
-   :nosignatures:
-   
-   ~plugins.extract.pipeline.ExtractMedia
-   ~plugins.extract.pipeline.Extractor
-
-.. rubric:: Module
-
 .. automodule:: plugins.extract.pipeline
    :members:
    :undoc-members:

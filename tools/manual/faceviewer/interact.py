@@ -139,7 +139,7 @@ class HoverBox():
 
 @dataclass
 class Asset:
-    """ Holds all of the display assets identifiers for a single frame's objects
+    """ Holds all of the display assets identifiers for the active frame's face viewer objects
 
     Parameters
     ----------

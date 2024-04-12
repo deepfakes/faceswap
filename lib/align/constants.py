@@ -11,7 +11,7 @@ CenteringType = T.Literal["face", "head", "legacy"]
 
 EXTRACT_RATIOS: dict[CenteringType, float] = {"legacy": 0.375, "face": 0.5, "head": 0.625}
 """dict[Literal["legacy", "face", head"] float]: The amount of padding applied to each
-centering type """
+centering type when generating aligned faces """
 
 
 class LandmarkType(Enum):
@@ -92,7 +92,8 @@ _MEAN_FACE: dict[LandmarkType, np.ndarray] = {
         [-0.589441, -8.443925, 6.109526],   # 46 mouth bottom R
         [0.0, -8.601736, 6.097667],         # 45 mouth bottom C
         [0.589441, -8.443925, 6.109526]])}   # 44 mouth bottom L
-
+"""dict[:class:`~LandmarkType, np.ndarray]: 'Mean' landmark points for various landmark types. Used
+for aligning faces """
 
 LANDMARK_PARTS: dict[LandmarkType, dict[str, tuple[int, int, bool]]] = {
             LandmarkType.LM_2D_68: {"mouth_outer": (48, 60, True),
@@ -105,5 +106,5 @@ LANDMARK_PARTS: dict[LandmarkType, dict[str, tuple[int, int, bool]]] = {
                                     "jaw": (0, 17, False),
                                     "chin": (8, 11, False)},
             LandmarkType.LM_2D_4: {"face": (0, 4, True)}}
-""":dict[:class:`LandmarkType`, dict[str, tuple[int, int, bool]]: For each landmark type, stores
+"""dict[:class:`LandmarkType`, dict[str, tuple[int, int, bool]]: For each landmark type, stores
 the (start index, end index, is polygon) information about each part of the face. """

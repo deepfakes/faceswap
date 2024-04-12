@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-03-28 23:49+0000\n"
-"PO-Revision-Date: 2024-03-29 00:08+0000\n"
+"POT-Creation-Date: 2024-04-12 12:10+0100\n"
+"PO-Revision-Date: 2024-04-12 12:13+0100\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ru\n"
@@ -65,17 +65,23 @@ msgstr ""
 msgid " Use the output option (-o) to process results."
 msgstr " Используйте опцию вывода (-o) для обработки результатов."
 
-#: tools/alignments/cli.py:57 tools/alignments/cli.py:97
+#: tools/alignments/cli.py:58 tools/alignments/cli.py:104
 msgid "processing"
 msgstr "обработка"
 
-#: tools/alignments/cli.py:60
+#: tools/alignments/cli.py:61
 #, python-brace-format
 msgid ""
 "R|Choose which action you want to perform. NB: All actions require an "
 "alignments file (-a) to be passed in.\n"
 "L|'draw': Draw landmarks on frames in the selected folder/video. A subfolder "
 "will be created within the frames folder to hold the output.{0}\n"
+"L|'export': Export the contents of an alignments file to a json file. Can be "
+"used for editing alignment information in external tools and then re-"
+"importing by using Faceswap's Extract 'Import' plugins. Note: masks and "
+"identity vectors will not be included in the exported file, so will be re-"
+"generated when the json file is imported back into Faceswap. All data is "
+"exported with the origin (0, 0) at the top left of the canvas.\n"
 "L|'extract': Re-extract faces from the source frames/video based on "
 "alignment data. This is a lot quicker than re-detecting faces. Can pass in "
 "the '-een' (--extract-every-n) parameter to only extract every nth frame."
@@ -109,6 +115,13 @@ msgstr ""
 "требуют передачи файла выравнивания (-a).\n"
 "L|'draw': Нарисовать ориентиры на кадрах в выбранной папке/видео. В папке "
 "frames будет создана подпапка для хранения результатов.\n"
+"L|'export': экспортировать содержимое файла выравнивания в файл JSON. Может "
+"использоваться для редактирования информации о выравнивании во внешних "
+"инструментах, а затем повторно импортируется с помощью плагинов Faceswap "
+"Extract 'Import'. ПРИМЕЧАНИЕ. Маски и векторы идентификации не будут "
+"включены в экспортированный файл, поэтому будут повторно сгенерированы, "
+"когда файл JSON будет импортирован обратно в Faceswap. Все данные "
+"экспортируются с началом координат (0, 0) в верхнем левом углу холста.\n"
 "L|'extract': Повторное извлечение лиц из исходных кадров/видео на основе "
 "данных о выравнивании. Это намного быстрее, чем повторное обнаружение лиц. "
 "Можно передать параметр '-een' (--extract-every-n), чтобы извлекать только "
@@ -139,7 +152,7 @@ msgstr ""
 "L|'spatial': Выполнить пространственную и временную фильтрацию для "
 "сглаживания выравниваний (ЭКСПЕРИМЕНТАЛЬНО!)."
 
-#: tools/alignments/cli.py:100
+#: tools/alignments/cli.py:107
 msgid ""
 "R|How to output discovered items ('faces' and 'frames' only):\n"
 "L|'console': Print the list of frames to the screen. (DEFAULT)\n"
@@ -154,12 +167,12 @@ msgstr ""
 "каталоге).\n"
 "L|'move': Переместить обнаруженные элементы в подпапку в исходном каталоге."
 
-#: tools/alignments/cli.py:111 tools/alignments/cli.py:134
-#: tools/alignments/cli.py:141
+#: tools/alignments/cli.py:118 tools/alignments/cli.py:141
+#: tools/alignments/cli.py:148
 msgid "data"
 msgstr "данные"
 
-#: tools/alignments/cli.py:118
+#: tools/alignments/cli.py:125
 msgid ""
 "Full path to the alignments file to be processed. If you have input a "
 "'frames_dir' and don't provide this option, the process will try to find the "
@@ -173,11 +186,11 @@ msgstr ""
 "задания 'from-faces', когда файл выравнивания будет создан в указанной папке "
 "с лицами."
 
-#: tools/alignments/cli.py:135
+#: tools/alignments/cli.py:142
 msgid "Directory containing source frames that faces were extracted from."
 msgstr "Папка, содержащая исходные кадры, из которых были извлечены лица."
 
-#: tools/alignments/cli.py:143
+#: tools/alignments/cli.py:150
 msgid ""
 "R|Run the aligmnents tool on multiple sources. The following jobs support "
 "batch mode:\n"
@@ -220,12 +233,12 @@ msgstr ""
 "выравнивания должен существовать в месте по умолчанию. Для всех остальных "
 "заданий этот параметр игнорируется."
 
-#: tools/alignments/cli.py:169 tools/alignments/cli.py:181
-#: tools/alignments/cli.py:191
+#: tools/alignments/cli.py:176 tools/alignments/cli.py:188
+#: tools/alignments/cli.py:198
 msgid "extract"
 msgstr "извлечение"
 
-#: tools/alignments/cli.py:171
+#: tools/alignments/cli.py:178
 msgid ""
 "[Extract only] Extract every 'nth' frame. This option will skip frames when "
 "extracting faces. For example a value of 1 will extract faces from every "
@@ -235,11 +248,11 @@ msgstr ""
 "кадры при извлечении лиц. Например, значение 1 будет извлекать лица из "
 "каждого кадра, значение 10 будет извлекать лица из каждого 10-го кадра."
 
-#: tools/alignments/cli.py:182
+#: tools/alignments/cli.py:189
 msgid "[Extract only] The output size of extracted faces."
 msgstr "[Только извлечение] Выходной размер извлеченных лиц."
 
-#: tools/alignments/cli.py:193
+#: tools/alignments/cli.py:200
 msgid ""
 "[Extract only] Only extract faces that have been resized by this percent or "
 "more to meet the specified extract size (`-sz`, `--size`). Useful for "

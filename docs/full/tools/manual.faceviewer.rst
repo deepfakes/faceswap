@@ -7,6 +7,7 @@ Handles the display of faces in the Face Viewer section of Faceswap's Manual Too
 .. contents:: Contents
    :local:
 
+
 frame module
 ============
 
@@ -28,6 +29,27 @@ frame module
    :undoc-members:
    :show-inheritance:
 
+
+interact module
+===============
+
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+
+   ~tools.manual.faceviewer.interact.ActiveFrame
+   ~tools.manual.faceviewer.interact.Asset
+   ~tools.manual.faceviewer.interact.HoverBox
+
+.. rubric:: Module
+
+.. automodule:: tools.manual.faceviewer.interact
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
 viewport module
 ===============
 
@@ -36,8 +58,6 @@ viewport module
 .. autosummary::
    :nosignatures:
 
-   ~tools.manual.faceviewer.viewport.ActiveFrame
-   ~tools.manual.faceviewer.viewport.HoverBox
    ~tools.manual.faceviewer.viewport.TKFace
    ~tools.manual.faceviewer.viewport.Viewport
    ~tools.manual.faceviewer.viewport.VisibleObjects   
