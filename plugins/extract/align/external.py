@@ -41,6 +41,10 @@ class Align(Aligner):
         remaining for the frame, all landmarks in the frame] """
 
         self._missing: list[str] = []
+        self._roll: dict[T.Literal["bottom-left", "top-right", "bottom-right"], int] = {
+            "bottom-left": 3, "top-right": 1, "bottom-right": 2}
+        """dict[Literal["bottom-left", "top-right", "bottom-right"], int]: Amount to roll the
+        points by for different origins when 4 Point ROI landmarks are provided """
 
         centering = self.config["4_point_centering"]
         self._adjustment: float = 1. if centering is None else 1. - EXTRACT_RATIOS[centering]
@@ -140,7 +144,7 @@ class Align(Aligner):
             try:
                 lms = np.array([self._import_face(face) for face in faces], dtype="float32")
                 if not np.any(lms):
-                    logger.trace("Skipping frame '%s' with no faces")
+                    logger.trace("Skipping frame '%s' with no faces")  # type:ignore[attr-defined]
                     continue
 
                 store_key = self._get_key(key)
@@ -200,10 +204,15 @@ class Align(Aligner):
         """
         if not np.any(landmarks) or self._origin == "top-left":
             return landmarks
+
+        if LandmarkType.from_shape(landmarks.shape) == LandmarkType.LM_2D_4:
+            landmarks = np.roll(landmarks, self._roll[self._origin], axis=0)
+
         if self._origin.startswith("bottom"):
             landmarks[:, 1] = frame_dims[0] - landmarks[:, 1]
         if self._origin.endswith("right"):
             landmarks[:, 0] = frame_dims[1] - landmarks[:, 0]
+
         return landmarks
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
