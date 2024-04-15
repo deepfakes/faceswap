@@ -29,10 +29,7 @@ class Detect(Detector):
         kwargs["min_size"] = 0  # Disable min_size
         super().__init__(git_model_id=None, model_filename=None, **kwargs)
 
-        self.input_size = 256
         self.name = "External"
-        self.vram = 0  # Doesn't use GPU
-        self.vram_per_batch = 0
         self.batchsize = 16
 
         self._origin: T.Literal["top-left",

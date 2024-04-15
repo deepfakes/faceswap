@@ -24,9 +24,7 @@ class Align(Aligner):
         kwargs["disable_filter"] = True  # Disable aligner filters
         super().__init__(git_model_id=None, model_filename=None, **kwargs)
 
-        self.input_size = 256
         self.name = "External"
-        self.vram = 0  # Doesn't use GPU
         self.batchsize = 16
 
         self._origin: T.Literal["top-left",
