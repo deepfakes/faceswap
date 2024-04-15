@@ -10,25 +10,27 @@ plugins either in parallel or in series, giving easy access to input and output.
 """
 from __future__ import annotations
 import logging
+import os
 import typing as T
 
-import cv2
-
+from lib.align import LandmarkType
 from lib.gpu_stats import GPUStats
+from lib.logger import parse_class_init
 from lib.queue_manager import EventQueue, queue_manager, QueueEmpty
-from lib.utils import get_backend
+from lib.serializer import get_serializer
+from lib.utils import get_backend, FaceswapError
 from plugins.plugin_loader import PluginLoader
 
 if T.TYPE_CHECKING:
-    import numpy as np
     from collections.abc import Generator
-    from lib.align.alignments import PNGHeaderSourceDict
-    from lib.align.detected_face import DetectedFace
-    from plugins.extract._base import Extractor as PluginExtractor
-    from plugins.extract.detect._base import Detector
-    from plugins.extract.align._base import Aligner
-    from plugins.extract.mask._base import Masker
-    from plugins.extract.recognition._base import Identity
+    from ._base import Extractor as PluginExtractor
+    from .align._base import Aligner
+    from .align.external import Align as AlignImport
+    from .detect._base import Detector
+    from .detect.external import Detect as DetectImport
+    from .mask._base import Masker
+    from .recognition._base import Identity
+    from . import ExtractMedia
 
 logger = logging.getLogger(__name__)
 _INSTANCES = -1  # Tracking for multiple instances of pipeline
@@ -110,12 +112,7 @@ class Extractor():
                  re_feed: int = 0,
                  re_align: bool = False,
                  disable_filter: bool = False) -> None:
-        logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, recognition: %s, "
-                     "configfile: %s, multiprocess: %s, exclude_gpus: %s, rotate_images: %s, "
-                     "min_size: %s, normalize_method: %s, re_feed: %s, re_align: %s, "
-                     "disable_filter: %s)", self.__class__.__name__, detector, aligner, masker,
-                     recognition, configfile, multiprocess, exclude_gpus, rotate_images, min_size,
-                     normalize_method, re_feed, re_align, disable_filter)
+        logger.debug(parse_class_init(locals()))
         self._instance = _get_instance()
         maskers = [T.cast(str | None,
                    masker)] if not isinstance(masker, list) else T.cast(list[str | None],
@@ -128,7 +125,7 @@ class Extractor():
         # TODO Calculate scaling for more plugins than currently exist in _parallel_scaling
         self._scaling_fallback = 0.4
         self._vram_stats = self._get_vram_stats()
-        self._detect = self._load_detect(detector, rotate_images, min_size, configfile)
+        self._detect = self._load_detect(detector, aligner, rotate_images, min_size, configfile)
         self._align = self._load_align(aligner,
                                        configfile,
                                        normalize_method,
@@ -212,7 +209,7 @@ class Extractor():
         >>>         extractor.input_queue.put(extract_media)
         """
         retval = self._phase_index == len(self._phases) - 1
-        logger.trace(retval)  # type: ignore
+        logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     @property
@@ -266,7 +263,7 @@ class Extractor():
         for phase in self._current_phase:
             self._launch_plugin(phase)
 
-    def detected_faces(self) -> Generator["ExtractMedia", None, None]:
+    def detected_faces(self) -> Generator[ExtractMedia, None, None]:
         """ Generator that returns results, frame by frame from the extraction pipeline
 
         This is the exit point for the extraction pipeline and is used to obtain the output
@@ -274,7 +271,7 @@ class Extractor():
 
         Yields
         ------
-        faces: :class:`ExtractMedia`
+        faces: :class:`~plugins.extract.extract_media.ExtractMedia`
             The populated extracted media object.
 
         Example
@@ -300,10 +297,88 @@ class Extractor():
 
         self._join_threads()
         if self.final_pass:
+            for plugin in self._all_plugins:
+                plugin.on_completion()
             logger.debug("Detection Complete")
         else:
             self._phase_index += 1
             logger.debug("Switching to phase: %s", self._current_phase)
+
+    def _disable_lm_maskers(self) -> None:
+        """ Disable any 68 point landmark based maskers if alignment data is not 2D 68
+        point landmarks and update the process flow/phases accordingly """
+        logger.warning("Alignment data is not 68 point 2D landmarks. Some Faceswap functionality "
+                       "will be unavailable for these faces")
+
+        rem_maskers = [m.name for m in self._mask
+                       if m is not None and m.landmark_type == LandmarkType.LM_2D_68]
+        self._mask = [m for m in self._mask if m is None or m.name not in rem_maskers]
+
+        self._flow = [
+            item for item in self._flow
+            if not item.startswith("mask")
+            or item.startswith("mask") and int(item.rsplit("_", maxsplit=1)[-1]) < len(self._mask)]
+
+        self._phases = [[s for s in p if s in self._flow] for p in self._phases
+                        if any(t in p for t in self._flow)]
+
+        for queue in self._queues:
+            queue_manager.del_queue(queue)
+        del self._queues
+        self._queues = self._add_queues()
+
+        logger.warning("The following maskers have been disabled due to unsupported landmarks: %s",
+                       rem_maskers)
+
+    def import_data(self, input_location: str) -> None:
+        """ Import json data to the detector and/or aligner if 'import' plugin has been selected
+
+        Parameters
+        ----------
+        input_location: str
+            Full path to the input location for the extract process
+        """
+        assert self._detect is not None
+        import_plugins: list[DetectImport | AlignImport] = [
+            p for p in (self._detect, self.aligner)  # type:ignore[misc]
+            if T.cast(str, p.name).lower() == "external"]
+
+        if not import_plugins:
+            return
+
+        align_origin = None
+        assert self.aligner.name is not None
+        if self.aligner.name.lower() == "external":
+            align_origin = self.aligner.config["origin"]
+
+        logger.info("Importing external data for %s from json file...",
+                    " and ".join([p.__class__.__name__ for p in import_plugins]))
+
+        folder = input_location
+        folder = folder if os.path.isdir(folder) else os.path.dirname(folder)
+
+        last_fname = ""
+        is_68_point = True
+        for plugin in import_plugins:
+            plugin_type = plugin.__class__.__name__
+            path = os.path.join(folder, plugin.config["file_name"])
+            if not os.path.isfile(path):
+                raise FaceswapError(f"{plugin_type} import file could not be found at '{path}'")
+
+            if path != last_fname:  # Different import file for aligner data
+                last_fname = path
+                data = get_serializer("json").load(path)
+
+            if plugin_type == "Detect":
+                plugin.import_data(data, align_origin)  # type:ignore[call-arg]
+            else:
+                plugin.import_data(data)  # type:ignore[call-arg]
+                is_68_point = plugin.landmark_type == LandmarkType.LM_2D_68  # type:ignore[union-attr]  # noqa:E501  # pylint:disable="line-too-long"
+
+        if not is_68_point:
+            self._disable_lm_maskers()
+
+        logger.info("Imported external data")
 
     # <<< INTERNAL METHODS >>> #
     @property
@@ -616,14 +691,40 @@ class Extractor():
 
     def _load_detect(self,
                      detector: str | None,
+                     aligner: str | None,
                      rotation: str | None,
                      min_size: int,
                      configfile: str | None) -> Detector | None:
-        """ Set global arguments and load detector plugin """
+        """ Set global arguments and load detector plugin
+
+        Parameters
+        ----------
+        detector: str | None
+            The name of the face detection plugin to use. ``None`` for no detection
+        aligner: str | None
+            The name of the face aligner plugin to use. ``None`` for no aligner
+        rotation: str | None
+            The rotation to perform on detection. ``None`` for no rotation
+        min_size: int
+            The minimum size of detected faces to accept
+        configfile: str | None
+            Full path to a custom config file to use. ``None`` for default config
+
+        Returns
+        -------
+        :class:`~plugins.extract.detect._base.Detector` | None
+            The face detection plugin to use, or ``None`` if no detection to be performed
+        """
         if detector is None or detector.lower() == "none":
             logger.debug("No detector selected. Returning None")
             return None
         detector_name = detector.replace("-", "_").lower()
+
+        if aligner == "external" and detector_name != "external":
+            logger.warning("Unsupported '%s' detector selected for 'External' aligner. Switching "
+                           "detector to 'External'", detector_name)
+            detector_name = aligner
+
         logger.debug("Loading Detector: '%s'", detector_name)
         plugin = PluginLoader.get_detector(detector_name)(exclude_gpus=self._exclude_gpus,
                                                           rotation=rotation,
@@ -775,198 +876,3 @@ class Extractor():
         """ Check all threads for errors and raise if one occurs """
         for plugin in self._active_plugins:
             plugin.check_and_raise_error()
-
-
-class ExtractMedia():
-    """ An object that passes through the :class:`~plugins.extract.pipeline.Extractor` pipeline.
-
-    Parameters
-    ----------
-    filename: str
-        The base name of the original frame's filename
-    image: :class:`numpy.ndarray`
-        The original frame or a faceswap aligned face image
-    detected_faces: list, optional
-        A list of :class:`~lib.align.DetectedFace` objects. Detected faces can be added
-        later with :func:`add_detected_faces`. Setting ``None`` will default to an empty list.
-        Default: ``None``
-    is_aligned: bool, optional
-        ``True`` if the :attr:`image` is an aligned faceswap image otherwise ``False``. Used for
-        face filtering with vggface2. Aligned faceswap images will automatically skip detection,
-        alignment and masking. Default: ``False``
-    """
-
-    def __init__(self,
-                 filename: str,
-                 image: np.ndarray,
-                 detected_faces: list[DetectedFace] | None = None,
-                 is_aligned: bool = False) -> None:
-        logger.trace("Initializing %s: (filename: '%s', image shape: %s, "  # type: ignore
-                     "detected_faces: %s, is_aligned: %s)", self.__class__.__name__, filename,
-                     image.shape, detected_faces, is_aligned)
-        self._filename = filename
-        self._image: np.ndarray | None = image
-        self._image_shape = T.cast(tuple[int, int, int], image.shape)
-        self._detected_faces: list[DetectedFace] = ([] if detected_faces is None
-                                                    else detected_faces)
-        self._is_aligned = is_aligned
-        self._frame_metadata: PNGHeaderSourceDict | None = None
-        self._sub_folders: list[str | None] = []
-
-    @property
-    def filename(self) -> str:
-        """ str: The base name of the :attr:`image` filename. """
-        return self._filename
-
-    @property
-    def image(self) -> np.ndarray:
-        """ :class:`numpy.ndarray`: The source frame for this object. """
-        assert self._image is not None
-        return self._image
-
-    @property
-    def image_shape(self) -> tuple[int, int, int]:
-        """ tuple: The shape of the stored :attr:`image`. """
-        return self._image_shape
-
-    @property
-    def image_size(self) -> tuple[int, int]:
-        """ tuple: The (`height`, `width`) of the stored :attr:`image`. """
-        return self._image_shape[:2]
-
-    @property
-    def detected_faces(self) -> list[DetectedFace]:
-        """list: A list of :class:`~lib.align.DetectedFace` objects in the :attr:`image`. """
-        return self._detected_faces
-
-    @property
-    def is_aligned(self) -> bool:
-        """ bool. ``True`` if :attr:`image` is an aligned faceswap image otherwise ``False`` """
-        return self._is_aligned
-
-    @property
-    def frame_metadata(self) -> PNGHeaderSourceDict:
-        """ dict: The frame metadata that has been added from an aligned image. This property
-        should only be called after :func:`add_frame_metadata` has been called when processing
-        an aligned face. For all other instances an assertion error will be raised.
-
-        Raises
-        ------
-        AssertionError
-            If frame metadata has not been populated from an aligned image
-        """
-        assert self._frame_metadata is not None
-        return self._frame_metadata
-
-    @property
-    def sub_folders(self) -> list[str | None]:
-        """ list: The sub_folders that the faces should be output to. Used when binning filter
-        output is enabled. The list corresponds to the list of detected faces
-        """
-        return self._sub_folders
-
-    def get_image_copy(self, color_format: T.Literal["BGR", "RGB", "GRAY"]) -> np.ndarray:
-        """ Get a copy of the image in the requested color format.
-
-        Parameters
-        ----------
-        color_format: ['BGR', 'RGB', 'GRAY']
-            The requested color format of :attr:`image`
-
-        Returns
-        -------
-        :class:`numpy.ndarray`:
-            A copy of :attr:`image` in the requested :attr:`color_format`
-        """
-        logger.trace("Requested color format '%s' for frame '%s'",  # type: ignore
-                     color_format, self._filename)
-        image = getattr(self, f"_image_as_{color_format.lower()}")()
-        return image
-
-    def add_detected_faces(self, faces: list[DetectedFace]) -> None:
-        """ Add detected faces to the object. Called at the end of each extraction phase.
-
-        Parameters
-        ----------
-        faces: list
-            A list of :class:`~lib.align.DetectedFace` objects
-        """
-        logger.trace("Adding detected faces for filename: '%s'. "  # type: ignore
-                     "(faces: %s, lrtb: %s)", self._filename, faces,
-                     [(face.left, face.right, face.top, face.bottom) for face in faces])
-        self._detected_faces = faces
-
-    def add_sub_folders(self, folders: list[str | None]) -> None:
-        """ Add detected faces to the object. Called at the end of each extraction phase.
-
-        Parameters
-        ----------
-        folders: list
-            A list of str sub folder names or ``None`` if no sub folder is required. Should
-            correspond to the detected faces list
-        """
-        logger.trace("Adding sub folders for filename: '%s'. "  # type: ignore
-                     "(folders: %s)", self._filename, folders,)
-        self._sub_folders = folders
-
-    def remove_image(self) -> None:
-        """ Delete the image and reset :attr:`image` to ``None``.
-
-        Required for multi-phase extraction to avoid the frames stacking RAM.
-        """
-        logger.trace("Removing image for filename: '%s'", self._filename)  # type: ignore
-        del self._image
-        self._image = None
-
-    def set_image(self, image: np.ndarray) -> None:
-        """ Add the image back into :attr:`image`
-
-        Required for multi-phase extraction adds the image back to this object.
-
-        Parameters
-        ----------
-        image: :class:`numpy.ndarry`
-            The original frame to be re-applied to for this :attr:`filename`
-        """
-        logger.trace("Reapplying image: (filename: `%s`, image shape: %s)",  # type: ignore
-                     self._filename, image.shape)
-        self._image = image
-
-    def add_frame_metadata(self, metadata: PNGHeaderSourceDict) -> None:
-        """ Add the source frame metadata from an aligned PNG's header data.
-
-        metadata: dict
-            The contents of the 'source' field in the PNG header
-        """
-        logger.trace("Adding PNG Source data for '%s': %s",  # type:ignore
-                     self._filename, metadata)
-        dims = T.cast(tuple[int, int], metadata["source_frame_dims"])
-        self._image_shape = (*dims, 3)
-        self._frame_metadata = metadata
-
-    def _image_as_bgr(self) -> np.ndarray:
-        """ Get a copy of the source frame in BGR format.
-
-        Returns
-        -------
-        :class:`numpy.ndarray`:
-            A copy of :attr:`image` in BGR color format """
-        return self.image[..., :3].copy()
-
-    def _image_as_rgb(self) -> np.ndarray:
-        """ Get a copy of the source frame in RGB format.
-
-        Returns
-        -------
-        :class:`numpy.ndarray`:
-            A copy of :attr:`image` in RGB color format """
-        return self.image[..., 2::-1].copy()
-
-    def _image_as_gray(self) -> np.ndarray:
-        """ Get a copy of the source frame in gray-scale format.
-
-        Returns
-        -------
-        :class:`numpy.ndarray`:
-            A copy of :attr:`image` in gray-scale color format """
-        return cv2.cvtColor(self.image.copy(), cv2.COLOR_BGR2GRAY)

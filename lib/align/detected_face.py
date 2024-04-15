@@ -15,7 +15,7 @@ from lib.image import encode_image, read_image
 from lib.utils import FaceswapError
 from .alignments import (Alignments, AlignmentFileDict, MaskAlignmentsFileDict,
                          PNGHeaderAlignmentsDict, PNGHeaderDict, PNGHeaderSourceDict)
-from . import AlignedFace, get_adjusted_center, get_centered_size
+from . import AlignedFace, get_adjusted_center, get_centered_size, LANDMARK_PARTS
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
@@ -231,12 +231,26 @@ class DetectedFace():
         -------
         :class:`numpy.ndarray`
             The generated landmarks mask for the selected area
+
+        Raises
+        ------
+        FaceSwapError
+            If the aligned face does not contain the correct landmarks to generate a landmark mask
         """
         # TODO Face mask generation from landmarks
         logger.trace("area: %s, dilation: %s", area, dilation)  # type:ignore[attr-defined]
-        areas = {"mouth": [slice(48, 60)], "eye": [slice(36, 42), slice(42, 48)]}
-        points = [self.aligned.landmarks[zone]
-                  for zone in areas[area]]
+
+        lm_type = self.aligned.landmark_type
+        if lm_type not in LANDMARK_PARTS:
+            raise FaceswapError(f"Landmark based masks cannot be created for {lm_type.name}")
+
+        lm_parts = LANDMARK_PARTS[self.aligned.landmark_type]
+        mapped = {"mouth": ["mouth_outer"], "eye": ["right_eye", "left_eye"]}
+        if not all(part in lm_parts for parts in mapped.values() for part in parts):
+            raise FaceswapError(f"Landmark based masks cannot be created for {lm_type.name}")
+
+        areas = {key: [slice(*lm_parts[v][:2]) for v in val]for key, val in mapped.items()}
+        points = [self.aligned.landmarks[zone] for zone in areas[area]]
 
         lmmask = LandmarksMask(points,
                                storage_size=self.aligned.size,
@@ -660,9 +674,9 @@ class Mask():
             The mask that is to be added as output from :mod:`plugins.extract.mask`.
             It should be in the range 0.0 - 1.0 ideally with a ``dtype`` of ``float32``
         """
-        mask = (cv2.resize(mask,
+        mask = (cv2.resize(mask * 255.0,
                            (self.stored_size, self.stored_size),
-                           interpolation=cv2.INTER_AREA) * 255.0).astype("uint8")
+                           interpolation=cv2.INTER_AREA)).astype("uint8")
         self._mask = compress(mask.tobytes())
 
     def set_dilation(self, amount: float) -> None:
@@ -903,7 +917,7 @@ class LandmarksMask(Mask):
         mask = np.zeros((self.stored_size, self.stored_size, 1), dtype="float32")
         for landmarks in self._points:
             lms = np.rint(landmarks).astype("int")
-            cv2.fillConvexPoly(mask, cv2.convexHull(lms), 1.0, lineType=cv2.LINE_AA)
+            cv2.fillConvexPoly(mask, cv2.convexHull(lms), [1.0], lineType=cv2.LINE_AA)
         if self._dilation[-1] is not None:
             self._dilate_mask(mask)
         if self._blur_kernel != 0 and self._blur_type is not None:

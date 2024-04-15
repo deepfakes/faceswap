@@ -8,13 +8,13 @@ import typing as T
 
 from lib.image import encode_image, ImagesSaver
 from lib.multithreading import MultiThread
-from plugins.extract.pipeline import Extractor
+from plugins.extract import Extractor
 
 if T.TYPE_CHECKING:
     from lib.align import Alignments, DetectedFace
     from lib.align.alignments import PNGHeaderDict
     from lib.queue_manager import EventQueue
-    from plugins.extract.pipeline import ExtractMedia
+    from plugins.extract import ExtractMedia
     from .loader import Loader
 
 

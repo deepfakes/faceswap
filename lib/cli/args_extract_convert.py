@@ -140,7 +140,9 @@ class ExtractArgs(ExtractConvertArgs):
                 "other GPU detectors but can often return more false positives."
                 "\nL|s3fd: Best detector. Slow on CPU, faster on GPU. Can detect more faces and "
                 "fewer false positives than other GPU detectors, but is a lot more resource "
-                "intensive.")})
+                "intensive."
+                "\nL|external: Import a face detection bounding box from a json file. ("
+                "configurable in Detect settings)")})
         argument_list.append({
             "opts": ("-A", "--aligner"),
             "action": Radio,
@@ -152,7 +154,9 @@ class ExtractArgs(ExtractConvertArgs):
                 "R|Aligner to use."
                 "\nL|cv2-dnn: A CPU only landmark detector. Faster, less resource intensive, but "
                 "less accurate. Only use this if not using a GPU and time is important."
-                "\nL|fan: Best aligner. Fast on GPU, slow on CPU.")})
+                "\nL|fan: Best aligner. Fast on GPU, slow on CPU."
+                "\nL|external: Import 68 point 2D landmarks or an aligned bounding box from a "
+                "json file. (configurable in Align settings)")})
         argument_list.append({
             "opts": ("-M", "--masker"),
             "action": MultiOption,

@@ -252,12 +252,14 @@ class Alignments():
 
         sample_filename = next(fname for fname in self.data)
         basename = sample_filename[:sample_filename.rfind("_")]
-        logger.debug("sample filename: %s, base filename: %s", sample_filename, basename)
+        ext = os.path.splitext(sample_filename)[-1]
+        logger.debug("sample filename: '%s', base filename: '%s' extension: '%s'",
+                     sample_filename, basename, ext)
         logger.info("Saving video meta information to Alignments file")
 
         for idx, pts in enumerate(pts_time):
             meta: dict[str, float | int] = {"pts_time": pts, "keyframe": idx in keyframes}
-            key = f"{basename}_{idx + 1:06d}.png"
+            key = f"{basename}_{idx + 1:06d}{ext}"
             if key not in self.data:
                 self.data[key] = {"video_meta": meta, "faces": []}
             else:

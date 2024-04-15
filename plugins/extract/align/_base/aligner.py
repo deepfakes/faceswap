@@ -4,7 +4,7 @@
 All Aligner Plugins should inherit from this class.
 See the override methods for which methods are required.
 
-The plugin will receive a :class:`~plugins.extract.pipeline.ExtractMedia` object.
+The plugin will receive a :class:`~plugins.extract.extract_media.ExtractMedia` object.
 
 For each source item, the plugin must pass a dict to finalize containing:
 
@@ -24,8 +24,10 @@ import numpy as np
 
 from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module # noqa
 
+from lib.align import LandmarkType
 from lib.utils import FaceswapError
-from plugins.extract._base import BatchType, Extractor, ExtractMedia, ExtractorBatch
+from plugins.extract import ExtractMedia
+from plugins.extract._base import BatchType, ExtractorBatch, Extractor
 from .processing import AlignedFilter, ReAlign
 
 if T.TYPE_CHECKING:
@@ -81,20 +83,13 @@ class AlignerBatch(ExtractorBatch):
 
     def __repr__(self):
         """ Prettier repr for debug printing """
-        data = [{k: v.shape if isinstance(v, np.ndarray) else v for k, v in dat.items()}
-                for dat in self.data]
-        return ("AlignerBatch("
-                f"batch_id={self.batch_id}, "
-                f"image={[img.shape for img in self.image]}, "
-                f"detected_faces={self.detected_faces}, "
-                f"filename={self.filename}, "
-                f"feed={self.feed.shape}, "
-                f"prediction={self.prediction.shape}, "
-                f"data={data}, "
-                f"landmarks={self.landmarks.shape}, "
-                f"refeeds={[feed.shape for feed in self.refeeds]}, "
-                f"second_pass={self.second_pass}, "
-                f"second_pass_masks={self.second_pass_masks})")
+        retval = super().__repr__()
+        retval += (f", batch_id={self.batch_id}, "
+                   f"landmarks=[({self.landmarks.shape}, {self.landmarks.dtype})], "
+                   f"refeeds={[(f.shape, f.dtype) for f in self.refeeds]}, "
+                   f"second_pass={self.second_pass}, "
+                   f"second_pass_masks={self.second_pass_masks})")
+        return retval
 
     def __post_init__(self):
         """ Make sure that we have been given a non-zero ID """
@@ -157,6 +152,10 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                          **kwargs)
         self._plugin_type = "align"
         self.realign_centering: CenteringType = "face"  # overide for plugin specific centering
+
+        # Override for specific landmark type:
+        self.landmark_type = LandmarkType.LM_2D_68
+
         self._eof_seen = False
         self._normalize_method: T.Literal["clahe", "hist", "mean"] | None = None
         self._re_feed = re_feed
@@ -244,8 +243,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         Items are returned from the ``queue`` in batches of
         :attr:`~plugins.extract._base.Extractor.batchsize`
 
-        Items are received as :class:`~plugins.extract.pipeline.ExtractMedia` objects and converted
-        to ``dict`` for internal processing.
+        Items are received as :class:`~plugins.extract.extract_media.ExtractMedia` objects and
+        converted to ``dict`` for internal processing.
 
         To ensure consistent batch sizes for aligner the items are split into separate items for
         each :class:`~lib.align.DetectedFace` object.
@@ -317,10 +316,6 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         else:
             logger.debug(item)
 
-        # TODO Move to end of process not beginning
-        if exhausted:
-            self._filter.output_counts()
-
         return exhausted, batch
 
     def faces_to_feed(self, faces: np.ndarray) -> np.ndarray:
@@ -354,7 +349,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
         Yields
         ------
-        :class:`~plugins.extract.pipeline.ExtractMedia`
+        :class:`~plugins.extract.extract_media.ExtractMedia`
             The :attr:`DetectedFaces` list will be populated for this class with the bounding boxes
             and landmarks for the detected faces found in the frame.
         """
@@ -387,6 +382,10 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                          output.image_shape, output.detected_faces, output)
             yield output
         self._re_align.untrack_batch(batch.batch_id)
+
+    def on_completion(self) -> None:
+        """ Output the filter counts when process has completed """
+        self._filter.output_counts()
 
     # <<< PROTECTED METHODS >>> #
     # << PROCESS_INPUT WRAPPER >>
@@ -584,7 +583,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                 if not all_filtered:
                     feed = batch.refeeds[selected_idx]
                     pred = batch.prediction[selected_idx]
-                    data = batch.data[selected_idx]
+                    data = batch.data[selected_idx] if batch.data else {}
                     selected_idx += 1
                 else:  # All resuts have been filtered out
                     feed = pred = np.array([])
@@ -604,14 +603,15 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
                 retval.append(subbatch)
         else:
-            for feed, pred, data in zip(batch.refeeds, batch.prediction, batch.data):
+            b_data = batch.data if batch.data else [{}]
+            for feed, pred, dat in zip(batch.refeeds, batch.prediction, b_data):
                 subbatch = AlignerBatch(batch_id=batch.batch_id,
                                         image=batch.image,
                                         detected_faces=batch.detected_faces,
                                         filename=batch.filename,
                                         feed=feed,
                                         prediction=pred,
-                                        data=[data],
+                                        data=[dat],
                                         second_pass=batch.second_pass)
                 self.process_output(subbatch)
                 retval.append(subbatch)

@@ -11,7 +11,7 @@ import typing as T
 import numpy as np
 from tqdm import tqdm
 
-from lib.align import AlignedFace
+from lib.align import AlignedFace, LandmarkType
 from lib.utils import FaceswapError
 from .sort_methods import SortMethod
 
@@ -36,6 +36,9 @@ class SortAlignedMetric(SortMethod):
         Set to ``True`` if this class is going to be called exclusively for binning.
         Default: ``False``
     """
+
+    _logged_lm_count_once: bool = False
+
     def _get_metric(self, aligned_face: AlignedFace) -> np.ndarray | float:
         """ Obtain the correct metric for the given sort method"
 
@@ -85,6 +88,12 @@ class SortAlignedMetric(SortMethod):
             raise FaceswapError(msg)
 
         face = AlignedFace(np.array(alignments["landmarks_xy"], dtype="float32"))
+        if (not self._logged_lm_count_once
+                and face.landmark_type == LandmarkType.LM_2D_4
+                and self.__class__.__name__ != "SortSize"):
+            logger.warning("You have selected to sort by an aligned metric, but at least one face "
+                           "does not contain facial landmark data. This probably won't work")
+            self._logged_lm_count_once = True
         self._result.append((filename, self._get_metric(face)))
 
 

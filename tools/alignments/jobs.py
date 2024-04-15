@@ -13,19 +13,23 @@ from scipy import signal
 from sklearn import decomposition
 from tqdm import tqdm
 
+from lib.logger import parse_class_init
+from lib.serializer import get_serializer
+from lib.utils import FaceswapError
+
 from .media import Faces, Frames
 from .jobs_faces import FaceToFile
 
 if T.TYPE_CHECKING:
     from collections.abc import Generator
     from argparse import Namespace
-    from lib.align.alignments import PNGHeaderDict
+    from lib.align.alignments import AlignmentFileDict, PNGHeaderDict
     from .media import AlignmentData
 
 logger = logging.getLogger(__name__)
 
 
-class Check():
+class Check:
     """ Frames and faces checking tasks.
 
     Parameters
@@ -36,7 +40,7 @@ class Check():
         The command line arguments that have called this job
     """
     def __init__(self, alignments: AlignmentData, arguments: Namespace) -> None:
-        logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
+        logger.debug(parse_class_init(locals()))
         self._alignments = alignments
         self._job = arguments.job
         self._type: T.Literal["faces", "frames"] | None = None
@@ -371,7 +375,81 @@ class Check():
             os.rename(src, dst)
 
 
-class Sort():
+class Export:
+    """ Export alignments from a Faceswap .fsa file to a json formatted file.
+
+        Parameters
+    ----------
+    alignments: :class:`tools.lib_alignments.media.AlignmentData`
+        The alignments data loaded from an alignments file for this rename job
+    arguments: :class:`argparse.Namespace`
+        The :mod:`argparse` arguments as passed in from :mod:`tools.py`. Unused
+    """
+    def __init__(self,
+                 alignments: AlignmentData,
+                 arguments: Namespace) -> None:  # pylint:disable=unused-argument
+        logger.debug(parse_class_init(locals()))
+        self._alignments = alignments
+        self._serializer = get_serializer("json")
+        self._output_file = self._get_output_file()
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _get_output_file(self) -> str:
+        """ Obtain the name of an output file. If a file of the request name exists, then append a
+        digit to the end until a unique filename is found
+
+        Returns
+        -------
+        str
+            Full path to an output json file
+        """
+        in_file = self._alignments.file
+        base_filename = f"{os.path.splitext(in_file)[0]}_export"
+        out_file = f"{base_filename}.json"
+        idx = 1
+        while True:
+            if not os.path.exists(out_file):
+                break
+            logger.debug("Output file exists: '%s'", out_file)
+            out_file = f"{base_filename}_{idx}.json"
+            idx += 1
+        logger.debug("Setting output file to '%s'", out_file)
+        return out_file
+
+    @classmethod
+    def _format_face(cls, face: AlignmentFileDict) -> dict[str, list[int] | list[list[float]]]:
+        """ Format the relevant keys from an alignment file's face into the correct format for
+        export/import
+
+        Parameters
+        ----------
+        face: :class:`~lib.align.alignments.AlignmentFileDict`
+            The alignment dictionary for a face to process
+
+        Returns
+        -------
+        dict[str, list[int] | list[list[float]]]
+            The face formatted for exporting to a json file
+        """
+        lms = face["landmarks_xy"]
+        assert isinstance(lms, np.ndarray)
+        retval = {"detected": [int(round(face["x"], 0)),
+                               int(round(face["y"], 0)),
+                               int(round(face["x"] + face["w"], 0)),
+                               int(round(face["y"] + face["h"], 0))],
+                  "landmarks_2d": lms.tolist()}
+        return retval
+
+    def process(self) -> None:
+        """ Parse the imported alignments file and output relevant information to a json file """
+        logger.info("[EXPORTING ALIGNMENTS]")  # Tidy up cli output
+        formatted = {key: [self._format_face(face) for face in val["faces"]]
+                     for key, val in self._alignments.data.items()}
+        logger.info("Saving export alignments to '%s'...", self._output_file)
+        self._serializer.save(self._output_file, formatted)
+
+
+class Sort:
     """ Sort alignments' index by the order they appear in an image in left to right order.
 
     Parameters
@@ -379,10 +457,12 @@ class Sort():
     alignments: :class:`tools.lib_alignments.media.AlignmentData`
         The alignments data loaded from an alignments file for this rename job
     arguments: :class:`argparse.Namespace`
-        The :mod:`argparse` arguments as passed in from :mod:`tools.py`
+        The :mod:`argparse` arguments as passed in from :mod:`tools.py`. Unused
     """
-    def __init__(self, alignments: AlignmentData, arguments: Namespace) -> None:
-        logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
+    def __init__(self,
+                 alignments: AlignmentData,
+                 arguments: Namespace) -> None:  # pylint:disable=unused-argument
+        logger.debug(parse_class_init(locals()))
         self._alignments = alignments
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -418,7 +498,7 @@ class Sort():
         return reindexed
 
 
-class Spatial():
+class Spatial:
     """ Apply spatial temporal filtering to landmarks
 
     Parameters
@@ -433,7 +513,7 @@ class Spatial():
     https://www.kaggle.com/selfishgene/animating-and-smoothing-3d-facial-keypoints/notebook
     """
     def __init__(self, alignments: AlignmentData, arguments: Namespace) -> None:
-        logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
+        logger.debug(parse_class_init(locals()))
         self.arguments = arguments
         self._alignments = alignments
         self._mappings: dict[int, str] = {}
@@ -467,7 +547,7 @@ class Spatial():
         Parameters
         ----------
         shaped_im_coords: :class:`numpy.ndarray`
-            The 68 point landmarks
+            The facial landmarks
 
         Returns
         -------
@@ -530,7 +610,15 @@ class Spatial():
         """ Compile all original and normalized alignments """
         logger.debug("Normalize")
         count = sum(1 for val in self._alignments.data.values() if val["faces"])
-        landmarks_all = np.zeros((68, 2, int(count)))
+
+        sample_lm = next((val["faces"][0]["landmarks_xy"]
+                          for val in self._alignments.data.values() if val["faces"]), 68)
+        assert isinstance(sample_lm, np.ndarray)
+        lm_count = sample_lm.shape[0]
+        if lm_count != 68:
+            raise FaceswapError("Spatial smoothing only supports 68 point facial landmarks")
+
+        landmarks_all = np.zeros((lm_count, 2, int(count)))
 
         end = 0
         for key in tqdm(sorted(self._alignments.data.keys()), desc="Compiling", leave=False):
@@ -539,7 +627,7 @@ class Spatial():
                 continue
             # We should only be normalizing a single face, so just take
             # the first landmarks found
-            landmarks = np.array(val[0]["landmarks_xy"]).reshape((68, 2, 1))
+            landmarks = np.array(val[0]["landmarks_xy"]).reshape((lm_count, 2, 1))
             start = end
             end = start + landmarks.shape[2]
             # Store in one big array

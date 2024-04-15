@@ -4,7 +4,7 @@
 All Recognition Plugins should inherit from this class.
 See the override methods for which methods are required.
 
-The plugin will receive a :class:`~plugins.extract.pipeline.ExtractMedia` object.
+The plugin will receive a :class:`~plugins.extract.extract_media.ExtractMedia` object.
 
 For each source frame, the plugin must pass a dict to finalize containing:
 
@@ -24,11 +24,11 @@ from dataclasses import dataclass, field
 import numpy as np
 from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module  # noqa
 
-from lib.align import AlignedFace, DetectedFace
+from lib.align import AlignedFace, DetectedFace, LandmarkType
 from lib.image import read_image_meta
 from lib.utils import FaceswapError
-from plugins.extract._base import BatchType, Extractor, ExtractorBatch
-from plugins.extract.pipeline import ExtractMedia
+from plugins.extract import ExtractMedia
+from plugins.extract._base import BatchType, ExtractorBatch, Extractor
 
 if T.TYPE_CHECKING:
     from collections.abc import Generator
@@ -75,6 +75,8 @@ class Identity(Extractor):  # pylint:disable=abstract-method
     plugins.extract.mask._base : Masker parent class for extraction plugins.
     """
 
+    _logged_lm_count_once = False
+
     def __init__(self,
                  git_model_id: int | None = None,
                  model_filename: str | None = None,
@@ -101,7 +103,7 @@ class Identity(Extractor):  # pylint:disable=abstract-method
 
         Parameters
         ----------
-        item: :class:`~plugins.extract.pipeline.ExtractMedia`
+        item: :class:`~plugins.extract.extract_media.ExtractMedia`
             The extract media to populate the detected face for
          """
         detected_face = DetectedFace()
@@ -113,14 +115,28 @@ class Identity(Extractor):  # pylint:disable=abstract-method
         logger.debug("Obtained detected face: (filename: %s, detected_face: %s)",
                      item.filename, item.detected_faces)
 
+    def _maybe_log_warning(self, face: AlignedFace) -> None:
+        """ Log a warning, once, if we do not have full facial landmarks
+
+        Parameters
+        ----------
+        face: :class:`~lib.align.aligned_face.AlignedFace`
+            The aligned face object to test the landmark type for
+        """
+        if face.landmark_type != LandmarkType.LM_2D_4 or self._logged_lm_count_once:
+            return
+        logger.warning("Extracted faces do not contain facial landmark data. '%s' "
+                       "identity data is likely to be sub-standard.", self.name)
+        self._logged_lm_count_once = True
+
     def get_batch(self, queue: Queue) -> tuple[bool, RecogBatch]:
         """ Get items for inputting into the recognition from the queue in batches
 
         Items are returned from the ``queue`` in batches of
         :attr:`~plugins.extract._base.Extractor.batchsize`
 
-        Items are received as :class:`~plugins.extract.pipeline.ExtractMedia` objects and converted
-        to :class:`RecogBatch` for internal processing.
+        Items are received as :class:`~plugins.extract.extract_media.ExtractMedia` objects and
+        converted to :class:`RecogBatch` for internal processing.
 
         To ensure consistent batch sizes for masker the items are split into separate items for
         each :class:`~lib.align.DetectedFace` object.
@@ -172,6 +188,8 @@ class Identity(Extractor):  # pylint:disable=abstract-method
                                         coverage_ratio=self.coverage_ratio,
                                         dtype="float32",
                                         is_aligned=item.is_aligned)
+
+                self._maybe_log_warning(feed_face)
 
                 batch.detected_faces.append(face)
                 batch.feed_faces.append(feed_face)
@@ -234,7 +252,7 @@ class Identity(Extractor):  # pylint:disable=abstract-method
 
         Yields
         ------
-        :class:`~plugins.extract.pipeline.ExtractMedia`
+        :class:`~plugins.extract.extract_media.ExtractMedia`
             The :attr:`DetectedFaces` list will be populated for this class with the bounding
             boxes, landmarks and masks for the detected faces found in the frame.
         """

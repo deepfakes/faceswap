@@ -15,7 +15,7 @@ from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
 from lib.utils import GetModel, FaceswapError
 from ._config import Config
-from .pipeline import ExtractMedia
+from . import ExtractMedia
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
@@ -85,6 +85,18 @@ class ExtractorBatch:
     feed: np.ndarray = np.array([])
     prediction: np.ndarray = np.array([])
     data: list[dict[str, T.Any]] = field(default_factory=list)
+
+    def __repr__(self) -> str:
+        """ Prettier repr for debug printing """
+        data = [{k: (v.shape, v.dtype) if isinstance(v, np.ndarray) else v for k, v in dat.items()}
+                for dat in self.data]
+        return (f"{self.__class__.__name__}("
+                f"image={[(img.shape, img.dtype) for img in self.image]}, "
+                f"detected_faces={self.detected_faces}, "
+                f"filename={self.filename}, "
+                f"feed={[(f.shape, f.dtype) for f in self.feed]}, "
+                f"prediction=({self.prediction.shape}, {self.prediction.dtype}), "
+                f"data={data}")
 
 
 class Extractor():
@@ -197,7 +209,7 @@ class Extractor():
         """ list: Internal threads for this plugin """
 
         self._extract_media: dict[str, ExtractMedia] = {}
-        """ dict: The :class:`plugins.extract.pipeline.ExtractMedia` objects currently being
+        """ dict: The :class:`~plugins.extract.extract_media.ExtractMedia` objects currently being
         processed. Stored at input for pairing back up on output of extractor process """
 
         # << THE FOLLOWING PROTECTED ATTRIBUTES ARE SET IN PLUGIN TYPE _base.py >>> #
@@ -275,6 +287,11 @@ class Extractor():
             landmarks as calculated from the :attr:`model`.
         """
         raise NotImplementedError
+
+    def on_completion(self) -> None:
+        """ Override to perform an action when the extract process has completed. By default, no
+        action is undertaken """
+        return
 
     def _predict(self, batch: BatchType) -> BatchType:
         """ **Override method** (at `<plugin_type>` level)
@@ -362,7 +379,7 @@ class Extractor():
         :mod:`plugins.extract.detect._base`, :mod:`plugins.extract.align._base` or
         :mod:`plugins.extract.mask._base`) and should not be overridden within plugins themselves.
 
-        Get :class:`~plugins.extract.pipeline.ExtractMedia` items from the queue in batches of
+        Get :class:`~plugins.extract.extract_media.ExtractMedia` items from the queue in batches of
         :attr:`batchsize`
 
         Parameters
@@ -409,11 +426,11 @@ class Extractor():
         ----------
         queue: :class:`queue.Queue`
             The input queue to the aligner. Should contain
-            :class:`~plugins.extract.pipeline.ExtractMedia` objects
+            :class:`~plugins.extract.extract_media.ExtractMedia` objects
 
         Returns
         -------
-        :class:`~plugins.extract.pipeline.ExtractMedia` or EOF
+        :class:`~plugins.extract.extract_media.ExtractMedia` or EOF
             The next extract media object, or EOF if pipe has ended
         """
         if self._rollover is not None:

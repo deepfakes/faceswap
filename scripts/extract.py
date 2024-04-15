@@ -17,7 +17,7 @@ from lib.align.alignments import PNGHeaderDict
 from lib.image import encode_image, generate_thumbnail, ImagesLoader, ImagesSaver, read_image_meta
 from lib.multithreading import MultiThread
 from lib.utils import get_folder, handle_deprecated_cliopts, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
-from plugins.extract.pipeline import Extractor, ExtractMedia
+from plugins.extract import ExtractMedia, Extractor
 from scripts.fsmedia import Alignments, PostProcess, finalize
 
 if T.TYPE_CHECKING:
@@ -596,8 +596,8 @@ class PipelineLoader():
         Parameters
         ----------
         detected_faces: dict
-            Dictionary of :class:`plugins.extract.pipeline.ExtractMedia` with the filename as the
-            key for repopulating the image attribute.
+            Dictionary of :class:`~plugins.extract.extract_media.ExtractMedia` with the filename as
+            the key for repopulating the image attribute.
         """
         logger.debug("Reload Images: Start. Detected Faces Count: %s", len(detected_faces))
         load_queue = self._extractor.input_queue
@@ -643,6 +643,7 @@ class _Extract():
 
         self._alignments = Alignments(self._args, True, self._loader.is_video)
         self._extractor = extractor
+        self._extractor.import_data(self._args.input_dir)
 
         self._existing_count = 0
         self._set_skip_list()
@@ -753,7 +754,7 @@ class _Extract():
 
         Parameters
         ----------
-        extract_media: :class:`plugins.extract.pipeline.ExtractMedia`
+        extract_media: :class:`~plugins.extract.extract_media.ExtractMedia`
             Output from :class:`plugins.extract.pipeline.Extractor`
         size: int
             The size that the aligned face should be created at
@@ -785,7 +786,7 @@ class _Extract():
         ----------
         saver: :class:`lib.images.ImagesSaver` or ``None``
             The background saver for saving the image or ``None`` if faces are not to be saved
-        extract_media: :class:`~plugins.extract.pipeline.ExtractMedia`
+        extract_media: :class:`~plugins.extract.extract_media.ExtractMedia`
             The output from :class:`~plugins.extract.Pipeline.Extractor`
         """
         logger.trace("Outputting faces for %s", extract_media.filename)  # type: ignore

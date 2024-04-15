@@ -5,7 +5,7 @@ Plugins should inherit from this class
 
 See the override methods for which methods are required.
 
-The plugin will receive a :class:`~plugins.extract.pipeline.ExtractMedia` object.
+The plugin will receive a :class:`~plugins.extract.extract_media.ExtractMedia` object.
 
 For each source item, the plugin must pass a dict to finalize containing:
 
@@ -23,9 +23,10 @@ import numpy as np
 
 from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module  # noqa
 
-from lib.align import AlignedFace, transform_image
+from lib.align import AlignedFace, LandmarkType, transform_image
 from lib.utils import FaceswapError
-from plugins.extract._base import BatchType, Extractor, ExtractorBatch, ExtractMedia
+from plugins.extract import ExtractMedia
+from plugins.extract._base import BatchType, ExtractorBatch, Extractor
 
 if T.TYPE_CHECKING:
     from collections.abc import Generator
@@ -79,6 +80,8 @@ class Masker(Extractor):  # pylint:disable=abstract-method
     plugins.extract.align._base : Aligner parent class for extraction plugins.
     """
 
+    _logged_lm_count_once = False
+
     def __init__(self,
                  git_model_id: int | None = None,
                  model_filename: str | None = None,
@@ -94,11 +97,32 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         self.input_size = 256  # Override for model specific input_size
         self.coverage_ratio = 1.0  # Override for model specific coverage_ratio
 
+        # Override if a specific type of landmark data is required:
+        self.landmark_type: LandmarkType | None = None
+
         self._plugin_type = "mask"
         self._storage_name = self.__module__.rsplit(".", maxsplit=1)[-1].replace("_", "-")
         self._storage_centering: CenteringType = "face"  # Centering to store the mask at
         self._storage_size = 128  # Size to store masks at. Leave this at default
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _maybe_log_warning(self, face: AlignedFace) -> None:
+        """ Log a warning, once, if we do not have full facial landmarks
+
+        Parameters
+        ----------
+        face: :class:`~lib.align.aligned_face.AlignedFace`
+            The aligned face object to test the landmark type for
+        """
+        if face.landmark_type != LandmarkType.LM_2D_4 or self._logged_lm_count_once:
+            return
+
+        msg = "are likely to be sub-standard"
+        msg = "can not be be generated" if self.name in ("Components", "Extended") else msg
+
+        logger.warning("Extracted faces do not contain facial landmark data. '%s' masks %s.",
+                       self.name, msg)
+        self._logged_lm_count_once = True
 
     def get_batch(self, queue: Queue) -> tuple[bool, MaskerBatch]:
         """ Get items for inputting into the masker from the queue in batches
@@ -106,8 +130,8 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         Items are returned from the ``queue`` in batches of
         :attr:`~plugins.extract._base.Extractor.batchsize`
 
-        Items are received as :class:`~plugins.extract.pipeline.ExtractMedia` objects and converted
-        to ``dict`` for internal processing.
+        Items are received as :class:`~plugins.extract.extract_media.ExtractMedia` objects and
+        converted to ``dict`` for internal processing.
 
         To ensure consistent batch sizes for masker the items are split into separate items for
         each :class:`~lib.align.DetectedFace` object.
@@ -162,6 +186,8 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                                         coverage_ratio=self.coverage_ratio,
                                         dtype="float32",
                                         is_aligned=item.is_aligned)
+
+                self._maybe_log_warning(feed_face)
 
                 assert feed_face.face is not None
                 if not item.is_aligned:
@@ -240,7 +266,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
 
         Yields
         ------
-        :class:`~plugins.extract.pipeline.ExtractMedia`
+        :class:`~plugins.extract.extract_media.ExtractMedia`
             The :attr:`DetectedFaces` list will be populated for this class with the bounding
             boxes, landmarks and masks for the detected faces found in the frame.
         """
@@ -249,6 +275,10 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                                                    batch.detected_faces,
                                                    batch.feed_faces,
                                                    batch.roi_masks):
+            if self.name in ("Components", "Extended") and not np.any(mask):
+                # Components/Extended masks can return empty when called from the manual tool with
+                # 4 Point ROI landmarks
+                continue
             self._crop_out_of_bounds(mask, roi_mask)
             face.add_mask(self._storage_name,
                           mask,
