@@ -24,7 +24,7 @@ from lib.queue_manager import queue_manager
 from scripts.fsmedia import Alignments, Images
 from scripts.convert import Predict, ConvertItem
 
-from plugins.extract.pipeline import ExtractMedia
+from plugins.extract import ExtractMedia
 
 from .control_panels import ActionFrame, ConfigTools, OptionsBook
 from .viewer import FacesDisplay, ImagesCanvas

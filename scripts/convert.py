@@ -23,7 +23,7 @@ from lib.image import read_image_meta_batch, ImagesLoader
 from lib.multithreading import MultiThread, total_cpus
 from lib.queue_manager import queue_manager
 from lib.utils import FaceswapError, get_folder, get_image_paths, handle_deprecated_cliopts
-from plugins.extract.pipeline import Extractor, ExtractMedia
+from plugins.extract import ExtractMedia, Extractor
 from plugins.plugin_loader import PluginLoader
 
 if T.TYPE_CHECKING:
@@ -44,7 +44,7 @@ class ConvertItem:
 
     Parameters
     ----------
-    input: :class:`~plugins.extract.pipeline.ExtractMedia`
+    input: :class:`~plugins.extract.extract_media.ExtractMedia`
         The ExtractMedia object holding the :attr:`filename`, :attr:`image` and attr:`list` of
         :class:`~lib.align.DetectedFace` objects loaded from disk
     feed_faces: list, Optional
@@ -702,6 +702,7 @@ class DiskIO():
             # Write out preview image for the GUI every 10 frames if writing to stream
             if write_preview and idx % 10 == 0 and not os.path.exists(preview_image):
                 logger.debug("Writing GUI Preview image: '%s'", preview_image)
+                assert isinstance(image, np.ndarray)
                 cv2.imwrite(preview_image, image)
             self._writer.write(filename, image)
         self._writer.close()
@@ -1093,7 +1094,7 @@ class Predict():
         logger.trace("Queued out batch. Batchsize: %s", len(batch))  # type:ignore
 
 
-class OptionalActions():
+class OptionalActions():  # pylint:disable=too-few-public-methods
     """ Process specific optional actions for Convert.
 
     Currently only handles skip faces. This class should probably be (re)moved.

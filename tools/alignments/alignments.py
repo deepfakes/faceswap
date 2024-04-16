@@ -10,7 +10,7 @@ from multiprocessing import Process
 
 from lib.utils import FaceswapError, handle_deprecated_cliopts, VIDEO_EXTENSIONS
 from .media import AlignmentData
-from .jobs import Check, Sort, Spatial  # noqa pylint:disable=unused-import
+from .jobs import Check, Export, Sort, Spatial  # noqa pylint:disable=unused-import
 from .jobs_faces import FromFaces, RemoveFaces, Rename  # noqa pylint:disable=unused-import
 from .jobs_frames import Draw, Extract  # noqa pylint:disable=unused-import
 
@@ -34,7 +34,7 @@ class Alignments():
     """
     def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self._requires_alignments = ["sort", "spatial"]
+        self._requires_alignments = ["export", "sort", "spatial"]
         self._requires_faces = ["extract", "from-faces"]
         self._requires_frames = ["draw",
                                  "extract",

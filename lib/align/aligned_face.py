@@ -1,63 +1,22 @@
 #!/usr/bin/env python3
 """ Aligner for faceswap.py """
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 import logging
 import typing as T
+
 from threading import Lock
 
 import cv2
 import numpy as np
 
+from lib.logger import parse_class_init
+
+from .constants import CenteringType, EXTRACT_RATIOS, LandmarkType, _MEAN_FACE
+from .pose import PoseEstimate
+
 logger = logging.getLogger(__name__)
-CenteringType = T.Literal["face", "head", "legacy"]
-
-_MEAN_FACE = np.array([[0.010086, 0.106454], [0.085135, 0.038915], [0.191003, 0.018748],
-                       [0.300643, 0.034489], [0.403270, 0.077391], [0.596729, 0.077391],
-                       [0.699356, 0.034489], [0.808997, 0.018748], [0.914864, 0.038915],
-                       [0.989913, 0.106454], [0.500000, 0.203352], [0.500000, 0.307009],
-                       [0.500000, 0.409805], [0.500000, 0.515625], [0.376753, 0.587326],
-                       [0.435909, 0.609345], [0.500000, 0.628106], [0.564090, 0.609345],
-                       [0.623246, 0.587326], [0.131610, 0.216423], [0.196995, 0.178758],
-                       [0.275698, 0.179852], [0.344479, 0.231733], [0.270791, 0.245099],
-                       [0.192616, 0.244077], [0.655520, 0.231733], [0.724301, 0.179852],
-                       [0.803005, 0.178758], [0.868389, 0.216423], [0.807383, 0.244077],
-                       [0.729208, 0.245099], [0.264022, 0.780233], [0.350858, 0.745405],
-                       [0.438731, 0.727388], [0.500000, 0.742578], [0.561268, 0.727388],
-                       [0.649141, 0.745405], [0.735977, 0.780233], [0.652032, 0.864805],
-                       [0.566594, 0.902192], [0.500000, 0.909281], [0.433405, 0.902192],
-                       [0.347967, 0.864805], [0.300252, 0.784792], [0.437969, 0.778746],
-                       [0.500000, 0.785343], [0.562030, 0.778746], [0.699747, 0.784792],
-                       [0.563237, 0.824182], [0.500000, 0.831803], [0.436763, 0.824182]])
-
-_MEAN_FACE_3D = np.array([[4.056931, -11.432347, 1.636229],   # 8 chin LL
-                          [1.833492, -12.542305, 4.061275],   # 7 chin L
-                          [0.0, -12.901019, 4.070434],        # 6 chin C
-                          [-1.833492, -12.542305, 4.061275],  # 5 chin R
-                          [-4.056931, -11.432347, 1.636229],  # 4 chin RR
-                          [6.825897, 1.275284, 4.402142],     # 33 L eyebrow L
-                          [1.330353, 1.636816, 6.903745],     # 29 L eyebrow R
-                          [-1.330353, 1.636816, 6.903745],    # 34 R eyebrow L
-                          [-6.825897, 1.275284, 4.402142],    # 38 R eyebrow R
-                          [1.930245, -5.060977, 5.914376],    # 54 nose LL
-                          [0.746313, -5.136947, 6.263227],    # 53 nose L
-                          [0.0, -5.485328, 6.76343],          # 52 nose C
-                          [-0.746313, -5.136947, 6.263227],   # 51 nose R
-                          [-1.930245, -5.060977, 5.914376],   # 50 nose RR
-                          [5.311432, 0.0, 3.987654],          # 13 L eye L
-                          [1.78993, -0.091703, 4.413414],     # 17 L eye R
-                          [-1.78993, -0.091703, 4.413414],    # 25 R eye L
-                          [-5.311432, 0.0, 3.987654],         # 21 R eye R
-                          [2.774015, -7.566103, 5.048531],    # 43 mouth L
-                          [0.509714, -7.056507, 6.566167],    # 42 mouth top L
-                          [0.0, -7.131772, 6.704956],         # 41 mouth top C
-                          [-0.509714, -7.056507, 6.566167],   # 40 mouth top R
-                          [-2.774015, -7.566103, 5.048531],   # 39 mouth R
-                          [-0.589441, -8.443925, 6.109526],   # 46 mouth bottom R
-                          [0.0, -8.601736, 6.097667],         # 45 mouth bottom C
-                          [0.589441, -8.443925, 6.109526]])   # 44 mouth bottom L
-
-_EXTRACT_RATIOS = {"legacy": 0.375, "face": 0.5, "head": 0.625}
 
 
 def get_matrix_scaling(matrix: np.ndarray) -> tuple[int, int]:
@@ -82,7 +41,7 @@ def get_matrix_scaling(matrix: np.ndarray) -> tuple[int, int]:
         interpolators = cv2.INTER_CUBIC, cv2.INTER_AREA
     else:
         interpolators = cv2.INTER_AREA, cv2.INTER_CUBIC
-    logger.trace("interpolator: %s, inverse interpolator: %s",  # type: ignore
+    logger.trace("interpolator: %s, inverse interpolator: %s",  # type:ignore[attr-defined]
                  interpolators[0], interpolators[1])
     return interpolators
 
@@ -109,7 +68,7 @@ def transform_image(image: np.ndarray,
     :class:`numpy.ndarray`
         The transformed image
     """
-    logger.trace("image shape: %s, matrix: %s, size: %s. padding: %s",  # type: ignore
+    logger.trace("image shape: %s, matrix: %s, size: %s. padding: %s",  # type:ignore[attr-defined]
                  image.shape, matrix, size, padding)
     # transform the matrix for size and padding
     mat = matrix * (size - 2 * padding)
@@ -118,7 +77,7 @@ def transform_image(image: np.ndarray,
     # transform image
     interpolators = get_matrix_scaling(mat)
     retval = cv2.warpAffine(image, mat, (size, size), flags=interpolators[0])
-    logger.trace("transformed matrix: %s, final image shape: %s",  # type: ignore
+    logger.trace("transformed matrix: %s, final image shape: %s",  # type:ignore[attr-defined]
                  mat, image.shape)
     return retval
 
@@ -146,13 +105,14 @@ def get_adjusted_center(image_size: int,
     :class:`numpy.ndarray`
         The center point of the image at the given size for the target centering
     """
-    source_size = image_size - (image_size * _EXTRACT_RATIOS[source_centering])
+    source_size = image_size - (image_size * EXTRACT_RATIOS[source_centering])
     offset = target_offset - source_offset
     offset *= source_size
     center = np.rint(offset + image_size / 2).astype("int32")
-    logger.trace("image_size: %s, source_offset: %s, target_offset: %s, "  # type: ignore
-                 "source_centering: '%s', adjusted_offset: %s, center: %s", image_size,
-                 source_offset, target_offset, source_centering, offset, center)
+    logger.trace(  # type:ignore[attr-defined]
+        "image_size: %s, source_offset: %s, target_offset: %s, source_centering: '%s', "
+        "adjusted_offset: %s, center: %s",
+        image_size, source_offset, target_offset, source_centering, offset, center)
     return center
 
 
@@ -196,156 +156,14 @@ def get_centered_size(source_centering: CenteringType,
     if source_centering == target_centering and coverage_ratio == 1.0:
         retval = size
     else:
-        src_size = size - (size * _EXTRACT_RATIOS[source_centering])
-        retval = 2 * int(np.rint((src_size / (1 - _EXTRACT_RATIOS[target_centering])
+        src_size = size - (size * EXTRACT_RATIOS[source_centering])
+        retval = 2 * int(np.rint((src_size / (1 - EXTRACT_RATIOS[target_centering])
                                  * coverage_ratio) / 2))
-    logger.trace("source_centering: %s, target_centering: %s, size: %s, "  # type: ignore
-                 "coverage_ratio: %s, source_size: %s, crop_size: %s", source_centering,
-                 target_centering, size, coverage_ratio, src_size, retval)
+    logger.trace(  # type:ignore[attr-defined]
+        "source_centering: %s, target_centering: %s, size: %s, coverage_ratio: %s, "
+        "source_size: %s, crop_size: %s",
+        source_centering, target_centering, size, coverage_ratio, src_size, retval)
     return retval
-
-
-class PoseEstimate():
-    """ Estimates pose from a generic 3D head model for the given 2D face landmarks.
-
-    Parameters
-    ----------
-    landmarks: :class:`numpy.ndarry`
-        The original 68 point landmarks aligned to 0.0 - 1.0 range
-
-    References
-    ----------
-    Head Pose Estimation using OpenCV and Dlib - https://www.learnopencv.com/tag/solvepnp/
-    3D Model points - http://aifi.isr.uc.pt/Downloads/OpenGL/glAnthropometric3DModel.cpp
-    """
-    def __init__(self, landmarks: np.ndarray) -> None:
-        self._distortion_coefficients = np.zeros((4, 1))  # Assuming no lens distortion
-        self._xyz_2d: np.ndarray | None = None
-
-        self._camera_matrix = self._get_camera_matrix()
-        self._rotation, self._translation = self._solve_pnp(landmarks)
-        self._offset = self._get_offset()
-        self._pitch_yaw_roll: tuple[float, float, float] = (0, 0, 0)
-
-    @property
-    def xyz_2d(self) -> np.ndarray:
-        """ :class:`numpy.ndarray` projected (x, y) coordinates for each x, y, z point at a
-        constant distance from adjusted center of the skull (0.5, 0.5) in the 2D space. """
-        if self._xyz_2d is None:
-            xyz = cv2.projectPoints(np.array([[6., 0., -2.3],
-                                              [0., 6., -2.3],
-                                              [0., 0., 3.7]]).astype("float32"),
-                                    self._rotation,
-                                    self._translation,
-                                    self._camera_matrix,
-                                    self._distortion_coefficients)[0].squeeze()
-            self._xyz_2d = xyz - self._offset["head"]
-        return self._xyz_2d
-
-    @property
-    def offset(self) -> dict[CenteringType, np.ndarray]:
-        """ dict: The amount to offset a standard 0.0 - 1.0 umeyama transformation matrix for a
-        from the center of the face (between the eyes) or center of the head (middle of skull)
-        rather than the nose area. """
-        return self._offset
-
-    @property
-    def pitch(self) -> float:
-        """ float: The pitch of the aligned face in eular angles """
-        if not any(self._pitch_yaw_roll):
-            self._get_pitch_yaw_roll()
-        return self._pitch_yaw_roll[0]
-
-    @property
-    def yaw(self) -> float:
-        """ float: The yaw of the aligned face in eular angles """
-        if not any(self._pitch_yaw_roll):
-            self._get_pitch_yaw_roll()
-        return self._pitch_yaw_roll[1]
-
-    @property
-    def roll(self) -> float:
-        """ float: The roll of the aligned face in eular angles """
-        if not any(self._pitch_yaw_roll):
-            self._get_pitch_yaw_roll()
-        return self._pitch_yaw_roll[2]
-
-    def _get_pitch_yaw_roll(self) -> None:
-        """ Obtain the yaw, roll and pitch from the :attr:`_rotation` in eular angles. """
-        proj_matrix = np.zeros((3, 4), dtype="float32")
-        proj_matrix[:3, :3] = cv2.Rodrigues(self._rotation)[0]
-        euler = cv2.decomposeProjectionMatrix(proj_matrix)[-1]
-        self._pitch_yaw_roll = T.cast(tuple[float, float, float], tuple(euler.squeeze()))
-        logger.trace("yaw_pitch: %s", self._pitch_yaw_roll)  # type: ignore
-
-    @classmethod
-    def _get_camera_matrix(cls) -> np.ndarray:
-        """ Obtain an estimate of the camera matrix based off the original frame dimensions.
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            An estimated camera matrix
-        """
-        focal_length = 4
-        camera_matrix = np.array([[focal_length, 0, 0.5],
-                                  [0, focal_length, 0.5],
-                                  [0, 0, 1]], dtype="double")
-        logger.trace("camera_matrix: %s", camera_matrix)  # type: ignore
-        return camera_matrix
-
-    def _solve_pnp(self, landmarks: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """ Solve the Perspective-n-Point for the given landmarks.
-
-        Takes 2D landmarks in world space and estimates the rotation and translation vectors
-        in 3D space.
-
-        Parameters
-        ----------
-        landmarks: :class:`numpy.ndarry`
-            The original 68 point landmark co-ordinates relating to the original frame
-
-        Returns
-        -------
-        rotation: :class:`numpy.ndarray`
-            The solved rotation vector
-        translation: :class:`numpy.ndarray`
-            The solved translation vector
-        """
-        points = landmarks[[6, 7, 8, 9, 10, 17, 21, 22, 26, 31, 32, 33, 34,
-                            35, 36, 39, 42, 45, 48, 50, 51, 52, 54, 56, 57, 58]]
-        _, rotation, translation = cv2.solvePnP(_MEAN_FACE_3D,
-                                                points,
-                                                self._camera_matrix,
-                                                self._distortion_coefficients,
-                                                flags=cv2.SOLVEPNP_ITERATIVE)
-        logger.trace("points: %s, rotation: %s, translation: %s",  # type: ignore
-                     points, rotation, translation)
-        return rotation, translation
-
-    def _get_offset(self) -> dict[CenteringType, np.ndarray]:
-        """ Obtain the offset between the original center of the extracted face to the new center
-        of the head in 2D space.
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            The x, y offset of the new center from the old center.
-        """
-        offset: dict[CenteringType, np.ndarray] = {"legacy": np.array([0.0, 0.0])}
-        points: dict[T.Literal["face", "head"], tuple[float, ...]] = {"head": (0.0, 0.0, -2.3),
-                                                                      "face": (0.0, -1.5, 4.2)}
-
-        for key, pnts in points.items():
-            center = cv2.projectPoints(np.array([pnts]).astype("float32"),
-                                       self._rotation,
-                                       self._translation,
-                                       self._camera_matrix,
-                                       self._distortion_coefficients)[0].squeeze()
-            logger.trace("center %s: %s", key, center)  # type: ignore
-            offset[key] = center - (0.5, 0.5)
-        logger.trace("offset: %s", offset)  # type: ignore
-        return offset
 
 
 @dataclass
@@ -464,27 +282,26 @@ class AlignedFace():
                  dtype: str | None = None,
                  is_aligned: bool = False,
                  is_legacy: bool = False) -> None:
-        logger.trace("Initializing: %s (image shape: %s, centering: '%s', "  # type: ignore
-                     "size: %s, coverage_ratio: %s, dtype: %s, is_aligned: %s, is_legacy: %s)",
-                     self.__class__.__name__, image if image is None else image.shape,
-                     centering, size, coverage_ratio, dtype, is_aligned, is_legacy)
+        logger.trace(parse_class_init(locals()))  # type:ignore[attr-defined]
         self._frame_landmarks = landmarks
+        self._landmark_type = LandmarkType.from_shape(landmarks.shape)
         self._centering = centering
         self._size = size
         self._coverage_ratio = coverage_ratio
         self._dtype = dtype
         self._is_aligned = is_aligned
         self._source_centering: CenteringType = "legacy" if is_legacy and is_aligned else "head"
-        self._matrices = {"legacy": _umeyama(landmarks[17:], _MEAN_FACE, True)[0:2],
-                          "face": np.array([]),
-                          "head": np.array([])}
         self._padding = self._padding_from_coverage(size, coverage_ratio)
 
+        lookup = self._landmark_type
+        self._mean_lookup = LandmarkType.LM_2D_51 if lookup == LandmarkType.LM_2D_68 else lookup
+
         self._cache = _FaceCache()
+        self._matrices: dict[CenteringType, np.ndarray] = {"legacy": self._get_default_matrix()}
 
         self._face = self.extract_face(image)
-        logger.trace("Initialized: %s (matrix: %s, padding: %s, face shape: %s)",  # type: ignore
-                     self.__class__.__name__, self._matrices["legacy"], self._padding,
+        logger.trace("Initialized: %s (padding: %s, face shape: %s)",  # type:ignore[attr-defined]
+                     self.__class__.__name__, self._padding,
                      self._face if self._face is None else self._face.shape)
 
     @property
@@ -508,11 +325,11 @@ class AlignedFace():
         """ :class:`numpy.ndarray`: The 3x2 transformation matrix for extracting and aligning the
         core face area out of the original frame, with no padding or sizing applied. The returned
         matrix is offset for the given :attr:`centering`. """
-        if not np.any(self._matrices[self._centering]):
+        if self._centering not in self._matrices:
             matrix = self._matrices["legacy"].copy()
             matrix[:, 2] -= self.pose.offset[self._centering]
             self._matrices[self._centering] = matrix
-            logger.trace("original matrix: %s, new matrix: %s",  # type: ignore
+            logger.trace("original matrix: %s, new matrix: %s",  # type:ignore[attr-defined]
                          self._matrices["legacy"], matrix)
         return self._matrices[self._centering]
 
@@ -523,7 +340,7 @@ class AlignedFace():
             if self._cache.pose is None:
                 lms = np.nan_to_num(cv2.transform(np.expand_dims(self._frame_landmarks, axis=1),
                                     self._matrices["legacy"]).squeeze())
-                self._cache.pose = PoseEstimate(lms)
+                self._cache.pose = PoseEstimate(lms, self._landmark_type)
         return self._cache.pose
 
     @property
@@ -535,7 +352,7 @@ class AlignedFace():
                 matrix = self.matrix.copy()
                 mat = matrix * (self._size - 2 * self.padding)
                 mat[:, 2] += self.padding
-                logger.trace("adjusted_matrix: %s", mat)  # type: ignore
+                logger.trace("adjusted_matrix: %s", mat)  # type:ignore[attr-defined]
                 self._cache.adjusted_matrix = mat
         return self._cache.adjusted_matrix
 
@@ -557,7 +374,7 @@ class AlignedFace():
                                 [self._size - 1, self._size - 1],
                                 [self._size - 1, 0]])
                 roi = np.rint(self.transform_points(roi, invert=True)).astype("int32")
-                logger.trace("original roi: %s", roi)  # type: ignore
+                logger.trace("original roi: %s", roi)  # type:ignore[attr-defined]
                 self._cache.original_roi = roi
         return self._cache.original_roi
 
@@ -568,9 +385,14 @@ class AlignedFace():
         with self._cache.lock("landmarks"):
             if self._cache.landmarks is None:
                 lms = self.transform_points(self._frame_landmarks)
-                logger.trace("aligned landmarks: %s", lms)  # type: ignore
+                logger.trace("aligned landmarks: %s", lms)  # type:ignore[attr-defined]
                 self._cache.landmarks = lms
             return self._cache.landmarks
+
+    @property
+    def landmark_type(self) -> LandmarkType:
+        """:class:`~LandmarkType`: The type of landmarks that generated this aligned face """
+        return self._landmark_type
 
     @property
     def normalized_landmarks(self) -> np.ndarray:
@@ -579,8 +401,8 @@ class AlignedFace():
         with self._cache.lock("landmarks_normalized"):
             if self._cache.landmarks_normalized is None:
                 lms = np.expand_dims(self._frame_landmarks, axis=1)
-                lms = cv2.transform(lms, self._matrices["legacy"], lms.shape).squeeze()
-                logger.trace("normalized landmarks: %s", lms)  # type: ignore
+                lms = cv2.transform(lms, self._matrices["legacy"]).squeeze()
+                logger.trace("normalized landmarks: %s", lms)  # type:ignore[attr-defined]
                 self._cache.landmarks_normalized = lms
         return self._cache.landmarks_normalized
 
@@ -590,7 +412,7 @@ class AlignedFace():
         with self._cache.lock("interpolators"):
             if not any(self._cache.interpolators):
                 interpolators = get_matrix_scaling(self.adjusted_matrix)
-                logger.trace("interpolators: %s", interpolators)  # type: ignore
+                logger.trace("interpolators: %s", interpolators)  # type:ignore[attr-defined]
                 self._cache.interpolators = interpolators
         return self._cache.interpolators
 
@@ -600,8 +422,12 @@ class AlignedFace():
         used for aligning the image. """
         with self._cache.lock("average_distance"):
             if not self._cache.average_distance:
-                average_distance = np.mean(np.abs(self.normalized_landmarks[17:] - _MEAN_FACE))
-                logger.trace("average_distance: %s", average_distance)  # type: ignore
+                mean_face = _MEAN_FACE[self._mean_lookup]
+                lms = self.normalized_landmarks
+                if self._landmark_type == LandmarkType.LM_2D_68:
+                    lms = lms[17:]  # 68 point landmarks only use core face items
+                average_distance = np.mean(np.abs(lms - mean_face))
+                logger.trace("average_distance: %s", average_distance)  # type:ignore[attr-defined]
                 self._cache.average_distance = average_distance
         return self._cache.average_distance
 
@@ -612,10 +438,13 @@ class AlignedFace():
         mouth, negative values indicate that eyes/eyebrows are misaligned below the mouth. """
         with self._cache.lock("relative_eye_mouth_position"):
             if not self._cache.relative_eye_mouth_position:
-                lowest_eyes = np.max(self.normalized_landmarks[np.r_[17:27, 36:48], 1])
-                highest_mouth = np.min(self.normalized_landmarks[48:68, 1])
-                position = highest_mouth - lowest_eyes
-                logger.trace("lowest_eyes: %s, highest_mouth: %s, "  # type: ignore
+                if self._landmark_type != LandmarkType.LM_2D_68:
+                    position = 1.0  # arbitrary positive value
+                else:
+                    lowest_eyes = np.max(self.normalized_landmarks[np.r_[17:27, 36:48], 1])
+                    highest_mouth = np.min(self.normalized_landmarks[48:68, 1])
+                    position = highest_mouth - lowest_eyes
+                logger.trace("lowest_eyes: %s, highest_mouth: %s, "  # type:ignore[attr-defined]
                              "relative_eye_mouth_position: %s", lowest_eyes, highest_mouth,
                              position)
                 self._cache.relative_eye_mouth_position = position
@@ -638,9 +467,24 @@ class AlignedFace():
         dict
             The padding required, in pixels for 'head', 'face' and 'legacy' face types
         """
-        retval = {_type: round((size * (coverage_ratio - (1 - _EXTRACT_RATIOS[_type]))) / 2)
+        retval = {_type: round((size * (coverage_ratio - (1 - EXTRACT_RATIOS[_type]))) / 2)
                   for _type in T.get_args(T.Literal["legacy", "face", "head"])}
-        logger.trace(retval)  # type: ignore
+        logger.trace(retval)  # type:ignore[attr-defined]
+        return retval
+
+    def _get_default_matrix(self) -> np.ndarray:
+        """ Get the default (legacy) matrix. All subsequent matrices are calculated from this
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The default 'legacy' matrix
+        """
+        lms = self._frame_landmarks
+        if self._landmark_type == LandmarkType.LM_2D_68:
+            lms = lms[17:]  # 68 point landmarks only use core face items
+        retval = _umeyama(lms, _MEAN_FACE[self._mean_lookup], True)[0:2]
+        logger.trace("Default matrix: %s", retval)  # type:ignore[attr-defined]
         return retval
 
     def transform_points(self, points: np.ndarray, invert: bool = False) -> np.ndarray:
@@ -662,9 +506,9 @@ class AlignedFace():
         """
         retval = np.expand_dims(points, axis=1)
         mat = cv2.invertAffineTransform(self.adjusted_matrix) if invert else self.adjusted_matrix
-        retval = cv2.transform(retval, mat, retval.shape).squeeze()
-        logger.trace("invert: %s, Original points: %s, transformed points: %s",  # type: ignore
-                     invert, points, retval)
+        retval = cv2.transform(retval, mat).squeeze()
+        logger.trace(  # type:ignore[attr-defined]
+            "invert: %s, Original points: %s, transformed points: %s", invert, points, retval)
         return retval
 
     def extract_face(self, image: np.ndarray | None) -> np.ndarray | None:
@@ -684,8 +528,8 @@ class AlignedFace():
             ``None`` if no image has been provided.
         """
         if image is None:
-            logger.trace("_extract_face called without a loaded image. "  # type: ignore
-                         "Returning empty face.")
+            logger.trace("_extract_face called without a loaded "  # type:ignore[attr-defined]
+                         "image. Returning empty face.")
             return None
 
         if self._is_aligned and (self._centering != self._source_centering or
@@ -721,8 +565,9 @@ class AlignedFace():
         :class:`numpy.ndarray`
             The aligned image with the correct centering, scaled to image input size
         """
-        logger.trace("image_size: %s, target_size: %s, coverage_ratio: %s",  # type: ignore
-                     image.shape[0], self.size, self._coverage_ratio)
+        logger.trace(  # type:ignore[attr-defined]
+            "image_size: %s, target_size: %s, coverage_ratio: %s",
+            image.shape[0], self.size, self._coverage_ratio)
 
         img_size = image.shape[0]
         target_size = get_centered_size(self._source_centering,
@@ -733,8 +578,9 @@ class AlignedFace():
 
         slices = self._get_cropped_slices(img_size, target_size)
         out[slices["out"][0], slices["out"][1], :] = image[slices["in"][0], slices["in"][1], :]
-        logger.trace("Cropped from aligned extract: (centering: %s, in shape: %s, "  # type: ignore
-                     "out shape: %s)", self._centering, image.shape, out.shape)
+        logger.trace(  # type:ignore[attr-defined]
+            "Cropped from aligned extract: (centering: %s, in shape: %s, out shape: %s)",
+            self._centering, image.shape, out.shape)
         return out
 
     def _get_cropped_slices(self,
@@ -766,7 +612,7 @@ class AlignedFace():
                              slice(max(roi[0] * -1, 0),
                                    target_size - min(target_size, max(0, roi[2] - image_size))))
                 self._cache.cropped_slices[self._centering] = {"in": slice_in, "out": slice_out}
-                logger.trace("centering: %s, cropped_slices: %s",  # type: ignore
+                logger.trace("centering: %s, cropped_slices: %s",  # type:ignore[attr-defined]
                              self._centering, self._cache.cropped_slices[self._centering])
         return self._cache.cropped_slices[self._centering]
 
@@ -805,8 +651,9 @@ class AlignedFace():
                                              self._source_centering)
                 padding = target_size // 2
                 roi = np.array([center - padding, center + padding]).ravel()
-                logger.trace("centering: '%s', center: %s, padding: %s, "  # type: ignore
-                             "sub roi: %s", centering, center, padding, roi)
+                logger.trace(  # type:ignore[attr-defined]
+                    "centering: '%s', center: %s, padding: %s, sub roi: %s",
+                    centering, center, padding, roi)
                 self._cache.cropped_roi[centering] = roi
         return self._cache.cropped_roi[centering]
 

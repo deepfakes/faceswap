@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-03-28 18:11+0000\n"
-"PO-Revision-Date: 2024-03-28 18:16+0000\n"
+"POT-Creation-Date: 2024-04-12 11:56+0100\n"
+"PO-Revision-Date: 2024-04-12 12:00+0100\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -20,7 +20,7 @@ msgstr ""
 
 #: lib/cli/args_extract_convert.py:46 lib/cli/args_extract_convert.py:56
 #: lib/cli/args_extract_convert.py:64 lib/cli/args_extract_convert.py:122
-#: lib/cli/args_extract_convert.py:479 lib/cli/args_extract_convert.py:488
+#: lib/cli/args_extract_convert.py:483 lib/cli/args_extract_convert.py:492
 msgid "Data"
 msgstr "데이터"
 
@@ -63,12 +63,12 @@ msgstr ""
 "또는 이미지들을 가진 부모 폴더가 되야 합니다. 얼굴들은 output_dir에 분리된 하"
 "위 폴더에 저장됩니다."
 
-#: lib/cli/args_extract_convert.py:133 lib/cli/args_extract_convert.py:150
-#: lib/cli/args_extract_convert.py:163 lib/cli/args_extract_convert.py:202
-#: lib/cli/args_extract_convert.py:220 lib/cli/args_extract_convert.py:233
-#: lib/cli/args_extract_convert.py:243 lib/cli/args_extract_convert.py:253
-#: lib/cli/args_extract_convert.py:499 lib/cli/args_extract_convert.py:525
-#: lib/cli/args_extract_convert.py:564
+#: lib/cli/args_extract_convert.py:133 lib/cli/args_extract_convert.py:152
+#: lib/cli/args_extract_convert.py:167 lib/cli/args_extract_convert.py:206
+#: lib/cli/args_extract_convert.py:224 lib/cli/args_extract_convert.py:237
+#: lib/cli/args_extract_convert.py:247 lib/cli/args_extract_convert.py:257
+#: lib/cli/args_extract_convert.py:503 lib/cli/args_extract_convert.py:529
+#: lib/cli/args_extract_convert.py:568
 msgid "Plugins"
 msgstr "플러그인들"
 
@@ -82,7 +82,9 @@ msgid ""
 "than other GPU detectors but can often return more false positives.\n"
 "L|s3fd: Best detector. Slow on CPU, faster on GPU. Can detect more faces and "
 "fewer false positives than other GPU detectors, but is a lot more resource "
-"intensive."
+"intensive.\n"
+"L|external: Import a face detection bounding box from a json file. "
+"(configurable in Detect settings)"
 msgstr ""
 "R|사용할 감지기. 몇몇 감지기들은 '/config/extract.ini' 또는 '설정 > 추출 플러"
 "그인 설정'에서 설정이 가능합니다:\n"
@@ -93,21 +95,27 @@ msgstr ""
 "니다.\n"
 "L|s3fd: 가장 좋은 감지기. CPU에선 느리고 GPU에선 빠릅니다. 다른 GPU 감지기들"
 "보다 더 많은 얼굴들을 감지할 수 있고 과 더 적은 false positives를 돌려주지만 "
-"자원을 굉장히 많이 사용합니다."
+"자원을 굉장히 많이 사용합니다.\n"
+"L|external: JSON 파일에서 얼굴 감지 경계 박스를 가져옵니다. (설정 감지에서 구"
+"성 가능)"
 
-#: lib/cli/args_extract_convert.py:152
+#: lib/cli/args_extract_convert.py:154
 msgid ""
 "R|Aligner to use.\n"
 "L|cv2-dnn: A CPU only landmark detector. Faster, less resource intensive, "
 "but less accurate. Only use this if not using a GPU and time is important.\n"
-"L|fan: Best aligner. Fast on GPU, slow on CPU."
+"L|fan: Best aligner. Fast on GPU, slow on CPU.\n"
+"L|external: Import 68 point 2D landmarks or an aligned bounding box from a "
+"json file. (configurable in Align settings)"
 msgstr ""
 "R|사용할 Aligner.\n"
 "L|cv2-dnn: CPU만을 사용하는 특징점 감지기. 빠르고 자원을 덜 사용하지만 부정확"
 "합니다. GPU를 사용하지 않고 시간이 중요할 때에만 사용하세요.\n"
-"L|fan: 가장 좋은 aligner. GPU에선 빠르고 CPU에선 느립니다."
+"L|fan: 가장 좋은 aligner. GPU에선 빠르고 CPU에선 느립니다.\n"
+"L|external: JSON 파일에서 68 포인트 2D 랜드 마크 또는 정렬 된 경계 상자를 가"
+"져옵니다. (정렬 설정에서 구성 가능)"
 
-#: lib/cli/args_extract_convert.py:165
+#: lib/cli/args_extract_convert.py:169
 msgid ""
 "R|Additional Masker(s) to use. The masks generated here will all take up GPU "
 "RAM. You can select none, one or multiple masks, but the extraction may take "
@@ -168,7 +176,7 @@ msgstr ""
 "로 뻗어 있습ㄴ다.\n"
 "(예: '-M unet-dfl vgg-clear', '--masker vgg-obstructed')"
 
-#: lib/cli/args_extract_convert.py:204
+#: lib/cli/args_extract_convert.py:208
 msgid ""
 "R|Performing normalization can help the aligner better align faces with "
 "difficult lighting conditions at an extraction speed cost. Different methods "
@@ -189,7 +197,7 @@ msgstr ""
 "L|hist: RGB 채널의 히스토그램을 동일하게 합니다.\n"
 "L|mean: 얼굴 색상을 평균으로 정규화합니다."
 
-#: lib/cli/args_extract_convert.py:222
+#: lib/cli/args_extract_convert.py:226
 msgid ""
 "The number of times to re-feed the detected face into the aligner. Each time "
 "the face is re-fed into the aligner the bounding box is adjusted by a small "
@@ -204,7 +212,7 @@ msgstr ""
 "다. 얼굴이 aligner에 다시 공급되는 횟수가 많을수록 micro-jitter 적게 발생하지"
 "만 추출에 더 오랜 시간이 걸립니다."
 
-#: lib/cli/args_extract_convert.py:235
+#: lib/cli/args_extract_convert.py:239
 msgid ""
 "Re-feed the initially found aligned face through the aligner. Can help "
 "produce better alignments for faces that are rotated beyond 45 degrees in "
@@ -214,7 +222,7 @@ msgstr ""
 "회전하거나 극단적인 각도에 있는 얼굴을 더 잘 정렬할 수 있습니다. 추출 속도가 "
 "느려집니다."
 
-#: lib/cli/args_extract_convert.py:245
+#: lib/cli/args_extract_convert.py:249
 msgid ""
 "If a face isn't found, rotate the images to try to find a face. Can find "
 "more faces at the cost of extraction speed. Pass in a single number to use "
@@ -225,7 +233,7 @@ msgstr ""
 "면서 더 많은 얼굴을 찾을 수 있습니다. 단일 숫자를 입력하여 해당 크기의 증분"
 "을 360까지 사용하거나 숫자 목록을 입력하여 확인할 각도를 정확하게 열거합니다."
 
-#: lib/cli/args_extract_convert.py:255
+#: lib/cli/args_extract_convert.py:259
 msgid ""
 "Obtain and store face identity encodings from VGGFace2. Slows down extract a "
 "little, but will save time if using 'sort by face'"
@@ -233,15 +241,15 @@ msgstr ""
 "VGGFace2에서 얼굴 식별 인코딩을 가져와 저장합니다. 추출 속도를 약간 늦추지만 "
 "'얼굴별로 정렬'을 사용하면 시간을 절약할 수 있습니다."
 
-#: lib/cli/args_extract_convert.py:265 lib/cli/args_extract_convert.py:276
-#: lib/cli/args_extract_convert.py:289 lib/cli/args_extract_convert.py:303
-#: lib/cli/args_extract_convert.py:610 lib/cli/args_extract_convert.py:619
-#: lib/cli/args_extract_convert.py:634 lib/cli/args_extract_convert.py:647
-#: lib/cli/args_extract_convert.py:661
+#: lib/cli/args_extract_convert.py:269 lib/cli/args_extract_convert.py:280
+#: lib/cli/args_extract_convert.py:293 lib/cli/args_extract_convert.py:307
+#: lib/cli/args_extract_convert.py:614 lib/cli/args_extract_convert.py:623
+#: lib/cli/args_extract_convert.py:638 lib/cli/args_extract_convert.py:651
+#: lib/cli/args_extract_convert.py:665
 msgid "Face Processing"
 msgstr "얼굴 처리"
 
-#: lib/cli/args_extract_convert.py:267
+#: lib/cli/args_extract_convert.py:271
 msgid ""
 "Filters out faces detected below this size. Length, in pixels across the "
 "diagonal of the bounding box. Set to 0 for off"
@@ -249,7 +257,7 @@ msgstr ""
 "이 크기 미만으로 탐지된 얼굴을 필터링합니다. 길이, 경계 상자의 대각선에 걸친 "
 "픽셀 단위입니다. 0으로 설정하면 꺼집니다"
 
-#: lib/cli/args_extract_convert.py:278
+#: lib/cli/args_extract_convert.py:282
 msgid ""
 "Optionally filter out people who you do not wish to extract by passing in "
 "images of those people. Should be a small variety of images at different "
@@ -261,7 +269,7 @@ msgstr ""
 "지들 또는 공백으로 구분된 여러 이미지 파일이 들어 있는 폴더를 선택할 수 있습"
 "니다."
 
-#: lib/cli/args_extract_convert.py:291
+#: lib/cli/args_extract_convert.py:295
 msgid ""
 "Optionally select people you wish to extract by passing in images of that "
 "person. Should be a small variety of images at different angles and in "
@@ -272,7 +280,7 @@ msgstr ""
 "와 조건이 다른 작은 다양한 이미지여야 합니다. 추출할 때 필요한 이미지들 또는 "
 "공백으로 구분된 여러 이미지 파일이 들어 있는 폴더를 선택할 수 있습니다."
 
-#: lib/cli/args_extract_convert.py:305
+#: lib/cli/args_extract_convert.py:309
 msgid ""
 "For use with the optional nfilter/filter files. Threshold for positive face "
 "recognition. Higher values are stricter."
@@ -280,12 +288,12 @@ msgstr ""
 "옵션인 nfilter/filter 파일과 함께 사용합니다. 긍정적인 얼굴 인식을 위한 임계"
 "값. 값이 높을수록 엄격합니다."
 
-#: lib/cli/args_extract_convert.py:314 lib/cli/args_extract_convert.py:327
-#: lib/cli/args_extract_convert.py:340 lib/cli/args_extract_convert.py:352
+#: lib/cli/args_extract_convert.py:318 lib/cli/args_extract_convert.py:331
+#: lib/cli/args_extract_convert.py:344 lib/cli/args_extract_convert.py:356
 msgid "output"
 msgstr "출력"
 
-#: lib/cli/args_extract_convert.py:316
+#: lib/cli/args_extract_convert.py:320
 msgid ""
 "The output size of extracted faces. Make sure that the model you intend to "
 "train supports your required size. This will only need to be changed for hi-"
@@ -294,7 +302,7 @@ msgstr ""
 "추출된 얼굴의 출력 크기입니다. 훈련하려는 모델이 필요한 크기를 지원하는지 꼭 "
 "확인하세요. 이것은 고해상도 모델에 대해서만 변경하면 됩니다."
 
-#: lib/cli/args_extract_convert.py:329
+#: lib/cli/args_extract_convert.py:333
 msgid ""
 "Extract every 'nth' frame. This option will skip frames when extracting "
 "faces. For example a value of 1 will extract faces from every frame, a value "
@@ -304,7 +312,7 @@ msgstr ""
 "설정합니다. 예를 들어, 값이 1이면 모든 프레임에서 얼굴이 추출되고, 값이 10이"
 "면 모든 10번째 프레임에서 얼굴이 추출됩니다."
 
-#: lib/cli/args_extract_convert.py:342
+#: lib/cli/args_extract_convert.py:346
 msgid ""
 "Automatically save the alignments file after a set amount of frames. By "
 "default the alignments file is only saved at the end of the extraction "
@@ -319,19 +327,18 @@ msgstr ""
 "을 쓸 때 스크립트가 손상될 수 있으므로 스크립트를 중단하지 마십시오. 해제하려"
 "면 0으로 설정"
 
-#: lib/cli/args_extract_convert.py:353
+#: lib/cli/args_extract_convert.py:357
 msgid "Draw landmarks on the ouput faces for debugging purposes."
 msgstr "디버깅을 위해 출력 얼굴에 특징점을 그립니다."
 
-#: lib/cli/args_extract_convert.py:359 lib/cli/args_extract_convert.py:369
-#: lib/cli/args_extract_convert.py:377 lib/cli/args_extract_convert.py:384
-#: lib/cli/args_extract_convert.py:674 lib/cli/args_extract_convert.py:686
-#: lib/cli/args_extract_convert.py:695 lib/cli/args_extract_convert.py:716
-#: lib/cli/args_extract_convert.py:722
+#: lib/cli/args_extract_convert.py:363 lib/cli/args_extract_convert.py:373
+#: lib/cli/args_extract_convert.py:381 lib/cli/args_extract_convert.py:388
+#: lib/cli/args_extract_convert.py:678 lib/cli/args_extract_convert.py:691
+#: lib/cli/args_extract_convert.py:712 lib/cli/args_extract_convert.py:718
 msgid "settings"
 msgstr "설정"
 
-#: lib/cli/args_extract_convert.py:361
+#: lib/cli/args_extract_convert.py:365
 msgid ""
 "Don't run extraction in parallel. Will run each part of the extraction "
 "process separately (one after the other) rather than all at the same time. "
@@ -341,22 +348,22 @@ msgstr ""
 "는 것이 아니라 개별적으로(하나씩) 실행합니다. VRAM이 프리미엄인 경우 유용합니"
 "다."
 
-#: lib/cli/args_extract_convert.py:371
+#: lib/cli/args_extract_convert.py:375
 msgid ""
 "Skips frames that have already been extracted and exist in the alignments "
 "file"
 msgstr "이미 추출되었거나 alignments 파일에 존재하는 프레임들을 스킵합니다"
 
-#: lib/cli/args_extract_convert.py:378
+#: lib/cli/args_extract_convert.py:382
 msgid "Skip frames that already have detected faces in the alignments file"
 msgstr "이미 얼굴을 탐지하여 alignments 파일에 존재하는 프레임들을 스킵합니다"
 
-#: lib/cli/args_extract_convert.py:385
+#: lib/cli/args_extract_convert.py:389
 msgid "Skip saving the detected faces to disk. Just create an alignments file"
 msgstr ""
 "탐지된 얼굴을 디스크에 저장하지 않습니다. 그저 alignments 파일을 만듭니다"
 
-#: lib/cli/args_extract_convert.py:459
+#: lib/cli/args_extract_convert.py:463
 msgid ""
 "Swap the original faces in a source video/images to your final faces.\n"
 "Conversion plugins can be configured in the 'Settings' Menu"
@@ -364,7 +371,7 @@ msgstr ""
 "원본 비디오/이미지의 원래 얼굴을 최종 얼굴으로 바꿉니다.\n"
 "변환 플러그인은 '설정' 메뉴에서 구성할 수 있습니다"
 
-#: lib/cli/args_extract_convert.py:481
+#: lib/cli/args_extract_convert.py:485
 msgid ""
 "Only required if converting from images to video. Provide The original video "
 "that the source frames were extracted from (for extracting the fps and "
@@ -373,14 +380,14 @@ msgstr ""
 "이미지에서 비디오로 변환하는 경우에만 필요합니다. 소스 프레임이 추출된 원본 "
 "비디오(fps 및 오디오 추출용)를 입력하세요."
 
-#: lib/cli/args_extract_convert.py:490
+#: lib/cli/args_extract_convert.py:494
 msgid ""
 "Model directory. The directory containing the trained model you wish to use "
 "for conversion."
 msgstr ""
 "모델 폴더. 당신이 변환에 사용하고자 하는 훈련된 모델을 가진 폴더입니다."
 
-#: lib/cli/args_extract_convert.py:501
+#: lib/cli/args_extract_convert.py:505
 msgid ""
 "R|Performs color adjustment to the swapped face. Some of these options have "
 "configurable settings in '/config/convert.ini' or 'Settings > Configure "
@@ -416,7 +423,7 @@ msgstr ""
 "공하지 않습니다.\n"
 "L|none: 색상 조정을 수행하지 않습니다."
 
-#: lib/cli/args_extract_convert.py:527
+#: lib/cli/args_extract_convert.py:531
 msgid ""
 "R|Masker to use. NB: The mask you require must exist within the alignments "
 "file. You can add additional masks with the Mask Tool.\n"
@@ -480,7 +487,7 @@ msgstr ""
 "L|predicted: 교육 중에 'Learn Mask(마스크 학습)' 옵션이 활성화된 경우에는 교"
 "육을 받은 모델이 만든 마스크가 사용됩니다."
 
-#: lib/cli/args_extract_convert.py:566
+#: lib/cli/args_extract_convert.py:570
 msgid ""
 "R|The plugin to use to output the converted images. The writers are "
 "configurable in '/config/convert.ini' or 'Settings > Configure Convert "
@@ -510,12 +517,12 @@ msgstr ""
 "L|pillow: [images] opencv보다 느리지만 더 많은 옵션이 있고 더 많은 형식을 지"
 "원합니다."
 
-#: lib/cli/args_extract_convert.py:587 lib/cli/args_extract_convert.py:596
-#: lib/cli/args_extract_convert.py:707
+#: lib/cli/args_extract_convert.py:591 lib/cli/args_extract_convert.py:600
+#: lib/cli/args_extract_convert.py:703
 msgid "Frame Processing"
 msgstr "프레임 처리"
 
-#: lib/cli/args_extract_convert.py:589
+#: lib/cli/args_extract_convert.py:593
 #, python-format
 msgid ""
 "Scale the final output frames by this amount. 100%% will output the frames "
@@ -524,7 +531,7 @@ msgstr ""
 "최종 출력 프레임의 크기를 이 양만큼 조정합니다. 100%%는 원본의 차원에서 프레"
 "임을 출력합니다. 50%%는 절반 크기에서, 200%%는 두 배 크기에서"
 
-#: lib/cli/args_extract_convert.py:598
+#: lib/cli/args_extract_convert.py:602
 msgid ""
 "Frame ranges to apply transfer to e.g. For frames 10 to 50 and 90 to 100 use "
 "--frame-ranges 10-50 90-100. Frames falling outside of the selected range "
@@ -536,7 +543,7 @@ msgstr ""
 "으면 선택한 범위를 벗어나는 프레임이 삭제됩니다. NB: 이미지에서 변환하는 경"
 "우 파일 이름은 프레임 번호로 끝나야 합니다!"
 
-#: lib/cli/args_extract_convert.py:612
+#: lib/cli/args_extract_convert.py:616
 msgid ""
 "Scale the swapped face by this percentage. Positive values will enlarge the "
 "face, Negative values will shrink the face."
@@ -544,7 +551,7 @@ msgstr ""
 "이 백분율로 교체된 면의 크기를 조정합니다. 양수 값은 얼굴을 확대하고, 음수 값"
 "은 얼굴을 축소합니다."
 
-#: lib/cli/args_extract_convert.py:621
+#: lib/cli/args_extract_convert.py:625
 msgid ""
 "If you have not cleansed your alignments file, then you can filter out faces "
 "by defining a folder here that contains the faces extracted from your input "
@@ -558,7 +565,7 @@ msgstr ""
 "alignments 파일 내에 존재하거나 지정된 폴더 내에 존재하는 얼굴만 변환됩니다. "
 "이 항목을 공백으로 두면 alignments 파일 내에 있는 모든 얼굴이 변환됩니다."
 
-#: lib/cli/args_extract_convert.py:636
+#: lib/cli/args_extract_convert.py:640
 msgid ""
 "Optionally filter out people who you do not wish to process by passing in an "
 "image of that person. Should be a front portrait with a single person in the "
@@ -571,7 +578,7 @@ msgstr ""
 "분하여 추가할 수 있습니다. 주의: 얼굴 필터를 사용하면 추출 속도가 현저히 감소"
 "하므로 정확성을 보장할 수 없습니다."
 
-#: lib/cli/args_extract_convert.py:649
+#: lib/cli/args_extract_convert.py:653
 msgid ""
 "Optionally select people you wish to process by passing in an image of that "
 "person. Should be a front portrait with a single person in the image. "
@@ -584,7 +591,7 @@ msgstr ""
 "가할 수 있습니다. 주의: 얼굴 필터를 사용하면 추출 속도가 현저히 감소하므로 정"
 "확성을 보장할 수 없습니다."
 
-#: lib/cli/args_extract_convert.py:663
+#: lib/cli/args_extract_convert.py:667
 msgid ""
 "For use with the optional nfilter/filter files. Threshold for positive face "
 "recognition. Lower values are stricter. NB: Using face filter will "
@@ -595,7 +602,7 @@ msgstr ""
 "값. 낮은 값이 더 엄격합니다. 주의: 얼굴 필터를 사용하면 추출 속도가 현저히 감"
 "소하므로 정확성을 보장할 수 없습니다."
 
-#: lib/cli/args_extract_convert.py:676
+#: lib/cli/args_extract_convert.py:680
 msgid ""
 "The maximum number of parallel processes for performing conversion. "
 "Converting images is system RAM heavy so it is possible to run out of memory "
@@ -611,15 +618,7 @@ msgstr ""
 "를 사용하려고 시도하지 않습니다. 단일 프로세스가 활성화된 경우 이 설정은 무시"
 "됩니다."
 
-#: lib/cli/args_extract_convert.py:688
-msgid ""
-"[LEGACY] This only needs to be selected if a legacy model is being loaded or "
-"if there are multiple models in the model folder"
-msgstr ""
-"[LEGACY] 이것은 레거시 모델을 로드 중이거나 모델 폴더에 여러 모델이 있는 경우"
-"에만 선택되어야 합니다"
-
-#: lib/cli/args_extract_convert.py:697
+#: lib/cli/args_extract_convert.py:693
 msgid ""
 "Enable On-The-Fly Conversion. NOT recommended. You should generate a clean "
 "alignments file for your destination video. However, if you wish you can "
@@ -633,7 +632,7 @@ msgstr ""
 "하고 표준 이하의 결과로 이어질 것입니다. alignments 파일이 발견되면 이 옵션"
 "은 무시됩니다."
 
-#: lib/cli/args_extract_convert.py:709
+#: lib/cli/args_extract_convert.py:705
 msgid ""
 "When used with --frame-ranges outputs the unchanged frames that are not "
 "processed instead of discarding them."
@@ -641,10 +640,17 @@ msgstr ""
 "사용시 --frame-ranges 인자를 사용하면 변경되지 않은 프레임을 버리지 않은 결과"
 "가 출력됩니다."
 
-#: lib/cli/args_extract_convert.py:717
+#: lib/cli/args_extract_convert.py:713
 msgid "Swap the model. Instead converting from of A -> B, converts B -> A"
 msgstr "모델을 바꿉니다. A -> B에서 변환하는 대신 B -> A로 변환"
 
-#: lib/cli/args_extract_convert.py:723
+#: lib/cli/args_extract_convert.py:719
 msgid "Disable multiprocessing. Slower but less resource intensive."
 msgstr "멀티프로세싱을 쓰지 않습니다. 느리지만 자원을 덜 소모합니다."
+
+#~ msgid ""
+#~ "[LEGACY] This only needs to be selected if a legacy model is being loaded "
+#~ "or if there are multiple models in the model folder"
+#~ msgstr ""
+#~ "[LEGACY] 이것은 레거시 모델을 로드 중이거나 모델 폴더에 여러 모델이 있는 "
+#~ "경우에만 선택되어야 합니다"
