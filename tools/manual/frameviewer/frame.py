@@ -479,12 +479,12 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         for action in ("copy_prev", "copy_next", "reload"):
             if action == "reload":
                 icon = "reload3"
-                cmd = lambda f=tk_frame_index: self._det_faces.revert_to_saved(f.get())  # noqa=E731  # pylint:disable=line-too-long,unnecessary-lambda-assignment
+                cmd = lambda f=tk_frame_index: self._det_faces.revert_to_saved(f.get())  # noqa:E731  # pylint:disable=line-too-long,unnecessary-lambda-assignment
                 helptext = _("Revert to saved Alignments ({})").format(lookup[action][1])
             else:
                 icon = action
                 direction = action.replace("copy_", "")
-                cmd = lambda f=tk_frame_index, d=direction: self._det_faces.update.copy(  # noqa=E731  # pylint:disable=line-too-long,unnecessary-lambda-assignment
+                cmd = lambda f=tk_frame_index, d=direction: self._det_faces.update.copy(  # noqa:E731  # pylint:disable=line-too-long,unnecessary-lambda-assignment
                     f.get(), d)
                 helptext = _("Copy {} Alignments ({})").format(*lookup[action])
             state = ["!disabled"] if action == "copy_next" else ["disabled"]
