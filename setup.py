@@ -57,6 +57,11 @@ _CONDA_MAPPING: dict[str, tuple[str, tuple[str, ...]]] = {
     "zlib-wapi": ("zlib-wapi", ("conda-forge", )),
     "xorg-libxft": ("xorg-libxft", ("conda-forge", ))}
 
+_GROUPS = [["pytorch*", "torch*"]]
+"""list[list[str]]: Packages that should be installed collectively at the same time """
+
+_DEV_TOOLS = ["flake8", "mypy", "pylint", "types-setuptools", "types-PyYAML"]
+
 # Force output to utf-8
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type:ignore[attr-defined]
 
@@ -77,6 +82,7 @@ class Environment():
         self.updater = updater
         # Flag that setup is being run by installer so steps can be skipped
         self.is_installer: bool = False
+        self.include_dev_tools: bool = False
         self.backend: backend_type | None = None
         self.enable_docker: bool = False
         self.cuda_cudnn = ["", ""]
@@ -153,6 +159,10 @@ class Environment():
         for arg in args:
             if arg == "--installer":
                 self.is_installer = True
+                continue
+            if arg == "--dev":
+                self.include_dev_tools = True
+                continue
             if not self.backend and (arg.startswith("--") and
                                      arg.replace("--", "") in self._backends):
                 self.backend = arg.replace("--", "").lower()  # type:ignore
@@ -461,6 +471,9 @@ class Packages():
                     if package and (not package.startswith(("#", "-r"))):
                         requirements.append(package)
 
+        if self._env.include_dev_tools:
+            requirements.extend(_DEV_TOOLS)
+
         self._required_packages = self._format_requirements(requirements)
         logger.debug(self._required_packages)
 
@@ -510,7 +523,7 @@ class Packages():
         self._check_conda_missing_dependencies()
 
 
-class Checks():
+class Checks():  # pylint:disable=too-few-public-methods
     """ Pre-installation checks
 
     Parameters
@@ -746,7 +759,7 @@ class ROCmCheck():
             return
 
 
-class CudaCheck():
+class CudaCheck():  # pylint:disable=too-few-public-methods
     """ Find the location of system installed Cuda and cuDNN on Windows and Linux. """
 
     def __init__(self) -> None:
@@ -898,7 +911,7 @@ class CudaCheck():
         return cudnn_checkfiles
 
 
-class Install():
+class Install():  # pylint:disable=too-few-public-methods
     """ Handles installation of Faceswap requirements
 
     Parameters
@@ -999,6 +1012,24 @@ class Install():
                 logger.error("Unable to install package: %s. Process aborted", clean_pkg)
                 sys.exit(1)
 
+    def _install_grouped_packages(self) -> None:
+        """ Install packages that should be installed collectively as a group """
+        if not self._env.is_conda:
+            return
+
+        packages = []
+        channels: set[str] = set()
+        for group in _GROUPS:
+            for item in group:
+                for idx, pkg in reversed(list(enumerate(self._packages.to_install))):
+                    if item == pkg[0] or (item.endswith("*") and pkg[0].startswith(item[:-1])):
+                        i_pkg = self._packages.to_install.pop(idx)
+                        packages.append(self._format_package(*i_pkg))
+                        channels.update(c for c in _CONDA_MAPPING.get(i_pkg[0],
+                                                                      (i_pkg[0],
+                                                                       ("defaults", )))[-1])
+        self._from_conda(packages, tuple(channels), conda_only=True)
+
     def _install_conda_packages(self) -> None:
         """ Install required conda packages """
         logger.info("Installing Required Conda Packages. This may take some time...")
@@ -1021,7 +1052,8 @@ class Install():
 
     def _install_missing_dep(self) -> None:
         """ Install missing dependencies """
-        self._install_conda_packages()  # Install conda packages first
+        self._install_conda_packages()  # Install required conda packages first
+        self._install_grouped_packages()  # Then install grouped packages
         self._install_python_packages()
 
     def _from_conda(self,
