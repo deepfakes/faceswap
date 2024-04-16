@@ -6,6 +6,7 @@ import os
 import sys
 import typing as T
 
+from keras.saving import load_model
 import numpy as np
 import keras
 import tensorflow as tf
@@ -147,7 +148,7 @@ class Inference():
     def process(self) -> None:
         """ Run the inference model creation process. """
         logger.info("Loading model '%s'", self._input_file)
-        model = keras.models.load_model(self._input_file, compile=False)
+        model = load_model(self._input_file, compile=False)
         logger.info("Creating inference model...")
         inference = _Inference(model, self._switch).model
         logger.info("Saving to: '%s'", self._output_file)
@@ -234,7 +235,7 @@ class NaNScan():
     def process(self) -> None:
         """ Scan the loaded model for NaNs and Infs and output summary. """
         logger.info("Loading model...")
-        model = keras.models.load_model(self._model_file, compile=False)
+        model = load_model(self._model_file, compile=False)
         logger.info("Parsing weights for invalid values...")
         errors = self._parse_weights(model)
 

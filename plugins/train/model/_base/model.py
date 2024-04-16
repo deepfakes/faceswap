@@ -13,6 +13,7 @@ import typing as T
 
 from collections import OrderedDict
 
+from keras.saving import load_model
 import numpy as np
 import keras
 
@@ -293,7 +294,7 @@ class ModelBase():
         os.mkdir(self.io.model_dir)
         new_model = self.build_model(self._get_inputs())
         for model_name, layer_name in legacy_mapping.items():
-            old_model: keras.models.Model = keras.models.load_model(
+            old_model: keras.models.Model = load_model(
                 os.path.join(archive_dir, model_name),
                 compile=False)
             layer = [layer for layer in new_model.layers if layer.name == layer_name]

@@ -10,7 +10,7 @@ import typing as T
 import cv2
 import numpy as np
 
-from keras.models import load_model
+from keras.saving import load_model
 from ._base import Aligner, AlignerBatch, BatchType
 
 if T.TYPE_CHECKING:
