@@ -85,13 +85,7 @@ class Convert():
         self._args = handle_deprecated_cliopts(arguments)
 
         self._images = ImagesLoader(self._args.input_dir, fast_count=True)
-        self._alignments = Alignments(self._args, False, self._images.is_video)
-        if self._alignments.version == 1.0:
-            logger.error("The alignments file format has been updated since the given alignments "
-                         "file was generated. You need to update the file to proceed.")
-            logger.error("To do this run the 'Alignments Tool' > 'Extract' Job.")
-            sys.exit(1)
-
+        self._alignments = self._get_alignments()
         self._opts = OptionalActions(self._args, self._images.file_list, self._alignments)
 
         self._add_queues()
@@ -131,6 +125,24 @@ class Convert():
             retval = min(total_cpus(), self._images.count)
         retval = 1 if retval == 0 else retval
         logger.debug(retval)
+        return retval
+
+    def _get_alignments(self) -> Alignments:
+        """ Perform validation checks and legacy updates and return alignemnts object
+
+        Returns
+        -------
+        :class:`~lib.align.alignments.Alignments`
+            The alignments file for the extract job
+        """
+        retval = Alignments(self._args, False, self._images.is_video)
+        if retval.version == 1.0:
+            logger.error("The alignments file format has been updated since the given alignments "
+                         "file was generated. You need to update the file to proceed.")
+            logger.error("To do this run the 'Alignments Tool' > 'Extract' Job.")
+            sys.exit(1)
+
+        retval.update_legacy_has_source(os.path.basename(self._args.input_dir))
         return retval
 
     def _validate(self) -> None:

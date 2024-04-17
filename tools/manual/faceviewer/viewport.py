@@ -481,7 +481,7 @@ class Recycler:
                              asset_type, asset_id)
 
             retval.setdefault(asset_type, []).append(asset_id)
-        logger.trace("Got mesh: %s", retval)  # type:ignore[attr-defined]
+        logger.info("Got mesh: %s", retval)  # type:ignore[attr-defined]
         return retval
 
 
@@ -647,7 +647,8 @@ class VisibleObjects():
             y_coord = base_coords[0][1] + (row * self._size)
             images.append([self._recycler.get_image((coords[0], y_coord))
                            for coords in base_coords])
-            meshes.append([self._recycler.get_mesh(face) for face in self._visible_faces[row]])
+            meshes.append([{} if face is None else self._recycler.get_mesh(face)
+                           for face in self._visible_faces[row]])
 
         a_images = np.array(images)
         a_meshes = np.array(meshes)

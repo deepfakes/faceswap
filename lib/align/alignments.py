@@ -10,14 +10,14 @@ from datetime import datetime
 import numpy as np
 
 from lib.serializer import get_serializer, get_serializer_from_filename
-from lib.utils import FaceswapError
+from lib.utils import FaceswapError, VIDEO_EXTENSIONS
 
 if T.TYPE_CHECKING:
     from collections.abc import Generator
     from .aligned_face import CenteringType
 
 logger = logging.getLogger(__name__)
-_VERSION = 2.3
+_VERSION = 2.4
 # VERSION TRACKING
 # 1.0 - Never really existed. Basically any alignments file prior to version 2.0
 # 2.0 - Implementation of full head extract. Any alignments version below this will have used
@@ -27,6 +27,7 @@ _VERSION = 2.3
 # 2.2 - Add support for differently centered masks (i.e. not all masks stored as face centering)
 # 2.3 - Add 'identity' key to alignments file. May or may not be populated, to contain vggface2
 #       embeddings. Make 'video_meta' key a standard key. Can be unpopulated
+# 2.4 - Update video file alignment keys to end in the video extension rather than '.png'
 
 
 # TODO Convert these to Dataclasses
@@ -584,6 +585,21 @@ class Alignments():
                          frame_name, face_count, frame_fullname)
             yield frame_name, val["faces"], face_count, frame_fullname
 
+    def update_legacy_has_source(self, filename: str) -> None:
+        """ Update legacy alignments files when we have the source filename available.
+
+        Updates here can only be performed when we have the source filename
+
+        Parameters
+        ----------
+        filename: str:
+            The filename/folder of the original source images/video for the current alignments
+        """
+        updates = [updater.is_updated for updater in (_VideoExtension(self, filename), )]
+        if any(updates):
+            self._io.update_version()
+            self.save()
+
 
 class _IO():
     """ Class to handle the saving/loading of an alignments file.
@@ -719,9 +735,13 @@ class _IO():
                                                       _MaskCentering(self._alignments),
                                                       _IdentityAndVideoMeta(self._alignments))]
         if any(updates):
-            self._version = _VERSION
-            logger.info("Updating alignments file to version %s", self._version)
+            self.update_version()
             self.save()
+
+    def update_version(self) -> None:
+        """ Update the version of the alignments file to the latest version """
+        self._version = _VERSION
+        logger.info("Updating alignments file to version %s", self._version)
 
     def load(self) -> dict[str, AlignmentDict]:
         """ Load the alignments data from the serialized alignments :attr:`file`.
@@ -906,6 +926,60 @@ class _Updater():
             The number of items that were updated
         """
         raise NotImplementedError()
+
+
+class _VideoExtension(_Updater):
+    """ Alignments files from video files used to have a dummy '.png' extension for each of the
+    keys. This has been changed to be file extension of the original input video (for better)
+    identification of alignments files generated from video files
+
+    Parameters
+    ----------
+    alignments: :class:`~Alignments`
+        The alignments object that is being tested and updated
+    video_filename: str
+        The video filename that holds these alignments
+    """
+    def __init__(self, alignments: Alignments, video_filename: str) -> None:
+        self._video_name, self._extension = os.path.splitext(video_filename)
+        super().__init__(alignments)
+
+    def test(self) -> bool:
+        """ Requires update if alignments version is < 2.4
+
+        Returns
+        -------
+        bool
+            ``True`` if the key extensions need updating otherwise ``False``
+        """
+        retval = self._alignments.version < 2.4 and self._extension in VIDEO_EXTENSIONS
+        logger.debug("Needs update for video extension: %s (version: %s, extension: %s)",
+                     retval, self._alignments.version, self._extension)
+        return retval
+
+    def update(self) -> int:
+        """ Update alignments files that have been extracted from videos to have the key end in the
+        video file extension rather than ',png' (the old way)
+
+        Parameters
+        ----------
+        video_filename: str
+            The filename of the video file that created these alignments
+        """
+        updated = 0
+        for key in list(self._alignments.data):
+            val = self._alignments.data[key]
+            fname = os.path.splitext(key)[0]
+            if fname.rsplit("_")[0] != self._video_name:
+                continue  # Key is from a different source
+
+            new_key = f"{fname}{self._extension}"
+            del self._alignments.data[key]
+            self._alignments.data[new_key] = val
+            updated += 1
+
+        logger.debug("Updated alignemnt keys for video extension: %s", updated)
+        return updated
 
 
 class _FileStructure(_Updater):
