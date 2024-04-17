@@ -60,7 +60,9 @@ _CONDA_MAPPING: dict[str, tuple[str, tuple[str, ...]]] = {
 _GROUPS = [["pytorch*", "torch*"]]
 """list[list[str]]: Packages that should be installed collectively at the same time """
 
-_DEV_TOOLS = ["flake8", "mypy", "pylint", "types-setuptools", "types-PyYAML"]
+_DEV_TOOLS = ["flake8", "mypy", "pylint", "pytest", "pytest-mock",
+              "types-setuptools", "types-PyYAML"]
+"""list[str]: Development packages to install if `--dev` cli arg passed"""
 
 # Force output to utf-8
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type:ignore[attr-defined]
