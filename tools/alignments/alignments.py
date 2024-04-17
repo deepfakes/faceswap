@@ -260,6 +260,11 @@ class _Alignments():
         else:
             self.alignments = AlignmentData(self._find_alignments())
 
+        if (self.alignments is not None and
+                arguments.frames_dir and
+                os.path.isfile(arguments.frames_dir)):
+            self.alignments.update_legacy_has_source(os.path.basename(arguments.frames_dir))
+
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _find_alignments(self) -> str:

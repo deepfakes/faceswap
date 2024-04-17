@@ -58,6 +58,8 @@ class DetectedFaces():
         self._updated_frame_indices: set[int] = set()
 
         self._alignments: Alignments = self._get_alignments(alignments_path, input_location)
+        self._alignments.update_legacy_has_source(os.path.basename(input_location))
+
         self._extractor = extractor
         self._tk_vars = self._set_tk_vars()
 
