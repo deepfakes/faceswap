@@ -625,12 +625,13 @@ class TestFrames:
         folder : str
             Dummy media folder
         """
-        expected = [{"frame_fullname": "images_000001.png",
+        ext = os.path.splitext(folder)[-1]
+        expected = [{"frame_fullname": f"images_000001{ext}",
                      "frame_name": "images_000001",
-                     "frame_extension": ".png"},
-                    {"frame_fullname": "images_000002.png",
+                     "frame_extension": ext},
+                    {"frame_fullname": f"images_000002{ext}",
                      "frame_name": "images_000002",
-                     "frame_extension": ".png"}]
+                     "frame_extension": ext}]
 
         frames = Frames(folder, None)
         returned = list(frames.process_video())
