@@ -226,9 +226,9 @@ class AdaBelief(Optimizer):
 
         Parameters
         ----------
-        momentum: :class:`keras.Tensor`
+        momentum: :class:`keras.KerasTensor`
             The momentum update
-        velocity: :class:`keras.Tensor`
+        velocity: :class:`keras.KerasTensor`
             The velocity update
         local_step: :class:`keras.KerasTensor`
             The current training step

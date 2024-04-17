@@ -7,29 +7,32 @@ import sys
 import inspect
 import typing as T
 
-import keras
-from keras.saving import get_custom_objects
 from keras import ops
+from keras.layers.input_spec import InputSpec
+from keras.layers.layer import Layer
+from keras.saving import get_custom_objects
 
 from lib.logger import parse_class_init
 
 if T.TYPE_CHECKING:
-    import torch
+    from keras import KerasTensor
+
 
 logger = logging.getLogger(__name__)
 
 
-class _GlobalPooling2D(keras.layers.Layer):
+class _GlobalPooling2D(Layer):  # pylint:disable=too-many-ancestors
     """Abstract class for different global pooling 2D layers. """
     def __init__(self, data_format: str | None = None, **kwargs) -> None:
         logger.debug(parse_class_init(locals()))
 
         super().__init__(**kwargs)
         self.data_format = "channels_last" if data_format is None else data_format
-        self.input_spec = keras.layers.InputSpec(ndim=4)
+        self.input_spec = InputSpec(ndim=4)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> tuple[int, ...]:
         """ Compute the output shape based on the input shape.
 
         Parameters
@@ -41,13 +44,20 @@ class _GlobalPooling2D(keras.layers.Layer):
             return (input_shape[0], input_shape[3])
         return (input_shape[0], input_shape[1])
 
-    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """ Override to call the layer.
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input to the layer
+
+        Returns
+        -------
+        :class:`keras.KerasTensor`
+            The output from the layer
+
         """
         raise NotImplementedError
 
@@ -58,20 +68,21 @@ class _GlobalPooling2D(keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class GlobalMinPooling2D(_GlobalPooling2D):
+class GlobalMinPooling2D(_GlobalPooling2D):  # pylint:disable=too-many-ancestors,abstract-method
     """Global minimum pooling operation for spatial data. """
 
-    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """This is where the layer's logic lives.
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor, or list/tuple of input tensors
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
         if self.data_format == "channels_last":
@@ -81,20 +92,21 @@ class GlobalMinPooling2D(_GlobalPooling2D):
         return pooled
 
 
-class GlobalStdDevPooling2D(_GlobalPooling2D):
+class GlobalStdDevPooling2D(_GlobalPooling2D):  # pylint:disable=too-many-ancestors,abstract-method
     """Global standard deviation pooling operation for spatial data. """
 
-    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """This is where the layer's logic lives.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             Input tensor, or list/tuple of input tensors
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
         if self.data_format == "channels_last":
@@ -104,7 +116,7 @@ class GlobalStdDevPooling2D(_GlobalPooling2D):
         return pooled
 
 
-class KResizeImages(keras.layers.Layer):
+class KResizeImages(Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """ A custom upscale function that uses :class:`keras.backend.resize_images` to upsample.
 
     Parameters
@@ -126,17 +138,18 @@ class KResizeImages(keras.layers.Layer):
         self.interpolation = interpolation
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """ Call the upsample layer
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor, or list/tuple of input tensors
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
         size = int(round(inputs.shape[1] * self.size)), int(round(inputs.shape[2] * self.size))
@@ -146,7 +159,8 @@ class KResizeImages(keras.layers.Layer):
                                   data_format="channels_last")
         return retval
 
-    def compute_output_shape(self, input_shape: tuple[int, ...]) -> tuple[int, ...]:
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> tuple[int, ...]:
         """Computes the output shape of the layer.
 
         This is the input shape with size dimensions multiplied by :attr:`size`
@@ -178,7 +192,7 @@ class KResizeImages(keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class L2Normalize(keras.layers.Layer):
+class L2Normalize(Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Normalizes a tensor w.r.t. the L2 norm alongside the specified axis.
 
     Parameters
@@ -194,20 +208,21 @@ class L2Normalize(keras.layers.Layer):
         super().__init__(**kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """This is where the layer's logic lives.
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor, or list/tuple of input tensors
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
-        return keras.ops.normalize(inputs, self.axis, order=2)
+        return ops.normalize(inputs, self.axis, order=2)
 
     def get_config(self) -> dict[str, T.Any]:
         """Returns the config of the layer.
@@ -229,7 +244,7 @@ class L2Normalize(keras.layers.Layer):
         return config
 
 
-class PixelShuffler(keras.layers.Layer):
+class PixelShuffler(Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """ PixelShuffler layer for Keras.
 
     This layer requires a Convolution2D prior to it, having output filters computed according to
@@ -278,17 +293,18 @@ class PixelShuffler(keras.layers.Layer):
         self.size = (size, size) if isinstance(size, int) else tuple(size)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """This is where the layer's logic lives.
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor, or list/tuple of input tensors
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
         input_shape = inputs.shape
@@ -321,7 +337,8 @@ class PixelShuffler(keras.layers.Layer):
             out = ops.reshape(out, (batch_size, o_height, o_width, o_channels))
         return out
 
-    def compute_output_shape(self, input_shape: tuple[int, ...]) -> tuple[int, ...]:
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> tuple[int, ...]:
         """Computes the output shape of the layer.
 
         Assumes that the layer will be built to match that input shape provided.
@@ -398,7 +415,7 @@ class PixelShuffler(keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class QuickGELU(keras.layers.Layer):
+class QuickGELU(Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Applies GELU approximation that is fast but somewhat inaccurate.
 
     Parameters
@@ -408,29 +425,29 @@ class QuickGELU(keras.layers.Layer):
     kwargs: dict
         The standard Keras Layer keyword arguments (if any)
     """
-
     def __init__(self, name: str = "QuickGELU", **kwargs) -> None:
         logger.debug(parse_class_init(locals()))
         super().__init__(name=name, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """ Call the QuickGELU layerr
 
         Parameters
         ----------
-        inputs : :class:`torch.Tensor`
+        inputs : :class:`keras.KerasTensor`
             The input Tensor
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The output Tensor
         """
         return inputs * ops.sigmoid(1.702 * inputs)
 
 
-class ReflectionPadding2D(keras.layers.Layer):
+class ReflectionPadding2D(Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """Reflection-padding layer for 2D input (e.g. picture).
 
     This layer can add rows and columns at the top, bottom, left and right side of an image tensor.
@@ -452,26 +469,27 @@ class ReflectionPadding2D(keras.layers.Layer):
             stride = stride[0]
         self.stride = stride
         self.kernel_size = kernel_size
-        self.input_spec: list[torch.Tensor] | None = None
+        self.input_spec: list[KerasTensor] | None = None
         super().__init__(**kwargs)
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def build(self, input_shape: torch.Tensor) -> None:
+    def build(self, input_shape: KerasTensor) -> None:
         """Creates the layer weights.
 
         Must be implemented on all layers that have weights.
 
         Parameters
         ----------
-        input_shape: :class:`torch.Tensor`
+        input_shape: :class:`keras.KerasTensor`
             Keras tensor (future input to layer) or ``list``/``tuple`` of Keras tensors to
             reference for weight shape computations.
         """
-        self.input_spec = [keras.layers.InputSpec(shape=input_shape)]
+        self.input_spec = [InputSpec(shape=input_shape)]
         super().build(input_shape)
 
-    def compute_output_shape(self, input_shape: tuple[int, ...]) -> tuple[int, ...]:
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> tuple[int, ...]:
         """Computes the output shape of the layer.
 
         Assumes that the layer will be built to match that input shape provided.
@@ -506,17 +524,18 @@ class ReflectionPadding2D(keras.layers.Layer):
                 input_shape[2] + padding_width,
                 input_shape[3])
 
-    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """This is where the layer's logic lives.
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor, or list/tuple of input tensors
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
         assert self.input_spec is not None
@@ -563,7 +582,7 @@ class ReflectionPadding2D(keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class Swish(keras.layers.Layer):
+class Swish(Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Swish Activation Layer implementation for Keras.
 
     Parameters
@@ -583,7 +602,8 @@ class Swish(keras.layers.Layer):
         self.beta = beta
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def call(self, inputs, *args, **kwargs):
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """ Call the Swish Activation function.
 
         Parameters
@@ -593,7 +613,7 @@ class Swish(keras.layers.Layer):
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
         return ops.nn.swish(inputs * self.beta)

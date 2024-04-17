@@ -7,8 +7,10 @@ import sys
 import inspect
 import typing as T
 
-from keras import initializers, ops, Variable
-from keras.src.initializers.random_initializers import compute_fans
+from keras import initializers, ops
+from keras.backend.common.variables import KerasVariable
+from keras.backend import floatx
+from keras.initializers.random_initializers import compute_fans
 from keras.saving import get_custom_objects
 
 import numpy as np
@@ -16,7 +18,7 @@ import numpy as np
 from lib.logger import parse_class_init
 
 if T.TYPE_CHECKING:
-    from torch import Tensor
+    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +36,7 @@ class ICNR(initializers.Initializer):
 
     Returns
     -------
-    :class:`torch.Tensor`
+    :class:`keras.KerasTensor`
         The modified kernel weights
 
     Example
@@ -59,7 +61,7 @@ class ICNR(initializers.Initializer):
     def __call__(self,
                  shape: list[int] | tuple[int, ...],
                  dtype: str = "float32",
-                 **kwargs) -> Tensor:
+                 **kwargs) -> KerasTensor:
         """ Call function for the ICNR initializer.
 
         Parameters
@@ -73,12 +75,16 @@ class ICNR(initializers.Initializer):
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The modified kernel weights
         """
         shape = list(shape)
+
         if self._scale == 1:
-            return self._initializer(shape)
+            initializer = self._initializer
+            if isinstance(initializer, dict):
+                initializer = next(i for i in self._initializer.values())
+            return initializer(shape)
 
         new_shape = shape[:3] + [shape[3] // (self._scale ** 2)]
         size = [s * self._scale for s in new_shape[:2]]
@@ -86,7 +92,7 @@ class ICNR(initializers.Initializer):
         if isinstance(self._initializer, dict):
             self._initializer = initializers.deserialize(self._initializer)
 
-        var_x: Tensor = self._initializer(new_shape, dtype)
+        var_x: KerasTensor = self._initializer(new_shape, dtype)
         var_x = ops.transpose(var_x, [2, 0, 1, 3])
         var_x = ops.image.resize(var_x,
                                  size,
@@ -98,17 +104,17 @@ class ICNR(initializers.Initializer):
         logger.debug("ICNR Output shape: %s", var_x.shape)
         return var_x
 
-    def _space_to_depth(self, input_tensor: Tensor) -> Tensor:
+    def _space_to_depth(self, input_tensor: KerasTensor) -> KerasTensor:
         """ Space to depth Keras implementation.
 
         Parameters
         ----------
-        input_tensor: :class:`torch.Tensor`
+        input_tensor: :class:`keras.KerasTensor`
             The tensor to be manipulated
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The manipulated input tensor
         """
         batch, height, width, depth = input_tensor.shape
@@ -158,7 +164,7 @@ class ConvolutionAware(initializers.Initializer):
 
     Returns
     -------
-    :class:`keras.Variable`
+    :class:`keras.backend.common.variables.KerasVariable`
         The modified kernel weights
 
     References
@@ -174,8 +180,8 @@ class ConvolutionAware(initializers.Initializer):
 
         self._eps_std = eps_std
         self._seed = seed
-        self._orthogonal = initializers.Orthogonal()
-        self._he_uniform = initializers.he_uniform()
+        self._orthogonal = initializers.OrthogonalInitializer()
+        self._he_uniform = initializers.HeUniform()
         self._initialized = initialized
 
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -254,7 +260,7 @@ class ConvolutionAware(initializers.Initializer):
 
     def __call__(self,
                  shape: list[int] | tuple[int, ...],
-                 dtype: str | None = None, **kwargs) -> Variable:
+                 dtype: str | None = None, **kwargs) -> KerasVariable:
         """ Call function for the ICNR initializer.
 
         Parameters
@@ -266,11 +272,12 @@ class ConvolutionAware(initializers.Initializer):
 
         Returns
         -------
-        :class:`keras.Variable`
+        :class:`keras.backend.common.variables.KerasVariable`
             The modified kernel weights
         """
         if self._initialized:   # Avoid re-calculating initializer when loading a saved model
             return self._he_uniform(shape, dtype=dtype)
+        dtype = floatx if dtype is None else dtype
         logger.info("Calculating Convolution Aware Initializer for shape: %s", shape)
         rank = len(shape)
         if self._seed is not None:
@@ -278,6 +285,11 @@ class ConvolutionAware(initializers.Initializer):
 
         fan_in, _ = compute_fans(shape)
         variance = 2 / fan_in
+
+        kernel_shape: tuple[int, ...]
+        transpose_dimensions: tuple[int, ...]
+        correct_ifft: T.Callable
+        correct_fft: T.Callable
 
         if rank == 3:
             row, stack_size, filters_size = shape
@@ -306,17 +318,22 @@ class ConvolutionAware(initializers.Initializer):
 
         else:
             self._initialized = True
-            return Variable(self._orthogonal(shape), dtype=dtype)
+            return KerasVariable(self._orthogonal(shape), dtype=dtype)
 
         kernel_fourier_shape = correct_fft(np.zeros(kernel_shape)).shape
 
-        basis = self._create_basis(filters_size, stack_size, np.prod(kernel_fourier_shape), dtype)
+        basis = self._create_basis(filters_size,
+                                   stack_size,
+                                   T.cast(int, np.prod(kernel_fourier_shape)),
+                                   dtype)
         basis = basis.reshape((filters_size, stack_size,) + kernel_fourier_shape)
         randoms = np.random.normal(0, self._eps_std, basis.shape[:-2] + kernel_shape)
         init = correct_ifft(basis, kernel_shape) + randoms
         init = self._scale_filters(init, variance)
         self._initialized = True
-        retval = Variable(init.transpose(transpose_dimensions), dtype=dtype, name="conv_aware")
+        retval = KerasVariable(init.transpose(transpose_dimensions),
+                               dtype=dtype,
+                               name="conv_aware")
         logger.debug("ConvAware output: %s", retval)
         return retval
 

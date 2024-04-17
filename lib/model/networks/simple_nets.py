@@ -10,7 +10,7 @@ from keras.models import Model
 from lib.logger import parse_class_init
 
 if T.TYPE_CHECKING:
-    import torch
+    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
@@ -60,19 +60,19 @@ class AlexNet(_net):
 
     @classmethod
     def _conv_block(cls,
-                    inputs: torch.Tensor,
+                    inputs: KerasTensor,
                     padding: int,
                     filters: int,
                     kernel_size: int,
                     strides: int,
                     block_idx: int,
-                    max_pool: bool) -> torch.Tensor:
+                    max_pool: bool) -> KerasTensor:
         """
         The Convolutional block for AlexNet
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input tensor to the block
         padding: int
             The amount of zero paddin to apply prior to convolution
@@ -89,13 +89,13 @@ class AlexNet(_net):
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The output of the Convolutional block
         """
         name = f"features.{block_idx}"
         var_x = inputs
         if max_pool:
-            var_x = layers.MaxPool2D(pool_size=3, strides=2, name=f"{name}.pool")(var_x)
+            var_x = layers.MaxPooling2D(pool_size=3, strides=2, name=f"{name}.pool")(var_x)
         var_x = layers.ZeroPadding2D(padding=padding, name=f"{name}.pad")(var_x)
         var_x = layers.Conv2D(filters,
                               kernel_size=kernel_size,
@@ -152,15 +152,15 @@ class SqueezeNet(_net):
 
     @classmethod
     def _fire(cls,
-              inputs: torch.Tensor,
+              inputs: KerasTensor,
               squeeze_planes: int,
               expand_planes: int,
-              block_idx: int) -> torch.Tensor:
+              block_idx: int) -> KerasTensor:
         """ The fire block for SqueezeNet.
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input to the fire block
         squeeze_planes: int
             The number of filters for the squeeze convolution
@@ -171,7 +171,7 @@ class SqueezeNet(_net):
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The output of the SqueezeNet fire block
         """
         name = f"features.{block_idx}"
@@ -202,7 +202,7 @@ class SqueezeNet(_net):
         expand = 64
         for idx in range(4):
             if idx < 3:
-                var_x = layers.MaxPool2D(pool_size=3, strides=2)(var_x)
+                var_x = layers.MaxPooling2D(pool_size=3, strides=2)(var_x)
                 block_idx += 1
             var_x = self._fire(var_x, squeeze, expand, block_idx)
             block_idx += 1

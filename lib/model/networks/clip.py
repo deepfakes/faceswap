@@ -11,13 +11,17 @@ import sys
 
 from dataclasses import dataclass
 
-from keras import layers, Model, ops, Variable
+from keras import layers, Model, ops
+from keras.backend.common import KerasVariable
 from keras.saving import get_custom_objects
 import numpy as np
-import torch
 
 from lib.model.layers import QuickGELU
 from lib.utils import GetModel
+
+if T.TYPE_CHECKING:
+    from keras import KerasTensor
+
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +102,7 @@ class Transformer():
         The number of layers in the Transformer.
     heads: int
         The number of attention heads.
-    attn_mask: torch.Tensor, optional
+    attn_mask: :class:`keras.KerasTensor`, optional
         The attention mask, by default None.
     name: str, optional
         The name of the Transformer model, by default "transformer".
@@ -115,7 +119,7 @@ class Transformer():
                  width: int,
                  num_layers: int,
                  heads: int,
-                 attn_mask: torch.Tensor = None,
+                 attn_mask: KerasTensor = None,
                  name: str = "transformer") -> None:
         logger.debug("Initializing: %s (width: %s, num_layers: %s, heads: %s, attn_mask: %s, "
                      "name: %s)",
@@ -150,12 +154,12 @@ class Transformer():
         return name
 
     @classmethod
-    def _mlp(cls, inputs: torch.Tensor, key_dim: int, name: str) -> torch.Tensor:
+    def _mlp(cls, inputs: KerasTensor, key_dim: int, name: str) -> KerasTensor:
         """" Multilayer Perecptron for Block Ateention
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input to the MLP
         key_dim: int
             key dimension per head for MultiHeadAttention
@@ -164,7 +168,7 @@ class Transformer():
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The output from the MLP
         """
         name = f"{name}.mlp"
@@ -174,29 +178,29 @@ class Transformer():
         return var_x
 
     def residual_attention_block(self,
-                                 inputs: torch.Tensor,
+                                 inputs: KerasTensor,
                                  key_dim: int,
                                  num_heads: int,
-                                 attn_mask: torch.Tensor,
-                                 name: str = "ResidualAttentionBlock") -> torch.Tensor:
+                                 attn_mask: KerasTensor,
+                                 name: str = "ResidualAttentionBlock") -> KerasTensor:
         """ Call the residual attention block
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input Tensor
         key_dim: int
             key dimension per head for MultiHeadAttention
         num_heads: int
             Number of heads for MultiHeadAttention
-        attn_mask: :class:`tensorflow.Tensor`, optional
+        attn_mask: :class:`keras.KerasTensor`, optional
             Default: ``None``
         name: str, optional
             The name for the layer. Default: "ResidualAttentionBlock"
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The return Tensor
         """
         name = self._get_name(name)
@@ -212,17 +216,17 @@ class Transformer():
         var_x = layers.Add()([var_y, self._mlp(var_x, key_dim, name)])
         return var_x
 
-    def __call__(self, inputs: torch.Tensor) -> torch.Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the Transformer layers
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input Tensor
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The return Tensor
         """
         logger.debug("Calling %s with input: %s", self.__class__.__name__, inputs.shape)
@@ -236,7 +240,7 @@ class Transformer():
         return var_x
 
 
-class EmbeddingLayer(layers.Layer):
+class EmbeddingLayer(layers.Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Parent class for trainable embedding variables
 
     Parameters
@@ -260,7 +264,7 @@ class EmbeddingLayer(layers.Layer):
         super().__init__(name=name, dtype=dtype, *args, **kwargs)
         self._input_shape = input_shape
         self._scale = scale
-        self._var: torch.Tensor
+        self._var: KerasTensor
 
     def build(self, input_shape: tuple[int, ...]) -> None:
         """ Add the weights
@@ -270,9 +274,9 @@ class EmbeddingLayer(layers.Layer):
         input_shape: tuple[int, ...
             The input shape of the incoming tensor
         """
-        self._var = Variable(self._scale * np.random.normal(size=(self._input_shape)),
-                             trainable=True,
-                             dtype=self.dtype)
+        self._var = KerasVariable(self._scale * np.random.normal(size=self._input_shape),
+                                  trainable=True,
+                                  dtype=self.dtype)
         super().build(input_shape)
 
     def get_config(self) -> dict[str, T.Any]:
@@ -289,55 +293,58 @@ class EmbeddingLayer(layers.Layer):
         return retval
 
 
-class ClassEmbedding(EmbeddingLayer):
+class ClassEmbedding(EmbeddingLayer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Trainable Class Embedding layer """
-    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """ Get the Class Embedding layer
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor to the embedding layer
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The class embedding layer shaped for the input tensor
         """
         return ops.tile(self._var[None, None], [inputs.shape[0], 1, 1])
 
 
-class PositionalEmbedding(EmbeddingLayer):
+class PositionalEmbedding(EmbeddingLayer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Trainable Positional Embedding layer """
-    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """ Get the Positional Embedding layer
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor to the embedding layer
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The positional embedding layer shaped for the input tensor
         """
         return ops.tile(self._var[None], [inputs.shape[0], 1, 1])
 
 
-class Projection(EmbeddingLayer):
+class Projection(EmbeddingLayer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Trainable Projection Embedding Layer """
-    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """ Get the Projection layer
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor to the embedding layer
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The Projection layer expanded to the batch dimension and transposed for matmul
         """
         return ops.tile(ops.transpose(self._var)[None], [inputs.shape[0], 1, 1])
@@ -398,11 +405,11 @@ class VisualTransformer():
             The Visual Transformer model.
         """
         inputs = layers.Input([self._input_resolution, self._input_resolution, 3])
-        var_x: torch.Tensor = layers.Conv2D(self._width,  # shape = [*, grid, grid, width]
-                                            self._patch_size,
-                                            strides=self._patch_size,
-                                            use_bias=False,
-                                            name=f"{self._name}.conv1")(inputs)
+        var_x: KerasTensor = layers.Conv2D(self._width,  # shape = [*, grid, grid, width]
+                                           self._patch_size,
+                                           strides=self._patch_size,
+                                           use_bias=False,
+                                           name=f"{self._name}.conv1")(inputs)
 
         var_x = layers.Reshape((-1, self._width))(var_x)  # shape = [*, grid ** 2, width]
 
@@ -465,17 +472,17 @@ class Bottleneck():
         self._name = name
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _downsample(self, inputs: torch.Tensor) -> torch.Tensor:
+    def _downsample(self, inputs: KerasTensor) -> KerasTensor:
         """ Perform downsample if required
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input the downsample
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The original tensor, if downsizing not required, otherwise the downsized tensor
         """
         if self._stride <= 1 and self._inplanes == self._planes * self.expansion:
@@ -491,7 +498,7 @@ class Bottleneck():
         out = layers.BatchNormalization(name=f"{name}.1", epsilon=1e-5)(out)
         return out
 
-    def __call__(self, inputs: torch.Tensor) -> torch.Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Performs the forward pass for a Bottleneck block.
 
         All conv layers have stride 1. an avgpool is performed after the second convolution when
@@ -499,12 +506,12 @@ class Bottleneck():
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input tensor to the Bottleneck block.
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The result of the forward pass through the Bottleneck block.
         """
         out = layers.Conv2D(self._planes, 1, use_bias=False, name=f"{self._name}.conv1")(inputs)
@@ -566,19 +573,19 @@ class AttentionPool2d():
         self._name = name
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def __call__(self, inputs: torch.Tensor) -> torch.Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """Performs the attention pooling operation on the input tensor.
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`:
+        inputs: :class:`keras.KerasTensor`:
                 The input tensor of shape [batch_size, height, width, embed_dim].
 
         Returns
         -------
-        :class:`tensorflow.Tensor`:: The result of the attention pooling operation
+        :class:`keras.KerasTensor`:: The result of the attention pooling operation
         """
-        var_x: torch.Tensor
+        var_x: KerasTensor
         var_x = layers.Reshape((-1, inputs.shape[-1]))(inputs)  # NHWC -> N(HW)C
         var_x = layers.Concatenate(axis=1)([ops.mean(var_x, axis=1,  # N(HW)C -> N(HW+1)C
                                                      keepdims=True), var_x])
@@ -636,19 +643,19 @@ class ModifiedResNet():
         self._output_dim = output_dim
         self._name = name
 
-    def _stem(self, inputs: torch.Tensor) -> torch.Tensor:
+    def _stem(self, inputs: KerasTensor) -> KerasTensor:
         """ Applies the stem operation to the input tensor, which consists of 3 convolutional
             layers with BatchNormalization and ReLU activation, followed by an average pooling
             layer.
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
                 The input tensor
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The output tensor after applying the stem operation.
         """
         var_x = inputs
@@ -667,17 +674,17 @@ class ModifiedResNet():
         return var_x
 
     def _bottleneck(self,
-                    inputs: torch.Tensor,
+                    inputs: KerasTensor,
                     planes: int,
                     blocks: int,
                     stride: int = 1,
-                    name: str = "layer") -> torch.Tensor:
+                    name: str = "layer") -> KerasTensor:
         """ A private method that creates a sequential layer of Bottleneck blocks for the
         ModifiedResNet model.
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
                 The input tensor
         planes: int
             The number of output channels for the layer.
@@ -690,10 +697,10 @@ class ModifiedResNet():
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             Sequential block of bottlenecks
         """
-        retval: torch.Tensor
+        retval: KerasTensor
         retval = Bottleneck(planes, planes, stride, name=f"{name}.0")(inputs)
         for i in range(1, blocks):
             retval = Bottleneck(planes * Bottleneck.expansion,

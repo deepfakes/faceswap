@@ -18,7 +18,6 @@ import typing as T
 
 from contextlib import nullcontext
 
-import torch
 import keras
 from keras import losses as k_losses
 from keras.config import set_dtype_policy
@@ -33,6 +32,7 @@ if T.TYPE_CHECKING:
     from collections.abc import Callable
     from contextlib import AbstractContextManager as ContextManager
     from argparse import Namespace
+    from keras import KerasTensor
     from .model import State
 
 logger = logging.getLogger(__name__)
@@ -53,8 +53,8 @@ class LossClass:
     kwargs: dict
         Any keyword arguments to supply to the loss function at initialization.
     """
-    function: Callable[[torch.Tensor, torch.Tensor],
-                       torch.Tensor] | T.Any = k_losses.MeanSquaredError
+    function: Callable[[KerasTensor, KerasTensor],
+                       KerasTensor] | T.Any = k_losses.MeanSquaredError
     init: bool = True
     kwargs: dict[str, T.Any] = field(default_factory=dict)
 
@@ -138,7 +138,7 @@ class Loss():
         self._set_loss_functions(model.output_names)
         self._names.insert(0, "total")
 
-    def _set_loss_names(self, outputs: list[torch.Tensor]) -> None:
+    def _set_loss_names(self, outputs: list[KerasTensor]) -> None:
         """ Name the losses based on model output.
 
         This is used for correct naming in the state file, for display purposes only.
@@ -147,7 +147,7 @@ class Loss():
 
         Parameters
         ----------
-        outputs: list
+        outputs: list[:class:`keras.KerasTensor`]
             A list of output tensors from the model plugin
         """
         # TODO Use output names if/when these are fixed upstream
@@ -163,7 +163,7 @@ class Loss():
                 self._names.append(f"{name}_{side}{suffix}")
         logger.debug(self._names)
 
-    def _get_function(self, name: str) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
+    def _get_function(self, name: str) -> Callable[[KerasTensor, KerasTensor], KerasTensor]:
         """ Obtain the requested Loss function
 
         Parameters

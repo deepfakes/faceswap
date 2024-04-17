@@ -17,7 +17,6 @@ from .normalization import InstanceNormalization
 
 if T.TYPE_CHECKING:
     import keras
-    from tensorflow import Tensor
 
 
 logger = logging.getLogger(__name__)
@@ -99,7 +98,7 @@ def _get_default_initializer(
     return retval
 
 
-class Conv2D(KConv2D):  # pylint:disable=too-many-ancestors
+class Conv2D(KConv2D):  # pylint:disable=too-many-ancestors,abstract-method
     """ A standard Keras Convolution 2D layer with parameters updated to be more appropriate for
     Faceswap architecture.
 
@@ -132,7 +131,7 @@ class Conv2D(KConv2D):  # pylint:disable=too-many-ancestors
         logger.debug("Initialized %s", self.__class__.__name__)
 
 
-class DepthwiseConv2D(KDepthwiseConv2d):  # noqa,pylint:disable=too-many-ancestors
+class DepthwiseConv2D(KDepthwiseConv2d):  # noqa,pylint:disable=too-many-ancestors,abstract-method
     """ A standard Keras Depthwise Convolution 2D layer with parameters updated to be more
     appropriate for Faceswap architecture.
 
@@ -204,17 +203,17 @@ class Conv2DOutput():
         self._activation = Activation(activation, dtype="float32", name=name)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
         """ Call the Faceswap Convolutional Output Layer.
 
         Parameters
         ----------
-        inputs: Tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the layer
 
         Returns
         -------
-        Tensor
+        :class:`keras.KerasTensor`
             The output tensor from the Convolution 2D Layer
         """
         var_x = self._conv(inputs)
@@ -338,17 +337,17 @@ class Conv2DBlock():
         logger.debug("%s layers: %s", self.__class__.__name__, retval)
         return retval
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
         """ Call the Faceswap Convolutional Layer.
 
         Parameters
         ----------
-        inputs: Tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the layer
 
         Returns
         -------
-        Tensor
+        :class:`keras.KerasTensor`
             The output tensor from the Convolution 2D Layer
         """
         var_x = inputs
@@ -397,17 +396,17 @@ class SeparableConv2DBlock():
         self._activation = Activation("relu", name=f"{name}_relu")
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
         """ Call the Faceswap Separable Convolutional 2D Block.
 
         Parameters
         ----------
-        inputs: Tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the layer
 
         Returns
         -------
-        Tensor
+        :class:`keras.KerasTensor`
             The output tensor from the Upscale Layer
         """
         var_x = self._conv(inputs)
@@ -469,17 +468,17 @@ class UpscaleBlock():
         self._shuffle = PixelShuffler(name=f"{name}_pixelshuffler", size=scale_factor)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
         """ Call the Faceswap Convolutional Layer.
 
         Parameters
         ----------
-        inputs: Tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the layer
 
         Returns
         -------
-        Tensor
+        :class:`keras.KerasTensor`
             The output tensor from the Upscale Layer
         """
         var_x = self._conv(inputs)
@@ -563,17 +562,17 @@ class Upscale2xBlock():
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
         """ Call the Faceswap Upscale 2x Layer.
 
         Parameters
         ----------
-        inputs: Tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the layer
 
         Returns
         -------
-        Tensor
+        :class:`keras.KerasTensor`
             The output tensor from the Upscale Layer
         """
         var_x = inputs
@@ -659,17 +658,17 @@ class UpscaleResizeImagesBlock():
             self._acivation = PReLU(name=f"{name}_prelu")
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
         """ Call the Faceswap Resize Images Layer.
 
         Parameters
         ----------
-        inputs: Tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the layer
 
         Returns
         -------
-        Tensor
+        :class:`keras.KerasTensor`
             The output tensor from the Upscale Layer
         """
         var_x = inputs
@@ -741,17 +740,17 @@ class UpscaleDNYBlock():
                        for idx in range(2)]
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
         """ Call the UpscaleDNY block
 
         Parameters
         ----------
-        inputs: :class;`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input to the block
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The output from the block
         """
         var_x = self._upsample(inputs)
@@ -844,17 +843,17 @@ class ResidualBlock():
         logger.debug("%s layers: %s", self.__class__.__name__, retval)
         return retval
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
         """ Call the Faceswap Residual Block.
 
         Parameters
         ----------
-        inputs: Tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the layer
 
         Returns
         -------
-        Tensor
+        :class:`keras.KerasTensor`
             The output tensor from the Upscale Layer
         """
         var_x = inputs

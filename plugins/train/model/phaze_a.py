@@ -22,7 +22,7 @@ from lib.utils import get_keras_version, FaceswapError
 from ._base import ModelBase, get_all_sub_models
 
 if T.TYPE_CHECKING:
-    from torch import Tensor
+    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
@@ -328,12 +328,12 @@ class Model(ModelBase):
                                 f"minimum version required is {keras_min} whilst you have version "
                                 f"{keras_ver} installed.")
 
-    def build_model(self, inputs: list[Tensor]) -> keras.models.Model:
+    def build_model(self, inputs: list[KerasTensor]) -> keras.models.Model:
         """ Create the model's structure.
 
         Parameters
         ----------
-        inputs: list
+        inputs: list[:class:`keras.KerasTensor`]
             A list of input tensors for the model. This will be a list of 2 tensors of
             shape :attr:`input_shape`, the first for side "a", the second for side "b".
 
@@ -353,12 +353,12 @@ class Model(ModelBase):
         autoencoder = keras.models.Model(inputs, outputs, name=self.model_name)
         return autoencoder
 
-    def _build_encoders(self, inputs: list[Tensor]) -> dict[str, keras.models.Model]:
+    def _build_encoders(self, inputs: list[KerasTensor]) -> dict[str, keras.models.Model]:
         """ Build the encoders for Phaze-A
 
         Parameters
         ----------
-        inputs: list
+        inputs: list[:class:`keras.KerasTensor`]
             A list of input tensors for the model. This will be a list of 2 tensors of
             shape :attr:`input_shape`, the first for side "a", the second for side "b".
 
@@ -492,12 +492,13 @@ class Model(ModelBase):
         return retval
 
 
-def _bottleneck(inputs: Tensor, bottleneck: str, size: int, normalization: str) -> Tensor:
+def _bottleneck(inputs: KerasTensor, bottleneck: str, size: int, normalization: str
+                ) -> KerasTensor:
     """ The bottleneck fully connected layer. Can be called from Encoder or FullyConnected layers.
 
     Parameters
     ----------
-    inputs: :class:`torch.Tensor`
+    inputs: :class:`keras.KerasTensor`
         The input to the bottleneck layer
     bottleneck: str or ``None``
         The type of layer to use for the bottleneck. ``None`` to not use a bottleneck
@@ -508,7 +509,7 @@ def _bottleneck(inputs: Tensor, bottleneck: str, size: int, normalization: str) 
 
     Returns
     -------
-    :class:`torch.Tensor`
+    :class:`keras.KerasTensor`
         The output from the bottleneck
     """
     norms = {"layer": kl.LayerNormalization,
@@ -777,17 +778,17 @@ class _EncoderFaceswap():
         self._kernel_size = 3 if self._is_alt else 5
         self._strides = 1 if self._is_alt else 2
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the original Faceswap Encoder
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input tensor to the Faceswap Encoder
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The output tensor from the Faceswap Encoder
         """
         var_x = inputs
@@ -820,7 +821,7 @@ class _EncoderFaceswap():
                                     strides=self._strides,
                                     relu_alpha=self._relu_alpha,
                                     name=f"{name}_convblk_{i}_1")(var_x)
-                var_x = kl.MaxPool2D(2, name=f"{name}_pool_{i}")(var_x)
+                var_x = kl.MaxPooling2D(2, name=f"{name}_pool_{i}")(var_x)
         return var_x
 
 
@@ -901,17 +902,17 @@ class FullyConnected():
         logger.debug("original_filters: %s, scaled_filters: %s", original_filters, retval)
         return retval
 
-    def _do_upsampling(self, inputs: Tensor) -> Tensor:
+    def _do_upsampling(self, inputs: KerasTensor) -> KerasTensor:
         """ Perform the upsampling at the end of the fully connected layers.
 
         Parameters
         ----------
-        inputs: Tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the upsample layers
 
         Returns
         -------
-        Tensor
+        :class:`keras.KerasTensor`
             The output from the upsample layers
         """
         upsample_filts = self._scale_filters(self._config["fc_upsample_filters"])
@@ -1011,7 +1012,7 @@ class UpscaleBlocks():
         self._layer_indicies = layer_indicies
         logger.debug("Initialized: %s", self.__class__.__name__,)
 
-    def _reshape_for_output(self, inputs: Tensor) -> Tensor:
+    def _reshape_for_output(self, inputs: KerasTensor) -> KerasTensor:
         """ Reshape the input for arbitrary output sizes.
 
         The number of filters in the input will have been scaled to the model output size allowing
@@ -1019,12 +1020,12 @@ class UpscaleBlocks():
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The tensor that is to be reshaped
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The tensor shaped correctly to upscale to output size
         """
         var_x = inputs
@@ -1039,17 +1040,17 @@ class UpscaleBlocks():
         return var_x
 
     def _upscale_block(self,
-                       inputs: Tensor,
+                       inputs: KerasTensor,
                        filters: int,
                        skip_residual: bool = False,
-                       is_mask: bool = False) -> Tensor:
+                       is_mask: bool = False) -> KerasTensor:
         """ Upscale block for Phaze-A Decoder.
 
         Uses requested upscale method, adds requested regularization and activation function.
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input tensor for the upscale block
         filters: int
             The number of filters to use for the upscale
@@ -1061,7 +1062,7 @@ class UpscaleBlocks():
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The output tensor from the upscale block
         """
         upscaler = _get_upscale_layer(self._config["dec_upscale_method"].lower(),
@@ -1084,17 +1085,17 @@ class UpscaleBlocks():
                 var_x = kl.LeakyReLU(alpha=0.1)(var_x)
         return var_x
 
-    def _normalization(self, inputs: Tensor) -> Tensor:
+    def _normalization(self, inputs: KerasTensor) -> KerasTensor:
         """ Add a normalization layer if requested.
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input tensor to apply normalization to.
 
         Returns
         --------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The tensor with any normalization applied
         """
         if not self._config["dec_norm"]:
@@ -1106,17 +1107,17 @@ class UpscaleBlocks():
                  "rms": RMSNormalization}
         return norms[self._config["dec_norm"]]()(inputs)
 
-    def _dny_entry(self, inputs: Tensor) -> Tensor:
+    def _dny_entry(self, inputs: KerasTensor) -> KerasTensor:
         """ Entry convolutions for using the upscale_dny method.
 
         Parameters
         ----------
-        inputs: Tensor
+        inputs: :class:`keras.KerasTensor`
             The inputs to the dny entry block
 
         Returns
         -------
-        Tensor
+        :class:`keras.KerasTensor`
             The output from the dny entry block
         """
         var_x = Conv2DBlock(self._config["dec_max_filters"],
@@ -1131,11 +1132,11 @@ class UpscaleBlocks():
                             relu_alpha=0.2)(var_x)
         return var_x
 
-    def __call__(self, inputs: Tensor | list[Tensor]) -> Tensor | list[Tensor]:
+    def __call__(self, inputs: KerasTensor | list[KerasTensor]) -> KerasTensor | list[KerasTensor]:
         """ Upscale Network.
 
         Parameters
-        inputs: Tensor or list of tensors
+        inputs: :class:`keras.KerasTensor` | list[:class:`keras.KerasTensor`]
             Input tensor(s) to upscale block. This will be a single tensor if learn mask is not
             selected or if this is the first call to the upscale blocks. If learn mask is selected
             and this is not the first call to upscale blocks, then this will be a list of the face
@@ -1143,13 +1144,15 @@ class UpscaleBlocks():
 
         Returns
         -------
-         Tensor or list of tensors
+         :class:`keras.KerasTensor` | list[:class:`keras.KerasTensor`]
             The output of encoder blocks. Either a single tensor (if learn mask is not enabled) or
             list of tensors (if learn mask is enabled)
         """
         start_idx, end_idx = (0, None) if self._layer_indicies is None else self._layer_indicies
         end_idx = None if end_idx == -1 else end_idx
 
+        var_x: KerasTensor
+        var_y: KerasTensor
         if self._config["learn_mask"] and start_idx == 0:
             # Mask needs to be created
             var_x = inputs
@@ -1222,17 +1225,17 @@ class GBlock():
 
     @classmethod
     def _g_block(cls,
-                 inputs: Tensor,
-                 style: Tensor,
+                 inputs: KerasTensor,
+                 style: KerasTensor,
                  filters: int,
-                 recursions: int = 2) -> Tensor:
+                 recursions: int = 2) -> KerasTensor:
         """ G_block adapted from ADAIN StyleGAN.
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input tensor to the G-Block model
-        style: :class:`torch.Tensor`
+        style: :class:`keras.KerasTensor`
             The input combined 'style' tensor to the G-Block model
         filters: int
             The number of filters to use for the G-Block Convolutional layers
@@ -1241,7 +1244,7 @@ class GBlock():
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The output tensor from the G-Block model
         """
         var_x = inputs

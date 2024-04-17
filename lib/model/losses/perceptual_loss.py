@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """ TF Keras implementation of Perceptual Loss Functions for faceswap.py """
+from __future__ import annotations
 
 import logging
 import typing as T
@@ -8,10 +9,14 @@ import numpy as np
 import torch
 
 import keras
-from keras import ops, Variable
+from keras import ops
+from keras.backend.common import KerasVariable
 
 from lib.keras_utils import ColorSpaceConvert, frobenius_norm, replicate_pad
 from lib.logger import parse_class_init
+
+if T.TYPE_CHECKING:
+    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
@@ -61,12 +66,12 @@ class DSSIMObjective(keras.losses.Loss):
         self._c2 = ((k_2 * max_value) ** 2) * compensation
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _get_kernel(self) -> torch.Tensor:
+    def _get_kernel(self) -> KerasTensor:
         """ Obtain the base kernel for performing depthwise convolution.
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The gaussian kernel based on selected size and sigma
         """
         coords = np.arange(self._filter_size, dtype="float32")
@@ -75,46 +80,46 @@ class DSSIMObjective(keras.losses.Loss):
         kernel = np.square(coords)
         kernel *= -0.5 / np.square(self._filter_sigma)
         kernel = np.reshape(kernel, (1, -1)) + np.reshape(kernel, (-1, 1))
-        kernel = Variable(np.reshape(kernel, (1, -1)), trainable=False)
+        kernel = KerasVariable(np.reshape(kernel, (1, -1)), trainable=False)
         kernel = ops.softmax(kernel)
         kernel = ops.reshape(kernel, (self._filter_size, self._filter_size, 1, 1))
         return kernel
 
     @classmethod
-    def _depthwise_conv2d(cls, image: torch.Tensor, kernel: torch.Tensor) -> torch.Tensor:
+    def _depthwise_conv2d(cls, image: KerasTensor, kernel: KerasTensor) -> KerasTensor:
         """ Perform a standardized depthwise convolution.
 
         Parameters
         ----------
-        image: :class:`torch.Tensor`
+        image: :class:`keras.KerasTensor`
             Batch of images, channels last, to perform depthwise convolution
-        kernel: :class:`torch.Tensor`
+        kernel: :class:`keras.KerasTensor`
             convolution kernel
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The output from the convolution
         """
         return ops.depthwise_conv(image, kernel, strides=(1, 1), padding="valid")
 
     def _get_ssim(self,
-                  y_true: torch.Tensor,
-                  y_pred: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+                  y_true: KerasTensor,
+                  y_pred: KerasTensor) -> tuple[KerasTensor, KerasTensor]:
         """ Obtain the structural similarity between a batch of true and predicted images.
 
         Parameters
         ----------
-        y_true: :class:`torch.Tensor`
+        y_true: :class:`keras.KerasTensor`
             The input batch of ground truth images
-        y_pred: :class:`torch.Tensor`
+        y_pred: :class:`keras.KerasTensor`
             The input batch of predicted images
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The SSIM for the given images
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The Contrast for the given images
         """
         channels = y_true.shape[-1]
@@ -140,19 +145,19 @@ class DSSIMObjective(keras.losses.Loss):
 
         return ssim, contrast
 
-    def call(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
+    def call(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
         """ Call the DSSIM  or MS-DSSIM Loss Function.
 
         Parameters
         ----------
-        y_true: :class:`torch.Tensor`
+        y_true: :class:`keras.KerasTensor`
             The input batch of ground truth images
-        y_pred: :class:`torch.Tensor`
+        y_pred: :class:`keras.KerasTensor`
             The input batch of predicted images
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The DSSIM or MS-DSSIM for the given images
         """
         ssim = self._get_ssim(y_true, y_pred)[0]
@@ -174,41 +179,41 @@ class GMSDLoss(keras.losses.Loss):
     def __init__(self, *args, **kwargs) -> None:
         logger.debug(parse_class_init(locals()))
         super().__init__(*args, name=self.__class__.__name__, **kwargs)
-        self._scharr_edges = Variable(np.array([[[[0.00070, 0.00070]],
-                                                 [[0.00520, 0.00370]],
-                                                 [[0.03700, 0.00000]],
-                                                 [[0.00520, -0.0037]],
-                                                 [[0.00070, -0.0007]]],
-                                                [[[0.00370, 0.00520]],
-                                                 [[0.11870, 0.11870]],
-                                                 [[0.25890, 0.00000]],
-                                                 [[0.11870, -0.1187]],
-                                                 [[0.00370, -0.0052]]],
-                                                [[[0.00000, 0.03700]],
-                                                 [[0.00000, 0.25890]],
-                                                 [[0.00000, 0.00000]],
-                                                 [[0.00000, -0.2589]],
-                                                 [[0.00000, -0.0370]]],
-                                                [[[-0.0037, 0.00520]],
-                                                 [[-0.1187, 0.11870]],
-                                                 [[-0.2589, 0.00000]],
-                                                 [[-0.1187, -0.1187]],
-                                                 [[-0.0037, -0.0052]]],
-                                                [[[-0.0007, 0.00070]],
-                                                 [[-0.0052, 0.00370]],
-                                                 [[-0.0370, 0.00000]],
-                                                 [[-0.0052, -0.0037]],
-                                                 [[-0.0007, -0.0007]]]]),
-                                      dtype="float32",
-                                      trainable=False)
+        self._scharr_edges = KerasVariable(np.array([[[[0.00070, 0.00070]],
+                                                      [[0.00520, 0.00370]],
+                                                      [[0.03700, 0.00000]],
+                                                      [[0.00520, -0.0037]],
+                                                      [[0.00070, -0.0007]]],
+                                                     [[[0.00370, 0.00520]],
+                                                      [[0.11870, 0.11870]],
+                                                      [[0.25890, 0.00000]],
+                                                      [[0.11870, -0.1187]],
+                                                      [[0.00370, -0.0052]]],
+                                                     [[[0.00000, 0.03700]],
+                                                      [[0.00000, 0.25890]],
+                                                      [[0.00000, 0.00000]],
+                                                      [[0.00000, -0.2589]],
+                                                      [[0.00000, -0.0370]]],
+                                                     [[[-0.0037, 0.00520]],
+                                                      [[-0.1187, 0.11870]],
+                                                      [[-0.2589, 0.00000]],
+                                                      [[-0.1187, -0.1187]],
+                                                      [[-0.0037, -0.0052]]],
+                                                     [[[-0.0007, 0.00070]],
+                                                      [[-0.0052, 0.00370]],
+                                                      [[-0.0370, 0.00000]],
+                                                      [[-0.0052, -0.0037]],
+                                                      [[-0.0007, -0.0007]]]]),
+                                           dtype="float32",
+                                           trainable=False)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _map_scharr_edges(self, image: torch.Tensor, magnitude: bool) -> torch.Tensor:
+    def _map_scharr_edges(self, image: KerasTensor, magnitude: bool) -> KerasTensor:
         """ Returns a tensor holding modified Scharr edge maps.
 
         Parameters
         ----------
-        image: :class:`torch.Tensor`
+        image: :class:`keras.KerasTensor`
             Image tensor with shape [batch_size, h, w, d] and type float32. The image(s) must be
             2x2 or larger.
         magnitude: bool
@@ -216,7 +221,7 @@ class GMSDLoss(keras.losses.Loss):
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             Tensor holding edge maps for each channel. Returns a tensor with shape `[batch_size, h,
             w, d, 2]` where the last two dimensions hold `[[dy[0], dx[0]], [dy[1], dx[1]], ...,
             [dy[d-1], dx[d-1]]]` calculated using the Scharr filter.
@@ -243,19 +248,19 @@ class GMSDLoss(keras.losses.Loss):
         # magnitude of edges -- unified x & y edges don't work well with Neural Networks
         return output
 
-    def call(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
+    def call(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
         """ Return the Gradient Magnitude Similarity Deviation Loss.
 
         Parameters
         ----------
-        y_true: :class:`torch.Tensor`
+        y_true: :class:`keras.KerasTensor`
             The ground truth value
-        y_pred: :class:`torch.Tensor`
+        y_pred: :class:`keras.KerasTensor`
             The predicted value
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The loss value
         """
         true_edge = self._map_scharr_edges(y_true, True)
@@ -349,24 +354,28 @@ class LDRFLIPLoss(keras.losses.Loss):
         self._feature_detector = _FeatureDetection(pixels_per_degree)
         self._col_conv = {"rgb2lab": ColorSpaceConvert(from_space="rgb", to_space="lab"),
                           "rgb2ycxcz": ColorSpaceConvert("srgb", "ycxcz")}
-        self._hunt = {"green": Variable([[[[0.0, 1.0, 0.0]]]], dtype="float32", trainable=False),
-                      "blue": Variable([[[[0.0, 0.0, 1.0]]]], dtype="float32", trainable=False)}
+        self._hunt = {"green": KerasVariable([[[[0.0, 1.0, 0.0]]]],
+                                             dtype="float32",
+                                             trainable=False),
+                      "blue": KerasVariable([[[[0.0, 0.0, 1.0]]]],
+                                            dtype="float32",
+                                            trainable=False)}
 
         logger.debug("Initialized: %s ", self.__class__.__name__)
 
-    def call(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
+    def call(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
         """ Call the LDR Flip Loss Function
 
         Parameters
         ----------
-        y_true: :class:`tensorflow.Tensor`
+        y_true: :class:`keras.KerasTensor`
             The ground truth batch of images
-        y_pred: :class:`tensorflow.Tensor`
+        y_pred: :class:`keras.KerasTensor`
             The predicted batch of images
 
         Returns
         -------
-        :class::class:`tensorflow.Tensor`
+        :class::class:`keras.KerasTensor`
             The calculated Flip loss value
         """
         if self._color_order == "bgr":  # Switch models training in bgr order to rgb
@@ -385,19 +394,19 @@ class LDRFLIPLoss(keras.losses.Loss):
         loss = ops.power(delta_e_color, 1 - delta_e_features)
         return loss
 
-    def _color_pipeline(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
+    def _color_pipeline(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
         """ Perform the color processing part of the FLIP loss function
 
         Parameters
         ----------
-        y_true: :class:`tensorflow.Tensor`
+        y_true: :class:`keras.KerasTensor`
             The ground truth batch of images in YCxCz color space
-        y_pred: :class:`tensorflow.Tensor`
+        y_pred: :class:`keras.KerasTensor`
             The predicted batch of images in YCxCz color space
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The exponentiated, maximum HyAB difference between two colors in Hunt-adjusted
             L*A*B* space
         """
@@ -416,19 +425,19 @@ class LDRFLIPLoss(keras.losses.Loss):
                          self._computed_distance_exponent)
         return self._redistribute_errors(power_delta, cmax)
 
-    def _process_features(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
+    def _process_features(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
         """ Perform the color processing part of the FLIP loss function
 
         Parameters
         ----------
-        y_true: :class:`tensorflow.Tensor`
+        y_true: :class:`keras.KerasTensor`
             The ground truth batch of images in YCxCz color space
-        y_pred: :class:`tensorflow.Tensor`
+        y_pred: :class:`keras.KerasTensor`
             The predicted batch of images in YCxCz color space
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The exponentiated features delta
         """
         col_y_true = (y_true[..., 0:1] + 16) / 116.
@@ -446,17 +455,17 @@ class LDRFLIPLoss(keras.losses.Loss):
         return ops.power(((1 / np.sqrt(2)) * delta), self._feature_exponent)
 
     @classmethod
-    def _hunt_adjustment(cls, image: torch.Tensor) -> torch.Tensor:
+    def _hunt_adjustment(cls, image: KerasTensor) -> KerasTensor:
         """ Apply Hunt-adjustment to an image in L*a*b* color space
 
         Parameters
         ----------
-        image: :class:`tensorflow.Tensor`
+        image: :class:`keras.KerasTensor`
             The batch of images in L*a*b* to adjust
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The hunt adjusted batch of images in L*a*b color space
         """
         ch_l = image[..., 0:1]
@@ -468,14 +477,14 @@ class LDRFLIPLoss(keras.losses.Loss):
 
         Parameters
         ----------
-        y_true: :class:`tensorflow.Tensor`
+        y_true: :class:`keras.KerasTensor`
             The ground truth batch of images in standard or Hunt-adjusted L*A*B* color space
-        y_pred: :class:`tensorflow.Tensor`
+        y_pred: :class:`keras.KerasTensor`
             The predicted batch of images in in standard or Hunt-adjusted L*A*B* color space
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             image tensor containing the per-pixel HyAB distances between true and predicted images
         """
         delta = y_true - y_pred
@@ -490,15 +499,15 @@ class LDRFLIPLoss(keras.losses.Loss):
 
         Parameters
         ----------
-        power_delta_e_hyab: :class:`tensorflow.Tensor`
+        power_delta_e_hyab: :class:`keras.KerasTensor`
             The exponentiated HyAb distance
-        cmax: :class:`tensorflow.Tensor`
+        cmax: :class:`keras.KerasTensor`
             The exponentiated, maximum HyAB difference between two colors in Hunt-adjusted
             L*A*B* space
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The redistributed per-pixel HyAB distances (in range [0,1])
         """
         pccmax = self._pc * cmax
@@ -528,7 +537,7 @@ class _SpatialFilters():
         self._ycxcz2rgb = ColorSpaceConvert(from_space="ycxcz", to_space="rgb")
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _generate_spatial_filters(self) -> tuple[torch.Tensor, int]:
+    def _generate_spatial_filters(self) -> tuple[KerasTensor, int]:
         """ Generates spatial contrast sensitivity filters with width depending on the number of
         pixels per degree of visual angle of the observer for channels "A", "RG" and "BY"
 
@@ -552,7 +561,7 @@ class _SpatialFilters():
 
         weights = np.array([self._generate_weights(mapping[channel], domain)
                             for channel in ("A", "RG", "BY")])
-        vweights = Variable(np.moveaxis(weights, 0, -1), dtype="float32", trainable=False)
+        vweights = KerasVariable(np.moveaxis(weights, 0, -1), dtype="float32", trainable=False)
 
         return vweights, radius
 
@@ -582,17 +591,17 @@ class _SpatialFilters():
         grad = np.reshape(grad, (*grad.shape, 1))
         return grad
 
-    def __call__(self, image: torch.Tensor) -> torch.Tensor:
+    def __call__(self, image: KerasTensor) -> KerasTensor:
         """ Call the spacial filtering.
 
         Parameters
         ----------
-        image: Tensor
+        image: :class:`keras.KerasTensor`
             Image tensor to filter in YCxCz color space
 
         Returns
         -------
-        Tensor
+        :class:`keras.KerasTensor`
             The input image transformed to linear RGB after filtering with spatial contrast
             sensitivity functions
         """
@@ -625,24 +634,24 @@ class _FeatureDetection():
 
         gradient = np.exp(-(grid[0] ** 2 + grid[1] ** 2) / (2 * (self._std ** 2)))
         self._grads = {
-            "edge": Variable(np.multiply(-grid[0], gradient), trainable=False),
-            "point": Variable(np.multiply(grid[0] ** 2 / (self._std ** 2) - 1, gradient),
-                              trainable=False)}
+            "edge": KerasVariable(np.multiply(-grid[0], gradient), trainable=False),
+            "point": KerasVariable(np.multiply(grid[0] ** 2 / (self._std ** 2) - 1, gradient),
+                                   trainable=False)}
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def __call__(self, image: torch.Tensor, feature_type: str) -> torch.Tensor:
+    def __call__(self, image: KerasTensor, feature_type: str) -> KerasTensor:
         """ Run the feature detection
 
         Parameters
         ----------
-        image: Tensor
+        image: :class:`keras.KerasTensor`
             Batch of images in YCxCz color space with normalized Y values
         feature_type: str
             Type of features to detect (`"edge"` or `"point"`)
 
         Returns
         -------
-        Tensor
+        :class:`keras.KerasTensor`
             Detected features in the 0-1 range
         """
         feature_type = feature_type.lower()
@@ -706,29 +715,29 @@ class MSSIMLoss(keras.losses.Loss):
         logger.debug(parse_class_init(locals()))
         super().__init__(name=self.__class__.__name__)
         self.filter_size = filter_size
-        self._filter_sigma = Variable(filter_sigma, dtype="float32", trainable=False)
+        self._filter_sigma = KerasVariable(filter_sigma, dtype="float32", trainable=False)
         self._k_1 = k_1
         self._k_2 = k_2
         self._max_value = max_value
         self._power_factors = power_factors
         self._divisor = [1, 2, 2, 1]
-        self._divisor_tensor = Variable(self._divisor[1:], dtype="int32", trainable=False)
+        self._divisor_tensor = KerasVariable(self._divisor[1:], dtype="int32", trainable=False)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @classmethod
-    def _reducer(cls, image: torch.Tensor, kernel: torch.Tensor) -> torch.Tensor:
+    def _reducer(cls, image: KerasTensor, kernel: KerasTensor) -> KerasTensor:
         """ Computes local averages from a set of images
 
         Parameters
         ----------
-        image: :class:`torch.Tensor`
+        image: :class:`keras.KerasTensor`
             The images to be processed
-        kernel: :class:`torch.Tensor`
+        kernel: :class:`keras.KerasTensor`
             The kernel to apply
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The reduced image
         """
         shape = image.shape
@@ -737,25 +746,25 @@ class MSSIMLoss(keras.losses.Loss):
         return ops.reshape(var_y, (*shape[:-3], *var_y.shape[1:]))
 
     def _ssim_helper(self,
-                     image1: torch.Tensor,
-                     image2: torch.Tensor,
-                     kernel: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+                     image1: KerasTensor,
+                     image2: KerasTensor,
+                     kernel: KerasTensor) -> tuple[KerasTensor, KerasTensor]:
         """ Helper function for computing SSIM
 
         Parameters
         ----------
-        image1: :class:`torch.Tensor`
+        image1: :class:`keras.KerasTensor`
             The first set of images
-        image2: :class:`torch.Tensor`
+        image2: :class:`keras.KerasTensor`
             The second set of images
-        kernel: :class:`torch.Tensor`
+        kernel: :class:`keras.KerasTensor`
             The gaussian kernel
 
         Returns
         -------
-        :class:`torch.Tensor`:
+        :class:`keras.KerasTensor`:
             The channel-wise SSIM
-        :class:`torch.Tensor`:
+        :class:`keras.KerasTensor`:
             The channel-wise contrast-structure
         """
         c_1 = (self._k_1 * self._max_value) ** 2
@@ -773,7 +782,7 @@ class MSSIMLoss(keras.losses.Loss):
 
         return luminance, cs_
 
-    def _fspecial_gauss(self, size: int) -> torch.Tensor:
+    def _fspecial_gauss(self, size: int) -> KerasTensor:
         """Function to mimic the 'fspecial' gaussian MATLAB function.
 
         Parameters
@@ -783,7 +792,7 @@ class MSSIMLoss(keras.losses.Loss):
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The gaussian kernel
         """
         coords = ops.cast(range(size), self._filter_sigma.dtype)
@@ -798,9 +807,9 @@ class MSSIMLoss(keras.losses.Loss):
         return ops.reshape(gauss, [size, size, 1, 1])
 
     def _ssim_per_channel(self,
-                          image1: torch.Tensor,
-                          image2: torch.Tensor,
-                          filter_size: int) -> tuple[torch.Tensor]:
+                          image1: KerasTensor,
+                          image2: KerasTensor,
+                          filter_size: int) -> tuple[KerasTensor, KerasTensor]:
         """Computes SSIM index between image1 and image2 per color channel.
 
         This function matches the standard SSIM implementation from:
@@ -810,18 +819,18 @@ class MSSIMLoss(keras.losses.Loss):
 
         Parameters
         ----------
-        image1: :class;`torch.Tensor`
+        image1: :class:`keras.KerasTensor`
             The first image batch
-        image2: :class;`torch.Tensor`
+        image2: :class:`keras.KerasTensor`
             The second image batch.
         filter_size: int
             size of gaussian filter).
 
         Returns
         -------
-        :class:`torch.Tensor`:
+        :class:`keras.KerasTensor`:
             The channel-wise SSIM
-        :class:`torch.Tensor`:
+        :class:`keras.KerasTensor`:
             The channel-wise contrast-structure
         """
         shape = image1.shape
@@ -837,19 +846,19 @@ class MSSIMLoss(keras.losses.Loss):
         return ssim_val, cs_
 
     @classmethod
-    def _do_pad(cls, images: torch.Tensor, remainder: torch.Tensor) -> list[torch.Tensor]:
+    def _do_pad(cls, images: KerasTensor, remainder: KerasTensor) -> list[KerasTensor]:
         """ Pad images
 
         Parameters
         ----------
-        images: :class:`torch.Tensor`
+        images: :class:`keras.KerasTensor`
             Images to pad
-        remainder: :class:`torch.Tensor`
+        remainder: :class:`keras.KerasTensor`
             Remainding images to pad
 
         Returns
         -------
-        list[:class:`torch.Tensor`]
+        list[:class:`keras.KerasTensor`]
             Padded images
         """
         padding = ops.expand_dims(remainder, axis=-1)
@@ -857,18 +866,18 @@ class MSSIMLoss(keras.losses.Loss):
         return [ops.pad(x, padding, mode="symmetric") for x in images]
 
     def _mssism(self,
-                y_true: torch.Tensor,
-                y_pred: torch.Tensor,
-                filter_size: int) -> torch.Tensor:
+                y_true: KerasTensor,
+                y_pred: KerasTensor,
+                filter_size: int) -> KerasTensor:
         """ Perform the MSSISM calculation.
 
         Ported from Tensorflow implementation `tf.image.ssim_multiscale`
 
         Parameters
         ----------
-        y_true: :class:`torch.Tensor`
+        y_true: :class:`keras.KerasTensor`
             The ground truth value
-        y_pred: :class:`torch.Tensor`
+        y_pred: :class:`keras.KerasTensor`
             The predicted value
         filter_size: int
             The filter size to use
@@ -887,9 +896,11 @@ class MSSIMLoss(keras.losses.Loss):
                 remainder = tails[0] % self._divisor_tensor
 
                 need_padding = ops.any(ops.not_equal(remainder, 0))
-                padded = ops.cond(need_padding,
-                                  lambda: self._do_pad(flat_images, remainder),
-                                  lambda: flat_images)
+                padded = ops.cond(
+                    need_padding,
+                    lambda: self._do_pad(flat_images,  # pylint:disable=cell-var-from-loop
+                                         remainder),  # pylint:disable=cell-var-from-loop
+                    lambda: flat_images)  # pylint:disable=cell-var-from-loop
 
                 downscaled = [ops.average_pool(x,
                                                self._divisor[1:3],
@@ -902,7 +913,7 @@ class MSSIMLoss(keras.losses.Loss):
                           for x, h, t in zip(downscaled, heads, tails)]
 
             # Overwrite previous ssim value since we only need the last one.
-            ssim_per_channel, cs_ = self._ssim_per_channel(*images, filter_size)
+            ssim_per_channel, cs_ = self._ssim_per_channel(images[0], images[1], filter_size)
             mcs.append(ops.relu(cs_))
 
         mcs.pop()  # Remove the cs score for the last scale.
@@ -912,19 +923,19 @@ class MSSIMLoss(keras.losses.Loss):
 
         return ops.mean(ms_ssim, [-1])  # Avg over color channels.
 
-    def call(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
+    def call(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
         """ Call the MS-SSIM Loss Function.
 
         Parameters
         ----------
-        y_true: :class:`torch.Tensor`
+        y_true: :class:`keras.KerasTensor`
             The ground truth value
-        y_pred: :class:`torch.Tensor`
+        y_pred: :class:`keras.KerasTensor`
             The predicted value
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             The MS-SSIM Loss value
         """
         im_size = y_true.shape[1]

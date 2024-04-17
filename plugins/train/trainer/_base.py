@@ -26,6 +26,7 @@ from .tensorboard import TorchTensorBoard
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
+    from keras import KerasTensor
     from plugins.train.model._base import ModelBase
     from lib.config import ConfigValueType
 
@@ -167,15 +168,16 @@ class TrainerBase():
                     f"{learning_rate:.1e}")
         return False
 
-    def _set_tensorboard(self) -> TorchTensorBoard:
+    def _set_tensorboard(self) -> TorchTensorBoard | None:
         """ Set up Tensorboard callback for logging loss.
 
         Bypassed if command line option "no-logs" has been selected.
 
         Returns
         -------
-        :class:`keras.callbacks.TensorBoard`
-            Tensorboard object for the the current training session.
+        :class:`keras.callbacks.TensorBoard` | None
+            Tensorboard object for the the current training session. ``None`` if Tensorboard
+            logging is not selected
         """
         if self._model.state.current_session["no_logs"]:
             logger.verbose("TensorBoard logging disabled")  # type: ignore
@@ -377,6 +379,7 @@ class TrainerBase():
             ``True`` if save has been called on model exit. Default: ``False``
         """
         self._model.io.save(is_exit=is_exit)
+        assert self._tensorboard is not None
         self._tensorboard.on_save()
         if is_exit:
             self._clear_tensorboard()
@@ -477,27 +480,27 @@ class _Samples():
         logger.debug("Resizing sample: (side: '%s', sample.shape: %s, target_size: %s, scale: %s)",
                      side, sample.shape, target_size, scale)
         interpn = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA
-        retval = np.array([cv2.resize(img, (target_size, target_size), interpn)
+        retval = np.array([cv2.resize(img, (target_size, target_size), interpolation=interpn)
                            for img in sample])
         logger.debug("Resized sample: (side: '%s' shape: %s)", side, retval.shape)
         return retval
 
-    def _filter_multiscale_output(self, standard: list[torch.Tensor], swapped: list[torch.Tensor]
-                                  ) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
+    def _filter_multiscale_output(self, standard: list[KerasTensor], swapped: list[KerasTensor]
+                                  ) -> tuple[list[KerasTensor], list[KerasTensor]]:
         """ Only return the largest predictions if the model has multi-scaled output
 
         Parameters
         ----------
-        standard: list[:class:`torch.Tensor`]
+        standard: list[:class:`keras.KerasTensor`]
             The standard output from the model
-        swapped: list[:class:`torch.Tensor`]
+        swapped: list[:class:`keras.KerasTensor`]
             The swapped output from the model
 
         Returns
         -------
-        standard: list[:class:`torch.Tensor`]
+        standard: list[:class:`keras.KerasTensor`]
             The standard output from the model, filtered to just the largest output
-        swapped: list[:class:`torch.Tensor`]
+        swapped: list[:class:`keras.KerasTensor`]
             The swapped output from the model, filtered to just the largest output
         """
         sizes = set(p.shape[1] for p in standard)
@@ -512,16 +515,16 @@ class _Samples():
                      [s.shape for s in standard], [s.shape for s in swapped])
         return standard, swapped
 
-    def _collate_output(self, standard: list[torch.Tensor], swapped: list[torch.Tensor]
+    def _collate_output(self, standard: list[KerasTensor], swapped: list[KerasTensor]
                         ) -> tuple[list[np.ndarray], list[np.ndarray]]:
         """ Merge the mask onto the preview image's 4th channel if learn mask is selected.
         Return as numpy array
 
         Parameters
         ----------
-        standard: list[:class:`torch.Tensor`]
+        standard: list[:class:`keras.KerasTensor`]
             The standard output from the model
-        swapped: list[:class:`torch.Tensor`]
+        swapped: list[:class:`keras.KerasTensor`]
             The swapped output from the model
 
         Returns
@@ -601,8 +604,10 @@ class _Samples():
 
         for side, samples in self.images.items():
             other_side = "a" if side == "b" else "b"
-            preds = [predictions[f"{side}_{side}"],
-                     predictions[f"{other_side}_{side}"]]
+            preds = [predictions[T.cast(T.Literal["a_a", "a_b", "b_b", "b_a"],
+                                        f"{side}_{side}")],
+                     predictions[T.cast(T.Literal["a_a", "a_b", "b_b", "b_a"],
+                                        f"{other_side}_{side}")]]
             display = self._to_full_frame(side, samples, preds)
             headers[side] = self._get_headers(side, display[0].shape[1])
             figures[side] = np.stack([display[0], display[1], display[2], ], axis=1)

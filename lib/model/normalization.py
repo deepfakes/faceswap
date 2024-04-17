@@ -8,17 +8,18 @@ import sys
 import typing as T
 
 from keras import constraints, initializers, layers, ops, regularizers
+from keras.layers.input_spec import InputSpec
 from keras.saving import get_custom_objects
 
 from lib.logger import parse_class_init
 
 if T.TYPE_CHECKING:
-    import torch
+    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
 
-class AdaInstanceNormalization(layers.Layer):
+class AdaInstanceNormalization(layers.Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Adaptive Instance Normalization Layer for Keras.
 
     Parameters
@@ -62,7 +63,7 @@ class AdaInstanceNormalization(layers.Layer):
         self.scale = scale
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def build(self, input_shape: tuple[int, ...]) -> None:
+    def build(self, input_shape: tuple[tuple[int, ...], ...]) -> None:
         """Creates the layer weights.
 
         Parameters
@@ -80,17 +81,18 @@ class AdaInstanceNormalization(layers.Layer):
 
         super().build(input_shape)
 
-    def call(self, inputs: torch.Tensor) -> torch.Tensor:
+    def call(self, inputs: KerasTensor  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """This is where the layer's logic lives.
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor, or list/tuple of input tensors
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
         input_shape = inputs[0].shape
@@ -129,7 +131,8 @@ class AdaInstanceNormalization(layers.Layer):
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-    def compute_output_shape(self, input_shape: tuple[int, ...]) -> int:
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> int:
         """ Calculate the output shape from this layer.
 
         Parameters
@@ -145,7 +148,7 @@ class AdaInstanceNormalization(layers.Layer):
         return input_shape[0]
 
 
-class GroupNormalization(layers.Layer):
+class GroupNormalization(layers.Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Group Normalization
 
     Parameters
@@ -213,7 +216,7 @@ class GroupNormalization(layers.Layer):
             Keras tensor (future input to layer) or ``list``/``tuple`` of Keras tensors to
             reference for weight shape computations.
         """
-        input_spec = [layers.InputSpec(shape=input_shape)]
+        input_spec = [InputSpec(shape=input_shape)]
         self.input_spec = input_spec  # pylint:disable=attribute-defined-outside-init
         shape = [1 for _ in input_shape]
         if self.data_format == 'channels_last':
@@ -234,17 +237,17 @@ class GroupNormalization(layers.Layer):
                                     name='beta')
         self.built = True  # pylint:disable=attribute-defined-outside-init
 
-    def _process_4_channel(self, inputs: torch.Tensor) -> torch.Tensor:
+    def _process_4_channel(self, inputs: KerasTensor) -> KerasTensor:
         """ Logic for processing 4 channel inputs
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input to the layer
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
         input_shape = inputs.shape
@@ -292,17 +295,18 @@ class GroupNormalization(layers.Layer):
         var_x = ops.reshape(var_x, (batch_size, channels, height, width))
         return self.gamma * var_x + self.beta
 
-    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """This is where the layer's logic lives.
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor, or list/tuple of input tensors
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
         input_shape = inputs.shape
@@ -347,7 +351,7 @@ class GroupNormalization(layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class InstanceNormalization(layers.Layer):
+class InstanceNormalization(layers.Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """Instance normalization layer (Lei Ba et al, 2016, Ulyanov et al., 2016).
 
     Normalize the activations of the previous layer at each step, i.e. applies a transformation
@@ -436,8 +440,7 @@ class InstanceNormalization(layers.Layer):
         if (self.axis is not None) and (ndim == 2):
             raise ValueError("Cannot specify axis for rank 1 tensor")
 
-        self.input_spec = layers.InputSpec(  # pylint:disable=attribute-defined-outside-init
-            ndim=ndim)
+        self.input_spec = InputSpec(ndim=ndim)  # pylint:disable=attribute-defined-outside-init
 
         if self.axis is None:
             shape = (1,)
@@ -462,17 +465,18 @@ class InstanceNormalization(layers.Layer):
             self.beta = None
         self.built = True  # pylint:disable=attribute-defined-outside-init
 
-    def call(self, inputs: torch.Tensor) -> torch.Tensor:
+    def call(self, inputs: KerasTensor  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """This is where the layer's logic lives.
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor, or list/tuple of input tensors
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
         input_shape = inputs.shape
@@ -530,7 +534,7 @@ class InstanceNormalization(layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class RMSNormalization(layers.Layer):
+class RMSNormalization(layers.Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Root Mean Square Layer Normalization (Biao Zhang, Rico Sennrich, 2019)
 
     RMSNorm is a simplification of the original layer normalization (LayerNorm). LayerNorm is a
@@ -568,10 +572,10 @@ class RMSNormalization(layers.Layer):
                  axis: int = -1,
                  epsilon: float = 1e-8,
                  partial: float = 0.0,
-                 bias: bool = False, **kwargs) -> False:
+                 bias: bool = False,
+                 **kwargs) -> None:
         logger.debug(parse_class_init(locals()))
         self.scale = None
-        self.offset = 0
         super().__init__(**kwargs)
 
         # Checks
@@ -622,17 +626,18 @@ class RMSNormalization(layers.Layer):
 
         self.built = True  # pylint:disable=attribute-defined-outside-init
 
-    def call(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """ Call Root Mean Square Layer Normalization
 
         Parameters
         ----------
-        inputs: :class:`torch.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor, or list/tuple of input tensors
 
         Returns
         -------
-        :class:`torch.Tensor`
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
         # Compute the axes along which to reduce the mean / variance
@@ -653,7 +658,8 @@ class RMSNormalization(layers.Layer):
         output = self.scale * inputs * recip_square_root + self.offset
         return output
 
-    def compute_output_shape(self, input_shape: tuple[int, ...]) -> tuple[int, ...]:
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> tuple[int, ...]:
         """ The output shape of the layer is the same as the input shape.
 
         Parameters

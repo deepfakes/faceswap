@@ -6,7 +6,8 @@ import logging
 import typing as T
 
 import keras
-from keras import applications as kapp, ops, Variable
+from keras import applications as kapp, ops
+from keras.backend.common import KerasVariable
 from keras.layers import Dropout, Conv2D, Input, Layer, Resizing
 from keras.models import Model
 
@@ -18,7 +19,7 @@ from lib.utils import GetModel
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
-    import torch
+    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
@@ -90,12 +91,12 @@ class _LPIPSTrunkNet():
                              outputs=[f"block{i + 1}_conv{2 if i < 2 else 3}" for i in range(5)])}
 
     @classmethod
-    def _normalize_output(cls, inputs: torch.Tensor, epsilon: float = 1e-10) -> torch.Tensor:
+    def _normalize_output(cls, inputs: KerasTensor, epsilon: float = 1e-10) -> KerasTensor:
         """ Normalize the output tensors from the trunk network.
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             An output tensor from the trunk model
         epsilon: float, optional
             Epsilon to apply to the normalization operation. Default: `1e-10`
@@ -189,19 +190,19 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):
             "vgg16": NetInfo(model_id=20,
                              model_name="vgg16_lpips_v1.h5")}
 
-    def _linear_block(self, net_output_layer: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def _linear_block(self, net_output_layer: KerasTensor) -> tuple[KerasTensor, KerasTensor]:
         """ Build a linear block for a trunk network output.
 
         Parameters
         ----------
-        net_output_layer: :class:`tensorflow.Tensor`
+        net_output_layer: :class:`keras.KerasTensor`
             An output from the selected trunk network
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The input to the linear block
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The output from the linear block
         """
         in_shape = net_output_layer.shape[1:]
@@ -295,12 +296,12 @@ class LPIPSLoss(keras.losses.Loss):
         self._use_lpips = lpips
         self._normalize = normalize
         self._ret_per_layer = ret_per_layer
-        self._shift = Variable(np.array([-.030, -.088, -.188],
-                                        dtype="float32")[None, None, None, :],
-                               trainable=False)
-        self._scale = Variable(np.array([.458, .448, .450],
-                                        dtype="float32")[None, None, None, :],
-                               trainable=False)
+        self._shift = KerasVariable(np.array([-.030, -.088, -.188],
+                                             dtype="float32")[None, None, None, :],
+                                    trainable=False)
+        self._scale = KerasVariable(np.array([.458, .448, .450],
+                                             dtype="float32")[None, None, None, :],
+                                    trainable=False)
 
         # Loss needs to be done as fp32. We could cast at output, but better to update the model
         switch_mixed_precision = keras.mixed_precision.global_policy().name == "mixed_float16"
@@ -319,7 +320,7 @@ class LPIPSLoss(keras.losses.Loss):
             keras.mixed_precision.set_global_policy("mixed_float16")
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _process_diffs(self, inputs: list[torch.Tensor]) -> list[torch.Tensor]:
+    def _process_diffs(self, inputs: list[KerasTensor]) -> list[KerasTensor]:
         """ Perform processing on the Trunk Network outputs.
 
         If :attr:`use_ldip` is enabled, process the diff values through the linear network,
@@ -327,19 +328,19 @@ class LPIPSLoss(keras.losses.Loss):
 
         Parameters
         ----------
-        inputs: list
+        inputs: list[:class:`keras.KerasTensor`]
             List of the squared difference of the true and predicted outputs from the trunk network
 
         Returns
         -------
-        list
+        list[:class:`keras.KerasTensor`]
             List of either the linear network outputs (when using lpips) or summed network outputs
         """
         if self._use_lpips:
             return self._linear_net(inputs)
         return [ops.sum(x, axis=-1) for x in inputs]
 
-    def _process_output(self, inputs: torch.Tensor, output_dims: tuple) -> torch.Tensor:
+    def _process_output(self, inputs: KerasTensor, output_dims: tuple) -> KerasTensor:
         """ Process an individual output based on whether :attr:`is_spatial` has been selected.
 
         When spatial output is selected, all outputs are sized to the shape of the original True
@@ -347,14 +348,14 @@ class LPIPSLoss(keras.losses.Loss):
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             An individual diff output tensor from the linear network or summed output
         output_dims: tuple
             The (height, width) of the original true image
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             Either the original tensor resized to the true image dimensions, or the mean
             value across the height, width axes.
         """
@@ -362,19 +363,19 @@ class LPIPSLoss(keras.losses.Loss):
             return Resizing(*output_dims, interpolation="bilinear")(inputs)
         return ops.mean(inputs, axis=(1, 2), keepdims=True)
 
-    def call(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
+    def call(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
         """ Perform the LPIPS Loss Function.
 
         Parameters
         ----------
-        y_true: :class:`tensorflow.Tensor`
+        y_true: :class:`keras.KerasTensor`
             The ground truth batch of images
-        y_pred: :class:`tensorflow.Tensor`
+        y_pred: :class:`keras.KerasTensor`
             The predicted batch of images
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The final  loss value
         """
         if self._normalize:
