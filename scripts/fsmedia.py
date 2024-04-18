@@ -287,12 +287,12 @@ class Images():
             A single frame
         """
         logger.debug("Input is video. Capturing frames")
-        vidname = os.path.splitext(os.path.basename(self._args.input_dir))[0]
+        vidname, ext = os.path.splitext(os.path.basename(self._args.input_dir))
         reader = imageio.get_reader(self._args.input_dir, "ffmpeg")  # type:ignore[arg-type]
         for i, frame in enumerate(T.cast(Iterator[np.ndarray], reader)):
             # Convert to BGR for cv2 compatibility
             frame = frame[:, :, ::-1]
-            filename = f"{vidname}_{i + 1:06d}.png"
+            filename = f"{vidname}_{i + 1:06d}{ext}"
             logger.trace("Loading video frame: '%s'", filename)  # type:ignore[attr-defined]
             yield filename, frame
         reader.close()

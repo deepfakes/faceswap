@@ -209,11 +209,11 @@ class ThumbsCreator():
                      pts_start, pts_end, start_index, segment_count)
         reader = self._get_reader(pts_start, pts_end)
         idx = 0
-        sample_filename = next(fname for fname in self._alignments.data)
+        sample_filename, ext = os.path.splitext(next(fname for fname in self._alignments.data))
         vidname = sample_filename[:sample_filename.rfind("_")]
         for idx, frame in enumerate(reader):
             frame_idx = idx + start_index
-            filename = f"{vidname}_{frame_idx + 1:06d}.png"
+            filename = f"{vidname}_{frame_idx + 1:06d}{ext}"
             self._set_thumbail(filename, frame[..., ::-1], frame_idx)
             if idx == segment_count - 1:
                 # Sometimes extra frames are picked up at the end of a segment, so stop

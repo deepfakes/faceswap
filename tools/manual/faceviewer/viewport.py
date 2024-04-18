@@ -481,7 +481,7 @@ class Recycler:
                              asset_type, asset_id)
 
             retval.setdefault(asset_type, []).append(asset_id)
-        logger.info("Got mesh: %s", retval)  # type:ignore[attr-defined]
+        logger.trace("Got mesh: %s", retval)  # type:ignore[attr-defined]
         return retval
 
 
