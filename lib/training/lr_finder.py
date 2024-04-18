@@ -14,6 +14,7 @@ import numpy as np
 from tqdm import tqdm
 
 if T.TYPE_CHECKING:
+    from keras import optimizers
     from lib.config import ConfigValueType
     from lib.training import Feeder
     from plugins.train.model._base import ModelBase
@@ -133,6 +134,24 @@ class LearningRateFinder:
             self._on_batch_end(idx, loss[0])
             self._update_description(pbar)
 
+    def _rebuild_optimizer(self, optimizer: optimizers.Optimizer) -> optimizers.Optimizer:
+        """ Pass through nested Optimizers (eg LossScaleOptimizer) and create new nested
+        optimizers based on their original config
+
+        Returns
+        -------
+        :class:`keras.optimizers.Optimizer`
+            A new optimizer of the same type as the given one, with the same config
+        """
+        logger.debug("Processing optimizer: '%s'", optimizer.name)
+        config = optimizer.get_config()
+        if hasattr(optimizer, "inner_optimizer"):
+            config["inner_optimizer"] = self._rebuild_optimizer(optimizer.inner_optimizer)
+        retval = optimizer.__class__(**config)
+        logger.debug("Created optimizer '%s': (old: %s, new: %s)",
+                     optimizer.name, optimizer, retval)
+        return retval
+
     def _reset_model(self, original_lr: float, new_lr: float) -> None:
         """ Reset the model's weights to initial values, reset the model's optimizer and set the
         learning rate
@@ -147,16 +166,21 @@ class LearningRateFinder:
         self._model.state.update_session_config("learning_rate", new_lr)
         self._model.state.save()
 
-        logger.debug("Loading initial weights")
-        self._model.model.load_weights(self._model.io.filename)
-
         if self._config["lr_finder_mode"] == "graph_and_exit":
             return
 
-        opt_conf = self._model.model.optimizer.get_config()
-        logger.debug("Recompiling model to reset optimizer state. Optimizer config: %s", opt_conf)
-        new_opt = self._model.model.optimizer.__class__(**opt_conf)
-        self._model.model.compile(optimizer=new_opt, loss=self._model.model.loss)
+        logger.info("Loading initial weights")
+
+        optimizer = self._model.model.optimizer
+        del self._model.model.optimizer
+
+        self._model.model.load_weights(self._model.io.filename)
+
+        logger.debug("Resetting optimizer")
+        optimizer = self._rebuild_optimizer(optimizer)
+        self._model.model.compile(optimizer=optimizer,
+                                  loss=self._model.model.loss,
+                                  metrics=self._model.model.loss)
 
         logger.info("Updating Learning Rate from %s to %s", f"{original_lr:.1e}", f"{new_lr:.1e}")
         self._model.model.optimizer.learning_rate.assign(new_lr)
