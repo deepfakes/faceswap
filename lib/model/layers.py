@@ -7,10 +7,7 @@ import sys
 import inspect
 import typing as T
 
-from keras import ops
-from keras.layers.input_spec import InputSpec
-from keras.layers.layer import Layer
-from keras.saving import get_custom_objects
+from keras import InputSpec, Layer, ops, saving
 
 from lib.logger import parse_class_init
 
@@ -636,4 +633,4 @@ class Swish(Layer):  # pylint:disable=too-many-ancestors,abstract-method
 # Update layers into Keras custom objects
 for name_, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
-        get_custom_objects().update({name_: obj})
+        saving.get_custom_objects().update({name_: obj})

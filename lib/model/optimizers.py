@@ -6,15 +6,16 @@ import logging
 import sys
 import typing as T
 
-from keras import ops
-from keras.saving import get_custom_objects
-from keras.optimizers import Adam, Optimizer, Nadam, RMSprop   # noqa:E501,F401  pylint:disable=unused-import
+from keras import ops, Optimizer, optimizers, saving
 
 from lib.logger import parse_class_init
 
 if T.TYPE_CHECKING:
-    from keras import KerasTensor
-    from keras.src.backend.common import KerasVariable
+    from keras import KerasTensor, Variable
+
+Adam = optimizers.Adam
+Nadam = optimizers.Nadam
+RMSprop = optimizers.RMSprop
 
 logger = logging.getLogger(__name__)
 
@@ -158,11 +159,11 @@ class AdaBelief(Optimizer):
         self.min_learning_rate = min_learning_rate
         logger.debug("Initialized %s", self.__class__.__name__)
 
-        self._momentums: list[KerasVariable] = []
-        self._velocities: list[KerasVariable] = []
-        self._velocity_hats: list[KerasVariable] = []  # Amsgrad only
+        self._momentums: list[Variable] = []
+        self._velocities: list[Variable] = []
+        self._velocity_hats: list[Variable] = []  # Amsgrad only
 
-    def build(self, variables: list[KerasVariable]) -> None:
+    def build(self, variables: list[Variable]) -> None:
         """Initialize optimizer variables.
 
         AdaBelief optimizer has 3 types of variables: momentums, velocities and
@@ -170,7 +171,7 @@ class AdaBelief(Optimizer):
 
         Parameters
         ----------
-        variables: list[:class:`keras.src.backend.common.KerasVariable`]
+        variables: list[:class:`keras.Variable`]
             list of model variables to build AdaBelief variables on.
         """
         if self.built:
@@ -256,17 +257,17 @@ class AdaBelief(Optimizer):
 
     def update_step(self,
                     gradient: KerasTensor,
-                    variable: KerasVariable,
-                    learning_rate: KerasVariable) -> None:
+                    variable: Variable,
+                    learning_rate: Variable) -> None:
         """Update step given gradient and the associated model variable for AdaBelief.
 
         Parameters
         ----------
         gradient :class:`keras.KerasTensor`
             The gradient to update
-        variable: :class:`keras.src.backend.common.KerasVariable`
+        variable: :class:`keras.Variable`
             The variable to update
-        learning_rate: :class:`keras.src.backend.common.KerasVariable`
+        learning_rate: :class:`keras.Variable`
             The learning rate
         """
         local_step = ops.cast(self.iterations + 1, variable.dtype)
@@ -327,4 +328,4 @@ class AdaBelief(Optimizer):
 # Update Optimizers into Keras custom objects
 for _name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
-        get_custom_objects().update({_name: obj})
+        saving.get_custom_objects().update({_name: obj})

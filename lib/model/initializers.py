@@ -7,11 +7,9 @@ import sys
 import inspect
 import typing as T
 
-from keras import initializers, ops
-from keras.backend.common.variables import KerasVariable
-from keras.backend import floatx
-from keras.initializers.random_initializers import compute_fans
-from keras.saving import get_custom_objects
+from keras import backend as K, initializers, ops
+from keras import saving, Variable
+from keras.src.initializers.random_initializers import compute_fans
 
 import numpy as np
 
@@ -164,7 +162,7 @@ class ConvolutionAware(initializers.Initializer):
 
     Returns
     -------
-    :class:`keras.backend.common.variables.KerasVariable`
+    :class:`keras.Variable`
         The modified kernel weights
 
     References
@@ -260,7 +258,7 @@ class ConvolutionAware(initializers.Initializer):
 
     def __call__(self,
                  shape: list[int] | tuple[int, ...],
-                 dtype: str | None = None, **kwargs) -> KerasVariable:
+                 dtype: str | None = None, **kwargs) -> Variable:
         """ Call function for the ICNR initializer.
 
         Parameters
@@ -272,12 +270,12 @@ class ConvolutionAware(initializers.Initializer):
 
         Returns
         -------
-        :class:`keras.backend.common.variables.KerasVariable`
+        :class:`keras.Variable`
             The modified kernel weights
         """
         if self._initialized:   # Avoid re-calculating initializer when loading a saved model
             return self._he_uniform(shape, dtype=dtype)
-        dtype = floatx if dtype is None else dtype
+        dtype = K.floatx() if dtype is None else dtype
         logger.info("Calculating Convolution Aware Initializer for shape: %s", shape)
         rank = len(shape)
         if self._seed is not None:
@@ -318,7 +316,7 @@ class ConvolutionAware(initializers.Initializer):
 
         else:
             self._initialized = True
-            return KerasVariable(self._orthogonal(shape), dtype=dtype)
+            return Variable(self._orthogonal(shape), dtype=dtype)
 
         kernel_fourier_shape = correct_fft(np.zeros(kernel_shape)).shape
 
@@ -331,9 +329,7 @@ class ConvolutionAware(initializers.Initializer):
         init = correct_ifft(basis, kernel_shape) + randoms
         init = self._scale_filters(init, variance)
         self._initialized = True
-        retval = KerasVariable(init.transpose(transpose_dimensions),
-                               dtype=dtype,
-                               name="conv_aware")
+        retval = Variable(init.transpose(transpose_dimensions), dtype=dtype, name="conv_aware")
         logger.debug("ConvAware output: %s", retval)
         return retval
 
@@ -355,4 +351,4 @@ class ConvolutionAware(initializers.Initializer):
 # Update initializers into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
-        get_custom_objects().update({name: obj})
+        saving.get_custom_objects().update({name: obj})

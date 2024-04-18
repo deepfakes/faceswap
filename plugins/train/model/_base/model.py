@@ -13,7 +13,7 @@ import typing as T
 
 from collections import OrderedDict
 
-from keras.saving import load_model
+from keras import models
 import numpy as np
 import keras
 
@@ -294,7 +294,7 @@ class ModelBase():
         os.mkdir(self.io.model_dir)
         new_model = self.build_model(self._get_inputs())
         for model_name, layer_name in legacy_mapping.items():
-            old_model: keras.models.Model = load_model(
+            old_model: keras.models.Model = models.load_model(
                 os.path.join(archive_dir, model_name),
                 compile=False)
             layer = [layer for layer in new_model.layers if layer.name == layer_name]
@@ -358,16 +358,13 @@ class ModelBase():
         """
         raise NotImplementedError
 
-    def _summary_to_log(self, summary: str, line_break: bool) -> None:
+    def _summary_to_log(self, summary: str) -> None:
         """ Function to output Keras model summary to log file at verbose log level
 
         Parameters
         ----------
         summary, str
             The model summary output from keras
-
-        line_break: bool
-            Unused, but required by Keras for print_fn as of keras 3.0.5
         """
         for line in summary.splitlines():
             logger.verbose(line)  # type:ignore[attr-defined]

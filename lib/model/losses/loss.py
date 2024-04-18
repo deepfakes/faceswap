@@ -6,9 +6,8 @@ import logging
 import typing as T
 
 import numpy as np
-from keras.losses import Loss
-from keras import ops
-from keras.backend.common import KerasVariable
+from keras import Loss
+from keras import ops, Variable
 
 import torch
 
@@ -420,9 +419,8 @@ class LaplacianPyramidLoss(Loss):
         logger.debug(parse_class_init(locals()))
         super().__init__(name=self.__class__.__name__)
         self._max_levels = max_levels
-        self._weights = KerasVariable([np.power(2., -2 * idx)
-                                       for idx in range(max_levels + 1)],
-                                      trainable=False)
+        self._weights = Variable([np.power(2., -2 * idx) for idx in range(max_levels + 1)],
+                                 trainable=False)
         self._gaussian_kernel = self._get_gaussian_kernel(gaussian_size, gaussian_sigma)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
@@ -449,7 +447,7 @@ class LaplacianPyramidLoss(Loss):
         kernel = np.exp(- x_2[:, None] - x_2[None, :])
         kernel /= kernel.sum()
         kernel = np.reshape(kernel, (size, size, 1, 1))
-        return KerasVariable(kernel, trainable=False)
+        return Variable(kernel, trainable=False)
 
     def _conv_gaussian(self, inputs: KerasTensor) -> KerasTensor:
         """ Perform Gaussian convolution on a batch of images.

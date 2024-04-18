@@ -7,9 +7,7 @@ import logging
 import sys
 import typing as T
 
-from keras import constraints, initializers, layers, ops, regularizers
-from keras.layers.input_spec import InputSpec
-from keras.saving import get_custom_objects
+from keras import constraints, initializers, InputSpec, layers, ops, regularizers, saving
 
 from lib.logger import parse_class_init
 
@@ -700,4 +698,4 @@ class RMSNormalization(layers.Layer):  # pylint:disable=too-many-ancestors,abstr
 # Update normalization into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
-        get_custom_objects().update({name: obj})
+        saving.get_custom_objects().update({name: obj})

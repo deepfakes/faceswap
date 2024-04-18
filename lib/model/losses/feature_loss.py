@@ -6,10 +6,7 @@ import logging
 import typing as T
 
 import keras
-from keras import applications as kapp, ops
-from keras.backend.common import KerasVariable
-from keras.layers import Dropout, Conv2D, Input, Layer, Resizing
-from keras.models import Model
+from keras import applications as kapp, layers, Model, ops, Variable
 
 import numpy as np
 
@@ -46,7 +43,7 @@ class NetInfo:
     net: Callable | None = None
     init_kwargs: dict[str, T.Any] = field(default_factory=dict)
     needs_init: bool = True
-    outputs: list[Layer] = field(default_factory=list)
+    outputs: list[layers.Layer] = field(default_factory=list)
 
 
 class _LPIPSTrunkNet():
@@ -206,9 +203,9 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):
             The output from the linear block
         """
         in_shape = net_output_layer.shape[1:]
-        input_ = Input(in_shape)
-        var_x = Dropout(rate=0.5)(input_) if self._use_dropout else input_
-        var_x = Conv2D(1, 1, strides=1, padding="valid", use_bias=False)(var_x)
+        input_ = layers.Input(in_shape)
+        var_x = layers.Dropout(rate=0.5)(input_) if self._use_dropout else input_
+        var_x = layers.Conv2D(1, 1, strides=1, padding="valid", use_bias=False)(var_x)
         return input_, var_x
 
     def __call__(self) -> Model:
@@ -296,12 +293,11 @@ class LPIPSLoss(keras.losses.Loss):
         self._use_lpips = lpips
         self._normalize = normalize
         self._ret_per_layer = ret_per_layer
-        self._shift = KerasVariable(np.array([-.030, -.088, -.188],
-                                             dtype="float32")[None, None, None, :],
-                                    trainable=False)
-        self._scale = KerasVariable(np.array([.458, .448, .450],
-                                             dtype="float32")[None, None, None, :],
-                                    trainable=False)
+        self._shift = Variable(np.array([-.030, -.088, -.188],
+                                        dtype="float32")[None, None, None, :],
+                               trainable=False)
+        self._scale = Variable(np.array([.458, .448, .450], dtype="float32")[None, None, None, :],
+                               trainable=False)
 
         # Loss needs to be done as fp32. We could cast at output, but better to update the model
         switch_mixed_precision = keras.mixed_precision.global_policy().name == "mixed_float16"
@@ -360,7 +356,7 @@ class LPIPSLoss(keras.losses.Loss):
             value across the height, width axes.
         """
         if self._spatial:
-            return Resizing(*output_dims, interpolation="bilinear")(inputs)
+            return layers.Resizing(*output_dims, interpolation="bilinear")(inputs)
         return ops.mean(inputs, axis=(1, 2), keepdims=True)
 
     def call(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:

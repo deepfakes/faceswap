@@ -5,8 +5,7 @@ import typing as T
 
 import numpy as np
 
-from keras import ops
-from keras.backend.exports import Variable
+from keras import ops, Variable
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor

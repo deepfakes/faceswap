@@ -9,8 +9,7 @@ import numpy as np
 import torch
 
 import keras
-from keras import ops
-from keras.backend.common import KerasVariable
+from keras import ops, Variable
 
 from lib.keras_utils import ColorSpaceConvert, frobenius_norm, replicate_pad
 from lib.logger import parse_class_init
@@ -80,7 +79,7 @@ class DSSIMObjective(keras.losses.Loss):
         kernel = np.square(coords)
         kernel *= -0.5 / np.square(self._filter_sigma)
         kernel = np.reshape(kernel, (1, -1)) + np.reshape(kernel, (-1, 1))
-        kernel = KerasVariable(np.reshape(kernel, (1, -1)), trainable=False)
+        kernel = Variable(np.reshape(kernel, (1, -1)), trainable=False)
         kernel = ops.softmax(kernel)
         kernel = ops.reshape(kernel, (self._filter_size, self._filter_size, 1, 1))
         return kernel
@@ -179,33 +178,33 @@ class GMSDLoss(keras.losses.Loss):
     def __init__(self, *args, **kwargs) -> None:
         logger.debug(parse_class_init(locals()))
         super().__init__(*args, name=self.__class__.__name__, **kwargs)
-        self._scharr_edges = KerasVariable(np.array([[[[0.00070, 0.00070]],
-                                                      [[0.00520, 0.00370]],
-                                                      [[0.03700, 0.00000]],
-                                                      [[0.00520, -0.0037]],
-                                                      [[0.00070, -0.0007]]],
-                                                     [[[0.00370, 0.00520]],
-                                                      [[0.11870, 0.11870]],
-                                                      [[0.25890, 0.00000]],
-                                                      [[0.11870, -0.1187]],
-                                                      [[0.00370, -0.0052]]],
-                                                     [[[0.00000, 0.03700]],
-                                                      [[0.00000, 0.25890]],
-                                                      [[0.00000, 0.00000]],
-                                                      [[0.00000, -0.2589]],
-                                                      [[0.00000, -0.0370]]],
-                                                     [[[-0.0037, 0.00520]],
-                                                      [[-0.1187, 0.11870]],
-                                                      [[-0.2589, 0.00000]],
-                                                      [[-0.1187, -0.1187]],
-                                                      [[-0.0037, -0.0052]]],
-                                                     [[[-0.0007, 0.00070]],
-                                                      [[-0.0052, 0.00370]],
-                                                      [[-0.0370, 0.00000]],
-                                                      [[-0.0052, -0.0037]],
-                                                      [[-0.0007, -0.0007]]]]),
-                                           dtype="float32",
-                                           trainable=False)
+        self._scharr_edges = Variable(np.array([[[[0.00070, 0.00070]],
+                                                 [[0.00520, 0.00370]],
+                                                 [[0.03700, 0.00000]],
+                                                 [[0.00520, -0.0037]],
+                                                 [[0.00070, -0.0007]]],
+                                                [[[0.00370, 0.00520]],
+                                                 [[0.11870, 0.11870]],
+                                                 [[0.25890, 0.00000]],
+                                                 [[0.11870, -0.1187]],
+                                                 [[0.00370, -0.0052]]],
+                                                [[[0.00000, 0.03700]],
+                                                 [[0.00000, 0.25890]],
+                                                 [[0.00000, 0.00000]],
+                                                 [[0.00000, -0.2589]],
+                                                 [[0.00000, -0.0370]]],
+                                                [[[-0.0037, 0.00520]],
+                                                 [[-0.1187, 0.11870]],
+                                                 [[-0.2589, 0.00000]],
+                                                 [[-0.1187, -0.1187]],
+                                                 [[-0.0037, -0.0052]]],
+                                                [[[-0.0007, 0.00070]],
+                                                 [[-0.0052, 0.00370]],
+                                                 [[-0.0370, 0.00000]],
+                                                 [[-0.0052, -0.0037]],
+                                                 [[-0.0007, -0.0007]]]]),
+                                      dtype="float32",
+                                      trainable=False)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def _map_scharr_edges(self, image: KerasTensor, magnitude: bool) -> KerasTensor:
@@ -354,12 +353,8 @@ class LDRFLIPLoss(keras.losses.Loss):
         self._feature_detector = _FeatureDetection(pixels_per_degree)
         self._col_conv = {"rgb2lab": ColorSpaceConvert(from_space="rgb", to_space="lab"),
                           "rgb2ycxcz": ColorSpaceConvert("srgb", "ycxcz")}
-        self._hunt = {"green": KerasVariable([[[[0.0, 1.0, 0.0]]]],
-                                             dtype="float32",
-                                             trainable=False),
-                      "blue": KerasVariable([[[[0.0, 0.0, 1.0]]]],
-                                            dtype="float32",
-                                            trainable=False)}
+        self._hunt = {"green": Variable([[[[0.0, 1.0, 0.0]]]], dtype="float32", trainable=False),
+                      "blue": Variable([[[[0.0, 0.0, 1.0]]]], dtype="float32", trainable=False)}
 
         logger.debug("Initialized: %s ", self.__class__.__name__)
 
@@ -561,7 +556,7 @@ class _SpatialFilters():
 
         weights = np.array([self._generate_weights(mapping[channel], domain)
                             for channel in ("A", "RG", "BY")])
-        vweights = KerasVariable(np.moveaxis(weights, 0, -1), dtype="float32", trainable=False)
+        vweights = Variable(np.moveaxis(weights, 0, -1), dtype="float32", trainable=False)
 
         return vweights, radius
 
@@ -634,9 +629,9 @@ class _FeatureDetection():
 
         gradient = np.exp(-(grid[0] ** 2 + grid[1] ** 2) / (2 * (self._std ** 2)))
         self._grads = {
-            "edge": KerasVariable(np.multiply(-grid[0], gradient), trainable=False),
-            "point": KerasVariable(np.multiply(grid[0] ** 2 / (self._std ** 2) - 1, gradient),
-                                   trainable=False)}
+            "edge": Variable(np.multiply(-grid[0], gradient), trainable=False),
+            "point": Variable(np.multiply(grid[0] ** 2 / (self._std ** 2) - 1, gradient),
+                              trainable=False)}
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def __call__(self, image: KerasTensor, feature_type: str) -> KerasTensor:
@@ -715,13 +710,13 @@ class MSSIMLoss(keras.losses.Loss):
         logger.debug(parse_class_init(locals()))
         super().__init__(name=self.__class__.__name__)
         self.filter_size = filter_size
-        self._filter_sigma = KerasVariable(filter_sigma, dtype="float32", trainable=False)
+        self._filter_sigma = Variable(filter_sigma, dtype="float32", trainable=False)
         self._k_1 = k_1
         self._k_2 = k_2
         self._max_value = max_value
         self._power_factors = power_factors
         self._divisor = [1, 2, 2, 1]
-        self._divisor_tensor = KerasVariable(self._divisor[1:], dtype="int32", trainable=False)
+        self._divisor_tensor = Variable(self._divisor[1:], dtype="int32", trainable=False)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @classmethod

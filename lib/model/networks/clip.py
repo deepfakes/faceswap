@@ -11,9 +11,7 @@ import sys
 
 from dataclasses import dataclass
 
-from keras import layers, Model, ops
-from keras.backend.common import KerasVariable
-from keras.saving import get_custom_objects
+from keras import layers, ops, Variable, models, saving
 import numpy as np
 
 from lib.model.layers import QuickGELU
@@ -109,7 +107,7 @@ class Transformer():
 
     Methods
     -------
-    __call__() -> Model:
+    __call__() -> :class:`keras.models.Model`:
         Calls the Transformer layers.
     """
     _layer_names: dict[str, int] = {}
@@ -274,9 +272,9 @@ class EmbeddingLayer(layers.Layer):  # pylint:disable=too-many-ancestors,abstrac
         input_shape: tuple[int, ...
             The input shape of the incoming tensor
         """
-        self._var = KerasVariable(self._scale * np.random.normal(size=self._input_shape),
-                                  trainable=True,
-                                  dtype=self.dtype)
+        self._var = Variable(self._scale * np.random.normal(size=self._input_shape),
+                             trainable=True,
+                             dtype=self.dtype)
         super().build(input_shape)
 
     def get_config(self) -> dict[str, T.Any]:
@@ -372,7 +370,7 @@ class VisualTransformer():
 
     Methods
     -------
-    __call__() -> Model:
+    __call__() -> :class:`keras.models.Model`:
         Builds and returns the Visual Transformer model.
     """
     def __init__(self,
@@ -396,12 +394,12 @@ class VisualTransformer():
         self._name = name
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def __call__(self) -> Model:
+    def __call__(self) -> models.Model:
         """ Builds and returns the Visual Transformer model.
 
         Returns
         -------
-        Model
+        :class:`keras.models.Model`
             The Visual Transformer model.
         """
         inputs = layers.Input([self._input_resolution, self._input_resolution, 3])
@@ -434,7 +432,7 @@ class VisualTransformer():
                           self._width ** -0.5,
                           name=f"{self._name}.proj")(var_x)
         var_x = layers.Dot(axes=-1)([var_x, proj])
-        return Model(inputs=inputs, outputs=[var_x], name=self._name)
+        return models.Model(inputs=inputs, outputs=[var_x], name=self._name)
 
 
 # ################ #
@@ -708,7 +706,7 @@ class ModifiedResNet():
                                 name=f"{name}.{i}")(retval)
         return retval
 
-    def __call__(self) -> Model:
+    def __call__(self) -> models.Model:
         """ Implements the forward pass of the ModifiedResNet model.
 
         Returns
@@ -732,7 +730,7 @@ class ModifiedResNet():
                                 self._heads,
                                 self._output_dim,
                                 name=f"{self._name}.attnpool")(var_x)
-        return Model(inputs, outputs=[var_x], name=self._name)
+        return models.Model(inputs, outputs=[var_x], name=self._name)
 
 
 # ### #
@@ -785,7 +783,7 @@ class ViT():
                         width: int,
                         embed_dim: int,
                         resolution: int,
-                        patch_size: int) -> Model:
+                        patch_size: int) -> models.Model:
         """ Obtain the network for the vision layets
 
         Parameters
@@ -824,7 +822,7 @@ class ViT():
                                  patch_size=patch_size,
                                  name="visual")
 
-    def __call__(self) -> Model:
+    def __call__(self) -> models.Model:
         """ Get the configured ViT model
 
         Returns
@@ -832,7 +830,7 @@ class ViT():
         :class:`keras.models.Model`
             The requested Visual Transformer model
         """
-        net: Model = self._net()
+        net: models.Model = self._net()
         if self._load_weights and not self._git_id:
             logger.warning("Trained weights are not available for '%s'", self._name)
             return net
@@ -848,4 +846,4 @@ class ViT():
 for name_, obj in inspect.getmembers(sys.modules[__name__]):
     if (inspect.isclass(obj) and issubclass(obj, layers.Layer)
             and obj.__module__ == __name__):
-        get_custom_objects().update({name_: obj})
+        saving.get_custom_objects().update({name_: obj})
