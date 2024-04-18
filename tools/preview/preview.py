@@ -290,9 +290,15 @@ class Samples():
                          "file was generated. You need to update the file to proceed.")
             logger.error("To do this run the 'Alignments Tool' > 'Extract' Job.")
             sys.exit(1)
+
         if not self._alignments.have_alignments_file:
             logger.error("Alignments file not found at: '%s'", self._alignments.file)
             sys.exit(1)
+
+        if self._images.is_video:
+            assert isinstance(self._images.input_images, str)
+            self._alignments.update_legacy_has_source(os.path.basename(self._images.input_images))
+
         self._filelist = self._get_filelist()
         self._indices = self._get_indices()
 
@@ -349,7 +355,8 @@ class Samples():
         """
         logger.debug("Filtering file list to frames with faces")
         if isinstance(self._images.input_images, str):
-            filelist = [f"{os.path.splitext(self._images.input_images)[0]}_{frame_no:06d}.png"
+            vid_name, ext = os.path.splitext(self._images.input_images)
+            filelist = [f"{vid_name}_{frame_no:06d}{ext}"
                         for frame_no in range(1, self._images.images_found + 1)]
         else:
             filelist = self._images.input_images

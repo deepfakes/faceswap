@@ -149,6 +149,10 @@ class _Mask:
 
         self._loader = Loader(arguments.input, self._input_is_faces)
         self._alignments = self._get_alignments(arguments.alignments, arguments.input)
+
+        if self._loader.is_video and self._alignments is not None:
+            self._alignments.update_legacy_has_source(os.path.basename(self._loader.location))
+
         self._loader.add_alignments(self._alignments)
 
         self._output = Output(arguments, self._alignments, self._loader.file_list)
@@ -206,8 +210,8 @@ class _Mask:
 
         Returns
         -------
-        ``None`` or :class:`lib.align.alignments.Alignments`:
-            If output is requested, returns a :class:`lib.image.ImagesSaver` otherwise
+        ``None`` or :class:`~lib.align.alignments.Alignments`:
+            If output is requested, returns a :class:`~lib.align.alignments.Alignments` otherwise
             returns ``None``
         """
         if alignments:
