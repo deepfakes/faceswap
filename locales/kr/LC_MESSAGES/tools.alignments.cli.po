@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-04-12 12:10+0100\n"
-"PO-Revision-Date: 2024-04-12 12:17+0100\n"
+"POT-Creation-Date: 2024-04-19 11:28+0100\n"
+"PO-Revision-Date: 2024-04-19 11:30+0100\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -35,29 +35,29 @@ msgstr ""
 "용하거나 여러 작업을 수행할 수 있습니다."
 
 #: tools/alignments/cli.py:43
-msgid " Must Pass in a frames folder/source video file (-fr)."
+msgid " Must Pass in a frames folder/source video file (-r)."
 msgstr ""
-" 프레임들이 저장된 폴더나 원본 비디오 파일을 무조건 전달해야 합니다 (-fr)."
+" 프레임들이 저장된 폴더나 원본 비디오 파일을 무조건 전달해야 합니다 (-r)."
 
 #: tools/alignments/cli.py:44
-msgid " Must Pass in a faces folder (-fc)."
-msgstr " 얼굴 폴더를 무조건 전달해야 합니다 (-fc)."
+msgid " Must Pass in a faces folder (-c)."
+msgstr " 얼굴 폴더를 무조건 전달해야 합니다 (-c)."
 
 #: tools/alignments/cli.py:45
 msgid ""
-" Must Pass in either a frames folder/source video file OR a faces folder (-"
-"fr or -fc)."
+" Must Pass in either a frames folder/source video file OR a faces folder (-r "
+"or -c)."
 msgstr ""
 " 프레임 폴더나 원본 비디오 파일 또는 얼굴 폴더중 하나를 무조건 전달해야 합니"
-"다 (-fr and -fc)."
+"다 (-r and -c)."
 
 #: tools/alignments/cli.py:47
 msgid ""
-" Must Pass in a frames folder/source video file AND a faces folder (-fr and -"
-"fc)."
+" Must Pass in a frames folder/source video file AND a faces folder (-r and -"
+"c)."
 msgstr ""
 " 프레임 폴더나 원본 비디오 파일 그리고 얼굴 폴더를 무조건 전달해야 합니다 (-"
-"fr and -fc)."
+"r and -c)."
 
 #: tools/alignments/cli.py:49
 msgid " Use the output option (-o) to process results."

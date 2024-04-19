@@ -57,7 +57,7 @@ class DataGenerator():
                  side: T.Literal["a", "b"],
                  images: list[str],
                  batch_size: int) -> None:
-        logger.debug("Initializing %s: (model: %s, side: %s, images: %s , "  # type: ignore
+        logger.debug("Initializing %s: (model: %s, side: %s, images: %s , "
                      "batch_size: %s, config: %s)", self.__class__.__name__, model.name, side,
                      len(images), batch_size, config)
         self._config = config
@@ -243,8 +243,9 @@ class DataGenerator():
             raw_faces = read_image_batch(filenames)
 
         detected_faces = self._face_cache.get_items(filenames)
-        logger.trace("filenames: %s, raw_faces: '%s', detected_faces: %s",  # type: ignore
-                     filenames, raw_faces.shape, len(detected_faces))
+        logger.trace(  # type:ignore[attr-defined]
+            "filenames: %s, raw_faces: '%s', detected_faces: %s",
+            filenames, raw_faces.shape, len(detected_faces))
         return raw_faces, detected_faces
 
     def _crop_to_coverage(self,
@@ -271,8 +272,8 @@ class DataGenerator():
         batch: :class:`np.ndarray`
             The pre-allocated array to hold this batch
         """
-        logger.trace("Cropping training images info: (filenames: %s, side: '%s')",  # type: ignore
-                     filenames, self._side)
+        logger.trace(  # type:ignore[attr-defined]
+            "Cropping training images info: (filenames: %s, side: '%s')", filenames, self._side)
 
         with futures.ThreadPoolExecutor() as executor:
             proc = {executor.submit(face.aligned.extract_face, img): idx
@@ -304,7 +305,7 @@ class DataGenerator():
         masks = np.array([face.get_training_masks() for face in detected_faces])
         batch[..., 3:] = masks
 
-        logger.trace("side: %s, masks: %s, batch: %s",  # type: ignore
+        logger.trace("side: %s, masks: %s, batch: %s",  # type:ignore[attr-defined]
                      self._side, masks.shape, batch.shape)
 
     def _process_batch(self, filenames: list[str]) -> BatchType:
@@ -333,9 +334,9 @@ class DataGenerator():
         self._apply_mask(detected_faces, batch)
         feed, targets = self.process_batch(filenames, raw_faces, detected_faces, batch)
 
-        logger.trace("Processed %s batch side %s. (filenames: %s, feed: %s, "  # type: ignore
-                     "targets: %s)", self.__class__.__name__, self._side, filenames,
-                     feed.shape, [t.shape for t in targets])
+        logger.trace(  # type:ignore[attr-defined]
+            "Processed %s batch side %s. (filenames: %s, feed: %s, targets: %s)",
+            self.__class__.__name__, self._side, filenames, feed.shape, [t.shape for t in targets])
 
         return feed, targets
 
@@ -450,15 +451,19 @@ class TrainingDataGenerator(DataGenerator):
             List of 4-dimensional target images, at all model output sizes, with masks compiled
             into channels 4+ for each output size
         """
-        logger.trace("Compiling targets: batch shape: %s", batch.shape)  # type: ignore
+        logger.trace("Compiling targets: batch shape: %s",  # type:ignore[attr-defined]
+                     batch.shape)
         if len(self._output_sizes) == 1 and self._output_sizes[0] == self._process_size:
             # Rolling buffer here makes next to no difference, so just create array on the fly
             retval = [self._to_float32(batch)]
         else:
-            retval = [self._to_float32(np.array([cv2.resize(image, (size, size), cv2.INTER_AREA)
+            retval = [self._to_float32(np.array([cv2.resize(image,
+                                                            (size, size),
+                                                            interpolation=cv2.INTER_AREA)
                                                  for image in batch]))
                       for size in self._output_sizes]
-        logger.trace("Processed targets: %s", [t.shape for t in retval])  # type: ignore
+        logger.trace("Processed targets: %s",  # type:ignore[attr-defined]
+                     [t.shape for t in retval])
         return retval
 
     def process_batch(self,
@@ -533,7 +538,7 @@ class TrainingDataGenerator(DataGenerator):
             feed = self._to_float32(np.array([cv2.resize(image,
                                                          (self._model_input_size,
                                                           self._model_input_size),
-                                                         cv2.INTER_AREA)
+                                                         interpolation=cv2.INTER_AREA)
                                               for image in warped]))
         else:
             feed = self._to_float32(warped)
@@ -556,8 +561,9 @@ class TrainingDataGenerator(DataGenerator):
         :class:`np.ndarray`
             Randomly selected closest matches from the other side's landmarks
         """
-        logger.trace("Retrieving closest matched landmarks: (filenames: '%s', "  # type: ignore
-                     "src_points: '%s')", filenames, batch_src_points)
+        logger.trace(  # type:ignore[attr-defined]
+            "Retrieving closest matched landmarks: (filenames: '%s', src_points: '%s')",
+            filenames, batch_src_points)
         lm_side: T.Literal["a", "b"] = "a" if self._side == "b" else "b"
         other_cache = get_cache(lm_side)
         landmarks = other_cache.aligned_landmarks
@@ -575,7 +581,8 @@ class TrainingDataGenerator(DataGenerator):
             closest_matches = self._cache_closest_matches(filenames, batch_src_points, landmarks)
 
         batch_dst_points = np.array([landmarks[choice(fname)] for fname in closest_matches])
-        logger.trace("Returning: (batch_dst_points: %s)", batch_dst_points.shape)  # type: ignore
+        logger.trace("Returning: (batch_dst_points: %s)",  # type:ignore[attr-defined]
+                     batch_dst_points.shape)
         return batch_dst_points
 
     def _cache_closest_matches(self,
@@ -648,8 +655,9 @@ class PreviewDataGenerator(DataGenerator):
         list
             List of 4-dimensional target images, at final model output size
         """
-        logger.trace("Compiling samples: images shape: %s, detected_faces: %s ",  # type: ignore
-                     images.shape, len(detected_faces))
+        logger.trace(  # type:ignore[attr-defined]
+            "Compiling samples: images shape: %s, detected_faces: %s ",
+            images.shape, len(detected_faces))
         output_size = self._output_sizes[-1]
         full_size = 2 * int(np.rint((output_size / self._coverage_ratio) / 2))
 
@@ -665,7 +673,7 @@ class PreviewDataGenerator(DataGenerator):
                         is_aligned=True).face
             for idx, face in enumerate(detected_faces)]))
 
-        logger.trace("Processed samples: %s", retval.shape)  # type: ignore
+        logger.trace("Processed samples: %s", retval.shape)  # type:ignore[attr-defined]
         return [retval]
 
     def process_batch(self,
@@ -840,8 +848,9 @@ class Feeder():
             side_feed, side_targets = next(self._feeds[side])
             if self._model.config["learn_mask"]:  # Add the face mask as it's own target
                 side_targets += [side_targets[-1][..., 3][..., None]]
-            logger.trace("side: %s, input_shapes: %s, target_shapes: %s",  # type: ignore
-                         side, side_feed.shape, [i.shape for i in side_targets])
+            logger.trace(  # type:ignore[attr-defined]
+                "side: %s, input_shapes: %s, target_shapes: %s",
+                side, side_feed.shape, [i.shape for i in side_targets])
             model_inputs.append([side_feed])
             model_targets.append(side_targets)
 

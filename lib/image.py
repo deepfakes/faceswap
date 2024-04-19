@@ -579,7 +579,7 @@ def encode_image(image: np.ndarray,
     Returns
     -------
     encoded_image: bytes
-        The image encoded into the correct file format
+        The image encoded into the correct file format as bytes
 
     Example
     -------
@@ -591,10 +591,10 @@ def encode_image(image: np.ndarray,
         raise ValueError("Metadata is only supported for .png and .tif images")
     args = tuple() if encoding_args is None else encoding_args
 
-    retval = cv2.imencode(extension, image, args)[1]
+    retval = cv2.imencode(extension, image, args)[1].tobytes()
     if metadata:
         func = {".png": png_write_meta, ".tif": tiff_write_meta}[extension]
-        retval = func(retval.tobytes(), metadata)  # type:ignore[arg-type]
+        retval = func(retval, metadata)
     return retval
 
 
@@ -624,7 +624,7 @@ def png_write_meta(image: bytes, data: PNGHeaderDict | dict[str, T.Any] | bytes)
     return retval
 
 
-def tiff_write_meta(image: bytes, data: dict[str, T.Any] | bytes) -> bytes:
+def tiff_write_meta(image: bytes, data: PNGHeaderDict | dict[str, T.Any] | bytes) -> bytes:
     """ Write Faceswap information to a tiff's image_description field.
 
     Parameters
