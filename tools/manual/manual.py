@@ -27,8 +27,7 @@ from .frameviewer.frame import DisplayFrame
 from .thumbnails import ThumbsCreator
 
 if T.TYPE_CHECKING:
-    from lib.align import DetectedFace
-    from lib.align.detected_face import Mask
+    from lib.align import DetectedFace, Mask
     from lib.queue_manager import EventQueue
 
 logger = logging.getLogger(__name__)
@@ -819,7 +818,7 @@ class Aligner():
 
         Returns
         -------
-        dict[str, :class:`~lib.align.detected_face.Mask`]
+        dict[str, :class:`~lib.align.aligned_mask.Mask`]
             The updated masks
         """
         logger.trace("frame_index: %s, face_index: %s",  # type:ignore[attr-defined]
