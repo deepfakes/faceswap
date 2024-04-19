@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
+from lib.logger import parse_class_init
+
 if T.TYPE_CHECKING:
     from keras import optimizers
     from lib.config import ConfigValueType
@@ -51,10 +53,7 @@ class LearningRateFinder:
                  feeder: Feeder,
                  stop_factor: int = 4,
                  beta: float = 0.98) -> None:
-        logger.debug("Initializing %s: (model: %s, config: %s, feeder: %s, stop_factor: %s, "
-                     "beta: %s)",
-                     self.__class__.__name__, model, config, feeder, stop_factor, beta)
-
+        logger.debug(parse_class_init(locals()))
         self._iterations = T.cast(int, config["lr_finder_iterations"])
         self._save_graph = config["lr_finder_mode"] in ("graph_and_set", "graph_and_exit")
         self._strength = LRStrength[T.cast(str, config["lr_finder_strength"]).upper()].value
@@ -169,15 +168,13 @@ class LearningRateFinder:
         if self._config["lr_finder_mode"] == "graph_and_exit":
             return
 
-        logger.info("Loading initial weights")
-
-        optimizer = self._model.model.optimizer
+        logger.debug("Resetting optimizer")
+        optimizer = self._rebuild_optimizer(self._model.model.optimizer)
         del self._model.model.optimizer
 
+        logger.info("Loading initial weights")
         self._model.model.load_weights(self._model.io.filename)
 
-        logger.debug("Resetting optimizer")
-        optimizer = self._rebuild_optimizer(optimizer)
         self._model.model.compile(optimizer=optimizer,
                                   loss=self._model.model.loss,
                                   metrics=self._model.model.loss)
