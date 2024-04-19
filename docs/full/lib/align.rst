@@ -41,6 +41,7 @@ Handles aligned storage and retrieval of Faceswap generated masks
    :nosignatures:
 
    ~lib.align.aligned_mask.BlurMask
+   ~lib.align.aligned_mask.LandmarksMask
    ~lib.align.aligned_mask.Mask
    
 .. rubric:: Module
@@ -108,6 +109,26 @@ pose module
 Handles pose estimates based on aligned face data
 
 .. automodule:: lib.align.pose
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
+thumbnails module
+=================
+Handles creation of jpg thumbnails for storage in alignment files/png headers
+
+.. automodule:: lib.align.thumbnails
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
+updater module
+==============
+Handles the update of alignments files to the latest version
+
+.. automodule:: lib.align.updater
    :members:
    :undoc-members:
    :show-inheritance:
