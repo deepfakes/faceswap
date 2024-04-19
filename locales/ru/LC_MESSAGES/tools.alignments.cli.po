@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-04-12 12:10+0100\n"
-"PO-Revision-Date: 2024-04-12 12:13+0100\n"
+"POT-Creation-Date: 2024-04-19 11:28+0100\n"
+"PO-Revision-Date: 2024-04-19 11:31+0100\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ru\n"
@@ -38,28 +38,28 @@ msgstr ""
 "кадров."
 
 #: tools/alignments/cli.py:43
-msgid " Must Pass in a frames folder/source video file (-fr)."
-msgstr " Должен проходить в папке с кадрами/исходным видеофайлом (-fr)."
+msgid " Must Pass in a frames folder/source video file (-r)."
+msgstr " Должен проходить в папке с кадрами/исходным видеофайлом (-r)."
 
 #: tools/alignments/cli.py:44
-msgid " Must Pass in a faces folder (-fc)."
-msgstr " Должен проходить в папке с лицами (-fc)."
+msgid " Must Pass in a faces folder (-c)."
+msgstr " Должен проходить в папке с лицами (-c)."
 
 #: tools/alignments/cli.py:45
 msgid ""
-" Must Pass in either a frames folder/source video file OR a faces folder (-"
-"fr or -fc)."
+" Must Pass in either a frames folder/source video file OR a faces folder (-r "
+"or -c)."
 msgstr ""
 " Должно передаваться либо в папку с кадрами/исходным видеофайлом, либо в "
-"папку с лицами (-fr или -fc)."
+"папку с лицами (-r или -c)."
 
 #: tools/alignments/cli.py:47
 msgid ""
-" Must Pass in a frames folder/source video file AND a faces folder (-fr and -"
-"fc)."
+" Must Pass in a frames folder/source video file AND a faces folder (-r and -"
+"c)."
 msgstr ""
 " Должно передаваться либо в папку с кадрами/исходным видеофайлом И в папку с "
-"лицами (-fr и -fc)."
+"лицами (-r и -c)."
 
 #: tools/alignments/cli.py:49
 msgid " Use the output option (-o) to process results."

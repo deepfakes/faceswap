@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-04-12 12:10+0100\n"
-"PO-Revision-Date: 2024-04-12 12:14+0100\n"
+"POT-Creation-Date: 2024-04-19 11:28+0100\n"
+"PO-Revision-Date: 2024-04-19 11:29+0100\n"
 "Last-Translator: \n"
 "Language-Team: tokafondo\n"
 "Language: es_ES\n"
@@ -37,29 +37,29 @@ msgstr ""
 "archivo de alineación."
 
 #: tools/alignments/cli.py:43
-msgid " Must Pass in a frames folder/source video file (-fr)."
+msgid " Must Pass in a frames folder/source video file (-r)."
 msgstr ""
-" Debe indicar una carpeta de fotogramas o archivo de vídeo de origen (-fr)."
+" Debe indicar una carpeta de fotogramas o archivo de vídeo de origen (-r)."
 
 #: tools/alignments/cli.py:44
-msgid " Must Pass in a faces folder (-fc)."
-msgstr " Debe indicar una carpeta de caras (-fc)."
+msgid " Must Pass in a faces folder (-c)."
+msgstr " Debe indicar una carpeta de caras (-c)."
 
 #: tools/alignments/cli.py:45
 msgid ""
-" Must Pass in either a frames folder/source video file OR a faces folder (-"
-"fr or -fc)."
+" Must Pass in either a frames folder/source video file OR a faces folder (-r "
+"or -c)."
 msgstr ""
 " Debe indicar una carpeta de fotogramas o archivo de vídeo de origen, o una "
-"carpeta de caras (-fr o -fc)."
+"carpeta de caras (-r o -c)."
 
 #: tools/alignments/cli.py:47
 msgid ""
-" Must Pass in a frames folder/source video file AND a faces folder (-fr and -"
-"fc)."
+" Must Pass in a frames folder/source video file AND a faces folder (-r and -"
+"c)."
 msgstr ""
 " Debe indicar una carpeta de fotogramas o archivo de vídeo de origen, y una "
-"carpeta de caras (-fr y -fc)."
+"carpeta de caras (-r y -c)."
 
 #: tools/alignments/cli.py:49
 msgid " Use the output option (-o) to process results."

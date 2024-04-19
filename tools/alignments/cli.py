@@ -40,12 +40,12 @@ class AlignmentsArgs(FaceSwapArgs):
         dict
             The argparse command line options for processing by argparse
         """
-        frames_dir = _(" Must Pass in a frames folder/source video file (-fr).")
-        faces_dir = _(" Must Pass in a faces folder (-fc).")
+        frames_dir = _(" Must Pass in a frames folder/source video file (-r).")
+        faces_dir = _(" Must Pass in a faces folder (-c).")
         frames_or_faces_dir = _(" Must Pass in either a frames folder/source video file OR a "
-                                "faces folder (-fr or -fc).")
+                                "faces folder (-r or -c).")
         frames_and_faces_dir = _(" Must Pass in a frames folder/source video file AND a faces "
-                                 "folder (-fr and -fc).")
+                                 "folder (-r and -c).")
         output_opts = _(" Use the output option (-o) to process results.")
         argument_list = []
         argument_list.append({
@@ -118,7 +118,7 @@ class AlignmentsArgs(FaceSwapArgs):
             "group": _("data"),
             # hacky solution to not require alignments file if creating alignments from faces:
             "required": not any(val in sys.argv for val in ["from-faces",
-                                                            "-fr",
+                                                            "-r",
                                                             "-frames_folder"]),
             "filetypes": "alignments",
             "help": _(
