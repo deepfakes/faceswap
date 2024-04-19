@@ -10,7 +10,11 @@ from datetime import datetime
 import numpy as np
 
 from lib.serializer import get_serializer, get_serializer_from_filename
-from lib.utils import FaceswapError, VIDEO_EXTENSIONS
+from lib.utils import FaceswapError
+
+from .thumbnails import Thumbnails
+from .updater import (FileStructure, IdentityAndVideoMeta, LandmarkRename, Legacy, ListToNumpy,
+                      MaskCentering, VideoExtension)
 
 if T.TYPE_CHECKING:
     from collections.abc import Generator
@@ -105,7 +109,7 @@ class Alignments():
         self._data = self._load()
         self._io.update_legacy()
 
-        self._legacy = _Legacy(self)
+        self._legacy = Legacy(self)
         self._thumbnails = Thumbnails(self)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -115,14 +119,14 @@ class Alignments():
     def frames_count(self) -> int:
         """ int: The number of frames that appear in the alignments :attr:`data`. """
         retval = len(self._data)
-        logger.trace(retval)  # type:ignore
+        logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     @property
     def faces_count(self) -> int:
         """ int: The total number of faces that appear in the alignments :attr:`data`. """
         retval = sum(len(val["faces"]) for val in self._data.values())
-        logger.trace(retval)  # type:ignore
+        logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     @property
@@ -196,9 +200,9 @@ class Alignments():
         return retval
 
     @property
-    def thumbnails(self) -> "Thumbnails":
-        """ :class:`~lib.align.Thumbnails`: The low resolution thumbnail images that exist
-        within the alignments file """
+    def thumbnails(self) -> Thumbnails:
+        """ :class:`~lib.align.thumbnails.Thumbnails`: The low resolution thumbnail images that
+        exist within the alignments file """
         return self._thumbnails
 
     @property
@@ -339,7 +343,7 @@ class Alignments():
             otherwise ``False``
         """
         retval = frame_name in self._data.keys()
-        logger.trace("'%s': %s", frame_name, retval)  # type:ignore
+        logger.trace("'%s': %s", frame_name, retval)  # type:ignore[attr-defined]
         return retval
 
     def frame_has_faces(self, frame_name: str) -> bool:
@@ -359,7 +363,7 @@ class Alignments():
         """
         frame_data = self._data.get(frame_name, T.cast(AlignmentDict, {}))
         retval = bool(frame_data.get("faces", []))
-        logger.trace("'%s': %s", frame_name, retval)  # type:ignore
+        logger.trace("'%s': %s", frame_name, retval)  # type:ignore[attr-defined]
         return retval
 
     def frame_has_multiple_faces(self, frame_name: str) -> bool:
@@ -383,7 +387,7 @@ class Alignments():
         else:
             frame_data = self._data.get(frame_name, T.cast(AlignmentDict, {}))
             retval = bool(len(frame_data.get("faces", [])) > 1)
-        logger.trace("'%s': %s", frame_name, retval)  # type:ignore
+        logger.trace("'%s': %s", frame_name, retval)  # type:ignore[attr-defined]
         return retval
 
     def mask_is_valid(self, mask_type: str) -> bool:
@@ -425,7 +429,7 @@ class Alignments():
         list
             The list of face dictionaries that appear within the requested frame_name
         """
-        logger.trace("Getting faces for frame_name: '%s'", frame_name)  # type:ignore
+        logger.trace("Getting faces for frame_name: '%s'", frame_name)  # type:ignore[attr-defined]
         frame_data = self._data.get(frame_name, T.cast(AlignmentDict, {}))
         return frame_data.get("faces", T.cast(list[AlignmentFileDict], []))
 
@@ -445,7 +449,7 @@ class Alignments():
         """
         frame_data = self._data.get(frame_name, T.cast(AlignmentDict, {}))
         retval = len(frame_data.get("faces", []))
-        logger.trace(retval)  # type:ignore
+        logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     # << MANIPULATION >> #
@@ -538,11 +542,12 @@ class Alignments():
             else:
                 filter_list = [idx for idx in range(len(frame_data["faces"]))
                                if idx not in face_indices]
-            logger.trace("frame: '%s', filter_list: %s", source_frame, filter_list)  # type:ignore
+            logger.trace("frame: '%s', filter_list: %s",  # type:ignore[attr-defined]
+                         source_frame, filter_list)
 
             for face_idx in reversed(sorted(filter_list)):
-                logger.verbose("Filtering out face: (filename: %s, index: %s)",  # type:ignore
-                               source_frame, face_idx)
+                logger.verbose(  # type:ignore[attr-defined]
+                    "Filtering out face: (filename: %s, index: %s)", source_frame, face_idx)
                 del frame_data["faces"][face_idx]
 
     def update_from_dict(self, data: dict[str, AlignmentDict]) -> None:
@@ -581,8 +586,9 @@ class Alignments():
         for frame_fullname, val in self._data.items():
             frame_name = os.path.splitext(frame_fullname)[0]
             face_count = len(val["faces"])
-            logger.trace("Yielding: (frame: '%s', faces: %s, frame_fullname: '%s')",  # type:ignore
-                         frame_name, face_count, frame_fullname)
+            logger.trace(  # type:ignore[attr-defined]
+                "Yielding: (frame: '%s', faces: %s, frame_fullname: '%s')",
+                frame_name, face_count, frame_fullname)
             yield frame_name, val["faces"], face_count, frame_fullname
 
     def update_legacy_has_source(self, filename: str) -> None:
@@ -595,7 +601,7 @@ class Alignments():
         filename: str:
             The filename/folder of the original source images/video for the current alignments
         """
-        updates = [updater.is_updated for updater in (_VideoExtension(self, filename), )]
+        updates = [updater.is_updated for updater in (VideoExtension(self, filename), )]
         if any(updates):
             self._io.update_version()
             self.save()
@@ -635,7 +641,7 @@ class _IO():
         """ bool: ``True`` if an alignments file exists at location :attr:`file` otherwise
         ``False``. """
         retval = os.path.exists(self._file)
-        logger.trace(retval)  # type:ignore
+        logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     def _update_file_format(self, folder: str, filename: str) -> str:
@@ -723,17 +729,17 @@ class _IO():
             # executed if an alignments file has not been explicitly provided therefore it will not
             # have been picked up in the extension test
             self._test_for_legacy(location)
-        logger.verbose("Alignments filepath: '%s'", location)  # type:ignore
+        logger.verbose("Alignments filepath: '%s'", location)  # type:ignore[attr-defined]
         return location
 
     def update_legacy(self) -> None:
         """ Check whether the alignments are legacy, and if so update them to current alignments
         format. """
-        updates = [updater.is_updated for updater in (_FileStructure(self._alignments),
-                                                      _LandmarkRename(self._alignments),
-                                                      _ListToNumpy(self._alignments),
-                                                      _MaskCentering(self._alignments),
-                                                      _IdentityAndVideoMeta(self._alignments))]
+        updates = [updater.is_updated for updater in (FileStructure(self._alignments),
+                                                      LandmarkRename(self._alignments),
+                                                      ListToNumpy(self._alignments),
+                                                      MaskCentering(self._alignments),
+                                                      IdentityAndVideoMeta(self._alignments))]
         if any(updates):
             self.update_version()
             self.save()
@@ -794,414 +800,3 @@ class _IO():
         logger.info("Backing up original alignments to '%s'", dst)
         os.rename(src, dst)
         logger.debug("Backed up alignments")
-
-
-class Thumbnails():
-    """ Thumbnail images stored in the alignments file.
-
-    The thumbnails are stored as low resolution (64px), low quality jpg in the alignments file
-    and are used for the Manual Alignments tool.
-
-    Parameters
-    ----------
-    alignments: :class:'~lib.align.Alignments`
-        The parent alignments class that these thumbs belong to
-    """
-    def __init__(self, alignments: Alignments) -> None:
-        logger.debug("Initializing %s: (alignments: %s)", self.__class__.__name__, alignments)
-        self._alignments_dict = alignments.data
-        self._frame_list = list(sorted(self._alignments_dict))
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def has_thumbnails(self) -> bool:
-        """ bool: ``True`` if all faces in the alignments file contain thumbnail images
-        otherwise ``False``. """
-        retval = all(np.any(face.get("thumb"))  # type:ignore  # numpy complaining about ``None``
-                     for frame in self._alignments_dict.values()
-                     for face in frame["faces"])
-        logger.trace(retval)  # type:ignore
-        return retval
-
-    def get_thumbnail_by_index(self, frame_index: int, face_index: int) -> np.ndarray:
-        """ Obtain a jpg thumbnail from the given frame index for the given face index
-
-        Parameters
-        ----------
-        frame_index: int
-            The frame index that contains the thumbnail
-        face_index: int
-            The face index within the frame to retrieve the thumbnail for
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            The encoded jpg thumbnail
-        """
-        retval = self._alignments_dict[self._frame_list[frame_index]]["faces"][face_index]["thumb"]
-        assert retval is not None
-        logger.trace("frame index: %s, face_index: %s, thumb shape: %s",  # type:ignore
-                     frame_index, face_index, retval.shape)
-        return retval
-
-    def add_thumbnail(self, frame: str, face_index: int, thumb: np.ndarray) -> None:
-        """ Add a thumbnail for the given face index for the given frame.
-
-        Parameters
-        ----------
-        frame: str
-            The name of the frame to add the thumbnail for
-        face_index: int
-            The face index within the given frame to add the thumbnail for
-        thumb: :class:`numpy.ndarray`
-            The encoded jpg thumbnail at 64px to add to the alignments file
-        """
-        logger.debug("frame: %s, face_index: %s, thumb shape: %s thumb dtype: %s",
-                     frame, face_index, thumb.shape, thumb.dtype)
-        self._alignments_dict[frame]["faces"][face_index]["thumb"] = thumb
-
-
-class _Updater():
-    """ Base class for inheriting to test for and update of an alignments file property
-
-    Parameters
-    ----------
-    alignments: :class:`~Alignments`
-        The alignments object that is being tested and updated
-    """
-    def __init__(self, alignments: Alignments) -> None:
-        self._alignments = alignments
-        self._needs_update = self._test()
-        if self._needs_update:
-            self._update()
-
-    @property
-    def is_updated(self) -> bool:
-        """ bool. ``True`` if this updater has been run otherwise ``False`` """
-        return self._needs_update
-
-    def _test(self) -> bool:
-        """ Calls the child's :func:`test` method and logs output
-
-        Returns
-        -------
-        bool
-            ``True`` if the test condition is met otherwise ``False``
-        """
-        logger.debug("checking %s", self.__class__.__name__)
-        retval = self.test()
-        logger.debug("legacy %s: %s", self.__class__.__name__, retval)
-        return retval
-
-    def test(self) -> bool:
-        """ Override to set the condition to test for.
-
-        Returns
-        -------
-        bool
-            ``True`` if the test condition is met otherwise ``False``
-        """
-        raise NotImplementedError()
-
-    def _update(self) -> int:
-        """ Calls the child's :func:`update` method, logs output and sets the
-        :attr:`is_updated` flag
-
-        Returns
-        -------
-        int
-            The number of items that were updated
-        """
-        retval = self.update()
-        logger.debug("Updated %s: %s", self.__class__.__name__, retval)
-        return retval
-
-    def update(self) -> int:
-        """ Override to set the action to perform on the alignments object if the test has
-        passed
-
-        Returns
-        -------
-        int
-            The number of items that were updated
-        """
-        raise NotImplementedError()
-
-
-class _VideoExtension(_Updater):
-    """ Alignments files from video files used to have a dummy '.png' extension for each of the
-    keys. This has been changed to be file extension of the original input video (for better)
-    identification of alignments files generated from video files
-
-    Parameters
-    ----------
-    alignments: :class:`~Alignments`
-        The alignments object that is being tested and updated
-    video_filename: str
-        The video filename that holds these alignments
-    """
-    def __init__(self, alignments: Alignments, video_filename: str) -> None:
-        self._video_name, self._extension = os.path.splitext(video_filename)
-        super().__init__(alignments)
-
-    def test(self) -> bool:
-        """ Requires update if alignments version is < 2.4
-
-        Returns
-        -------
-        bool
-            ``True`` if the key extensions need updating otherwise ``False``
-        """
-        retval = self._alignments.version < 2.4 and self._extension in VIDEO_EXTENSIONS
-        logger.debug("Needs update for video extension: %s (version: %s, extension: %s)",
-                     retval, self._alignments.version, self._extension)
-        return retval
-
-    def update(self) -> int:
-        """ Update alignments files that have been extracted from videos to have the key end in the
-        video file extension rather than ',png' (the old way)
-
-        Parameters
-        ----------
-        video_filename: str
-            The filename of the video file that created these alignments
-        """
-        updated = 0
-        for key in list(self._alignments.data):
-            val = self._alignments.data[key]
-            fname = os.path.splitext(key)[0]
-            if fname.rsplit("_")[0] != self._video_name:
-                continue  # Key is from a different source
-
-            new_key = f"{fname}{self._extension}"
-            del self._alignments.data[key]
-            self._alignments.data[new_key] = val
-            updated += 1
-
-        logger.debug("Updated alignemnt keys for video extension: %s", updated)
-        return updated
-
-
-class _FileStructure(_Updater):
-    """ Alignments were structured: {frame_name: <list of faces>}. We need to be able to store
-    information at the frame level, so new structure is:  {frame_name: {faces: <list of faces>}}
-    """
-    def test(self) -> bool:
-        """ Test whether the alignments file is laid out in the old structure of
-        `{frame_name: [faces]}`
-
-        Returns
-        -------
-        bool
-            ``True`` if the file has legacy structure otherwise ``False``
-        """
-        return any(isinstance(val, list) for val in self._alignments.data.values())
-
-    def update(self) -> int:
-        """ Update legacy alignments files from the format `{frame_name: [faces}` to the
-        format `{frame_name: {faces: [faces]}`.
-
-        Returns
-        -------
-        int
-            The number of items that were updated
-        """
-        updated = 0
-        for key, val in self._alignments.data.items():
-            if not isinstance(val, list):
-                continue
-            self._alignments.data[key] = {"faces": val}
-            updated += 1
-        return updated
-
-
-class _LandmarkRename(_Updater):
-    """ Landmarks renamed from landmarksXY to landmarks_xy for PEP compliance """
-    def test(self) -> bool:
-        """ check for legacy landmarksXY keys.
-
-        Returns
-        -------
-        bool
-            ``True`` if the alignments file contains legacy `landmarksXY` keys otherwise ``False``
-        """
-        return (any(key == "landmarksXY"
-                    for val in self._alignments.data.values()
-                    for alignment in val["faces"]
-                    for key in alignment))
-
-    def update(self) -> int:
-        """ Update legacy `landmarksXY` keys to PEP compliant `landmarks_xy` keys.
-
-        Returns
-        -------
-        int
-            The number of landmarks keys that were changed
-        """
-        update_count = 0
-        for val in self._alignments.data.values():
-            for alignment in val["faces"]:
-                if "landmarksXY" in alignment:
-                    alignment["landmarks_xy"] = alignment.pop("landmarksXY")  # type:ignore
-                    update_count += 1
-        return update_count
-
-
-class _ListToNumpy(_Updater):
-    """ Landmarks stored as list instead of numpy array """
-    def test(self) -> bool:
-        """ check for legacy landmarks stored as `list` rather than :class:`numpy.ndarray`.
-
-        Returns
-        -------
-        bool
-            ``True`` if not all landmarks are :class:`numpy.ndarray` otherwise ``False``
-        """
-        return not all(isinstance(face["landmarks_xy"], np.ndarray)
-                       for val in self._alignments.data.values()
-                       for face in val["faces"])
-
-    def update(self) -> int:
-        """ Update landmarks stored as `list` to :class:`numpy.ndarray`.
-
-        Returns
-        -------
-        int
-            The number of landmarks keys that were changed
-        """
-        update_count = 0
-        for val in self._alignments.data.values():
-            for alignment in val["faces"]:
-                test = alignment["landmarks_xy"]
-                if not isinstance(test, np.ndarray):
-                    alignment["landmarks_xy"] = np.array(test, dtype="float32")
-                    update_count += 1
-        return update_count
-
-
-class _MaskCentering(_Updater):
-    """ Masks not containing the stored_centering parameters. Prior to this implementation all
-    masks were stored with face centering """
-
-    def test(self) -> bool:
-        """ Mask centering was introduced in alignments version 2.2
-
-        Returns
-        -------
-        bool
-            ``True`` mask centering requires updating otherwise ``False``
-        """
-        return self._alignments.version < 2.2
-
-    def update(self) -> int:
-        """ Add the mask key to the alignment file and update the centering of existing masks
-
-        Returns
-        -------
-        int
-            The number of masks that were updated
-        """
-        update_count = 0
-        for val in self._alignments.data.values():
-            for alignment in val["faces"]:
-                if "mask" not in alignment:
-                    alignment["mask"] = {}
-                for mask in alignment["mask"].values():
-                    mask["stored_centering"] = "face"
-                    update_count += 1
-        return update_count
-
-
-class _IdentityAndVideoMeta(_Updater):
-    """ Prior to version 2.3 the identity key did not exist and the video_meta key was not
-    compulsory. These should now both always appear, but do not need to be populated. """
-
-    def test(self) -> bool:
-        """ Identity Key was introduced in alignments version 2.3
-
-        Returns
-        -------
-        bool
-            ``True`` identity key needs inserting otherwise ``False``
-        """
-        return self._alignments.version < 2.3
-
-    # Identity information was not previously stored in the alignments file.
-    def update(self) -> int:
-        """ Add the video_meta and identity keys to the alignment file and leave empty
-
-        Returns
-        -------
-        int
-            The number of keys inserted
-        """
-        update_count = 0
-        for val in self._alignments.data.values():
-            this_update = 0
-            if "video_meta" not in val:
-                val["video_meta"] = {}
-                this_update = 1
-            for alignment in val["faces"]:
-                if "identity" not in alignment:
-                    alignment["identity"] = {}
-                    this_update = 1
-                update_count += this_update
-        return update_count
-
-
-class _Legacy():
-    """ Legacy alignments properties that are no longer used, but are still required for backwards
-    compatibility/upgrading reasons.
-
-    Parameters
-    ----------
-    alignments: :class:`~Alignments`
-        The alignments object that requires these legacy properties
-    """
-    def __init__(self, alignments: Alignments) -> None:
-        self._alignments = alignments
-        self._hashes_to_frame: dict[str, dict[str, int]] = {}
-        self._hashes_to_alignment: dict[str, AlignmentFileDict] = {}
-
-    @property
-    def hashes_to_frame(self) -> dict[str, dict[str, int]]:
-        """ dict: The SHA1 hash of the face mapped to the frame(s) and face index within the frame
-        that the hash corresponds to. The structure of the dictionary is:
-
-        {**SHA1_hash** (`str`): {**filename** (`str`): **face_index** (`int`)}}.
-
-        Notes
-        -----
-        This method is deprecated and exists purely for updating legacy hash based alignments
-        to new png header storage in :class:`lib.align.update_legacy_png_header`.
-
-        The first time this property is referenced, the dictionary will be created and cached.
-        Subsequent references will be made to this cached dictionary.
-        """
-        if not self._hashes_to_frame:
-            logger.debug("Generating hashes to frame")
-            for frame_name, val in self._alignments.data.items():
-                for idx, face in enumerate(val["faces"]):
-                    self._hashes_to_frame.setdefault(
-                        face["hash"], {})[frame_name] = idx  # type:ignore
-        return self._hashes_to_frame
-
-    @property
-    def hashes_to_alignment(self) -> dict[str, AlignmentFileDict]:
-        """ dict: The SHA1 hash of the face mapped to the alignment for the face that the hash
-        corresponds to. The structure of the dictionary is:
-
-        Notes
-        -----
-        This method is deprecated and exists purely for updating legacy hash based alignments
-        to new png header storage in :class:`lib.align.update_legacy_png_header`.
-
-        The first time this property is referenced, the dictionary will be created and cached.
-        Subsequent references will be made to this cached dictionary.
-        """
-        if not self._hashes_to_alignment:
-            logger.debug("Generating hashes to alignment")
-            self._hashes_to_alignment = {face["hash"]: face  # type:ignore
-                                         for val in self._alignments.data.values()
-                                         for face in val["faces"]}
-        return self._hashes_to_alignment

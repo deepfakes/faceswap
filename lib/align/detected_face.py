@@ -87,8 +87,7 @@ class DetectedFace():
                  top: int | None = None,
                  height: int | None = None,
                  landmarks_xy: np.ndarray | None = None,
-                 mask: dict[str, Mask] | None = None,
-                 filename: str | None = None) -> None:
+                 mask: dict[str, Mask] | None = None) -> None:
         logger.trace(parse_class_init(locals()))  # type:ignore[attr-defined]
         self.image = image
         self.left = left
