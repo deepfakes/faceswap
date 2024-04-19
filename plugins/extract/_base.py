@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import torch
-from keras.backend import device_scope
+from keras import device
 
 from lib.logger import parse_class_init
 from lib.multithreading import MultiThread
@@ -424,7 +424,7 @@ class Extractor():
         """
         if cpu:
             logger.debug("CPU mode selected. Returning CPU device context")
-            return device_scope("cpu")
+            return device("cpu")
 
         # TODO apple_silicon + directml
         if get_backend() == "apple_silicon":
@@ -434,10 +434,10 @@ class Extractor():
 
         if torch.cuda.is_available():
             logger.debug("Cuda available. Returning Cuda device context")
-            return device_scope("cuda")
+            return device("cuda")
 
         logger.debug("Cuda not available. Returning CPU device context")
-        return device_scope("cpu")
+        return device("cpu")
 
     # <<< THREADING METHODS >>> #
     def start(self) -> None:
