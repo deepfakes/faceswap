@@ -4,10 +4,7 @@ from __future__ import annotations
 import logging
 import typing as T
 
-from keras.layers import (
-    Activation, Add, BatchNormalization, Concatenate, Conv2D as KConv2D, Conv2DTranspose,
-    DepthwiseConv2D as KDepthwiseConv2d, LeakyReLU, PReLU, SeparableConv2D, UpSampling2D)
-from keras.initializers import HeUniform, VarianceScaling
+from keras import initializers, layers
 
 from lib.logger import parse_class_init
 
@@ -16,8 +13,7 @@ from .layers import PixelShuffler, ReflectionPadding2D, Swish, KResizeImages
 from .normalization import InstanceNormalization
 
 if T.TYPE_CHECKING:
-    import keras
-
+    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +62,19 @@ def _get_name(name: str) -> str:
     return name
 
 
+def reset_naming() -> None:
+    """ Reset the naming convention for nn_block layers to start from 0
+
+    Used when a model needs to be rebuilt and the names for each build should be identical
+    """
+    logger.debug("Resetting nn_block layer naming")
+    global _NAMES  # pylint:disable=global-statement
+    _NAMES = {}
+
+
 #  << CONVOLUTIONS >>
 def _get_default_initializer(
-        initializer: keras.initializers.Initializer) -> keras.initializers.Initializer:
+        initializer: initializers.Initializer) -> initializers.Initializer:
     """ Returns a default initializer of Convolutional Aware or HeUniform for convolutional
     layers.
 
@@ -89,7 +95,7 @@ def _get_default_initializer(
     if _CONFIG["conv_aware_init"]:
         retval = ConvolutionAware()
     elif initializer is None:
-        retval = HeUniform()
+        retval = initializers.HeUniform()
     else:
         retval = initializer
         logger.debug("Using model supplied initializer: %s", retval)
@@ -98,7 +104,7 @@ def _get_default_initializer(
     return retval
 
 
-class Conv2D(KConv2D):  # pylint:disable=too-many-ancestors,abstract-method
+class Conv2D(layers.Conv2D):  # pylint:disable=too-many-ancestors,abstract-method
     """ A standard Keras Convolution 2D layer with parameters updated to be more appropriate for
     Faceswap architecture.
 
@@ -131,7 +137,7 @@ class Conv2D(KConv2D):  # pylint:disable=too-many-ancestors,abstract-method
         logger.debug("Initialized %s", self.__class__.__name__)
 
 
-class DepthwiseConv2D(KDepthwiseConv2d):  # noqa,pylint:disable=too-many-ancestors,abstract-method
+class DepthwiseConv2D(layers.DepthwiseConv2D):  # noqa,pylint:disable=too-many-ancestors,abstract-method
     """ A standard Keras Depthwise Convolution 2D layer with parameters updated to be more
     appropriate for Faceswap architecture.
 
@@ -200,10 +206,10 @@ class Conv2DOutput():
         name = _get_name(kwargs.pop("name")) if "name" in kwargs else _get_name(
                          f"conv_output_{filters}")
         self._conv = Conv2D(filters, kernel_size, padding=padding, name=f"{name}_conv2d", **kwargs)
-        self._activation = Activation(activation, dtype="float32", name=name)
+        self._activation = layers.Activation(activation, dtype="float32", name=name)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the Faceswap Convolutional Output Layer.
 
         Parameters
@@ -297,7 +303,7 @@ class Conv2DBlock():
         assert self._activation in ("leakyrelu", "swish", "prelu", None), (
             "activation should be 'leakyrelu', 'prelu', 'swish' or None")
 
-    def _get_layers(self) -> list[keras.layers.Layer]:
+    def _get_layers(self) -> list[layers.Layer]:
         """ Obtain the layer chain for the block
 
         Returns
@@ -311,7 +317,7 @@ class Conv2DBlock():
                                               kernel_size=self._args[-1][0],  # type:ignore[index]
                                               name=f"{self._name}_reflectionpadding2d"))
 
-        conv: keras.layers.Layer = DepthwiseConv2D if self._use_depthwise else Conv2D
+        conv: layers.Layer = DepthwiseConv2D if self._use_depthwise else Conv2D
 
         retval.append(conv(*self._args,
                            strides=self._strides,
@@ -324,20 +330,20 @@ class Conv2DBlock():
             retval.append(InstanceNormalization(name=f"{self._name}_instancenorm"))
 
         if self._normalization == "batch":
-            retval.append(BatchNormalization(axis=3, name=f"{self._name}_batchnorm"))
+            retval.append(layers.BatchNormalization(axis=3, name=f"{self._name}_batchnorm"))
 
         # activation
         if self._activation == "leakyrelu":
-            retval.append(LeakyReLU(self._relu_alpha, name=f"{self._name}_leakyrelu"))
+            retval.append(layers.LeakyReLU(self._relu_alpha, name=f"{self._name}_leakyrelu"))
         if self._activation == "swish":
             retval.append(Swish(name=f"{self._name}_swish"))
         if self._activation == "prelu":
-            retval.append(PReLU(name=f"{self._name}_prelu"))
+            retval.append(layers.PReLU(name=f"{self._name}_prelu"))
 
         logger.debug("%s layers: %s", self.__class__.__name__, retval)
         return retval
 
-    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the Faceswap Convolutional Layer.
 
         Parameters
@@ -385,18 +391,18 @@ class SeparableConv2DBlock():
         initializer = _get_default_initializer(kwargs.pop("kernel_initializer", None))
 
         name = _get_name(f"separableconv2d_{filters}")
-        self._conv = SeparableConv2D(filters,
-                                     kernel_size=kernel_size,
-                                     strides=strides,
-                                     padding="same",
-                                     depthwise_initializer=initializer,
-                                     pointwise_initializer=initializer,
-                                     name=f"{name}_seperableconv2d",
-                                     **kwargs)
-        self._activation = Activation("relu", name=f"{name}_relu")
+        self._conv = layers.SeparableConv2D(filters,
+                                            kernel_size=kernel_size,
+                                            strides=strides,
+                                            padding="same",
+                                            depthwise_initializer=initializer,
+                                            pointwise_initializer=initializer,
+                                            name=f"{name}_seperableconv2d",
+                                            **kwargs)
+        self._activation = layers.Activation("relu", name=f"{name}_relu")
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the Faceswap Separable Convolutional 2D Block.
 
         Parameters
@@ -468,7 +474,7 @@ class UpscaleBlock():
         self._shuffle = PixelShuffler(name=f"{name}_pixelshuffler", size=scale_factor)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the Faceswap Convolutional Layer.
 
         Parameters
@@ -554,15 +560,16 @@ class Upscale2xBlock():
                                 is_upscale=True,
                                 name=f"{name}_conv2d",
                                 **kwargs)
-            self._upsample = UpSampling2D(size=(scale_factor, scale_factor),
-                                          interpolation=interpolation,
-                                          name=f"{name}_upsampling2D")
+            self._upsample = layers.UpSampling2D(size=(scale_factor, scale_factor),
+                                                 interpolation=interpolation,
+                                                 name=f"{name}_upsampling2D")
 
-        self._joiner = Add() if self._fast else Concatenate(name=f"{name}_concatenate")
+        self._joiner = layers.Add() if self._fast else layers.Concatenate(
+            name=f"{name}_concatenate")
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the Faceswap Upscale 2x Layer.
 
         Parameters
@@ -643,22 +650,22 @@ class UpscaleResizeImagesBlock():
                             padding=padding,
                             is_upscale=True,
                             name=f"{name}_conv")
-        self._conv_trans = Conv2DTranspose(filters,
-                                           3,
-                                           strides=2,
-                                           padding=padding,
-                                           name=f"{name}_convtrans")
-        self._add = Add()
+        self._conv_trans = layers.Conv2DTranspose(filters,
+                                                  3,
+                                                  strides=2,
+                                                  padding=padding,
+                                                  name=f"{name}_convtrans")
+        self._add = layers.Add()
 
         if activation == "leakyrelu":
-            self._acivation = LeakyReLU(0.2, name=f"{name}_leakyrelu")
+            self._acivation = layers.LeakyReLU(0.2, name=f"{name}_leakyrelu")
         if activation == "swish":
             self._acivation = Swish(name=f"{name}_swish")
         if activation == "prelu":
-            self._acivation = PReLU(name=f"{name}_prelu")
+            self._acivation = layers.PReLU(name=f"{name}_prelu")
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the Faceswap Resize Images Layer.
 
         Parameters
@@ -725,9 +732,9 @@ class UpscaleDNYBlock():
                  **kwargs) -> None:
         logger.debug(parse_class_init(locals()))
         name = _get_name(f"upscale_dny_{filters}")
-        self._upsample = UpSampling2D(size=size,
-                                      interpolation=interpolation,
-                                      name=f"{name}_upsample2d")
+        self._upsample = layers.UpSampling2D(size=size,
+                                             interpolation=interpolation,
+                                             name=f"{name}_upsample2d")
         self._convs = [Conv2DBlock(filters,
                                    kernel_size,
                                    strides=1,
@@ -740,7 +747,7 @@ class UpscaleDNYBlock():
                        for idx in range(2)]
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the UpscaleDNY block
 
         Parameters
@@ -799,11 +806,11 @@ class ResidualBlock():
         self._kwargs = kwargs
 
         self._layers = self._get_layers()
-        self._add = Add()
-        self._activation = LeakyReLU(alpha=0.2, name=f"{self._name}_leakyrelu_3")
+        self._add = layers.Add()
+        self._activation = layers.LeakyReLU(alpha=0.2, name=f"{self._name}_leakyrelu_3")
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _get_layers(self) -> list[keras.layers.Layer]:
+    def _get_layers(self) -> list[layers.Layer]:
         """ Obtain the layer chain for the block
 
         Returns
@@ -822,7 +829,7 @@ class ResidualBlock():
                              padding=self._padding,
                              name=f"{self._name}_conv2d_0",
                              **self._kwargs))
-        retval.append(LeakyReLU(alpha=0.2, name=f"{self._name}_leakyrelu_1"))
+        retval.append(layers.LeakyReLU(alpha=0.2, name=f"{self._name}_leakyrelu_1"))
 
         if self._use_reflect_padding:
             retval.append(ReflectionPadding2D(stride=1,
@@ -831,9 +838,9 @@ class ResidualBlock():
 
         kwargs = {key: val for key, val in self._kwargs.items() if key != "kernel_initializer"}
         if not _CONFIG["conv_aware_init"]:
-            kwargs["kernel_initializer"] = VarianceScaling(scale=0.2,
-                                                           mode="fan_in",
-                                                           distribution="uniform")
+            kwargs["kernel_initializer"] = initializers.VarianceScaling(scale=0.2,
+                                                                        mode="fan_in",
+                                                                        distribution="uniform")
         retval.append(Conv2D(self._filters,
                              kernel_size=self._kernel_size,
                              padding=self._padding,
@@ -843,7 +850,7 @@ class ResidualBlock():
         logger.debug("%s layers: %s", self.__class__.__name__, retval)
         return retval
 
-    def __call__(self, inputs: keras.KerasTensor) -> keras.KerasTensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the Faceswap Residual Block.
 
         Parameters

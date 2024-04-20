@@ -19,13 +19,12 @@ import typing as T
 from contextlib import nullcontext
 
 import keras
-from keras import losses as k_losses
-from keras.config import set_dtype_policy
-from keras.dtype_policies import DTypePolicy
-from keras.optimizers import LossScaleOptimizer
+from keras import (config as k_config, dtype_policies, losses as k_losses,
+                   optimizers as k_optimizers)
 
 from lib.model import losses, optimizers
 from lib.model.autoclip import AutoClipper
+from lib.model.nn_blocks import reset_naming
 from lib.utils import get_backend
 
 if T.TYPE_CHECKING:
@@ -75,7 +74,8 @@ class Loss():
         self._mask_channels = self._get_mask_channels()
         self._inputs: list[keras.layers.Layer] = []
         self._names: list[str] = []
-        self._funcs: dict[str, Callable] = {}
+        self._funcs: dict[str, losses.LossWrapper | T.Callable[[KerasTensor, KerasTensor],
+                                                               KerasTensor]] = {}
 
         self._loss_dict = {"ffl": LossClass(function=losses.FocalFrequencyLoss),
                            "flip": LossClass(function=losses.LDRFLIPLoss,
@@ -105,9 +105,10 @@ class Loss():
         return self._names
 
     @property
-    def functions(self) -> dict[str, losses.LossWrapper]:
-        """ dict[str, :class:`~lib.model.losses.LossWrapper`]: The loss functions that apply to
-        each model output. """
+    def functions(self) -> dict[str, losses.LossWrapper | T.Callable[[KerasTensor, KerasTensor],
+                                                                     KerasTensor]]:
+        """ dict[str, :class:`~lib.model.losses.LossWrapper` | | Callable[[KerasTensor,
+        KerasTensor], KerasTensor]]]: The loss functions that apply to each model output. """
         return self._funcs
 
     @property
@@ -309,7 +310,7 @@ class Optimizer():
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
-    def optimizer(self) -> keras.optimizers.Optimizer:
+    def optimizer(self) -> k_optimizers.Optimizer:
         """ :class:`keras.optimizers.Optimizer`: The requested optimizer. """
         return self._optimizer(**self._kwargs)
 
@@ -392,7 +393,7 @@ class Settings():
     @classmethod
     def loss_scale_optimizer(
             cls,
-            optimizer: keras.optimizers.Optimizer) -> LossScaleOptimizer:
+            optimizer: k_optimizers.Optimizer) -> k_optimizers.LossScaleOptimizer:
         """ Optimize loss scaling for mixed precision training.
 
         Parameters
@@ -405,7 +406,7 @@ class Settings():
         :class:`keras.optimizers.LossScaleOptimizer`
             The original optimizer with loss scaling applied
         """
-        return LossScaleOptimizer(optimizer)
+        return k_optimizers.LossScaleOptimizer(optimizer)
 
     @classmethod
     def _set_keras_mixed_precision(cls, enable: bool) -> None:
@@ -419,8 +420,8 @@ class Settings():
         Enables or disables the Keras Mixed Precision API if requested in the user configuration
         file.
         """
-        policy = DTypePolicy("mixed_float16" if enable else "float32")
-        set_dtype_policy(policy)
+        policy = dtype_policies.DTypePolicy("mixed_float16" if enable else "float32")
+        k_config.set_dtype_policy(policy)
         logger.debug("%s mixed precision. (Compute dtype: %s, variable_dtype: %s)",
                      "Enabling" if enable else "Disabling",
                      policy.compute_dtype, policy.variable_dtype)
@@ -534,7 +535,12 @@ class Settings():
                 retval.extend(self._get_mixed_precision_layers(config["layers"]))
                 continue
 
+            if "dtype" not in config:
+                logger.debug("Skipping unsupported layer: %s %s",
+                             layer.get("name", f"class_name: {layer['class_name']}"), config)
+                continue
             dtype = config["dtype"]
+
             # Fail tests if Keras changes the way it stores dtypes
             assert isinstance(dtype, str), "Keras config dtype storage method has changed"
             if dtype == "mixed_float16":
@@ -556,7 +562,6 @@ class Settings():
             A list of layer names that are compatible to have their datatype switched
         """
         dtype = "mixed_float16" if self.use_mixed_precision else "float32"
-        policy = {"class_name": "Policy", "config": {"name": dtype}}
 
         for layer in layers:
             config = layer["config"]
@@ -570,8 +575,8 @@ class Settings():
                 continue
 
             logger.debug("Updating dtype for %s from: %s to: %s",
-                         layer["name"], config["dtype"], policy)
-            config["dtype"] = policy
+                         layer["name"], config["dtype"], dtype)
+            config["dtype"] = dtype
 
     def get_mixed_precision_layers(self,
                                    build_func: Callable[[list[keras.layers.Layer]],
@@ -595,14 +600,19 @@ class Settings():
             The list of layer names within the full precision model that can be switched
             to mixed precision
         """
-        logger.debug("Storing Mixed Precision compatible layers.")
+        logger.info("Storing Mixed Precision compatible layers.")
         self._set_keras_mixed_precision(True)
-        model = build_func(inputs)
-        layers = self._get_mixed_precision_layers(model.get_config()["layers"])
+        with keras.device("CPU"):
+            model = build_func(inputs)
+            layers = self._get_mixed_precision_layers(model.get_config()["layers"])
+
         del model
+        keras.backend.clear_session()
 
         self._set_keras_mixed_precision(False)
+        reset_naming()
         model = build_func(inputs)
+
         logger.debug("model: %s, mixed precision layers: %s", model, layers)
         return model, layers
 
@@ -640,6 +650,7 @@ class Settings():
             return model
 
         config = model.get_config()
+        weights = model.get_weights()
 
         if not self.use_mixed_precision and not state.mixed_precision_layers:
             # Switched to Full Precision, get compatible layers from model if not already stored
@@ -647,11 +658,13 @@ class Settings():
 
         self._switch_precision(config["layers"], state.mixed_precision_layers)
 
-        new_model = keras.models.Model().from_config(config)
-        new_model.set_weights(model.get_weights())
-        logger.info("Mixed precision has been updated from '%s' to '%s'",
-                    not self.use_mixed_precision, self.use_mixed_precision)
         del model
+        keras.backend.clear_session()
+        new_model = keras.models.Model().from_config(config)
+
+        new_model.set_weights(weights)
+        logger.info("Mixed precision has been %s",
+                    "enabled" if self.use_mixed_precision else "disabled")
         return new_model
 
     def strategy_scope(self) -> ContextManager:
