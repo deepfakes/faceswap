@@ -103,17 +103,32 @@ class VideoExtension(_Updater):
         super().__init__(alignments)
 
     def test(self) -> bool:
-        """ Requires update if alignments version is < 2.4
+        """ Requires update if the extension of the key in the alignment file is not the same
+        as for the input video file
 
         Returns
         -------
         bool
             ``True`` if the key extensions need updating otherwise ``False``
         """
-        retval = self._alignments.version < 2.4 and self._extension in VIDEO_EXTENSIONS
-        logger.debug("Needs update for video extension: %s (version: %s, extension: %s)",
-                     retval, self._alignments.version, self._extension)
-        return retval
+        if self._alignments.version > 2.4:
+            return False
+
+        if self._extension.lower() not in VIDEO_EXTENSIONS:
+            return False
+
+        exts = set(os.path.splitext(k)[-1] for k in self._alignments.data)
+        if len(exts) != 1:
+            logger.debug("Alignments file has multiple key extensions. Skipping")
+            return False
+
+        if self._extension in exts:
+            logger.debug("Alignments file contains correct key extensions. Skipping")
+            return False
+
+        logger.debug("Needs update for video extension (version: %s, extension: %s)",
+                     self._alignments.version, self._extension)
+        return True
 
     def update(self) -> int:
         """ Update alignments files that have been extracted from videos to have the key end in the
