@@ -327,7 +327,7 @@ class TrainArgs(FaceSwapArgs):
         argument_list.append({
             "opts": ("-bs", ),
             "type": int,
-            "dest": "depr_batch_size_bs_b",
+            "dest": "depr_batch-size_bs_b",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-it", ),
@@ -337,46 +337,46 @@ class TrainArgs(FaceSwapArgs):
         argument_list.append({
             "opts": ("-nl", ),
             "action": "store_true",
-            "dest": "depr_no_logs_nl_n",
+            "dest": "depr_no-logs_nl_n",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-ss", ),
             "type": int,
-            "dest": "depr_snapshot_interval_ss_I",
+            "dest": "depr_snapshot-interval_ss_I",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-tia", ),
             "type": str,
-            "dest": "depr_timelapse_input_a_tia_x",
+            "dest": "depr_timelapse-input-A_tia_x",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-tib", ),
             "type": str,
-            "dest": "depr_timelapse_input_b_tib_y",
+            "dest": "depr_timelapse-input-B_tib_y",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-to", ),
             "type": str,
-            "dest": "depr_timelapse_output_to_z",
+            "dest": "depr_timelapse-output_to_z",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-wl", ),
             "action": "store_true",
-            "dest": "depr_warp_to_landmarks_wl_M",
+            "dest": "depr_warp-to-landmarks_wl_M",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-nf", ),
             "action": "store_true",
-            "dest": "depr_no_flip_nf_P",
+            "dest": "depr_no-flip_nf_P",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-nac", ),
             "action": "store_true",
-            "dest": "depr_no_augment_color_nac_c",
+            "dest": "depr_no-augment-color_nac_c",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-nw", ),
             "action": "store_true",
-            "dest": "depr_no_warp_nw_W",
+            "dest": "depr_no-warp_nw_W",
             "help": argparse.SUPPRESS})
         return argument_list

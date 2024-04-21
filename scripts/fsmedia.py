@@ -53,7 +53,7 @@ def finalize(images_found: int, num_faces_detected: int, verify_output: bool) ->
         logger.info("Double check your results.")
         logger.info("-------------------------")
 
-    logger.info("Process Succesfully Completed. Shutting Down...")
+    logger.info("Process Successfully Completed. Shutting Down...")
 
 
 class Alignments(AlignmentsBase):

@@ -225,6 +225,6 @@ class SortArgs(FaceSwapArgs):
         argument_list.append({
             "opts": ("-lf", ),
             "type": str,
-            "dest": "depr_log_file_path_lf_f",
+            "dest": "depr_log-file_lf_f",
             "help": argparse.SUPPRESS})
         return argument_list

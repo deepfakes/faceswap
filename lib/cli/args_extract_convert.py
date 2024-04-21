@@ -71,7 +71,7 @@ class ExtractConvertArgs(FaceSwapArgs):
             "action": FileFullPaths,
             "filetypes": "alignments",
             "type": str,
-            "dest": "depr_alignments_path_al_p",
+            "dest": "depr_alignments_al_p",
             "help": argparse.SUPPRESS})
         return argument_list
 
@@ -391,12 +391,12 @@ class ExtractArgs(ExtractConvertArgs):
         argument_list.append({
             "opts": ("-min", ),
             "type": int,
-            "dest": "depr_min_size_min_m",
+            "dest": "depr_min-size_min_m",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-een", ),
             "type": int,
-            "dest": "depr_extract_every_n_een_N",
+            "dest": "depr_extract-every-n_een_N",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-nm",),
@@ -407,7 +407,7 @@ class ExtractArgs(ExtractConvertArgs):
         argument_list.append({
             "opts": ("-rf", ),
             "type": int,
-            "dest": "depr_re_feed_rf_R",
+            "dest": "depr_re-feed_rf_R",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-sz", ),
@@ -417,12 +417,12 @@ class ExtractArgs(ExtractConvertArgs):
         argument_list.append({
             "opts": ("-si", ),
             "type": int,
-            "dest": "depr_save_interval_si_v",
+            "dest": "depr_save-interval_si_v",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-dl", ),
             "action": "store_true",
-            "dest": "depr_debug_landmarks_dl_B",
+            "dest": "depr_debug-landmarks_dl_B",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-sp", ),
@@ -432,12 +432,12 @@ class ExtractArgs(ExtractConvertArgs):
         argument_list.append({
             "opts": ("-sf", ),
             "action": "store_true",
-            "dest": "depr_skip_faces_sf_e",
+            "dest": "depr_skip-existing-faces_sf_e",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-ssf", ),
             "action": "store_true",
-            "dest": "depr_skip_saving_faces_ssf_K",
+            "dest": "depr_skip-saving-faces_ssf_K",
             "help": argparse.SUPPRESS})
         return argument_list
 
@@ -726,22 +726,22 @@ class ConvertArgs(ExtractConvertArgs):
         argument_list.append({
             "opts": ("-ref", ),
             "type": str,
-            "dest": "depr_reference_video_ref_r",
+            "dest": "depr_reference-video_ref_r",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-fr", ),
             "type": str,
             "nargs": "+",
-            "dest": "depr_frame_ranges_fr_R",
+            "dest": "depr_frame-ranges_fr_R",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-osc", ),
             "type": int,
-            "dest": "depr_output_scale_osc_O",
+            "dest": "depr_output-scale_osc_O",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-otf", ),
             "action": "store_true",
-            "dest": "depr_on_the_fly_otf_T",
+            "dest": "depr_on-the-fly_otf_T",
             "help": argparse.SUPPRESS})
         return argument_list

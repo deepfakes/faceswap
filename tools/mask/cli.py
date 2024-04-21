@@ -238,6 +238,6 @@ class MaskArgs(FaceSwapArgs):
         argument_list.append({
             "opts": ("-it", ),
             "type": str,
-            "dest": "depr_input_type_it_I",
+            "dest": "depr_input-type_it_I",
             "help": argparse.SUPPRESS})
         return argument_list

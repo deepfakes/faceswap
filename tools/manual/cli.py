@@ -69,7 +69,7 @@ class ManualArgs(FaceSwapArgs):
         argument_list.append({
             "opts": ("-al", ),
             "type": str,
-            "dest": "depr_alignments_path_al_a",
+            "dest": "depr_alignments_al_a",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-fr", ),

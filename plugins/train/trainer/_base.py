@@ -479,7 +479,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
         logger.debug("Resizing sample: (side: '%s', sample.shape: %s, target_size: %s, scale: %s)",
                      side, sample.shape, target_size, scale)
         interpn = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA
-        retval = np.array([cv2.resize(img, (target_size, target_size), interpn)
+        retval = np.array([cv2.resize(img, (target_size, target_size), interpolation=interpn)
                            for img in sample])
         logger.debug("Resized sample: (side: '%s' shape: %s)", side, retval.shape)
         return retval

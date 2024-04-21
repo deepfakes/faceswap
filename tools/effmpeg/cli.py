@@ -211,7 +211,7 @@ class EffmpegArgs(FaceSwapArgs):
             "opts": ("-ef", ),
             "type": str,
             "choices": IMAGE_EXTENSIONS,
-            "dest": "depr_extract_ext_et_E",
+            "dest": "depr_extract-filetype_et_E",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ('-tr', ),
