@@ -111,9 +111,8 @@ class VideoExtension(_Updater):
         bool
             ``True`` if the key extensions need updating otherwise ``False``
         """
-        if self._alignments.version > 2.4:
-            return False
-
+        # Note: Don't check on alignments file version. It's possible that the file gets updated to
+        # a newer version before this check is run
         if self._extension.lower() not in VIDEO_EXTENSIONS:
             return False
 
