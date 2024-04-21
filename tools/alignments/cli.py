@@ -208,17 +208,17 @@ class AlignmentsArgs(FaceSwapArgs):
         argument_list.append({
             "opts": ("-fc", ),
             "type": str,
-            "dest": "depr_faces_dir_fc_c",
+            "dest": "depr_faces_folder_fc_c",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-fr", ),
             "type": str,
-            "dest": "depr_extract_every_n_een_N",
+            "dest": "depr_extract-every-n_een_N",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-een", ),
             "type": int,
-            "dest": "depr_frames_dir_fr_r",
+            "dest": "depr_faces_folder_fr_r",
             "help": argparse.SUPPRESS})
         argument_list.append({
             "opts": ("-sz", ),

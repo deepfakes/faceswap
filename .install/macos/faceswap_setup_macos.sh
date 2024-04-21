@@ -298,7 +298,7 @@ conda_opts () {
     echo ""
     info "Faceswap will be installed inside a Conda Environment. If an environment already\
     exists with the name specified then it will be deleted."
-    ask "Please specify a name for the Faceswap Conda Environmnet" "ENV_NAME"
+    ask "Please specify a name for the Faceswap Conda Environment" "ENV_NAME"
 }
 
 faceswap_opts () {

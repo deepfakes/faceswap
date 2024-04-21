@@ -25,7 +25,7 @@ class AugConstants:  # pylint:disable=too-many-instance-attributes,too-few-publi
     ----------
     config: dict[str, ConfigValueType]
         The user training configuration options
-    pricessing_size: int:
+    processing_size: int:
         The size of image to augment the data for
     batch_size: int
         The batch size that augmented data is being prepared for
