@@ -6,16 +6,12 @@ import logging
 import sys
 import typing as T
 
-from keras import ops, Optimizer, optimizers, saving
+from keras import ops, Optimizer, saving
 
 from lib.logger import parse_class_init
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor, Variable
-
-Adam = optimizers.Adam
-Nadam = optimizers.Nadam
-RMSprop = optimizers.RMSprop
 
 logger = logging.getLogger(__name__)
 

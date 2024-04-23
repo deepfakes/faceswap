@@ -389,10 +389,7 @@ class ModelBase():
         if self.state.model_needs_rebuild:
             self._model = self._settings.check_model_precision(self._model, self._state)
 
-        optimizer = Optimizer(self.config["optimizer"],
-                              self.config["learning_rate"],
-                              self.config["autoclip"],
-                              10 ** int(self.config["epsilon_exponent"])).optimizer
+        optimizer = Optimizer(self.config).optimizer
         if self._settings.use_mixed_precision:
             optimizer = self._settings.loss_scale_optimizer(optimizer)
 
@@ -709,9 +706,9 @@ class State():
             ``True`` if legacy items exist and state file has been updated, otherwise ``False``
         """
         logger.debug("Checking for legacy state file update")
-        priors = ["dssim_loss", "mask_type", "mask_type", "l2_reg_term", "clipnorm"]
-        new_items = ["loss_function", "learn_mask", "mask_type", "loss_function_2",
-                     "autoclip"]
+        priors = ["dssim_loss", "mask_type", "mask_type", "l2_reg_term", "clipnorm", "autoclip"]
+        new_items = ["loss_function", "learn_mask", "mask_type", "loss_function_2", "clipping",
+                     "clipping"]
         updated = False
         for old, new in zip(priors, new_items):
             if old not in self._config:
@@ -755,10 +752,17 @@ class State():
 
             # Replace clipnorm with correct gradient clipping type and value
             if old == "clipnorm":
-                self._config[new] = self._config[old]
+                self._config[new] = "norm"
                 del self._config[old]
                 updated = True
-                logger.info("Updated config from legacy '%s' to '%s'", old, new)
+                logger.info("Updated config from legacy '%s' to  '%s: %s'", old, new, old)
+
+            # Replace autoclip with correct gradient clipping type
+            if old == "autoclip":
+                self._config[new] = old
+                del self._config[old]
+                updated = True
+                logger.info("Updated config from legacy '%s' to '%s: %s'", old, new, old)
 
         logger.debug("State file updated for legacy config: %s", updated)
         return updated

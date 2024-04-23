@@ -107,6 +107,7 @@ class Config(FaceswapConfig):
         logger.debug("Setting defaults")
         self._set_globals()
         self._set_loss()
+        self._set_optimizer()
         self._defaults_from_plugin(os.path.dirname(__file__))
 
     def _set_globals(self) -> None:
@@ -192,90 +193,6 @@ class Config(FaceswapConfig):
                 "a new model."))
         self.add_item(
             section=section,
-            title="optimizer",
-            datatype=str,
-            gui_radio=True,
-            group=_("optimizer"),
-            default="adam",
-            choices=["adabelief", "adam", "nadam", "rms-prop"],
-            info=_(
-                "The optimizer to use."
-                "\n\t adabelief - Adapting Stepsizes by the Belief in Observed Gradients. An "
-                "optimizer with the aim to converge faster, generalize better and remain more "
-                "stable. (https://arxiv.org/abs/2010.07468). NB: Epsilon for AdaBelief needs to "
-                "be set to a smaller value than other Optimizers. Generally setting the 'Epsilon "
-                "Exponent' to around '-16' should work."
-                "\n\t adam - Adaptive Moment Optimization. A stochastic gradient descent method "
-                "that is based on adaptive estimation of first-order and second-order moments."
-                "\n\t nadam - Adaptive Moment Optimization with Nesterov Momentum. Much like "
-                "Adam but uses a different formula for calculating momentum."
-                "\n\t rms-prop - Root Mean Square Propagation. Maintains a moving (discounted) "
-                "average of the square of the gradients. Divides the gradient by the root of "
-                "this average."))
-        self.add_item(
-            section=section,
-            title="learning_rate",
-            datatype=float,
-            default=5e-5,
-            min_max=(1e-6, 1e-4),
-            rounding=6,
-            fixed=False,
-            group=_("optimizer"),
-            info=_(
-                "Learning rate - how fast your network will learn (how large are the "
-                "modifications to the model weights after one batch of training). Values that "
-                "are too large might result in model crashes and the inability of the model to "
-                "find the best solution. Values that are too small might be unable to escape "
-                "from dead-ends and find the best global minimum."))
-        self.add_item(
-            section=section,
-            title="epsilon_exponent",
-            datatype=int,
-            default=-7,
-            min_max=(-20, 0),
-            rounding=1,
-            fixed=False,
-            group=_("optimizer"),
-            info=_(
-                "The epsilon adds a small constant to weight updates to attempt to avoid 'divide "
-                "by zero' errors. Unless you are using the AdaBelief Optimizer, then Generally "
-                "this option should be left at default value, For AdaBelief, setting this to "
-                "around '-16' should work.\n"
-                "In all instances if you are getting 'NaN' loss values, and have been unable to "
-                "resolve the issue any other way (for example, increasing batch size, or "
-                "lowering learning rate), then raising the epsilon can lead to a more stable "
-                "model. It may, however, come at the cost of slower training and a less accurate "
-                "final result.\n"
-                "NB: The value given here is the 'exponent' to the epsilon. For example, "
-                "choosing '-7' will set the epsilon to 1e-7. Choosing '-3' will set the epsilon "
-                "to 0.001 (1e-3)."))
-        self.add_item(
-            section=section,
-            title="save_optimizer",
-            datatype=str,
-            group=_("optimizer"),
-            default="exit",
-            fixed=False,
-            gui_radio=True,
-            choices=["never", "always", "exit"],
-            info=_(
-                "When to save the Optimizer Weights. Saving the optimizer weights is not "
-                "necessary and will increase the model file size 3x (and by extension the amount "
-                "of time it takes to save the model). However, it can be useful to save these "
-                "weights if you want to guarantee that a resumed model carries off exactly from "
-                "where it left off, rather than spending a few hundred iterations catching up."
-                "\n\t never - Don't save optimizer weights."
-                "\n\t always - Save the optimizer weights at every save iteration. Model saving "
-                "will take longer, due to the increased file size, but you will always have the "
-                "last saved optimizer state in your model file."
-                "\n\t exit - Only save the optimizer weights when explicitly terminating a "
-                "model. This can be when the model is actively stopped or when the target "
-                "iterations are met. Note: If the training session ends because of another "
-                "reason (e.g. power outage, Out of Memory Error, NaN detected) then the "
-                "optimizer weights will NOT be saved."))
-
-        self.add_item(
-            section=section,
             title="lr_finder_iterations",
             datatype=int,
             default=1000,
@@ -321,20 +238,6 @@ class Config(FaceswapConfig):
                 "but with a higher chance of exploding gradients."
                 "\n\textreme - The highest optimal learning rate. A much higher risk of exploding "
                 "gradients."))
-        self.add_item(
-            section=section,
-            title="autoclip",
-            datatype=bool,
-            default=False,
-            info=_(
-                "Apply AutoClipping to the gradients. AutoClip analyzes the "
-                "gradient weights and adjusts the normalization value dynamically to fit the "
-                "data. Can help prevent NaNs and improve model optimization at the expense of "
-                "VRAM. Ref: AutoClip: Adaptive Gradient Clipping for Source Separation Networks "
-                "https://arxiv.org/abs/2007.14469"),
-            fixed=False,
-            gui_radio=True,
-            group=_("optimizer"))
         self.add_item(
             section=section,
             title="reflect_padding",
@@ -669,3 +572,262 @@ class Config(FaceswapConfig):
                 "Dedicate a portion of the model to learning how to duplicate the input "
                 "mask. Increases VRAM usage in exchange for learning a quick ability to try "
                 "to replicate more complex mask models."))
+
+    def _set_optimizer(self) -> None:
+        """ Set the default optimizer options. """
+        logger.debug("Setting Optimizer config")
+        section = "global.optimizer"
+        self.add_section(section, _(
+            "Optimizer configuration options\n"
+            "The optimizer applies the output of the loss function to the model.\n")
+            + ADDITIONAL_INFO)
+        self.add_item(
+            section=section,
+            title="optimizer",
+            datatype=str,
+            gui_radio=True,
+            group=_("optimizer"),
+            default="adam",
+            choices=["adabelief", "adam", "adamax", "adamw", "lion", "nadam", "rms-prop"],
+            fixed=True,
+            info=_(
+                "The optimizer to use."
+                "\n\t adabelief - Adapting Stepsizes by the Belief in Observed Gradients. An "
+                "optimizer with the aim to converge faster, generalize better and remain more "
+                "stable. (https://arxiv.org/abs/2010.07468). NB: Epsilon for AdaBelief needs to "
+                "be set to a smaller value than other Optimizers. Generally setting the 'Epsilon "
+                "Exponent' to around '-16' should work."
+                "\n\t adam - Adaptive Moment Optimization. A stochastic gradient descent method "
+                "that is based on adaptive estimation of first-order and second-order moments."
+                "\n\t adamax - a variant of Adam based on the infinity norm. Due to its "
+                "capability of adjusting the learning rate based on data characteristics, it is "
+                "suited to learn time-variant process, "
+                "parameters follow those provided in the paper"
+                "\n\t adamw - Like 'adam' but with an added method to decay weights per the "
+                "techniques discussed in the paper (https://arxiv.org/abs/1711.05101). NB: "
+                "Weight decay should be set at 0.004 for default implementation."
+                "\n\t lion - A method that uses the sign operator to control the magnitude of the "
+                "update, rather than relying on second-order moments (Adam). saves VRAM by only "
+                "tracking the momentum. Performance gains should be better with larger batch "
+                "sizes. A suitable learning rate for Lion is typically 3-10x smaller than that "
+                "for AdamW. The weight decay for Lion should be 3-10x larger than that for AdamW "
+                "to maintain a similar strength."
+                "\n\t nadam - Adaptive Moment Optimization with Nesterov Momentum. Much like "
+                "Adam but uses a different formula for calculating momentum."
+                "\n\t rms-prop - Root Mean Square Propagation. Maintains a moving (discounted) "
+                "average of the square of the gradients. Divides the gradient by the root of "
+                "this average."))
+        self.add_item(
+            section=section,
+            title="learning_rate",
+            datatype=float,
+            default=5e-5,
+            min_max=(1e-6, 1e-4),
+            rounding=6,
+            fixed=False,
+            group=_("optimizer"),
+            info=_(
+                "Learning rate - how fast your network will learn (how large are the "
+                "modifications to the model weights after one batch of training). Values that "
+                "are too large might result in model crashes and the inability of the model to "
+                "find the best solution. Values that are too small might be unable to escape "
+                "from dead-ends and find the best global minimum."))
+        self.add_item(
+            section=section,
+            title="epsilon_exponent",
+            datatype=int,
+            default=-7,
+            min_max=(-20, 0),
+            rounding=1,
+            fixed=False,
+            group=_("optimizer"),
+            info=_(
+                "The epsilon adds a small constant to weight updates to attempt to avoid 'divide "
+                "by zero' errors. Unless you are using the AdaBelief Optimizer, then Generally "
+                "this option should be left at default value, For AdaBelief, setting this to "
+                "around '-16' should work.\n"
+                "In all instances if you are getting 'NaN' loss values, and have been unable to "
+                "resolve the issue any other way (for example, increasing batch size, or "
+                "lowering learning rate), then raising the epsilon can lead to a more stable "
+                "model. It may, however, come at the cost of slower training and a less accurate "
+                "final result.\n"
+                "NB: The value given here is the 'exponent' to the epsilon. For example, "
+                "choosing '-7' will set the epsilon to 1e-7. Choosing '-3' will set the epsilon "
+                "to 0.001 (1e-3)."))
+        self.add_item(
+            section=section,
+            title="save_optimizer",
+            datatype=str,
+            group=_("optimizer"),
+            default="exit",
+            fixed=False,
+            gui_radio=True,
+            choices=["never", "always", "exit"],
+            info=_(
+                "When to save the Optimizer Weights. Saving the optimizer weights is not "
+                "necessary and will increase the model file size 3x (and by extension the amount "
+                "of time it takes to save the model). However, it can be useful to save these "
+                "weights if you want to guarantee that a resumed model carries off exactly from "
+                "where it left off, rather than spending a few hundred iterations catching up."
+                "\n\t never - Don't save optimizer weights."
+                "\n\t always - Save the optimizer weights at every save iteration. Model saving "
+                "will take longer, due to the increased file size, but you will always have the "
+                "last saved optimizer state in your model file."
+                "\n\t exit - Only save the optimizer weights when explicitly terminating a "
+                "model. This can be when the model is actively stopped or when the target "
+                "iterations are met. Note: If the training session ends because of another "
+                "reason (e.g. power outage, Out of Memory Error, NaN detected) then the "
+                "optimizer weights will NOT be saved."))
+        self.add_item(
+            section=section,
+            title="gradient_clipping",
+            datatype=str,
+            choices=["autoclip", "global_norm", "norm", "value", "none"],
+            gui_radio=True,
+            default="none",
+            group=_("clipping"),
+            fixed=False,
+            info=_(
+                "Apply clipping to the gradients. Can help prevent NaNs and improve model "
+                "optimization at the expense of VRAM."
+                "\n\tautoclip: Analyzes the gradient weights and adjusts the normalization value "
+                "dynamically to fit the data"
+                "\n\tglobal_norm: Clips the gradient of each weight so that the global norm is no "
+                "higher than the given value."
+                "\n\tnorm: Clips the gradient of each weight so that its norm is no higher than "
+                "the given value."
+                "\n\tvalue: Clips the gradient of each weight so that it is no higher than the "
+                "given value."
+                "\n\tnone: Don't perform any clipping to the gradients."))
+        self.add_item(
+            section=section,
+            title="clipping_value",
+            datatype=float,
+            min_max=(0.0, 10.0),
+            rounding=1,
+            default=1.0,
+            group=_("clipping"),
+            fixed=False,
+            info=_(
+                "The amount of clipping to perform."
+                "\n\tautoclip: The percentile to clip at. A value of 1.0 will clip at the 10th "
+                "percentile a value of 2.5 will clip at the 25th percentile etc. Default: 1.0"
+                "\n\tglobal_norm: The gradient of each weight is clipped so that the global norm "
+                "is no higher than this value."
+                "\n\tnorm: The gradient of each weight is clipped so that its norm is no higher "
+                "than this value."
+                "\n\tvalue: The gradient of each weight is clipped to be no higher than this "
+                "value."
+                "\n\tnone: This option is ignored."))
+        self.add_item(
+            section=section,
+            title="autoclip_history",
+            datatype=int,
+            min_max=(0, 100000),
+            rounding=1000,
+            default=10000,
+            group=_("clipping"),
+            fixed=False,
+            info=_(
+                "The maximum number of prior iterations for autoclipper to analyze when "
+                "calculating the normalization amount. 0 to always include all prior iterations."))
+        self.add_item(
+            section=section,
+            title="weight_decay",
+            datatype=float,
+            min_max=(0.0, 1.0),
+            rounding=4,
+            default=0.0,
+            group=_("updates"),
+            fixed=False,
+            info=_("If set, weight decay is applied. 0.0 for no weight decay. Default is 0.0 for "
+                   "all optimizers except AdamW (0.004)"))
+        self.add_item(
+            section=section,
+            title="gradient_accumulation",
+            datatype=int,
+            min_max=(1, 100),
+            rounding=1,
+            default=1,
+            group=_("updates"),
+            fixed=False,
+            info=_(
+                "Values above 1 will enable Gradient Accumulation. Updates will not be at every "
+                "iteration; instead they will occur every number of iterations given here. The "
+                "update will be the average value of the gradients since the last update. Can be "
+                "useful when your batch size is very small, in order to reduce gradient noise at "
+                "each update iteration."))
+        self.add_item(
+            section=section,
+            title="use_ema",
+            datatype=bool,
+            default=False,
+            group=_("exponential moving average"),
+            fixed=True,
+            info=_(
+                "Enable exponential moving average (EMA). EMA consists of computing an "
+                "exponential moving average of the weights of the model (as the weight values "
+                "change after each training batch), and periodically overwriting the weights with "
+                "their moving average"))
+        self.add_item(
+            section=section,
+            title="ema_momentum",
+            datatype=float,
+            min_max=(0.0, 1.0),
+            rounding=4,
+            default=0.99,
+            group=_("exponential moving average"),
+            fixed=True,
+            info=_(
+                "Only used if use_ema is enabled. This is the momentum to use when computing the "
+                "EMA of the model's weights: new_average = ema_momentum * old_average + (1 - "
+                "ema_momentum) * current_variable_value."))
+        self.add_item(
+            section=section,
+            title="ema_frequency",
+            datatype=int,
+            min_max=(10, 10000),
+            rounding=10,
+            default=100,
+            group=_("exponential moving average"),
+            fixed=True,
+            info=_(
+                "Only used if use_ema is enabled. Set the number of iterations, to overwrite the "
+                "model variable by its moving average. "))
+        self.add_item(
+            section=section,
+            title="ada_beta_1",
+            datatype=float,
+            min_max=(0.0, 1.0),
+            rounding=4,
+            default=0.9,
+            group=_("optimizer specific"),
+            fixed=True,
+            info=_(
+                "The exponential decay rate for the 1st moment estimates. Used for the following "
+                "Optimizers: AdaBelief, Adam, Adamax, AdamW, Lion, nAdam. Ignored for all "
+                "others."))
+        self.add_item(
+            section=section,
+            title="ada_beta_2",
+            datatype=float,
+            min_max=(0.0, 1.0),
+            rounding=4,
+            default=0.999,
+            group=_("optimizer specific"),
+            fixed=True,
+            info=_(
+                "The exponential decay rate for the 2nd moment estimates. Used for the following "
+                "Optimizers:  AdaBelief, Adam, Adamax, AdamW, Lion, nAdam. Ignored for all "
+                "others."))
+        self.add_item(
+            section=section,
+            title="ada_amsgrad",
+            datatype=bool,
+            default=False,
+            group=_("optimizer specific"),
+            fixed=True,
+            info=_(
+                "Whether to apply AMSGrad variant of the algorithm from the paper 'On the "
+                "Convergence of Adam and beyond. Used for the following Optimizers: AdaBelief, "
+                "Adam, AdamW. Ignored for all others.'"))

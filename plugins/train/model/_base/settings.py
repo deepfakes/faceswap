@@ -19,12 +19,13 @@ import typing as T
 from contextlib import nullcontext
 
 import keras
-from keras import (config as k_config, dtype_policies, losses as k_losses,
-                   optimizers as k_optimizers)
+from keras import config as k_config, dtype_policies, losses as k_losses, optimizers
 
-from lib.model import losses, optimizers
+from lib.model import losses
+from lib.model.optimizers import AdaBelief
 from lib.model.autoclip import AutoClipper
 from lib.model.nn_blocks import reset_naming
+from lib.logger import parse_class_init
 from lib.utils import get_backend
 
 if T.TYPE_CHECKING:
@@ -32,6 +33,7 @@ if T.TYPE_CHECKING:
     from contextlib import AbstractContextManager as ContextManager
     from argparse import Namespace
     from keras import KerasTensor
+    from lib.config import ConfigValueType
     from .model import State
 
 logger = logging.getLogger(__name__)
@@ -277,70 +279,177 @@ class Optimizer():
 
     Parameters
     ----------
-    optimizer: str
-        The selected optimizer name for the plugin
-    learning_rate: float
-        The selected learning rate to use
-    autoclip: bool
-        ``True`` if AutoClip should be enabled otherwise ``False``
-    epsilon: float
-        The value to use for the epsilon of the optimizer
+    config: dict[str, ConfigValueType]:
+        The user settings configuration dictionary
     """
-    def __init__(self,
-                 optimizer: str,
-                 learning_rate: float,
-                 autoclip: bool,
-                 epsilon: float) -> None:
-        logger.debug("Initializing %s: (optimizer: %s, learning_rate: %s, autoclip: %s, "
-                     ", epsilon: %s)", self.__class__.__name__, optimizer, learning_rate,
-                     autoclip, epsilon)
-        valid_optimizers = {"adabelief": (optimizers.AdaBelief,
-                                          {"beta_1": 0.5, "beta_2": 0.99, "epsilon": epsilon}),
-                            "adam": (optimizers.Adam,
-                                     {"beta_1": 0.5, "beta_2": 0.99, "epsilon": epsilon}),
-                            "nadam": (optimizers.Nadam,
-                                      {"beta_1": 0.5, "beta_2": 0.99, "epsilon": epsilon}),
-                            "rms-prop": (optimizers.RMSprop, {"epsilon": epsilon})}
-        optimizer_info = valid_optimizers[optimizer]
-        self._optimizer: Callable = optimizer_info[0]
-        self._kwargs: dict[str, T.Any] = optimizer_info[1]
+    def __init__(self, config: dict[str, ConfigValueType]) -> None:
+        logger.debug(parse_class_init(locals()))
+        betas = {"ada_beta_1": "beta_1", "ada_beta_2": "beta_2"}
+        amsgrad = {"ada_amsgrad": "amsgrad"}
+        self._valid: dict[str, tuple[T.Type[Optimizer], dict[str, T.Any]]] = {
+            "adabelief": (AdaBelief, betas | amsgrad),
+            "adam": (optimizers.Adam, betas | amsgrad),
+            "adamax": (optimizers.Adamax, betas),
+            "adamw": (optimizers.AdamW, betas | amsgrad),
+            "lion": (optimizers.Lion, betas),
+            "nadam": (optimizers.Nadam, betas),
+            "rms-prop": (optimizers.RMSprop, {})}
 
-        self._configure(learning_rate, autoclip)
-        logger.verbose("Using %s optimizer", optimizer.title())  # type:ignore[attr-defined]
+        assert isinstance(config["learning_rate"], float)
+        assert isinstance(config["epsilon_exponent"], int)
+        assert isinstance(config["optimizer"], str)
+
+        self._optimizer = self._valid[config["optimizer"]][0]
+        self._kwargs: dict[str, T.Any] = {"learning_rate": config["learning_rate"],
+                                          "epsilon": 10 ** int(config["epsilon_exponent"])}
+
+        self._configure(config)
+        logger.verbose("Using %s optimizer", self._optimizer.__name__)  # type:ignore[attr-defined]
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
-    def optimizer(self) -> k_optimizers.Optimizer:
+    def optimizer(self) -> optimizers.Optimizer:
         """ :class:`keras.optimizers.Optimizer`: The requested optimizer. """
         return self._optimizer(**self._kwargs)
 
-    def _configure(self,
-                   learning_rate: float,
-                   autoclip: bool) -> None:
-        """ Configure the optimizer based on user settings.
+    def _configure_clipping(self,
+                            method: T.Literal["autoclip", "norm", "value"] | None,
+                            value: float,
+                            history: int) -> None:
+        """ Configure optimizer clipping related kwargs, if selected
 
         Parameters
         ----------
-        learning_rate: float
-            The selected learning rate to use
-        autoclip: bool
-            ``True`` if AutoClip should be enabled otherwise ``False``
+        method: Literal["autoclip", "norm", "value"] | None
+            The clipping method to use. ``None`` for no clipping
+        value: float
+            The value to clip by norm/value by. For autoclip, this is the clip percentile
+            (a value of 1.0 is a clip percentile of 10%)
+        history: int
+            autoclip only: The number of iterations to keep for calculating the normalized value
         """
-        self._kwargs["learning_rate"] = learning_rate
+        logger.debug("method: '%s', value: %s, history: %s", method, value, history)
+        if method is None:
+            logger.debug("clipping disabled")
+            return
 
+        logger.info("Enabling Clipping: %s", method.replace("_", " ").replace("_", " ").title())
+        clip_types = {"global_norm": "global_clipnorm", "norm": "clipnorm", "value": "clipvalue"}
+        if method in clip_types:
+            self._kwargs[clip_types[method]] = value
+            logger.debug("Setting clipping kwargs for '%s': %s",
+                         method, {k: v for k, v in self._kwargs.items()
+                                  if k == clip_types[method]})
+            return
+
+        assert method == "autoclip"
         # Test for if keras optimizer changes its structure to no longer have _clip_gradients.
         # Ensures any tests fails in this situation
         assert hasattr(self._optimizer,
                        "_clip_gradients"), "keras.BaseOptimizer._clip_gradients no longer exists"
 
-        if not autoclip:
-            return
-
-        logger.info("Enabling AutoClip")
         # TODO Keras3 has removed the ""gradient_transformers" kwarg, and there now appears to be
         # no standardised method to add custom gradent transformers. Currently, we monkey patch its
         # _clip_gradients function, which feels hacky and potentially problematic
-        setattr(self._optimizer, "_clip_gradients", AutoClipper(10, history_size=10000))
+        setattr(self._optimizer, "_clip_gradients", AutoClipper(int(value * 10),
+                                                                history_size=history))
+
+    def _configure_ema(self, enable: bool, momentum: float, frequency: int) -> None:
+        """ Confihure the optimizer kwargs for exponential moving average updates
+
+        Parameters
+        ----------
+        enable: bool
+            ``False`` to disable
+        momentum: float
+            the momentum to use when computing the EMA of the model's weights: new_average =
+            momentum * old_average + (1 - momentum) * current_variable_value
+        frequency: int
+            the number of iterations, to overwrite the model variable by its moving average.
+        """
+        self._kwargs["use_ema"] = enable
+        if not enable:
+            logger.debug("ema disabled.")
+            return
+
+        logger.info("Enabling EMA")
+        self._kwargs["ema_momentum"] = momentum
+        self._kwargs["ema_overwrite_frequency"] = frequency
+        logger.debug("ema enabled (momentum: %s, frequency: %s)", momentum, frequency)
+
+    def _configure_kwargs(self, weight_decay: float, gradient_accumulation_steps: int) -> None:
+        """ Configure the remaining global optimizer kwargs
+
+        Parameters
+        ----------
+        weight_decay: float
+            The amount of weight decay to apply
+        gradient_accumulation_steps: int
+            The number of steps to accumulate gradients for before applying the average
+        """
+        if weight_decay > 0.0:
+            logger.info("Enabling Weight Decay: %s", weight_decay)
+            self._kwargs["weight_decay"] = weight_decay
+        else:
+            logger.debug("weight decay disabled")
+
+        if gradient_accumulation_steps > 1:
+            logger.info("Enabling Gradient Accumulation: %s", gradient_accumulation_steps)
+            self._kwargs["gradient_accumulation_steps"] = gradient_accumulation_steps
+        else:
+            logger.debug("gradient accumulation disabled")
+
+    def _configure_specific(self, config: dict[str, ConfigValueType]) -> None:
+        """ Configure keyword optimizer specific keyword arguments based on user settings.
+
+        Parameters
+        ----------
+        config: dict[str, ConfigValueType]:
+            The user settings configuration dictionary
+        """
+        assert isinstance(config["optimizer"], str)
+        opts = self._valid[config["optimizer"]][1]
+        if not opts:
+            logger.debug("No additional kwargs to set for '%s'", config["optimizer"])
+            return
+
+        for key, val in opts.items():
+            logger.debug("Setting kwarg '%s' from '%s' to: %s", val, key, config[key])
+            self._kwargs[val] = config[key]
+
+    def _configure(self, config: dict[str, ConfigValueType]) -> None:
+        """ Process the user configuration options into Keras Optimizer kwargs.
+
+        Parameters
+        ----------
+        config: dict[str, ConfigValueType]:
+            The user settings configuration dictionary
+        """
+        clip_type: T.TypeAlias = T.Literal["autoclip", "norm", "value"]
+        clip_method = config["gradient_clipping"]
+        assert clip_method is None or (isinstance(clip_method, str)
+                                       and clip_method in T.get_args(clip_type))
+        assert isinstance(config["clipping_value"], float)
+        assert isinstance(config["clipping_value"], int)
+        self._configure_clipping(T.cast(clip_type | None, clip_method),
+                                 config["clipping_value"],
+                                 config["clipping_value"])
+
+        assert isinstance(config["use_ema"], bool)
+        assert isinstance(config["ema_momentum"], float)
+        assert isinstance(config["ema_frequency"], int)
+        self._configure_ema(config["use_ema"],
+                            config["ema_momentum"],
+                            config["ema_frequency"])
+
+        assert isinstance(config["weight_decay"], float)
+        assert isinstance(config["gradient_accumulation"], int)
+        self._configure_kwargs(config["weight_decay"],
+                               config["gradient_accumulation"])
+
+        self._configure_specific(config)
+
+        logger.debug("Configured '%s' optimizer. kwargs: %s", config["optimizer"], self._kwargs)
 
 
 class Settings():
@@ -393,7 +502,7 @@ class Settings():
     @classmethod
     def loss_scale_optimizer(
             cls,
-            optimizer: k_optimizers.Optimizer) -> k_optimizers.LossScaleOptimizer:
+            optimizer: optimizers.Optimizer) -> optimizers.LossScaleOptimizer:
         """ Optimize loss scaling for mixed precision training.
 
         Parameters
@@ -406,7 +515,7 @@ class Settings():
         :class:`keras.optimizers.LossScaleOptimizer`
             The original optimizer with loss scaling applied
         """
-        return k_optimizers.LossScaleOptimizer(optimizer)
+        return optimizers.LossScaleOptimizer(optimizer)
 
     @classmethod
     def _set_keras_mixed_precision(cls, enable: bool) -> None:

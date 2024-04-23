@@ -68,6 +68,7 @@ class TorchTensorBoard(keras.callbacks.Callback):
 
     def _write_keras_model_summary(self) -> None:
         """Writes Keras graph network summary to TensorBoard."""
+        assert self._model is not None
         summary = self._model.to_json()
         self._train_writer.add_text("keras", summary, global_step=0)
 
@@ -111,6 +112,7 @@ class TorchTensorBoard(keras.callbacks.Callback):
         logs: dict[str, float]
             The logs to write
         """
+        assert logs is not None
         if self._should_write_train_graph:
             self._write_keras_model_train_graph()
             self._should_write_train_graph = False
