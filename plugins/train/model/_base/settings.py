@@ -430,10 +430,10 @@ class Optimizer():
         assert clip_method is None or (isinstance(clip_method, str)
                                        and clip_method in T.get_args(clip_type))
         assert isinstance(config["clipping_value"], float)
-        assert isinstance(config["clipping_value"], int)
+        assert isinstance(config["autoclip_history"], int)
         self._configure_clipping(T.cast(clip_type | None, clip_method),
                                  config["clipping_value"],
-                                 config["clipping_value"])
+                                 config["autoclip_history"])
 
         assert isinstance(config["use_ema"], bool)
         assert isinstance(config["ema_momentum"], float)

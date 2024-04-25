@@ -137,12 +137,12 @@ class IO():
         Note: Currently disabled as keras hangs trying to load old faceswap models
         """
         if self.model_exists:
-            logger.info("Existing model file is current: '%s'", os.path.basename(self.filename))
+            logger.debug("Existing model file is current: '%s'", os.path.basename(self.filename))
             return
 
         old_fname = f"{os.path.splitext(self.filename)[0]}.h5"
         if not os.path.isfile(old_fname):
-            logger.info("No legacy model file to update")
+            logger.debug("No legacy model file to update")
             return
 
         raise FaceswapError("Legacy model file found. Currently Faceswap does not support "

@@ -249,7 +249,7 @@ class ModelBase():
             if self._io.model_exists:
                 model = self.io.load()
                 if self._is_predict:
-                    inference = _Inference(model, self._args.swap_model)
+                    inference = Inference(model, self._args.swap_model)
                     self._model = inference.model
                 else:
                     self._model = model
@@ -732,7 +732,7 @@ class State():
             self._rebuild_model = self._rebuild_model or key in rebuild_tasks
 
 
-class _Inference():
+class Inference():
     """ Calculates required layers and compiles a saved model for inference.
 
     Parameters

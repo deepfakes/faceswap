@@ -24,14 +24,14 @@ class Backup():
     model_name: str
         The name of the model that is to be backed up
     """
-    def __init__(self, model_dir, model_name):
+    def __init__(self, model_dir: str, model_name: str) -> None:
         logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s')",
                      self.__class__.__name__, model_dir, model_name)
         self.model_dir = str(model_dir)
         self.model_name = model_name
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _check_valid(self, filename, for_restore=False):
+    def _check_valid(self, filename: str, for_restore: bool = False) -> bool:
         """ Check if the passed in filename is valid for a backup or restore operation.
 
         Parameters
@@ -67,7 +67,7 @@ class Backup():
         return retval
 
     @staticmethod
-    def backup_model(full_path):
+    def backup_model(full_path: str) -> None:
         """ Backup a model file.
 
         The backed up file is saved with the original filename in the original location with `.bk`
@@ -86,7 +86,7 @@ class Backup():
                            full_path, backupfile)
             copyfile(full_path, backupfile)
 
-    def snapshot_models(self, iterations):
+    def snapshot_models(self, iterations: int) -> None:
         """ Take a snapshot of the model at the current state and back it up.
 
         The snapshot is a copy of the model folder located in the same root location
@@ -99,7 +99,7 @@ class Backup():
             The number of iterations that the model has trained when performing the snapshot.
         """
         print("\x1b[2K", end="\r")  # Erase the current line
-        logger.verbose("Saving snapshot")
+        logger.verbose("Saving snapshot")  # type:ignore[attr-defined]
         snapshot_dir = f"{self.model_dir}_snapshot_{iterations}_iters"
 
         if os.path.isdir(snapshot_dir):
@@ -113,12 +113,15 @@ class Backup():
                 continue
             srcfile = os.path.join(self.model_dir, filename)
             dstfile = os.path.join(dst, filename)
-            copyfunc = copytree if os.path.isdir(srcfile) else copyfile
+
             logger.debug("Saving snapshot: '%s' > '%s'", srcfile, dstfile)
-            copyfunc(srcfile, dstfile)
+            if os.path.isdir(srcfile):
+                copytree(srcfile, dstfile)
+            else:
+                copyfile(srcfile, dstfile)
         logger.info("Saved snapshot (%s iterations)", iterations)
 
-    def restore(self):
+    def restore(self) -> None:
         """ Restores a model from backup.
 
         The original model files are migrated into a folder within the original model folder
@@ -129,7 +132,7 @@ class Backup():
         self._restore_files()
         self._restore_logs(archive_dir)
 
-    def _move_archived(self):
+    def _move_archived(self) -> str:
         """ Move archived files to the archived folder.
 
         Returns
@@ -145,14 +148,15 @@ class Backup():
             if not self._check_valid(filename, for_restore=False):
                 logger.debug("Not moving file to archived: '%s'", filename)
                 continue
-            logger.verbose("Moving '%s' to archived model folder: '%s'", filename, archive_dir)
+            logger.verbose(  # type:ignore[attr-defined]
+                "Moving '%s' to archived model folder: '%s'", filename, archive_dir)
             src = os.path.join(self.model_dir, filename)
             dst = os.path.join(archive_dir, filename)
             os.rename(src, dst)
-        logger.verbose("Archived existing model files")
+        logger.verbose("Archived existing model files")  # type:ignore[attr-defined]
         return archive_dir
 
-    def _restore_files(self):
+    def _restore_files(self) -> None:
         """ Restore files from .bk """
         logger.info("Restoring models from backup...")
         for filename in os.listdir(self.model_dir):
@@ -160,13 +164,14 @@ class Backup():
                 logger.debug("Not restoring file: '%s'", filename)
                 continue
             dstfile = os.path.splitext(filename)[0]
-            logger.verbose("Restoring '%s' to '%s'", filename, dstfile)
+            logger.verbose("Restoring '%s' to '%s'",  # type:ignore[attr-defined]
+                           filename, dstfile)
             src = os.path.join(self.model_dir, filename)
             dst = os.path.join(self.model_dir, dstfile)
             copyfile(src, dst)
-        logger.verbose("Restored models from backup")
+        logger.verbose("Restored models from backup")  # type:ignore[attr-defined]
 
-    def _restore_logs(self, archive_dir):
+    def _restore_logs(self, archive_dir: str) -> None:
         """ Restores the log files up to and including the last backup.
 
         Parameters
@@ -180,12 +185,18 @@ class Backup():
         for log_dir in log_dirs:
             src = os.path.join(archive_dir, log_dir)
             dst = os.path.join(self.model_dir, log_dir)
-            logger.verbose("Restoring logfile: %s", dst)
+            logger.verbose("Restoring logfile: %s", dst)  # type:ignore[attr-defined]
             copytree(src, dst)
-        logger.verbose("Restored Logs")
+        logger.verbose("Restored Logs")  # type:ignore[attr-defined]
 
-    def _get_session_names(self):
-        """ Get the existing session names from a state file. """
+    def _get_session_names(self) -> list[str]:
+        """ Get the existing session names from a state file.
+
+        Returns
+        -------
+        list[str]
+            The session names that exist for the model
+        """
         serializer = get_serializer("json")
         state_file = os.path.join(self.model_dir,
                                   f"{self.model_name}_state.{serializer.file_extension}")
@@ -194,19 +205,19 @@ class Backup():
         logger.debug("Session to restore: %s", session_names)
         return session_names
 
-    def _get_log_dirs(self, archive_dir, session_names):
+    def _get_log_dirs(self, archive_dir: str, session_names: list[str]) -> list[str]:
         """ Get the session log directory paths in the archive folder.
 
         Parameters
         ----------
         archive_dir: str
             The full path to the model's archive folder
-        session_names: list
+        session_names: list[str]
             The name of the training sessions that exist for the model
 
         Returns
         -------
-        list
+        list[str]
             The full paths to the log folders
         """
         archive_logs = os.path.join(archive_dir, f"{self.model_name}_logs")
