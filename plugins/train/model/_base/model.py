@@ -13,7 +13,6 @@ import typing as T
 
 from collections import OrderedDict
 
-from keras import models
 import numpy as np
 import keras
 
@@ -245,7 +244,6 @@ class ModelBase():
 
         Finally, a model summary is outputted to the logger at verbose level.
         """
-        self._update_legacy_models()
         is_summary = hasattr(self._args, "summary") and self._args.summary
         with self._settings.strategy_scope():
             if self._io.model_exists:
@@ -269,51 +267,6 @@ class ModelBase():
             if not is_summary and not self._is_predict:
                 self._compile_model()
             self._output_summary()
-
-    def _update_legacy_models(self) -> None:
-        """ Load weights from legacy split models into new unified model, archiving old model files
-        to a new folder. """
-        legacy_mapping = self._legacy_mapping()  # pylint:disable=assignment-from-none
-        if legacy_mapping is None:
-            return
-
-        if not all(os.path.isfile(os.path.join(self.io.model_dir, fname))
-                   for fname in legacy_mapping):
-            return
-        archive_dir = f"{self.io.model_dir}_TF1_Archived"
-        if os.path.exists(archive_dir):
-            raise FaceswapError("We need to update your model files for use with Tensorflow 2.x, "
-                                "but the archive folder already exists. Please remove the "
-                                f"following folder to continue: '{archive_dir}'")
-
-        logger.info("Updating legacy models for Tensorflow 2.x")
-        logger.info("Your Tensorflow 1.x models will be archived in the following location: '%s'",
-                    archive_dir)
-        os.rename(self.io.model_dir, archive_dir)
-        os.mkdir(self.io.model_dir)
-        new_model = self.build_model(self._get_inputs())
-        for model_name, layer_name in legacy_mapping.items():
-            old_model: keras.models.Model = models.load_model(
-                os.path.join(archive_dir, model_name),
-                compile=False)
-            layer = [layer for layer in new_model.layers if layer.name == layer_name]
-            if not layer:
-                logger.warning("Skipping legacy weights from '%s'...", model_name)
-                continue
-            klayer: keras.layers.Layer = layer[0]
-            logger.info("Updating legacy weights from '%s'...", model_name)
-            klayer.set_weights(old_model.get_weights())
-        filename = self._io.filename
-        logger.info("Saving Tensorflow 2.x model to '%s'", filename)
-        new_model.save(filename)
-        # Penalized Loss and Learn Mask used to be disabled automatically if a mask wasn't
-        # selected, so disable it if enabled, but mask_type is None
-        if self.config["mask_type"] is None:
-            self.config["penalized_mask_loss"] = False
-            self.config["learn_mask"] = False
-            self.config["eye_multiplier"] = 1
-            self.config["mouth_multiplier"] = 1
-        self._state.save()
 
     def _validate_input_shape(self) -> None:
         """ Validate that the input shape is either a single shape tuple of 3 dimensions or
@@ -402,18 +355,6 @@ class ModelBase():
         self.model.compile(optimizer=optimizer, loss=losses, metrics=losses)
         self._state.add_session_loss_names(self._loss.names)
         logger.debug("Compiled Model: %s", self.model)
-
-    def _legacy_mapping(self) -> dict | None:
-        """ The mapping of separate model files to single model layers for transferring of legacy
-        weights.
-
-        Returns
-        -------
-        dict or ``None``
-            Dictionary of original H5 filenames for legacy models mapped to new layer names or
-            ``None`` if the model did not exist in Faceswap prior to Tensorflow 2
-        """
-        return None
 
     def add_history(self, loss: list[float]) -> None:
         """ Add the current iteration's loss history to :attr:`_io.history`.

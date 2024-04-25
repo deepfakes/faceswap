@@ -6,8 +6,7 @@ This model is heavily documented as it acts as a template that other model plugi
 from.
 """
 
-from keras.layers import Dense, Flatten, Reshape, Input
-from keras.models import Model as KModel
+from keras import Input, layers, Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
 from ._base import ModelBase
@@ -112,9 +111,9 @@ class Model(ModelBase):
         var_x = Conv2DBlock(512, activation="leakyrelu")(var_x)
         if not self.low_mem:
             var_x = Conv2DBlock(1024, activation="leakyrelu")(var_x)
-        var_x = Dense(self.encoder_dim)(Flatten()(var_x))
-        var_x = Dense(4 * 4 * 1024)(var_x)
-        var_x = Reshape((4, 4, 1024))(var_x)
+        var_x = layers.Dense(self.encoder_dim)(layers.Flatten()(var_x))
+        var_x = layers.Dense(4 * 4 * 1024)(var_x)
+        var_x = layers.Reshape((4, 4, 1024))(var_x)
         var_x = UpscaleBlock(512, activation="leakyrelu")(var_x)
         return KModel(input_, var_x, name="encoder")
 
@@ -150,9 +149,3 @@ class Model(ModelBase):
             var_y = Conv2DOutput(1, 5, name=f"mask_out_{side}")(var_y)
             outputs.append(var_y)
         return KModel(input_, outputs=outputs, name=f"decoder_{side}")
-
-    def _legacy_mapping(self):
-        """ The mapping of legacy separate model names to single model names """
-        return {f"{self.name}_encoder.h5": "encoder",
-                f"{self.name}_decoder_A.h5": "decoder_a",
-                f"{self.name}_decoder_B.h5": "decoder_b"}

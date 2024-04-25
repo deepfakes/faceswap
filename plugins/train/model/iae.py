@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """ Improved autoencoder for faceswap """
 
-from keras.layers import Concatenate, Dense, Flatten, Input, Reshape
-from keras.models import Model as KModel
+from keras import Input, layers, Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
 
@@ -27,8 +26,8 @@ class Model(ModelBase):
         encoder_a = encoder(inputs[0])
         encoder_b = encoder(inputs[1])
 
-        outputs = (decoder(Concatenate()([inter_a(encoder_a), inter_both(encoder_a)])) +
-                   decoder(Concatenate()([inter_b(encoder_b), inter_both(encoder_b)])))
+        outputs = (decoder(layers.Concatenate()([inter_a(encoder_a), inter_both(encoder_a)])) +
+                   decoder(layers.Concatenate()([inter_b(encoder_b), inter_both(encoder_b)])))
 
         autoencoder = KModel(inputs, outputs, name=self.model_name)
         return autoencoder
@@ -41,15 +40,15 @@ class Model(ModelBase):
         var_x = Conv2DBlock(256, activation="leakyrelu")(var_x)
         var_x = Conv2DBlock(512, activation="leakyrelu")(var_x)
         var_x = Conv2DBlock(1024, activation="leakyrelu")(var_x)
-        var_x = Flatten()(var_x)
+        var_x = layers.Flatten()(var_x)
         return KModel(input_, var_x, name="encoder")
 
     def intermediate(self, side):
         """ Intermediate Network """
         input_ = Input(shape=(4 * 4 * 1024, ))
-        var_x = Dense(self.encoder_dim)(input_)
-        var_x = Dense(4 * 4 * int(self.encoder_dim/2))(var_x)
-        var_x = Reshape((4, 4, int(self.encoder_dim/2)))(var_x)
+        var_x = layers.Dense(self.encoder_dim)(input_)
+        var_x = layers.Dense(4 * 4 * int(self.encoder_dim/2))(var_x)
+        var_x = layers.Reshape((4, 4, int(self.encoder_dim/2)))(var_x)
         return KModel(input_, var_x, name=f"inter_{side}")
 
     def decoder(self):
@@ -72,11 +71,3 @@ class Model(ModelBase):
             var_y = Conv2DOutput(1, 5, name="mask_out")(var_y)
             outputs.append(var_y)
         return KModel(input_, outputs=outputs, name="decoder")
-
-    def _legacy_mapping(self):
-        """ The mapping of legacy separate model names to single model names """
-        return {f"{self.name}_encoder.h5": "encoder",
-                f"{self.name}_intermediate_A.h5": "inter_a",
-                f"{self.name}_intermediate_B.h5": "inter_b",
-                f"{self.name}_inter.h5": "inter_both",
-                f"{self.name}_decoder.h5": "decoder"}
