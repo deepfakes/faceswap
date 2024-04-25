@@ -4,10 +4,10 @@
     Based on the original https://www.reddit.com/r/deepfakes/
     code sample + contributions """
 
-from keras.models import Model as KModel
+from keras import Input, layers, Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
-from .original import Model as OriginalModel, Dense, Flatten, Input, Reshape
+from .original import Model as OriginalModel
 
 
 class Model(OriginalModel):
@@ -23,9 +23,9 @@ class Model(OriginalModel):
         var_x = Conv2DBlock(128, activation="leakyrelu")(var_x)
         var_x = Conv2DBlock(256, activation="leakyrelu")(var_x)
         var_x = Conv2DBlock(512, activation="leakyrelu")(var_x)
-        var_x = Dense(self.encoder_dim)(Flatten()(var_x))
-        var_x = Dense(4 * 4 * 512)(var_x)
-        var_x = Reshape((4, 4, 512))(var_x)
+        var_x = layers.Dense(self.encoder_dim)(layers.Flatten()(var_x))
+        var_x = layers.Dense(4 * 4 * 512)(var_x)
+        var_x = layers.Reshape((4, 4, 512))(var_x)
         var_x = UpscaleBlock(256, activation="leakyrelu")(var_x)
         return KModel(input_, var_x, name="encoder")
 

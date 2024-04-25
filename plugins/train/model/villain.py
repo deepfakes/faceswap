@@ -3,9 +3,7 @@
     Based on the original https://www.reddit.com/r/deepfakes/ code sample + contributions
     Adapted from a model by VillainGuy (https://github.com/VillainGuy) """
 
-from keras.initializers import RandomNormal
-from keras.layers import add, Dense, Flatten, Input, LeakyReLU, Reshape
-from keras.models import Model as KModel
+from keras import initializers, Input, layers, Model as KModel
 
 from lib.model.layers import PixelShuffler
 from lib.model.nn_blocks import (Conv2DOutput, Conv2DBlock, ResidualBlock, SeparableConv2DBlock,
@@ -20,7 +18,7 @@ class Model(OriginalModel):
         super().__init__(*args, **kwargs)
         self.input_shape = (128, 128, 3)
         self.encoder_dim = 512 if self.low_mem else 1024
-        self.kernel_initializer = RandomNormal(0, 0.02)
+        self.kernel_initializer = initializers.RandomNormal(0, 0.02)
 
     def encoder(self):
         """ Encoder Network """
@@ -34,14 +32,14 @@ class Model(OriginalModel):
         var_x = Conv2DBlock(in_conv_filters, activation=None, **kwargs)(input_)
         tmp_x = var_x
 
-        var_x = LeakyReLU(alpha=0.2)(var_x)
+        var_x = layers.LeakyReLU(alpha=0.2)(var_x)
         res_cycles = 8 if self.config.get("lowmem", False) else 16
         for _ in range(res_cycles):
             nn_x = ResidualBlock(in_conv_filters, **kwargs)(var_x)
             var_x = nn_x
         # consider adding scale before this layer to scale the residual chain
-        tmp_x = LeakyReLU(alpha=0.1)(tmp_x)
-        var_x = add([var_x, tmp_x])
+        tmp_x = layers.LeakyReLU(alpha=0.1)(tmp_x)
+        var_x = layers.add([var_x, tmp_x])
         var_x = Conv2DBlock(128, activation="leakyrelu", **kwargs)(var_x)
         var_x = PixelShuffler()(var_x)
         var_x = Conv2DBlock(128, activation="leakyrelu", **kwargs)(var_x)
@@ -52,9 +50,9 @@ class Model(OriginalModel):
         if not self.config.get("lowmem", False):
             var_x = SeparableConv2DBlock(1024, **kwargs)(var_x)
 
-        var_x = Dense(self.encoder_dim, **kwargs)(Flatten()(var_x))
-        var_x = Dense(dense_shape * dense_shape * 1024, **kwargs)(var_x)
-        var_x = Reshape((dense_shape, dense_shape, 1024))(var_x)
+        var_x = layers.Dense(self.encoder_dim, **kwargs)(layers.Flatten()(var_x))
+        var_x = layers.Dense(dense_shape * dense_shape * 1024, **kwargs)(var_x)
+        var_x = layers.Reshape((dense_shape, dense_shape, 1024))(var_x)
         var_x = UpscaleBlock(512, activation="leakyrelu", **kwargs)(var_x)
         return KModel(input_, var_x, name="encoder")
 
@@ -66,13 +64,13 @@ class Model(OriginalModel):
 
         var_x = input_
         var_x = UpscaleBlock(512, activation=None, **kwargs)(var_x)
-        var_x = LeakyReLU(alpha=0.2)(var_x)
+        var_x = layers.LeakyReLU(alpha=0.2)(var_x)
         var_x = ResidualBlock(512, **kwargs)(var_x)
         var_x = UpscaleBlock(256, activation=None, **kwargs)(var_x)
-        var_x = LeakyReLU(alpha=0.2)(var_x)
+        var_x = layers.LeakyReLU(alpha=0.2)(var_x)
         var_x = ResidualBlock(256, **kwargs)(var_x)
         var_x = UpscaleBlock(self.input_shape[0], activation=None, **kwargs)(var_x)
-        var_x = LeakyReLU(alpha=0.2)(var_x)
+        var_x = layers.LeakyReLU(alpha=0.2)(var_x)
         var_x = ResidualBlock(self.input_shape[0], **kwargs)(var_x)
         var_x = Conv2DOutput(3, 5, name=f"face_out_{side}")(var_x)
         outputs = [var_x]
