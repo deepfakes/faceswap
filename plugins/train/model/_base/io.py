@@ -14,16 +14,17 @@ import logging
 import os
 import sys
 import typing as T
+from shutil import copytree
 
 from keras import layers, models as kmodels
-from keras.saving import load_model
 
+from lib.logger import parse_class_init
 from lib.model.backup_restore import Backup
 from lib.utils import FaceswapError
 
 if T.TYPE_CHECKING:
     from .model import ModelBase
-    from keras.optimizers import Optimizer
+    from keras import Optimizer
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,7 @@ class IO():
                  model_dir: str,
                  is_predict: bool,
                  save_optimizer: T.Literal["never", "always", "exit"]) -> None:
+        logger.debug(parse_class_init(locals()))
         self._plugin = plugin
         self._is_predict = is_predict
         self._model_dir = model_dir
@@ -88,6 +90,8 @@ class IO():
         self._history: list[float] = []
         """list[float]: Loss history for current save iteration """
         self._backup = Backup(self._model_dir, self._plugin.name)
+        self._update_legacy()
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def model_dir(self) -> str:
@@ -126,6 +130,58 @@ class IO():
                      self._plugin.name, plugins, test, retval)
         return retval
 
+    def _update_legacy(self) -> None:
+        """ Look for faceswap 2.x .h5 files in the model folder. If exists, then update to Faceswap
+        3 .keras file and backup the original model .h5 file
+
+        Note: Currently disabled as keras hangs trying to load old faceswap models
+        """
+        if self.model_exists:
+            logger.info("Existing model file is current: '%s'", os.path.basename(self.filename))
+            return
+
+        old_fname = f"{os.path.splitext(self.filename)[0]}.h5"
+        if not os.path.isfile(old_fname):
+            logger.info("No legacy model file to update")
+            return
+
+        raise FaceswapError("Legacy model file found. Currently Faceswap does not support "
+                            "upgrading legacy models. Please provide a different folder")
+
+        # TODO Get this working
+
+        logger.info("Updating legacy Faceswap model...")
+        dst_path = f"{self.model_dir}_fs2_backup"
+        if os.path.exists(dst_path) and os.listdir(dst_path):
+            raise FaceswapError(
+                f"The destination archive folder '{dst_path}' already exists. Either delete this "
+                "folder, select a different model folder, or remove the legacy model files from "
+                f"your model folder '{self.model_dir}'.")
+
+        if os.path.exists(dst_path):
+            logger.info("Removing pre-existing empty folder '%s'", dst_path)
+            os.rmdir(dst_path)
+
+        logger.info("Archiving model folder '%s' to '%s'", self.model_dir, dst_path)
+        copytree(self.model_dir, dst_path)
+
+        logger.info("Updating '%s' to '%s'",
+                    os.path.basename(old_fname), os.path.basename(self.filename))
+
+        old_model: kmodels.Model = kmodels.load_model(old_fname)
+        old_model.save(self.filename)
+        os.remove(old_fname)
+        for filename in os.listdir(self.model_dir):
+            fname, ext = os.path.splitext(filename)
+            if ext != ".bk":
+                continue
+            if fname in (f"{self._plugin.name}.h5", f"{self._plugin.name}_state.json"):
+                logger.debug("Removing legacy backup file '%s'", filename)
+                os.remove(os.path.join(self.model_dir, filename))
+
+        logger.info("The model in '%s' has been updated for Keras 3", self.model_dir)
+        logger.info("The old Keras 2 model has been archived in '%s'", dst_path)
+
     def load(self) -> kmodels.Model:
         """ Loads the model from disk
 
@@ -146,7 +202,7 @@ class IO():
             sys.exit(1)
 
         try:
-            model = load_model(self.filename, compile=False)
+            model = kmodels.load_model(self.filename, compile=False)
         except RuntimeError as err:
             if "unable to get link info" in str(err).lower():
                 msg = (f"Unable to load the model from '{self.filename}'. This may be a "
@@ -464,7 +520,7 @@ class Weights():
             In the event of a failure to load the weights, or the weights belonging to a different
             model
         """
-        retval = get_all_sub_models(load_model(self._weights_file, compile=False))
+        retval = get_all_sub_models(kmodels.load_model(self._weights_file, compile=False))
         if not retval:
             raise FaceswapError(f"Error loading weights file {self._weights_file}.")
 
