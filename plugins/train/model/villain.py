@@ -32,13 +32,13 @@ class Model(OriginalModel):
         var_x = Conv2DBlock(in_conv_filters, activation=None, **kwargs)(input_)
         tmp_x = var_x
 
-        var_x = layers.LeakyReLU(alpha=0.2)(var_x)
+        var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
         res_cycles = 8 if self.config.get("lowmem", False) else 16
         for _ in range(res_cycles):
             nn_x = ResidualBlock(in_conv_filters, **kwargs)(var_x)
             var_x = nn_x
         # consider adding scale before this layer to scale the residual chain
-        tmp_x = layers.LeakyReLU(alpha=0.1)(tmp_x)
+        tmp_x = layers.LeakyReLU(negative_slope=0.1)(tmp_x)
         var_x = layers.add([var_x, tmp_x])
         var_x = Conv2DBlock(128, activation="leakyrelu", **kwargs)(var_x)
         var_x = PixelShuffler()(var_x)
@@ -64,13 +64,13 @@ class Model(OriginalModel):
 
         var_x = input_
         var_x = UpscaleBlock(512, activation=None, **kwargs)(var_x)
-        var_x = layers.LeakyReLU(alpha=0.2)(var_x)
+        var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
         var_x = ResidualBlock(512, **kwargs)(var_x)
         var_x = UpscaleBlock(256, activation=None, **kwargs)(var_x)
-        var_x = layers.LeakyReLU(alpha=0.2)(var_x)
+        var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
         var_x = ResidualBlock(256, **kwargs)(var_x)
         var_x = UpscaleBlock(self.input_shape[0], activation=None, **kwargs)(var_x)
-        var_x = layers.LeakyReLU(alpha=0.2)(var_x)
+        var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
         var_x = ResidualBlock(self.input_shape[0], **kwargs)(var_x)
         var_x = Conv2DOutput(3, 5, name=f"face_out_{side}")(var_x)
         outputs = [var_x]

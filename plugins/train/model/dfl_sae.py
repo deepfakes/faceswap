@@ -120,21 +120,21 @@ class Model(ModelBase):
         var_x = input_
 
         var_x1 = UpscaleBlock(dims * 8, activation=None)(var_x)
-        var_x1 = layers.LeakyReLU(alpha=0.2)(var_x1)
+        var_x1 = layers.LeakyReLU(negative_slope=0.2)(var_x1)
         var_x1 = ResidualBlock(dims * 8)(var_x1)
         var_x1 = ResidualBlock(dims * 8)(var_x1)
         if self.multiscale_count >= 3:
             outputs.append(Conv2DOutput(3, 5, name=f"face_out_32_{side}")(var_x1))
 
         var_x2 = UpscaleBlock(dims * 4, activation=None)(var_x1)
-        var_x2 = layers.LeakyReLU(alpha=0.2)(var_x2)
+        var_x2 = layers.LeakyReLU(negative_slope=0.2)(var_x2)
         var_x2 = ResidualBlock(dims * 4)(var_x2)
         var_x2 = ResidualBlock(dims * 4)(var_x2)
         if self.multiscale_count >= 2:
             outputs.append(Conv2DOutput(3, 5, name=f"face_out_64_{side}")(var_x2))
 
         var_x3 = UpscaleBlock(dims * 2, activation=None)(var_x2)
-        var_x3 = layers.LeakyReLU(alpha=0.2)(var_x3)
+        var_x3 = layers.LeakyReLU(negative_slope=0.2)(var_x3)
         var_x3 = ResidualBlock(dims * 2)(var_x3)
         var_x3 = ResidualBlock(dims * 2)(var_x3)
 

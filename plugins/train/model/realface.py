@@ -85,7 +85,7 @@ class Model(ModelBase):
 
         for idx in range(self.downscalers_no - 1):
             var_x = Conv2DBlock(encoder_complexity * 2**idx, activation=None)(var_x)
-            var_x = layers.LeakyReLU(alpha=0.2)(var_x)
+            var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
             var_x = ResidualBlock(encoder_complexity * 2**idx, use_bias=True)(var_x)
             var_x = ResidualBlock(encoder_complexity * 2**idx, use_bias=True)(var_x)
 
@@ -107,13 +107,13 @@ class Model(ModelBase):
         var_xy = UpscaleBlock(self.dense_filters, activation=None)(var_xy)
 
         var_x = var_xy
-        var_x = layers.LeakyReLU(alpha=0.2)(var_x)
+        var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
         var_x = ResidualBlock(self.dense_filters, use_bias=False)(var_x)
 
         decoder_b_complexity = self.config["complexity_decoder"]
         for idx in range(self.upscalers_no - 2):
             var_x = UpscaleBlock(decoder_b_complexity // 2**idx, activation=None)(var_x)
-            var_x = layers.LeakyReLU(alpha=0.2)(var_x)
+            var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
             var_x = ResidualBlock(decoder_b_complexity // 2**idx, use_bias=False)(var_x)
             var_x = ResidualBlock(decoder_b_complexity // 2**idx, use_bias=True)(var_x)
         var_x = UpscaleBlock(decoder_b_complexity // 2**(idx + 1), activation="leakyrelu")(var_x)
@@ -124,7 +124,7 @@ class Model(ModelBase):
 
         if self.config.get("learn_mask", False):
             var_y = var_xy
-            var_y = layers.LeakyReLU(alpha=0.1)(var_y)
+            var_y = layers.LeakyReLU(negative_slope=0.1)(var_y)
 
             mask_b_complexity = 384
             for idx in range(self.upscalers_no-2):
@@ -155,7 +155,7 @@ class Model(ModelBase):
         var_xy = UpscaleBlock(dense_filters, activation=None)(var_xy)
 
         var_x = var_xy
-        var_x = layers.LeakyReLU(alpha=0.2)(var_x)
+        var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
         var_x = ResidualBlock(dense_filters, use_bias=False)(var_x)
 
         decoder_a_complexity = int(self.config["complexity_decoder"] / 1.5)
@@ -169,7 +169,7 @@ class Model(ModelBase):
 
         if self.config.get("learn_mask", False):
             var_y = var_xy
-            var_y = layers.LeakyReLU(alpha=0.1)(var_y)
+            var_y = layers.LeakyReLU(negative_slope=0.1)(var_y)
 
             mask_a_complexity = 384
             for idx in range(self.upscalers_no-2):

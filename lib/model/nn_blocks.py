@@ -807,7 +807,7 @@ class ResidualBlock():
 
         self._layers = self._get_layers()
         self._add = layers.Add()
-        self._activation = layers.LeakyReLU(alpha=0.2, name=f"{self._name}_leakyrelu_3")
+        self._activation = layers.LeakyReLU(negative_slope=0.2, name=f"{self._name}_leakyrelu_3")
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _get_layers(self) -> list[layers.Layer]:
@@ -829,7 +829,7 @@ class ResidualBlock():
                              padding=self._padding,
                              name=f"{self._name}_conv2d_0",
                              **self._kwargs))
-        retval.append(layers.LeakyReLU(alpha=0.2, name=f"{self._name}_leakyrelu_1"))
+        retval.append(layers.LeakyReLU(negative_slope=0.2, name=f"{self._name}_leakyrelu_1"))
 
         if self._use_reflect_padding:
             retval.append(ReflectionPadding2D(stride=1,

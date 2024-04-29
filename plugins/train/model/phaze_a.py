@@ -932,7 +932,7 @@ class FullyConnected():
                                               activation="leakyrelu")
                 var_x = upscaler(var_x)
         if upsampler == "upsample2d":
-            var_x = kl.LeakyReLU(alpha=0.1)(var_x)
+            var_x = kl.LeakyReLU(negative_slope=0.1)(var_x)
         return var_x
 
     def __call__(self) -> keras.models.Model:
@@ -1076,13 +1076,13 @@ class UpscaleBlocks():
             var_x = kl.GaussianNoise(1.0)(var_x)
         if not is_mask and self._config["dec_res_blocks"] and not skip_residual:
             var_x = self._normalization(var_x)
-            var_x = kl.LeakyReLU(alpha=0.2)(var_x)
+            var_x = kl.LeakyReLU(negative_slope=0.2)(var_x)
             for _ in range(self._config["dec_res_blocks"]):
                 var_x = ResidualBlock(filters)(var_x)
         else:
             var_x = self._normalization(var_x)
             if not self._is_dny:
-                var_x = kl.LeakyReLU(alpha=0.1)(var_x)
+                var_x = kl.LeakyReLU(negative_slope=0.1)(var_x)
         return var_x
 
     def _normalization(self, inputs: KerasTensor) -> KerasTensor:

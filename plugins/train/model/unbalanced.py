@@ -104,15 +104,15 @@ class Model(ModelBase):
             var_x = UpscaleBlock(decoder_complexity // 8, activation="leakyrelu", **kwargs)(var_x)
         else:
             var_x = UpscaleBlock(decoder_complexity, activation=None, **kwargs)(var_x)
-            var_x = layers.LeakyReLU(alpha=0.2)(var_x)
+            var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
             var_x = ResidualBlock(decoder_complexity,
                                   kernel_initializer=self.kernel_initializer)(var_x)
             var_x = UpscaleBlock(decoder_complexity, activation=None, **kwargs)(var_x)
-            var_x = layers.LeakyReLU(alpha=0.2)(var_x)
+            var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
             var_x = ResidualBlock(decoder_complexity,
                                   kernel_initializer=self.kernel_initializer)(var_x)
             var_x = UpscaleBlock(decoder_complexity // 2, activation=None, **kwargs)(var_x)
-            var_x = layers.LeakyReLU(alpha=0.2)(var_x)
+            var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
             var_x = ResidualBlock(decoder_complexity // 2,
                                   kernel_initializer=self.kernel_initializer)(var_x)
             var_x = UpscaleBlock(decoder_complexity // 4, activation="leakyrelu", **kwargs)(var_x)
