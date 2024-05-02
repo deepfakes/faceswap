@@ -131,7 +131,9 @@ class Inference():
         str
             The full path to the inference model save location
          """
-        model_name = next(fname for fname in os.listdir(model_dir) if fname.endswith(".keras"))
+        model_name = next(fname for fname in os.listdir(model_dir)
+                          if fname.endswith(".keras")
+                          and not fname.endswith("_inference.keras"))
         in_path = os.path.join(model_dir, model_name)
         logger.debug("Model input path: '%s'", in_path)
 
