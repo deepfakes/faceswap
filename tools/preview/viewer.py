@@ -118,7 +118,7 @@ class FacesDisplay():
         size = self._get_scale_size(img)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         pilimg = Image.fromarray(img)
-        pilimg = pilimg.resize(size, Image.ANTIALIAS)
+        pilimg = pilimg.resize(size, Image.Resampling.BICUBIC)
         self._tk_image = ImageTk.PhotoImage(pilimg)
         logger.trace("Updated tk image")  # type: ignore
 
