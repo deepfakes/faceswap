@@ -300,11 +300,12 @@ class Optimizer():
         assert isinstance(config["optimizer"], str)
 
         self._optimizer = self._valid[config["optimizer"]][0]
-        self._kwargs: dict[str, T.Any] = {"learning_rate": config["learning_rate"],
-                                          "epsilon": 10 ** int(config["epsilon_exponent"])}
+        self._kwargs: dict[str, T.Any] = {"learning_rate": config["learning_rate"]}
+        if config["optimizer"] != "lion":
+            self._kwargs["epsilon"] = 10 ** int(config["epsilon_exponent"])
 
         self._configure(config)
-        logger.verbose("Using %s optimizer", self._optimizer.__name__)  # type:ignore[attr-defined]
+        logger.info("Using %s optimizer", self._optimizer.__name__)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
