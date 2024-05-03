@@ -15,5 +15,4 @@ pytorch>=2.2.1
 torchaudio>=2.2.1
 torchvision>=0.17.1
 tensorboard>=2.12.1
-keras>=3.2.1
-
+keras>=3.3.1

@@ -240,6 +240,30 @@ class Environment():
         pip_version = pip.__version__
         logger.info("Installed pip: %s", pip_version)
 
+    def _configure_keras(self) -> None:
+        """ Set up the keras.json file to use Torch as the backend """
+        if "KERAS_HOME" in os.environ:
+            keras_dir = os.environ["KERAS_HOME"]
+        else:
+            keras_base_dir = os.path.expanduser("~")
+            if not os.access(keras_base_dir, os.W_OK):
+                keras_base_dir = "/tmp"
+            keras_dir = os.path.join(keras_base_dir, ".keras")
+
+        conf_file = os.path.expanduser(os.path.join(keras_dir, "keras.json"))
+        config = {}
+        if os.path.exists(conf_file):
+            try:
+                with open(conf_file, "r", encoding="utf-8") as c_file:
+                    config = json.load(c_file)
+            except ValueError:
+                pass
+
+        config["backend"] = "torch"
+        with open(conf_file, "w", encoding="utf-8") as c_file:
+            c_file.write(json.dumps(config, indent=4))
+        logger.info("Keras config written to: %s", conf_file)
+
     def set_config(self) -> None:
         """ Set the backend in the faceswap config file """
         config = {"backend": self.backend}
@@ -248,6 +272,7 @@ class Environment():
         with open(config_file, "w", encoding="utf8") as cnf:
             json.dump(config, cnf)
         logger.info("Faceswap config written to: %s", config_file)
+        self._configure_keras()
 
     def _set_env_vars(self) -> None:
         """ There are some foibles under Conda which need to be worked around in different
