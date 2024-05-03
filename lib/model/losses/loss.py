@@ -575,9 +575,9 @@ class LossWrapper(Loss):
     splits off (4, 128, 128, 3:6) from the end of the tensor, leaving the original y_true of
     shape (4, 128, 128, 3) ready for masking and feeding through the loss functions.
     """
-    def __init__(self) -> None:
+    def __init__(self, name="LossWrapper", reduction="sum_over_batch_size") -> None:
         logger.debug(parse_class_init(locals()))
-        super().__init__(name=self.__class__.__name__)
+        super().__init__(name=name, reduction=reduction)
         self._loss_functions: list[Loss] = []
         self._loss_weights: list[float] = []
         self._mask_channels: list[int] = []
