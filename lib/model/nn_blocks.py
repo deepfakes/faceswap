@@ -92,6 +92,10 @@ def _get_default_initializer(
         The kernel initializer to use for this convolutional layer. Either the original given
         initializer, HeUniform or convolutional aware (if selected in config options)
     """
+    if isinstance(initializer, dict) and initializer.get("class_name", "") == "ConvolutionAware":
+        logger.debug("Returning serialized initialized ConvAware initializer: %s", initializer)
+        return initializer
+
     if _CONFIG.get("conv_aware_init"):
         retval = ConvolutionAware()
     elif initializer is None:
