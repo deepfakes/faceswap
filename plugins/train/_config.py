@@ -651,9 +651,10 @@ class Config(FaceswapConfig):
                 "lowering learning rate), then raising the epsilon can lead to a more stable "
                 "model. It may, however, come at the cost of slower training and a less accurate "
                 "final result.\n"
-                "NB: The value given here is the 'exponent' to the epsilon. For example, "
+                "Note: The value given here is the 'exponent' to the epsilon. For example, "
                 "choosing '-7' will set the epsilon to 1e-7. Choosing '-3' will set the epsilon "
-                "to 0.001 (1e-3)."))
+                "to 0.001 (1e-3).\n"
+                "Note: Not used by the Lion optimizer"))
         self.add_item(
             section=section,
             title="save_optimizer",

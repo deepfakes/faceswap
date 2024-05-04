@@ -296,12 +296,12 @@ class Optimizer():
             "rms-prop": (optimizers.RMSprop, {})}
 
         assert isinstance(config["learning_rate"], float)
-        assert isinstance(config["epsilon_exponent"], int)
         assert isinstance(config["optimizer"], str)
 
         self._optimizer = self._valid[config["optimizer"]][0]
         self._kwargs: dict[str, T.Any] = {"learning_rate": config["learning_rate"]}
         if config["optimizer"] != "lion":
+            assert isinstance(config["epsilon_exponent"], int)
             self._kwargs["epsilon"] = 10 ** int(config["epsilon_exponent"])
 
         self._configure(config)
