@@ -555,8 +555,8 @@ class State():
         self.lowest_avg_loss = state.get("lowest_avg_loss", 0.0)
         if isinstance(self.lowest_avg_loss, dict):
             lowest_avg_loss = sum(self.lowest_avg_loss.values())
-            logger.info("Collating legacy lowest_avg_loss from %s to %s",
-                        self.lowest_avg_loss, lowest_avg_loss)
+            logger.debug("Collating legacy lowest_avg_loss from %s to %s",
+                         self.lowest_avg_loss, lowest_avg_loss)
             self.lowest_avg_loss = lowest_avg_loss
 
         self._iterations = state.get("iterations", 0)
