@@ -71,11 +71,8 @@ class Analysis(DisplayPage):  # pylint:disable=too-many-ancestors
     def on_tab_select(self):
         """ Callback for when the analysis tab is selected.
 
-        If Faceswap is currently training a model, then update the statistics with the latest
-        values.
+        Update the statistics with the latest values.
         """
-        if not self.vars["is_training"].get():
-            return
         logger.debug("Analysis update callback received")
         self._reset_session()
 

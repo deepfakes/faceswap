@@ -585,7 +585,7 @@ class TensorBoardLogs():
         """ list[int]: Sorted list of integers of available session ids. """
         return self._log_files.session_ids
 
-    def set_training(self, is_training: bool) -> None:
+    def set_training(self, is_training: bool) -> bool:
         """ Set the internal training flag to the given `is_training` value.
 
         If a new training session is being instigated, refresh the log filenames
@@ -595,15 +595,23 @@ class TensorBoardLogs():
         is_training: bool
             ``True`` to indicate that the logs to be read are from the currently training
             session otherwise ``False``
+
+        Returns
+        -------
+        bool
+            ``True`` if the session that is starting training belongs to the session already loaded
+            otherwise ``False``
         """
+        retval = True
         if self._is_training == is_training:
             logger.debug("Training flag already set to %s. Returning", is_training)
-            return
+            return retval
 
         logger.debug("Setting is_training to %s", is_training)
         self._is_training = is_training
         if is_training:
-            if not self._log_files.refresh():
+            retval = self._log_files.refresh()
+            if not retval:
                 self._cache.reset()
             log_file = self._log_files.get(self.session_ids[-1])
             logger.debug("Setting training iterator for log file: '%s'", log_file)
@@ -612,6 +620,7 @@ class TensorBoardLogs():
             logger.debug("Removing training iterator")
             del self._training_iterator
             self._training_iterator = None
+        return retval
 
     def _cache_data(self, session_id: int) -> None:
         """ Cache TensorBoard logs for the given session ID on first access.
