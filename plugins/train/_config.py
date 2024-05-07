@@ -144,7 +144,7 @@ class Config(FaceswapConfig):
             section=section,
             title="coverage",
             datatype=float,
-            default=87.5,
+            default=100.0,
             min_max=(62.5, 100.0),
             rounding=2,
             fixed=True,
