@@ -35,6 +35,18 @@ class ScriptExecutor():
     def __init__(self, command: str) -> None:
         self._command = command.lower()
 
+    def _set_environment_variables(self) -> None:
+        """ Set the number of threads that numexpr can use and TF environment variables. """
+        # Allocate a decent number of threads to numexpr to suppress warnings
+        cpu_count = os.cpu_count()
+        allocate = max(1, cpu_count - cpu_count // 3 if cpu_count is not None else 1)
+        if "OMP_NUM_THREADS" in os.environ:
+            # If this is set above NUMEXPR_MAX_THREADS, numexpr will error.
+            # ref: https://github.com/pydata/numexpr/issues/322
+            os.environ.pop("OMP_NUM_THREADS")
+        logger.debug("Setting NUMEXPR_MAX_THREADS to %s", allocate)
+        os.environ["NUMEXPR_MAX_THREADS"] = str(allocate)
+
     def _import_script(self) -> Callable:
         """ Imports the relevant script as indicated by :attr:`_command` from the scripts folder.
 
@@ -43,6 +55,7 @@ class ScriptExecutor():
         class: Faceswap Script
             The uninitialized script from the faceswap scripts folder.
         """
+        self._set_environment_variables()
         self._test_for_torch_version()
         self._test_for_gui()
         cmd = os.path.basename(sys.argv[0])
