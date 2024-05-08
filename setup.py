@@ -250,7 +250,10 @@ class Environment():
                 keras_base_dir = "/tmp"
             keras_dir = os.path.join(keras_base_dir, ".keras")
 
-        conf_file = os.path.expanduser(os.path.join(keras_dir, "keras.json"))
+        keras_dir = os.path.expanduser(keras_dir)
+        os.makedirs(keras_dir, exist_ok=True)
+
+        conf_file = os.path.join(keras_dir, "keras.json")
         config = {}
         if os.path.exists(conf_file):
             try:
