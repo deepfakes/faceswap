@@ -654,11 +654,13 @@ class Settings():
             # Fail tests if Keras changes the way it stores dtypes
             assert isinstance(dtype, str), "Keras config dtype storage method has changed"
             if dtype == "mixed_float16":
-                logger.debug("Adding supported mixed precision layer: %s %s", layer["name"], dtype)
-                retval.append(layer["name"])
+                logger.debug("Adding supported mixed precision layer: %s %s",
+                             layer["config"]["name"], dtype)
+                retval.append(layer["config"]["name"])
             else:
                 logger.debug("Skipping unsupported layer: %s %s",
-                             layer.get("name", f"class_name: {layer['class_name']}"), dtype)
+                             layer["config"].get("name", f"class_name: {layer['class_name']}"),
+                             dtype)
         return retval
 
     def _switch_precision(self, layers: list[dict], compatible: list[str]) -> None:
@@ -680,12 +682,12 @@ class Settings():
                 self._switch_precision(config["layers"], compatible)
                 continue
 
-            if layer["name"] not in compatible:
-                logger.debug("Skipping incompatible layer: %s", layer["name"])
+            if layer["config"]["name"] not in compatible:
+                logger.debug("Skipping incompatible layer: %s", layer["config"]["name"])
                 continue
 
             logger.debug("Updating dtype for %s from: %s to: %s",
-                         layer["name"], config["dtype"], dtype)
+                         layer["config"]["name"], config["dtype"], dtype)
             config["dtype"] = dtype
 
     def get_mixed_precision_layers(self,
