@@ -329,8 +329,8 @@ class ModelBase():
             if idx == 0:
                 parent = model
                 continue
-            model.summary(line_length=100, print_fn=print_fn)
-        parent.summary(line_length=100, print_fn=print_fn)
+            model.summary(print_fn=print_fn)
+        parent.summary(print_fn=print_fn)
 
     def _compile_model(self) -> None:
         """ Compile the model to include the Optimizer and Loss Function(s). """
