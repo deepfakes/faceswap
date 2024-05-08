@@ -432,7 +432,7 @@ class VisualTransformer():
                           self._width ** -0.5,
                           name=f"{self._name}.proj")(var_x)
         var_x = layers.Dot(axes=-1)([var_x, proj])
-        return models.Model(inputs=inputs, outputs=[var_x], name=self._name)
+        return models.Model(inputs=inputs, outputs=var_x, name=self._name)
 
 
 # ################ #
@@ -730,7 +730,7 @@ class ModifiedResNet():
                                 self._heads,
                                 self._output_dim,
                                 name=f"{self._name}.attnpool")(var_x)
-        return models.Model(inputs, outputs=[var_x], name=self._name)
+        return models.Model(inputs, outputs=var_x, name=self._name)
 
 
 # ### #
