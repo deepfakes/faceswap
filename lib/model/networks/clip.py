@@ -837,7 +837,7 @@ class ViT():
         if self._load_weights:
             model_path = GetModel(f"CLIPv_{self._name}_v1.h5", self._git_id).model_path
             logger.info("Loading CLIPv trained weights for '%s'", self._name)
-            net.load_weights(model_path, by_name=True, skip_mismatch=True)
+            net.load_weights(model_path)
 
         return net
 
