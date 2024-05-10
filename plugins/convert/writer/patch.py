@@ -5,6 +5,7 @@
 """
 import json
 import logging
+import re
 
 import os
 import cv2
@@ -34,6 +35,7 @@ class Writer(Output):
         super().__init__(output_folder, **kwargs)
         self._extension = {"png": ".png", "tiff": ".tif"}[self.config["format"]]
         self._separate_mask = self.config["separate_mask"]
+        self._fname_split = re.compile("[^0-9a-zA-Z]")
 
         if self._extension == ".png" and self.config["bit_depth"] not in ("8", "16"):
             logger.warning("Patch Writer: Bit Depth '%s' is unsupported for format '%s'. "
@@ -97,18 +99,20 @@ class Writer(Output):
         fname, ext = os.path.splitext(filename)
         fname = os.path.basename(fname)
 
-        split_fname = fname.rsplit("_", 1)
-        if split_fname[-1].isdigit():
+        split_fname = self._fname_split.split(fname)
+        if split_fname and split_fname[-1].isdigit():
             i_frame_no = (int(split_fname[-1]) +
                           (int(self.config["start_index"]) - 1) +
                           self.config["index_offset"])
             frame_no = f".{str(i_frame_no).rjust(self.config['number_padding'], '0')}"
+            base_fname = fname[:-len(split_fname[-1]) - 1]
         else:
             frame_no = ""
+            base_fname = fname
 
         retval = ""
         if self.config["include_filename"]:
-            retval += f"{split_fname[0]}"
+            retval += base_fname
         if self.config["face_index_location"] == "before":
             retval = f"{retval}_{face_idx}"
         retval += frame_no
