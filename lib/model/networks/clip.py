@@ -8,6 +8,7 @@ import inspect
 import logging
 import typing as T
 import sys
+import warnings
 
 from dataclasses import dataclass
 
@@ -837,7 +838,12 @@ class ViT():
         if self._load_weights:
             model_path = GetModel(f"CLIPv_{self._name}_v1.h5", self._git_id).model_path
             logger.info("Loading CLIPv trained weights for '%s'", self._name)
-            net.load_weights(model_path)
+            with warnings.catch_warnings():
+                # TODO There is a potential bug in keras load_weights_by_name that tries to load
+                # top_level_weights where they don't exist. This always generates a scary looking
+                # warning, so it supressed for now
+                warnings.simplefilter("ignore")
+                net.load_weights(model_path, by_name=True, skip_mismatch=True)
 
         return net
 
