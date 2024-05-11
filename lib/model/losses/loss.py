@@ -6,12 +6,15 @@ import logging
 import typing as T
 
 import numpy as np
-from keras import Loss
+from keras import Loss, backend as K
 from keras import ops, Variable
 
-import torch
-
 from lib.logger import parse_class_init
+
+if K.backend() == "torch":
+    import torch  # pylint:disable=import-error
+else:
+    import tensorflow as tf  # pylint:disable=import-error
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
@@ -62,7 +65,7 @@ class FocalFrequencyLoss(Loss):
         logger.debug(parse_class_init(locals()))
         super().__init__(name=self.__class__.__name__)
         self._alpha = alpha
-        # TODO Fix bug where FFT will be incorrect if patch_factor > 1
+        # TODO Fix bug where FFT will be incorrect if patch_factor > 1 for tensorflow
         self._patch_factor = patch_factor
         self._ave_spectrum = ave_spectrum
         self._log_matrix = log_matrix
@@ -83,10 +86,9 @@ class FocalFrequencyLoss(Loss):
         :class:`keras.KerasTensor``
             The incoming batch converted into patches
         """
-        rows, cols = self._dims
         patch_list = []
-        patch_rows = cols // self._patch_factor
-        patch_cols = rows // self._patch_factor
+        patch_rows = self._dims[0] // self._patch_factor
+        patch_cols = self._dims[1] // self._patch_factor
         for i in range(self._patch_factor):
             for j in range(self._patch_factor):
                 row_from = i * patch_rows
@@ -112,8 +114,20 @@ class FocalFrequencyLoss(Loss):
             The DFT frequencies split into real and imaginary numbers as float32
         """
         patch = ops.transpose(patch, (0, 1, 4, 2, 3))  # move channels to first
-        freq = torch.fft.fft2(patch, norm="ortho")
+
+        assert K.backend() in ("torch", "tensorflow"), "Only Torch and Tensorflow are supported"
+        if K.backend() == "torch":
+            freq = torch.fft.fft2(patch, norm="ortho")
+        else:
+            patch = patch / np.sqrt(self._dims[0] * self._dims[1])  # Orthonormalization
+            patch = ops.cast(patch, "complex64")
+            freq = tf.signal.fft2d(patch)[..., None]
+
         freq = ops.stack([freq.real, freq.imag], axis=-1)
+
+        if K.backend() == "tensorflow":
+            freq = ops.cast(freq, "float32")
+
         freq = ops.transpose(freq, (0, 1, 3, 4, 2, 5))  # channels to last
         return freq
 
@@ -144,7 +158,7 @@ class FocalFrequencyLoss(Loss):
         else:
             weights = weights / ops.max(ops.max(weights, axis=-2), axis=-2)[..., None, None, :]
 
-        weights = ops.where(torch.isnan(weights), ops.zeros_like(weights), weights)
+        weights = ops.nan_to_num(weights)
         weights = ops.clip(weights, x_min=0.0, x_max=1.0)
 
         return weights
@@ -173,7 +187,7 @@ class FocalFrequencyLoss(Loss):
         freq_distance = tmp[..., 0] + tmp[..., 1]
         loss = weight_matrix * freq_distance  # dynamic spectrum weighting (Hadamard product)
 
-        return loss
+        return ops.mean(loss)
 
     def call(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
         """ Call the Focal Frequency Loss Function.

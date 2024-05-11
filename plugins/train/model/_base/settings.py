@@ -712,7 +712,7 @@ class Settings():
             The list of layer names within the full precision model that can be switched
             to mixed precision
         """
-        logger.info("Storing Mixed Precision compatible layers.")
+        logger.debug("Storing Mixed Precision compatible layers.")
         self._set_keras_mixed_precision(True)
         with keras.device("CPU"):
             model = build_func(inputs)
