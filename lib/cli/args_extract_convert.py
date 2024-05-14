@@ -359,7 +359,7 @@ class ExtractArgs(ExtractConvertArgs):
             "opts": ("-P", "--singleprocess"),
             "action": "store_true",
             "default": False,
-            "backend": ("nvidia", "directml", "rocm", "apple_silicon"),
+            "backend": ("nvidia", "rocm", "apple_silicon"),
             "group": _("settings"),
             "help": _(
                 "Don't run extraction in parallel. Will run each part of the extraction process "

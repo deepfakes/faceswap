@@ -426,10 +426,8 @@ class Extractor():
             logger.debug("CPU mode selected. Returning CPU device context")
             return device("cpu")
 
-        # TODO apple_silicon + directml
+        # TODO apple_silicon
         if get_backend() == "apple_silicon":
-            pass
-        if get_backend() == "directml":
             pass
 
         if torch.cuda.is_available():

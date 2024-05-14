@@ -171,7 +171,7 @@ class TrainArgs(FaceSwapArgs):
             "type": str.lower,
             "choices": ["default", "central-storage", "mirrored"],
             "default": "default",
-            "backend": ("nvidia", "directml", "rocm", "apple_silicon"),
+            "backend": ("nvidia", "rocm", "apple_silicon"),
             "group": _("training"),
             "help": _(
                 "R|Select the distribution stategy to use."

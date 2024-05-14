@@ -261,7 +261,7 @@ class Config(FaceswapConfig):
                 "NVIDIA GPUs can run operations in float16 faster than in "
                 "float32. Mixed precision allows you to use a mix of float16 with float32, to "
                 "get the performance benefits from float16 and the numeric stability benefits "
-                "from float32.\n\nThis is untested on DirectML backend, but will run on most "
+                "from float32.\n\nThis is untested on non-Nvidia cards, but will run on most "
                 "Nvidia models. it will only speed up training on more recent GPUs. Those with "
                 "compute capability 7.0 or higher will see the greatest performance benefit from "
                 "mixed precision because they have Tensor Cores. Older GPUs offer no math "

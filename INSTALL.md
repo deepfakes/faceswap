@@ -56,7 +56,6 @@ The type of computations that the process does are well suited for graphics card
     - Laptop CPUs can often run the software, but will not be fast enough to train at reasonable speeds
 - **A powerful GPU**
     - Currently, Nvidia GPUs are fully supported
-    - DirectX 12 AMD GPUs are supported on Windows through DirectML.
     - More modern AMD GPUs are supported on Linux through ROCm.
     - M-series Macs are supported through Tensorflow-Metal
     - If using an Nvidia GPU, then it needs to support at least CUDA Compute Capability 3.5. (Release 1.0 will work on Compute Capability 3.0)
@@ -67,7 +66,6 @@ The type of computations that the process does are well suited for graphics card
 ## Supported operating systems
 - **Windows 10/11**
   Windows 7 and 8 might work for Nvidia. Your mileage may vary.
-  DirectML support is only available in Windows 10 onwards.
   Windows has an installer which will set up everything you need. See: https://github.com/deepfakes/faceswap/releases
 - **Linux**
   Most Ubuntu/Debian or CentOS based Linux distributions will work. There is a Linux install script that will install and set up everything you need. See: https://github.com/deepfakes/faceswap/releases

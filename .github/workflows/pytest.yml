@@ -22,8 +22,6 @@ jobs:
         include:
           - os: "ubuntu-latest"
             backend: "rocm"
-          - os: "windows-latest"
-            backend: "directml"
     steps:
       - uses: actions/checkout@v3
       - name: Set cache date
@@ -63,13 +61,13 @@ jobs:
         run: python -c "from lib.sysinfo import sysinfo ;  print(sysinfo)"
       - name: Simple Tests
         # These backends will fail as GPU drivers not available
-        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia' && matrix.backend != 'directml'
+        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia'
         run: |
           FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
       - name: End to End Tests
         # These backends will fail as GPU drivers not available
         # macOS fails on first extract test with 'died with <Signals.SIGSEGV: 11>'
-        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia' && matrix.backend != 'directml' && matrix.os != 'macos-latest'
+        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia' && matrix.os != 'macos-latest'
         run: |
           FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
 
@@ -123,10 +121,9 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10"]
-        backend: ["cpu", "directml"]
+        backend: ["cpu"]
         include:
           - backend: "cpu"
-          - backend: "directml"
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}

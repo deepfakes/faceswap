@@ -20,7 +20,7 @@ from pkg_resources import parse_requirements
 from lib.logger import log_setup
 
 logger = logging.getLogger(__name__)
-backend_type: T.TypeAlias = T.Literal['nvidia', 'apple_silicon', 'directml', 'cpu', 'rocm', "all"]
+backend_type: T.TypeAlias = T.Literal['nvidia', 'apple_silicon', 'cpu', 'rocm', "all"]
 
 _INSTALL_FAILED = False
 # Packages that are explicitly required for setup.py
@@ -78,7 +78,7 @@ class Environment():
         setup is running. Default: ``False``
     """
 
-    _backends = (("nvidia", "apple_silicon", "directml", "rocm", "cpu"))
+    _backends = (("nvidia", "apple_silicon", "rocm", "cpu"))
 
     def __init__(self, updater: bool = False) -> None:
         self.updater = updater
@@ -587,20 +587,8 @@ class Checks():  # pylint:disable=too-few-public-methods
             logger.info("ROCm Support Enabled")
             self._env.backend = "rocm"
 
-    def _directml_ask_enable(self) -> None:
-        """ Set backend to 'directml' if OS is Windows and DirectML support required """
-        if self._env.os_version[0] != "Windows":
-            return
-        logger.info("DirectML support:\r\nIf you are using an AMD or Intel GPU, then select 'yes'."
-                    "\r\nNvidia users should answer 'no'.")
-        i = input("Enable DirectML Support? [y/N] ")
-        if i in ("Y", "y"):
-            logger.info("DirectML Support Enabled")
-            self._env.backend = "directml"
-
     def _user_input(self) -> None:
-        """ Get user input for AMD/DirectML/ROCm/Cuda/Docker """
-        self._directml_ask_enable()
+        """ Get user input for AMD/ROCm/Cuda/Docker """
         self._rocm_ask_enable()
         if not self._env.backend:
             self._docker_ask_enable()

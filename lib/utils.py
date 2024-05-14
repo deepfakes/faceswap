@@ -31,7 +31,7 @@ VIDEO_EXTENSIONS = [".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".w
                     ".ts", ".vob"]
 _TORCH_VERS: tuple[int, int] | None = None
 _KERAS_VERS: tuple[int, int] | None = None
-ValidBackends = T.Literal["nvidia", "cpu", "apple_silicon", "directml", "rocm"]
+ValidBackends = T.Literal["nvidia", "cpu", "apple_silicon", "rocm"]
 
 
 class _Backend():  # pylint:disable=too-few-public-methods
@@ -41,10 +41,9 @@ class _Backend():  # pylint:disable=too-few-public-methods
     If file doesn't exist and a variable hasn't been set, create the config file. """
     def __init__(self) -> None:
         self._backends: dict[str, ValidBackends] = {"1": "cpu",
-                                                    "2": "directml",
-                                                    "3": "nvidia",
-                                                    "4": "apple_silicon",
-                                                    "5": "rocm"}
+                                                    "2": "nvidia",
+                                                    "3": "apple_silicon",
+                                                    "4": "rocm"}
         self._valid_backends = list(self._backends.values())
         self._config_file = self._get_config_file()
         self.backend = self._get_backend()
@@ -133,7 +132,7 @@ def get_backend() -> ValidBackends:
     Returns
     -------
     str
-        The backend configuration in use by Faceswap. One of  ["cpu", "directml", "nvidia", "rocm",
+        The backend configuration in use by Faceswap. One of  ["cpu", "nvidia", "rocm",
         "apple_silicon"]
 
     Example
@@ -150,7 +149,7 @@ def set_backend(backend: str) -> None:
 
     Parameters
     ----------
-    backend: ["cpu", "directml", "nvidia", "rocm", "apple_silicon"]
+    backend: ["cpu", "nvidia", "rocm", "apple_silicon"]
         The backend to set faceswap to
 
     Example

@@ -39,8 +39,8 @@ def test_set_backend(monkeypatch: pytest.MonkeyPatch) -> None:
         Monkey patching _FS_BACKEND
     """
     monkeypatch.setattr(utils, "_FS_BACKEND", "cpu")  # _FS_BACKEND already defined
-    set_backend("directml")
-    assert utils._FS_BACKEND == "directml"
+    set_backend("nvidia")
+    assert utils._FS_BACKEND == "nvidia"
     monkeypatch.delattr(utils, "_FS_BACKEND")  # _FS_BACKEND is not already defined
     set_backend("rocm")
     assert utils._FS_BACKEND == "rocm"

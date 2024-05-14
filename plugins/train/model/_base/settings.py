@@ -563,7 +563,7 @@ class Settings():
             The request Tensorflow Strategy if the backend is Nvidia and the strategy is not
             `"Default"` otherwise ``None``
         """
-        if get_backend() not in ("nvidia", "directml", "rocm"):
+        if get_backend() not in ("nvidia", "rocm"):
             retval = None
         elif strategy == "mirrored":
             retval = self._get_mirrored_strategy()
