@@ -140,17 +140,19 @@ class VideoExtension(_Updater):
         """
         updated = 0
         for key in list(self._alignments.data):
-            val = self._alignments.data[key]
             fname = os.path.splitext(key)[0]
-            if fname.rsplit("_")[0] != self._video_name:
+            if fname.rsplit("_", maxsplit=1)[0] != self._video_name:
                 continue  # Key is from a different source
 
+            val = self._alignments.data[key]
             new_key = f"{fname}{self._extension}"
+
             del self._alignments.data[key]
             self._alignments.data[new_key] = val
+
             updated += 1
 
-        logger.debug("Updated alignemnt keys for video extension: %s", updated)
+        logger.debug("Updated alignment keys for video extension: %s", updated)
         return updated
 
 
