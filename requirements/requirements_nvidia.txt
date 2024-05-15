@@ -2,4 +2,5 @@
 # Exclude badly numbered Python2 version of nvidia-ml-py
 nvidia-ml-py>=12.535,<300
 pynvx==1.0.0 ; sys_platform == "darwin"
-pytorch-cuda>=12.1
+--extra-index-url https://download.pytorch.org/whl/cu121 ; sys_platform == "windows"
+torch>=2.3.0,<2.4.0

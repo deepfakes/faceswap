@@ -31,24 +31,23 @@ _INSTALLER_REQUIREMENTS: list[tuple[str, str]] = [("pexpect>=4.8.0", "!Windows")
 # Could not locate zlibwapi.dll. Please make sure it is in your library path!
 # This only seems to occur on Anaconda cuDNN not conda-forge
 _BACKEND_SPECIFIC_CONDA: dict[backend_type, list[str]] = {
-    "nvidia": ["zlib-wapi"],
-    "apple_silicon": ["libblas"]}
+    "nvidia": ["zlib-wapi", "pytorch-cuda==12.1"],
+    "apple_silicon": ["libblas"],
+    "cpu": ["cpuonly==2.0"]}
 # Packages that should only be installed through pip
 _FORCE_PIP: dict[backend_type, list[str]] = {
     "all": [
-        "imageio-ffmpeg"]}  # 17/11/23 Conda forge uses incorrect ffmpeg, so fallback to pip
+        "imageio-ffmpeg",  # 17/11/23 Conda forge uses incorrect ffmpeg, so fallback to pip
+        "numexpr"],  # 15/05/24  Numexpr likes to pull in all kinds of incorrect libs
+    "rocm": ["torch", "torchvision", "torchaudio"]}  # 15/05/24 Pytorch ROCM has no Conda install
 
-# TODO:
-# ROCm min/max version requirements for Tensorflow
-_TENSORFLOW_ROCM_REQUIREMENTS = {">=2.10.0,<2.11.0": ((5, 2, 0), (5, 4, 0))}
-# TODO tensorflow-metal versioning
+_TORCH_ROCM_REQUIREMENTS = {">=2.2.1,<2.4.0": ((6, 0), (6, 0))}
+"""dict[str, tuple[tuple[int, int], tuple[int, int]]]: Minumum and maximum ROCm versions """
 
 # Mapping of Python packages to their conda names if different from pip or in non-default channel
 _CONDA_MAPPING: dict[str, tuple[str, tuple[str, ...]]] = {
     "pytorch-cuda": ("pytorch-cuda", ("pytorch", "nvidia")),
-    "pytorch": ("pytorch", ("pytorch", "nvidia")),
-    "torchvision": ("torchvision", ("pytorch", "nvidia")),
-    "torchaudio": ("torchaudio", ("pytorch", "nvidia")),
+    "torch": ("pytorch", ("pytorch", )),  # As we group torch imports, only specify channel once
     "fastcluster": ("fastcluster", ("conda-forge", )),
     "ffmpy": ("ffmpy", ("conda-forge", )),
     # "imageio-ffmpeg": ("imageio-ffmpeg", ("conda-forge", )),
@@ -57,7 +56,7 @@ _CONDA_MAPPING: dict[str, tuple[str, tuple[str, ...]]] = {
     "zlib-wapi": ("zlib-wapi", ("conda-forge", )),
     "xorg-libxft": ("xorg-libxft", ("conda-forge", ))}
 
-_GROUPS = [["pytorch*", "torch*"]]
+_GROUPS = [["pytorch*", "torch*", "cpuonly"]]
 """list[list[str]]: Packages that should be installed collectively at the same time """
 
 _DEV_TOOLS = ["flake8", "mypy", "pylint", "pytest", "pytest-mock",
@@ -345,15 +344,18 @@ class Packages():
         # Default TK has bad fonts under Linux. There is a better build in Conda-Forge, so set
         # channel accordingly
         tk_channel = "conda-forge" if self._env.os_version[0].lower() == "linux" else "defaults"
+
+        self._required_packages: list[tuple[str, list[tuple[str, str]]]] = []
+        self._missing_packages: list[tuple[str, list[tuple[str, str]]]] = []
+        self._conda_missing_packages: list[tuple[str, tuple[str, ...]]] = []
+        self._pip_args: list[str] = []
+
         self._conda_required_packages: list[tuple[str, tuple[str, ...]]] = [
             ("tk", (tk_channel, )),
             ("git", ("defaults", ))]
         self._update_backend_specific_conda()
         self._installed_packages = self._get_installed_packages()
         self._conda_installed_packages = self._get_installed_conda_packages()
-        self._required_packages: list[tuple[str, list[tuple[str, str]]]] = []
-        self._missing_packages: list[tuple[str, list[tuple[str, str]]]] = []
-        self._conda_missing_packages: list[tuple[str, tuple[str, ...]]] = []
 
     @property
     def prerequisites(self) -> list[tuple[str, list[tuple[str, str]]]]:
@@ -393,6 +395,12 @@ class Packages():
         pip and conda """
         return {**self._installed_packages, **self._conda_installed_packages}
 
+    @property
+    def pip_arguments(self) -> list[str]:
+        """ list[str] Any additional pip arguments that are required for installing from pip for
+        the given backend """
+        return self._pip_args
+
     def _update_backend_specific_conda(self) -> None:
         """ Add backend specific packages to Conda required packages """
         assert self._env.backend is not None
@@ -402,10 +410,18 @@ class Packages():
                          self._env.backend, _BACKEND_SPECIFIC_CONDA)
             return
 
+        clean_groups = [tuple(item.replace("*", "") for item in group) for group in _GROUPS]
+
         for pkg in to_add:
             pkg, channel = _CONDA_MAPPING.get(pkg, (pkg, ("defaults", )))
             if pkg == "zlib-wapi" and self._env.os_version[0].lower() != "windows":
                 # TODO move this front and center
+                continue
+
+            if any(pkg.startswith(items) for items in clean_groups):
+                # Required torch packages need to be put into main package list so they can be
+                # installed with the wider pytorch group
+                self._required_packages.extend(self._format_requirements([pkg]))
                 continue
 
             self._conda_required_packages.append((pkg, channel))
@@ -498,13 +514,16 @@ class Packages():
             with open(requirements_file, encoding="utf8") as req:
                 for package in req.readlines():
                     package = package.strip()
+                    if package and package.startswith("-") and not package.startswith("-r"):
+                        self._pip_args.append(package)
+                        continue
                     if package and (not package.startswith(("#", "-r"))):
                         requirements.append(package)
 
         if self._env.include_dev_tools:
             requirements.extend(_DEV_TOOLS)
 
-        self._required_packages = self._format_requirements(requirements)
+        self._required_packages.extend(self._format_requirements(requirements))
         logger.debug(self._required_packages)
 
     def _check_conda_missing_dependencies(self) -> None:
@@ -536,9 +555,12 @@ class Packages():
 
     def check_missing_dependencies(self) -> None:
         """ Check for missing dependencies and add to :attr:`_missing_packages` """
+        assert self._env.backend is not None
+        force_pip = _FORCE_PIP.get("all", []) + _FORCE_PIP.get(self._env.backend, [])
         for key, specs in self._required_packages:
 
-            if self._env.is_conda:  # Get Conda alias for Key
+            if self._env.is_conda and key not in force_pip:
+                # Get Conda alias for Key
                 key = _CONDA_MAPPING.get(key, (key, None))[0]
 
             if key not in self._all_installed_packages:
@@ -746,9 +768,9 @@ class ROCmCheck():
     """ Find the location of system installed ROCm on Linux """
     # TODO
     def __init__(self) -> None:
-        self.version_min = min(v[0] for v in _TENSORFLOW_ROCM_REQUIREMENTS.values())
-        self.version_max = max(v[1] for v in _TENSORFLOW_ROCM_REQUIREMENTS.values())
-        self.rocm_version: tuple[int, ...] = (0, 0, 0)
+        self.version_min = min(v[0] for v in _TORCH_ROCM_REQUIREMENTS.values())
+        self.version_max = max(v[1] for v in _TORCH_ROCM_REQUIREMENTS.values())
+        self.rocm_version: tuple[int, ...] = (0, 0)
         if platform.system() == "Linux":
             self._rocm_check()
 
@@ -772,7 +794,7 @@ class ROCmCheck():
         if version is None:
             return
         try:
-            self.rocm_version = tuple(int(v) for v in version.groups()[0].split("."))
+            self.rocm_version = tuple(int(v) for v in version.groups()[0].split("."))[:2]
         except ValueError:
             return
 
@@ -1032,21 +1054,28 @@ class Install():  # pylint:disable=too-few-public-methods
 
     def _install_grouped_packages(self) -> None:
         """ Install packages that should be installed collectively as a group """
-        if not self._env.is_conda:
-            return
-
+        assert self._env.backend is not None
+        force_pip = _FORCE_PIP.get("all", []) + _FORCE_PIP.get(self._env.backend, [])
+        use_pip = False
         packages = []
         channels: set[str] = set()
         for group in _GROUPS:
             for item in group:
                 for idx, pkg in reversed(list(enumerate(self._packages.to_install))):
-                    if item == pkg[0] or (item.endswith("*") and pkg[0].startswith(item[:-1])):
-                        i_pkg = self._packages.to_install.pop(idx)
-                        packages.append(self._format_package(*i_pkg))
-                        channels.update(c for c in _CONDA_MAPPING.get(i_pkg[0],
-                                                                      (i_pkg[0],
-                                                                       ("defaults", )))[-1])
-        self._from_conda(packages, tuple(channels), conda_only=True)
+                    if item != pkg[0] and not (item.endswith("*") and
+                                               pkg[0].startswith(item[:-1])):
+                        continue
+                    i_pkg = self._packages.to_install.pop(idx)
+                    if i_pkg[0] in force_pip:
+                        use_pip = True
+                    packages.append(self._format_package(*i_pkg))
+                    channels.update(next((v[1] for v in _CONDA_MAPPING.values()
+                                          if v[0] == i_pkg[0]),
+                                         ("defaults", )))
+        if use_pip:
+            self._from_pip(packages, " ".join(self._packages.pip_arguments))
+        else:
+            self._from_conda(packages, tuple(channels), conda_only=True)
 
     def _install_conda_packages(self) -> None:
         """ Install required conda packages """
@@ -1120,21 +1149,26 @@ class Install():  # pylint:disable=too-few-public-methods
         success = retcode == 0 and success
         return success
 
-    def _from_pip(self, package: str) -> None:
+    def _from_pip(self, package: list[str] | str, extra_args: str = "") -> None:
         """ Install a pip package
 
         Parameters
         ----------
-        package: str
-            The full formatted package, with version, to be installed
+        package: list[str] | str
+            The full formatted package(s), with version(s), to be installed
+        extra_args: str, optional
+            Any extra arguments to provide to pip. Default: "" (no extra arguments)
         """
+        packages = package if isinstance(package, list) else [package]
         pipexe = [sys.executable, "-u", "-m", "pip", "install", "--no-cache-dir"]
         # install as user to solve perm restriction
         if not self._env.is_admin and not self._env.is_virtualenv:
             pipexe.append("--user")
-        pipexe.append(package)
+        if extra_args:
+            pipexe.extend(extra_args.split(" "))
+        pipexe.extend(packages)
 
-        installer = self._installer(self._env, package, pipexe, self._is_gui)
+        installer = self._installer(self._env, " ".join(packages), pipexe, self._is_gui)
         if installer() != 0:
             logger.warning("Couldn't install %s with pip. Please install this package manually",
                            package)
