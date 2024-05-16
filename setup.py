@@ -201,8 +201,8 @@ class Environment():
         if self.updater:
             return
 
-        if not ((3, 10) <= sys.version_info < (3, 13) and self.py_version[1] == "64bit"):
-            logger.error("Please run this script with Python version 3.10 to 3.12 64bit and try "
+        if not ((3, 10) <= sys.version_info < (3, 12) and self.py_version[1] == "64bit"):
+            logger.error("Please run this script with Python version 3.10 to 3.11 64bit and try "
                          "again.")
             sys.exit(1)
 
