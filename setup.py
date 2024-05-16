@@ -25,7 +25,7 @@ backend_type: T.TypeAlias = T.Literal['nvidia', 'apple_silicon', 'cpu', 'rocm', 
 _INSTALL_FAILED = False
 # Packages that are explicitly required for setup.py
 _INSTALLER_REQUIREMENTS: list[tuple[str, str]] = [("pexpect>=4.8.0", "!Windows"),
-                                                  ("pywinpty==2.0.2", "Windows")]
+                                                  ("pywinpty>=2.0.2", "Windows")]
 # Conda packages that are required for a specific backend
 # TODO zlib-wapi is required on some Windows installs where cuDNN complains:
 # Could not locate zlibwapi.dll. Please make sure it is in your library path!
@@ -201,8 +201,8 @@ class Environment():
         if self.updater:
             return
 
-        if not ((3, 10) <= sys.version_info < (3, 11) and self.py_version[1] == "64bit"):
-            logger.error("Please run this script with Python version 3.10 64bit and try "
+        if not ((3, 10) <= sys.version_info < (3, 13) and self.py_version[1] == "64bit"):
+            logger.error("Please run this script with Python version 3.10 to 3.12 64bit and try "
                          "again.")
             sys.exit(1)
 
@@ -1072,6 +1072,9 @@ class Install():  # pylint:disable=too-few-public-methods
                     channels.update(next((v[1] for v in _CONDA_MAPPING.values()
                                           if v[0] == i_pkg[0]),
                                          ("defaults", )))
+        if not packages:
+            return
+
         if use_pip:
             self._from_pip(packages, " ".join(self._packages.pip_arguments))
         else:
