@@ -640,7 +640,8 @@ class Legacy:  # pylint:disable=too-few-public-methods
 
     def _process_inbounds(self,
                           layer_name: str,
-                          inbound_nodes: list[list[list[str | int]]]) -> None:
+                          inbound_nodes: list[list[list[str | int]]] | list[list[str | int]]
+                          ) -> None:
         """ If the inbound nodes are from a shared functional model, decrement the node index by
         one. Operation is performed in place
 
@@ -648,10 +649,14 @@ class Legacy:  # pylint:disable=too-few-public-methods
         ----------
         layer_name: str
             The name of the layer (for logging)
-        inbound_nodes: dict[str, list[str | int]]
+        inbound_nodes: list[list[list[str | int]]] | list[list[str | int]]
             The inbound nodes from a Keras 2 config dict to process
         """
-        for inbound in inbound_nodes:
+        to_proccess = T.cast(
+            list[list[list[str | int]]],
+            inbound_nodes if isinstance(inbound_nodes[0][0], list) else [inbound_nodes])
+
+        for inbound in to_proccess:
             for node in inbound:
                 name, node_index = node[0], node[1]
                 assert isinstance(name, str) and isinstance(node_index, int)
