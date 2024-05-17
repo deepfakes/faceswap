@@ -405,10 +405,14 @@ class Packages():
         """ Add backend specific packages to Conda required packages """
         assert self._env.backend is not None
         to_add = _BACKEND_SPECIFIC_CONDA.get(self._env.backend)
+
         if not to_add:
             logger.debug("No backend packages to add for '%s'. All optional packages: %s",
                          self._env.backend, _BACKEND_SPECIFIC_CONDA)
             return
+
+        if self._env.backend == "nvidia" and self._env.os_version[0] == "Darwin":
+            to_add = [p for p in to_add if "cuda" not in p]
 
         clean_groups = [tuple(item.replace("*", "") for item in group) for group in _GROUPS]
 
