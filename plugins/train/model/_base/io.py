@@ -23,6 +23,7 @@ from keras import layers, models as kmodels
 
 from lib.logger import parse_class_init
 from lib.model.backup_restore import Backup
+from lib.model.networks import TypeModelsViT, ViT
 from lib.utils import FaceswapError
 
 if T.TYPE_CHECKING:
@@ -617,26 +618,72 @@ class Legacy:  # pylint:disable=too-few-public-methods
         logger.debug("Unwrapped outputs: %s to: %s", outputs, retval)
         return retval
 
-    @classmethod
-    def _process_deprecations(cls, layer: dict[str, T.Any]) -> None:
-        """ Some layer kwargs are deprecated between Keras 2 and Keras 3. This is not mission
+    def _get_clip_config(self) -> dict[str, T.Any]:
+        """ Build a clip model from the configuration information stored in the legacy state file
+
+        Returns
+        -------
+        dict[str, T.Any]
+            The new keras configuration for a Clip model
+
+        Raises
+        ------
+        FaceswapError
+            If the clip model cannot be built
+        """
+        state_file = f"{os.path.splitext(self._old_model_file)[0]}_state.json"
+        if not os.path.isfile(state_file):
+            raise FaceswapError(
+                f"The state file '{state_file}' does not exist. This model cannot be ported")
+
+        with open(state_file, "r", encoding="utf-8") as ifile:
+            config = json.load(ifile)
+
+        logger.debug("Loaded legacy config '%s': %s", state_file, config)
+        net_name = config.get("config", {}).get("enc_architecture", "")
+        scaling = config.get("config", {}).get("enc_scaling", 0) / 100
+
+        # Import here to prevent circular imports
+        from plugins.train.model.phaze_a import _MODEL_MAPPING  # pylint:disable=C0415
+        vit_info = _MODEL_MAPPING.get(net_name)
+
+        if not scaling or not vit_info:
+            raise FaceswapError(
+                f"Clip network could not be found in '{state_file}'. Discovered network is "
+                f"'{net_name}' with encoder scaling: {scaling}. This model cannot be ported")
+
+        input_size = int(max(vit_info.min_size, ((vit_info.default_size * scaling) // 16) * 16))
+        vit_model = ViT(T.cast(TypeModelsViT, vit_info.keras_name), input_size=input_size)()
+
+        retval = vit_model.get_config()
+        del vit_model
+        logger.debug("Got new config for '%s' at input size: %s: %s", net_name, input_size, retval)
+        return retval
+
+    def _process_deprecations(self, layer: dict[str, T.Any]) -> None:
+        """ Some layer kwargs are deprecated between Keras 2 and Keras 3. Some are not mission
         critical, but updating these here prevents Keras from outputting warnings about deprecated
-        arguments. Operation is performed in place
+        arguments. Others will fail to load the legacy model (eg Clip) so are replaced with a new
+        config. Operation is performed in place
 
         Parameters
         ----------
         layer: dict[str, T.Any]
             A keras model config item representing a keras layer
         """
-        if layer["class_name"] != "LeakyReLU":
-            return
+        if layer["class_name"] == "LeakyReLU":
+            # Non mission-critical, but prevents scary deprecation messages
+            config = layer["config"]
+            old, new = "alpha", "negative_slope"
+            if old in config:
+                logger.debug("Updating '%s' kwarg '%s' to '%s'", layer["name"], old, new)
+                config[new] = config[old]
+                del config[old]
 
-        config = layer["config"]
-        old, new = "alpha", "negative_slope"
-        if old in config:
-            logger.debug("Updating '%s' kwarg '%s' to '%s'", layer["name"], old, new)
-            config[new] = config[old]
-            del config[old]
+        if layer["name"] == "visual":
+            # MultiHeadAttention is not backwards compatible, so get new config for Clip models
+            logger.debug("Getting new config for 'visual' model")
+            layer["config"] = self._get_clip_config()
 
     def _process_inbounds(self,
                           layer_name: str,
