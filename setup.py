@@ -37,8 +37,10 @@ _BACKEND_SPECIFIC_CONDA: dict[backend_type, list[str]] = {
 # Packages that should only be installed through pip
 _FORCE_PIP: dict[backend_type, list[str]] = {
     "all": [
+        "ffmpy",  # 17/04/24 Can pull in incompatible ffmpeg
         "imageio-ffmpeg",  # 17/11/23 Conda forge uses incorrect ffmpeg, so fallback to pip
-        "numexpr"],  # 15/05/24  Numexpr likes to pull in all kinds of incorrect libs
+        "numexpr",  # 15/05/24  Numexpr likes to pull in all kinds of incorrect libs
+        "opencv-python"],  # Not directly in Conda
     "rocm": ["torch", "torchvision", "torchaudio"]}  # 15/05/24 Pytorch ROCM has no Conda install
 
 _TORCH_ROCM_REQUIREMENTS = {">=2.2.1,<2.4.0": ((6, 0), (6, 0))}
@@ -49,7 +51,7 @@ _CONDA_MAPPING: dict[str, tuple[str, tuple[str, ...]]] = {
     "pytorch-cuda": ("pytorch-cuda", ("pytorch", "nvidia")),
     "torch": ("pytorch", ("pytorch", )),  # As we group torch imports, only specify channel once
     "fastcluster": ("fastcluster", ("conda-forge", )),
-    "ffmpy": ("ffmpy", ("conda-forge", )),
+    # "ffmpy": ("ffmpy", ("conda-forge", )),
     # "imageio-ffmpeg": ("imageio-ffmpeg", ("conda-forge", )),
     "nvidia-ml-py": ("nvidia-ml-py", ("conda-forge", )),
     "libblas": ("libblas", ("conda-forge", )),
@@ -201,8 +203,8 @@ class Environment():
         if self.updater:
             return
 
-        if not ((3, 10) <= sys.version_info < (3, 12) and self.py_version[1] == "64bit"):
-            logger.error("Please run this script with Python version 3.10 to 3.11 64bit and try "
+        if not ((3, 10) <= sys.version_info < (3, 13) and self.py_version[1] == "64bit"):
+            logger.error("Please run this script with Python version 3.10 to 3.12 64bit and try "
                          "again.")
             sys.exit(1)
 
