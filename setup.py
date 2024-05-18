@@ -288,10 +288,10 @@ class Environment():
 
         Notes
         -----
-        From Tensorflow 2.7, installing Cuda Toolkit from conda-forge and tensorflow from pip
-        causes tensorflow to not be able to locate shared libs and hence not use the GPU.
-        We update the environment variable for all instances using Conda as it shouldn't hurt
-        anything and may help avoid conflicts with globally installed Cuda
+        Installing Cuda Toolkit from conda-forge and sometimes means Faceswap is not be able to
+        locate shared libs and hence not use the GPU. We update the environment variable for all
+        instances using Conda as it shouldn't hurt anything and may help avoid conflicts with
+        globally installed Cuda
         """
         if not self.is_conda:
             return

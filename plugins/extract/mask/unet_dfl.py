@@ -18,9 +18,7 @@ import logging
 import typing as T
 
 import numpy as np
-from keras import backend as K
-from keras.models import Model
-from keras.layers import Concatenate, Conv2D, Conv2DTranspose, Input, MaxPool2D
+from keras import backend as K, layers as kl, Model
 
 from lib.logger import parse_class_init
 from ._base import BatchType, Masker, MaskerBatch
@@ -85,9 +83,6 @@ class UnetDFL:
     Conv2DTranspose combinations when model was trained on one backend but inferred on another:
     https://github.com/keras-team/keras-core/issues/774
     The effect of this misaligns the mask and peforms bad inference for this model.
-
-    The update here will only work well on PyTorch backends. The original implementation (saved in
-    the .h5 file) should be used for Tensorflow backend
     """
     def __init__(self, weights_path: str, batch_size: int) -> None:
         logger.debug(parse_class_init(locals()))
@@ -121,12 +116,12 @@ class UnetDFL:
         output = inputs
 
         for _ in range(recursions):
-            output = Conv2D(filters,
-                            3,
-                            padding="same",
-                            activation="relu",
-                            kernel_initializer="random_uniform",
-                            name=f"features.{idx}")(output)
+            output = kl.Conv2D(filters,
+                               3,
+                               padding="same",
+                               activation="relu",
+                               kernel_initializer="random_uniform",
+                               name=f"features.{idx}")(output)
             idx += 2
 
         return output
@@ -161,27 +156,27 @@ class UnetDFL:
         :class:`keras.KerasTensor`
             The output from the upscaled/skip connection
         """
-        output = Conv2D(conv_filters,
-                        3,
-                        padding="same",
-                        activation="linear" if linear else "relu",
-                        kernel_initializer="random_uniform",
-                        name=f"conv2d_{idx}")(input_1)
+        output = kl.Conv2D(conv_filters,
+                           3,
+                           padding="same",
+                           activation="linear" if linear else "relu",
+                           kernel_initializer="random_uniform",
+                           name=f"conv2d_{idx}")(input_1)
 
         # TF vs PyTorch paddng is different. We need to negative pad the output for Torch
         padding = "valid" if K.backend() == "torch" else "same"
-        output = Conv2DTranspose(trans_filters,
-                                 3,
-                                 strides=2,
-                                 padding=padding,
-                                 activation="relu",
-                                 kernel_initializer="random_uniform",
-                                 name=f"conv2d_transpose_{idx}")(output)
+        output = kl.Conv2DTranspose(trans_filters,
+                                    3,
+                                    strides=2,
+                                    padding=padding,
+                                    activation="relu",
+                                    kernel_initializer="random_uniform",
+                                    name=f"conv2d_transpose_{idx}")(output)
 
         if K.backend() == "torch":
             output = output[:, :-1, :-1, :]
 
-        return Concatenate(name=f"concatenate_{idx}")([output, input_2])
+        return kl.Concatenate(name=f"concatenate_{idx}")([output, input_2])
 
     def _load_model(self, weights_path: str) -> Model:
         """ Definition of the UNet-DFL Model.
@@ -197,22 +192,22 @@ class UnetDFL:
             The VGG-Clear model
         """
         features = []
-        input_ = Input(shape=(256, 256, 3), name="input_1")
+        input_ = kl.Input(shape=(256, 256, 3), name="input_1")
 
         features.append(self.conv_block(input_, 64, 1, 0))
-        var_x = MaxPool2D(pool_size=2, strides=2, name="max_pooling2d_1")(features[-1])
+        var_x = kl.MaxPool2D(pool_size=2, strides=2, name="max_pooling2d_1")(features[-1])
 
         features.append(self.conv_block(var_x, 128, 1, 3))
-        var_x = MaxPool2D(pool_size=2, strides=2, name="max_pooling2d_2")(features[-1])
+        var_x = kl.MaxPool2D(pool_size=2, strides=2, name="max_pooling2d_2")(features[-1])
 
         features.append(self.conv_block(var_x, 256, 2, 6))
-        var_x = MaxPool2D(pool_size=2, strides=2, name="max_pooling2d_3")(features[-1])
+        var_x = kl.MaxPool2D(pool_size=2, strides=2, name="max_pooling2d_3")(features[-1])
 
         features.append(self.conv_block(var_x, 512, 2, 11))
-        var_x = MaxPool2D(pool_size=2, strides=2, name="max_pooling2d_4")(features[-1])
+        var_x = kl.MaxPool2D(pool_size=2, strides=2, name="max_pooling2d_4")(features[-1])
 
         features.append(self.conv_block(var_x, 512, 2, 16))
-        var_x = MaxPool2D(pool_size=2, strides=2, name="max_pooling2d_5")(features[-1])
+        var_x = kl.MaxPool2D(pool_size=2, strides=2, name="max_pooling2d_5")(features[-1])
 
         convs = [512, 512, 512, 256, 128]
         for idx, (feats, filts) in enumerate(zip(reversed(features), convs)):
@@ -220,18 +215,18 @@ class UnetDFL:
             trans_filts = filts // 2 if idx < 2 else filts // 4
             var_x = self.skip_block(var_x, feats, filts, trans_filts, linear, idx + 1)
 
-        var_x = Conv2D(64,
-                       3,
-                       padding="same",
-                       activation="relu",
-                       kernel_initializer="random_uniform",
-                       name="conv2d_6")(var_x)
-        output = Conv2D(1,
-                        3,
-                        padding="same",
-                        activation="sigmoid",
-                        kernel_initializer="random_uniform",
-                        name="conv2d_7")(var_x)
+        var_x = kl.Conv2D(64,
+                          3,
+                          padding="same",
+                          activation="relu",
+                          kernel_initializer="random_uniform",
+                          name="conv2d_6")(var_x)
+        output = kl.Conv2D(1,
+                           3,
+                           padding="same",
+                           activation="sigmoid",
+                           kernel_initializer="random_uniform",
+                           name="conv2d_7")(var_x)
 
         model = Model(input_, output)
         model.load_weights(weights_path)

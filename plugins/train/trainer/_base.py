@@ -327,11 +327,7 @@ class TrainerBase():
                             for side, side_loss in zip(("A", "B"), loss)])
         timestamp = time.strftime("%H:%M:%S")
         output = f"[{timestamp}] [#{self._model.iterations:05d}] {output}"
-        try:
-            print(f"{output}", end="\r")
-        except OSError as err:
-            logger.warning("Swallowed OS Error caused by Tensorflow distributed training. output "
-                           "line: %s, error: %s", output, str(err))
+        print(f"{output}", end="\r")
 
     def _update_viewers(self,
                         viewer: Callable[[np.ndarray, str], None] | None,

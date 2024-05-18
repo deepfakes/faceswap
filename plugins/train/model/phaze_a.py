@@ -324,7 +324,7 @@ class Model(ModelBase):
         keras_ver = get_keras_version()
         keras_min = model.keras_min
         if keras_ver < keras_min:
-            raise FaceswapError(f"{arch}' is not compatible with your version of Tensorflow. The "
+            raise FaceswapError(f"{arch}' is not compatible with your version of Keras. The "
                                 f"minimum version required is {keras_min} whilst you have version "
                                 f"{keras_ver} installed.")
 

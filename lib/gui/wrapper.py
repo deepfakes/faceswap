@@ -176,7 +176,7 @@ class ProcessWrapper():
         logger.debug("Built cli arguments: (%s)", args)
         return args
 
-    def _get_training_session_info(self, cli_option: list[str]) -> None:
+    def _get_training_session_info(self, cli_option: tuple[str, ...]) -> None:
         """ Set the model folder and model name to :`attr:_training_session_location` so the global
         session picks them up for logging to the graph and analysis tab.
 
@@ -401,10 +401,6 @@ class FaceswapControl():
                 if self._command != "train" and self._capture_tqdm(output):
                     continue
                 if self._process_training_determinate_function(output):
-                    continue
-                if os.name == "nt" and "Call to CreateProcess failed. Error code: 2" in output:
-                    # Suppress ptxas errors on Tensorflow for Windows
-                    logger.debug("Suppressed call to subprocess error: '%s'", output)
                     continue
                 print(output.strip(), file=sys.stderr)
         logger.debug("Terminated stderr reader")

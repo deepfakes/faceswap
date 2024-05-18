@@ -2,9 +2,6 @@
 """
 Return a requested detector/aligner/masker pipeline
 
-Tensorflow does not like to release GPU VRAM, so parallel plugins need to be managed to work
-together.
-
 This module sets up a pipeline for the extraction workflow, loading detect, align and mask
 plugins either in parallel or in series, giving easy access to input and output.
 """

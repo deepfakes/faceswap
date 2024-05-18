@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Handles the loading and collation of events from Tensorflow event log files. """
+""" Handles the loading and collation of events from Tensorboard event log files. """
 from __future__ import annotations
 import logging
 import os
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class EventData:
-    """ Holds data collected from Tensorflow Event Files
+    """ Holds data collected from Tensorboard Event Files
 
     Parameters
     ----------
@@ -38,7 +38,7 @@ class EventData:
 
 
 class _LogFiles():
-    """ Holds the filenames of the Tensorflow Event logs that require parsing.
+    """ Holds the filenames of the Tensorboard Event logs that require parsing.
 
     Parameters
     ----------
@@ -57,7 +57,7 @@ class _LogFiles():
         return list(sorted(self._filenames))
 
     def _get_log_filenames(self) -> dict[int, str]:
-        """ Get the Tensorflow event filenames for all existing sessions.
+        """ Get the Tensorboard event filenames for all existing sessions.
 
         Returns
         -------
@@ -84,7 +84,7 @@ class _LogFiles():
         Parameters
         ----------
         folder: str
-            The full path to the folder that contains the session's Tensorflow Event Log
+            The full path to the folder that contains the session's Tensorboard Event Log
 
         Returns
         -------
@@ -107,7 +107,7 @@ class _LogFiles():
         Parameters
         ----------
         folder: str
-            The full path to the folder that contains the session's Tensorflow Event Log
+            The full path to the folder that contains the session's Tensorboard Event Log
         filenames: list[str]
             List of filenames that exist within the given folder
 
@@ -158,7 +158,7 @@ class _LogFiles():
 
 
 class _CacheData():
-    """ Holds cached data that has been retrieved from Tensorflow Event Files and is compressed
+    """ Holds cached data that has been retrieved from Tensorboard Event Files and is compressed
     in memory for a single or live training session
 
     Parameters
@@ -226,7 +226,7 @@ class _CacheData():
 
 
 class _Cache():
-    """ Holds parsed Tensorflow log event data in a compressed cache in memory. """
+    """ Holds parsed Tensorboard log event data in a compressed cache in memory. """
     def __init__(self) -> None:
         logger.debug(parse_class_init(locals()))
         self._data: dict[int, _CacheData] = {}
@@ -298,7 +298,7 @@ class _Cache():
         Parameters
         ----------
         data: dict
-            The incoming tensorflow event data in dictionary form per step
+            The incoming Tensorboard event data in dictionary form per step
         is_live: bool, optional
             ``True`` if the data to be cached is from a live training session otherwise ``False``.
             Default: ``False``
@@ -378,7 +378,7 @@ class _Cache():
         Parameters
         ----------
         data: dict
-            The incoming tensorflow event data in dictionary form per step
+            The incoming Tensorboard event data in dictionary form per step
         is_live: bool
             ``True`` if the data to be cached is from a live training session otherwise ``False``.
 
@@ -725,12 +725,12 @@ class TensorBoardLogs():
 
 
 class _EventParser():
-    """ Parses Tensorflow event and populates data to :class:`_Cache`.
+    """ Parses Tensorboard event and populates data to :class:`_Cache`.
 
     Parameters
     ----------
     iterator: :class:`RecordIterator`
-        The iterator to use for reading Tensorflow event logs
+        The iterator to use for reading Tensorboard event logs
     cache: :class:`_Cache`
         The cache object to store the collected parsed events to
     live_data: bool
@@ -755,12 +755,12 @@ class _EventParser():
         Parameters
         ----------
         iterator: :class:`RecordIterator`
-            The live training iterator to use for reading Tensorflow event logs
+            The live training iterator to use for reading Tensorboard event logs
 
         Yields
         ------
         dict
-            A Tensorflow event in dictionary form for a single step
+            A Tensorboard event in dictionary form for a single step
         """
         i = 0
         while True:
@@ -773,7 +773,7 @@ class _EventParser():
         logger.debug("Collected %s records from live log file", i)
 
     def cache_events(self, session_id: int) -> None:
-        """ Parse the Tensorflow events logs and add to :attr:`_cache`.
+        """ Parse the Tensorboard events logs and add to :attr:`_cache`.
 
         Parameters
         ----------
@@ -807,7 +807,7 @@ class _EventParser():
 
         Parameters
         ----------
-        event: :class:`tensorflow.core.util.event_pb2`
+        event: :class:`tensorboard.compat.proto.event_pb2`
             The event data containing the keras model structure to be parsed
         """
         serializer = get_serializer("json")
@@ -866,18 +866,18 @@ class _EventParser():
 
     @classmethod
     def _process_event(cls, event: event_pb2.Event, step: EventData) -> EventData:
-        """ Process a single Tensorflow event.
+        """ Process a single Tensorboard event.
 
         Adds timestamp to the step `dict` if a total loss value is received, process the labels for
         any new loss entries and adds the side loss value to the step `dict`.
 
         Parameters
         ----------
-        event: :class:`tensorflow.core.util.event_pb2`
+        event: :class:`tensorboard.compat.proto.event_pb2`
             The event data to be processed
         step: :class:`EventData`
             The currently processing dictionary to be populated with the extracted data from the
-            tensorflow event for this step
+            Tensorboard event for this step
 
         Returns
         -------

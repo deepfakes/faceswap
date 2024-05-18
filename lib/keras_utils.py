@@ -43,9 +43,9 @@ def replicate_pad(image: KerasTensor, padding: int) -> KerasTensor:
 
     Notes
     -----
-    At the time of writing Keras/Tensorflow does not have a native replication padding method.
+    At the time of writing Keras does not have a native replication padding method.
     The implementation here is probably not the most efficient, but it is a pure keras method
-    which should work on TF.
+    which should work ok.
 
     Parameters
     ----------

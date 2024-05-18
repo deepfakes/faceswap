@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Custom Optimizers for TensorFlow 2.x/keras """
+""" Custom Optimizers for Torch/keras """
 from __future__ import annotations
 import inspect
 import logging

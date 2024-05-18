@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Normalization methods for faceswap.py specific to Tensorflow backend """
+""" Normalization methods for faceswap.py specific to Torch backend """
 from __future__ import annotations
 
 import inspect
