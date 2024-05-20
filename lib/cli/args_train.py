@@ -164,25 +164,25 @@ class TrainArgs(FaceSwapArgs):
                 "stop training when you are happy with the previews. However, if you want the "
                 "model to stop automatically at a set number of iterations, you can set that "
                 "value here.")})
-        argument_list.append({
-            "opts": ("-D", "--distribution-strategy"),
-            "dest": "distribution_strategy",
-            "action": Radio,
-            "type": str.lower,
-            "choices": ["default", "central-storage", "mirrored"],
-            "default": "default",
-            "backend": ("nvidia", "rocm", "apple_silicon"),
-            "group": _("training"),
-            "help": _(
-                "R|Select the distribution stategy to use."
-                "\nL|default: Use Tensorflow's default distribution strategy."
-                "\nL|central-storage: Centralizes variables on the CPU whilst operations are "
-                "performed on 1 or more local GPUs. This can help save some VRAM at the cost of "
-                "some speed by not storing variables on the GPU. Note: Mixed-Precision is not "
-                "supported on multi-GPU setups."
-                "\nL|mirrored: Supports synchronous distributed training across multiple local "
-                "GPUs. A copy of the model and all variables are loaded onto each GPU with "
-                "batches distributed to each GPU at each iteration.")})
+        # argument_list.append({
+        #     "opts": ("-D", "--distribution-strategy"),
+        #     "dest": "distribution_strategy",
+        #     "action": Radio,
+        #     "type": str.lower,
+        #     "choices": ["default", "central-storage", "mirrored"],
+        #     "default": "default",
+        #     "backend": ("nvidia", "rocm", "apple_silicon"),
+        #     "group": _("training"),
+        #     "help": _(
+        #         "R|Select the distribution stategy to use."
+        #         "\nL|default: Use Tensorflow's default distribution strategy."
+        #         "\nL|central-storage: Centralizes variables on the CPU whilst operations are "
+        #         "performed on 1 or more local GPUs. This can help save some VRAM at the cost of "
+        #         "some speed by not storing variables on the GPU. Note: Mixed-Precision is not "
+        #         "supported on multi-GPU setups."
+        #         "\nL|mirrored: Supports synchronous distributed training across multiple local "
+        #         "GPUs. A copy of the model and all variables are loaded onto each GPU with "
+        #         "batches distributed to each GPU at each iteration.")})
         argument_list.append({
             "opts": ("-n", "--no-logs"),
             "action": "store_true",

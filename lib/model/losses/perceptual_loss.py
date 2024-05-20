@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" TF Keras implementation of Perceptual Loss Functions for faceswap.py """
+""" Keras implementation of Perceptual Loss Functions for faceswap.py """
 from __future__ import annotations
 
 import logging
@@ -697,7 +697,7 @@ class MSSIMLoss(keras.losses.Loss):
     Notes
     ------
     You should add a regularization term like a l2 loss in addition to this one.
-    Adapted from Tehnsorflow's tf.image.ssim_multiscale implementation
+    Adapted from Tehnsorflow's ssim_multiscale implementation
     """
     def __init__(self,
                  k_1: float = 0.01,
@@ -797,7 +797,7 @@ class MSSIMLoss(keras.losses.Loss):
         gauss *= -0.5 / ops.square(self._filter_sigma)
 
         gauss = ops.reshape(gauss, [1, -1]) + ops.reshape(gauss, [-1, 1])
-        gauss = ops.reshape(gauss, [1, -1])  # For tf.nn.softmax().
+        gauss = ops.reshape(gauss, [1, -1])  # For ops.softmax().
         gauss = ops.softmax(gauss)
         return ops.reshape(gauss, [size, size, 1, 1])
 
@@ -866,7 +866,7 @@ class MSSIMLoss(keras.losses.Loss):
                 filter_size: int) -> KerasTensor:
         """ Perform the MSSISM calculation.
 
-        Ported from Tensorflow implementation `tf.image.ssim_multiscale`
+        Ported from Tensorflow implementation `image.ssim_multiscale`
 
         Parameters
         ----------

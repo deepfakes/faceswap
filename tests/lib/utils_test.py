@@ -207,8 +207,8 @@ def test_camel_case_split(text: str, result: list[str]) -> None:
 def test_get_torch_version() -> None:
     """ Test the :func:`~lib.utils.get_torch_version` function version returns correctly in
     range """
-    tf_version = get_torch_version()
-    assert (2, 1) <= tf_version < (2, 3)
+    torch_version = get_torch_version()
+    assert (2, 2) <= torch_version < (2, 4)
 
 
 def test_get_dpi() -> None:

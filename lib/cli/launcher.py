@@ -36,7 +36,7 @@ class ScriptExecutor():
         self._command = command.lower()
 
     def _set_environment_variables(self) -> None:
-        """ Set the number of threads that numexpr can use and TF environment variables. """
+        """ Set the number of threads that numexpr can use. """
         # Allocate a decent number of threads to numexpr to suppress warnings
         cpu_count = os.cpu_count()
         allocate = max(1, cpu_count - cpu_count // 3 if cpu_count is not None else 1)

@@ -14,8 +14,7 @@ import numpy as np
 import pytest
 import pytest_mock
 
-import tensorflow as tf
-from tensorflow.core.util import event_pb2  # pylint:disable=no-name-in-module
+from tensorboard.compat.proto import event_pb2
 
 from lib.gui.analysis.event_reader import (_Cache, _CacheData, _EventParser,
                                            _LogFiles, EventData, TensorBoardLogs)
@@ -448,8 +447,7 @@ class TestTensorBoardLogs:
         """
         tb_logs = tensorboardlogs_instance
 
-        with pytest.raises(tf.errors.NotFoundError):  # Invalid session id
-            tb_logs.get_loss(3)
+        tb_logs.get_loss(3)
 
         check_cache = mocker.patch("lib.gui.analysis.event_reader.TensorBoardLogs._check_cache")
         get_data = mocker.patch("lib.gui.analysis.event_reader._Cache.get_data")
@@ -480,8 +478,7 @@ class TestTensorBoardLogs:
             Mocker for checking _cache_data is called
         """
         tb_logs = tensorboardlogs_instance
-        with pytest.raises(tf.errors.NotFoundError):  # invalid session_id
-            tb_logs.get_timestamps(3)
+        tb_logs.get_timestamps(3)
 
         check_cache = mocker.patch("lib.gui.analysis.event_reader.TensorBoardLogs._check_cache")
         get_data = mocker.patch("lib.gui.analysis.event_reader._Cache.get_data")

@@ -61,7 +61,7 @@ class AdaBelief(Optimizer):
 
     Examples
     --------
-    >>> from adabelief_tf import AdaBelief
+    >>> from optimizers import AdaBelief
     >>> opt = AdaBelief(lr=1e-3)
 
     Example of serialization:

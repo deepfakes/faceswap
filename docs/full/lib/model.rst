@@ -63,29 +63,29 @@ model.losses module
 .. autosummary::
    :nosignatures:
 
-   ~lib.model.loss.loss_tf.FocalFrequencyLoss
-   ~lib.model.loss.loss_tf.GeneralizedLoss
-   ~lib.model.loss.loss_tf.GradientLoss
-   ~lib.model.loss.loss_tf.LaplacianPyramidLoss
-   ~lib.model.loss.loss_tf.LInfNorm
-   ~lib.model.loss.loss_tf.LossWrapper
-   ~lib.model.loss.feature_loss_tf.LPIPSLoss
-   ~lib.model.loss.perceptual_loss_tf.DSSIMObjective
-   ~lib.model.loss.perceptual_loss_tf.GMSDLoss
-   ~lib.model.loss.perceptual_loss_tf.LDRFLIPLoss
-   ~lib.model.loss.perceptual_loss_tf.MSSIMLoss
+   ~lib.model.losses.loss.FocalFrequencyLoss
+   ~lib.model.losses.loss.GeneralizedLoss
+   ~lib.model.losses.loss.GradientLoss
+   ~lib.model.losses.loss.LaplacianPyramidLoss
+   ~lib.model.losses.loss.LInfNorm
+   ~lib.model.losses.loss.LossWrapper
+   ~lib.model.losses.feature_loss.LPIPSLoss
+   ~lib.model.losses.loss.perceptual_loss.DSSIMObjective
+   ~lib.model.losses.loss.perceptual_loss.GMSDLoss
+   ~lib.model.losses.loss.perceptual_loss.LDRFLIPLoss
+   ~lib.model.losses.loss.perceptual_loss.MSSIMLoss
 
-.. automodule:: lib.model.loss.loss_tf
+.. automodule:: lib.model.loss.losses.loss
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: lib.model.loss.feature_loss_tf
+.. automodule:: lib.model.loss.feature_loss
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: lib.model.loss.perceptual_loss_tf
+.. automodule:: lib.model.loss.perceptual_loss
    :members:
    :undoc-members:
    :show-inheritance:
@@ -152,9 +152,9 @@ model.optimizers module
 .. autosummary::
    :nosignatures:
 
-   ~lib.model.optimizers_tf.AdaBelief
+   ~lib.model.optimizers.AdaBelief
 
-.. automodule:: lib.model.optimizers_tf
+.. automodule:: lib.model.optimizers
    :members:
    :undoc-members:
    :show-inheritance:
