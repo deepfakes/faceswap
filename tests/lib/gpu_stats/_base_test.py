@@ -10,22 +10,8 @@ import pytest_mock
 
 # pylint:disable=protected-access
 from lib.gpu_stats import _base
-from lib.gpu_stats._base import BiggestGPUInfo, GPUInfo, _GPUStats, set_exclude_devices
+from lib.gpu_stats._base import BiggestGPUInfo, GPUInfo, _GPUStats
 from lib.utils import get_backend
-
-
-def test_set_exclude_devices(monkeypatch: pytest.MonkeyPatch) -> None:
-    """ Test that :func:`~lib.gpu_stats._base.set_exclude_devices` adds devices
-
-    Parameters
-    ----------
-    monkeypatch: :class:`pytest.MonkeyPatch`
-        Monkey patching _EXCLUDE_DEVICES
-    """
-    monkeypatch.setattr(_base, "_EXCLUDE_DEVICES", [])
-    assert not _base._EXCLUDE_DEVICES
-    set_exclude_devices([0, 1])
-    assert _base._EXCLUDE_DEVICES == [0, 1]
 
 
 @dataclass

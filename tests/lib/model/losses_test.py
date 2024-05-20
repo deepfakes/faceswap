@@ -41,9 +41,9 @@ _LWPARAMS = [losses.DSSIMObjective(),
              losses.LaplacianPyramidLoss(),
              losses.LDRFLIPLoss(),
              losses.LInfNorm(),
-             k_losses.logcosh,  # pylint:disable=no-member
-             k_losses.mean_absolute_error,
-             k_losses.mean_squared_error,
+             k_losses.LogCosh(),
+             k_losses.MeanAbsoluteError(),
+             k_losses.MeanSquaredError(),
              losses.MSSIMLoss()]
 _LWIDS = ["DSSIMObjective", "FocalFrequencyLoss", "GeneralizedLoss", "GMSDLoss", "GradientLoss",
           "LaplacianPyramidLoss", "LInfNorm", "LDRFlipLoss", "logcosh", "mae", "mse", "MS-SSIM"]
