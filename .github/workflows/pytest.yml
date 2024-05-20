@@ -63,13 +63,13 @@ jobs:
         # These backends will fail as GPU drivers not available
         if: matrix.backend != 'rocm' && matrix.backend != 'nvidia'
         run: |
-          FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
+         KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
       - name: End to End Tests
         # These backends will fail as GPU drivers not available
         # macOS fails on first extract test with 'died with <Signals.SIGSEGV: 11>'
         if: matrix.backend != 'rocm' && matrix.backend != 'nvidia' && matrix.os != 'macos-latest'
         run: |
-          FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
+          KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
 
   build_linux:
     name: "pip (ubuntu-latest, ${{ matrix.backend }})"
@@ -109,10 +109,10 @@ jobs:
           mypy .
       - name: Simple Tests
         run: |
-          FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
+          KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
       - name: End to End Tests
         run: |
-          FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
+          KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
 
   build_windows:
     name: "pip (windows-latest, ${{ matrix.backend }})"
@@ -140,8 +140,10 @@ jobs:
           pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
       - name: List installed packages
         run: pip freeze
-      - name: Set Backend EnvVar
+      - name: Set Faceswap Backend EnvVar
         run: echo "FACESWAP_BACKEND=${{ matrix.backend }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Set Keras Backend EnvVar
+        run: echo "KERAS_BACKEND=torch" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
