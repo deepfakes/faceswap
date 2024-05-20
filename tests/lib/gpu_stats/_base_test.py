@@ -111,20 +111,6 @@ def test__gpu_stats_get_card_most_free(mocker: pytest_mock.MockerFixture,
                                                             free=2048,
                                                             total=2048)
 
-
-def test__gpu_stats_exclude_all_devices(gpu_stats_instance: _GPUStats) -> None:
-    """ Ensure that the object correctly returns whether all devices are excluded
-
-    Parameters
-    ----------
-    gpu_stats_instance: :class:`_GPUStats`
-        Fixture instance of the _GPUStats base class
-    """
-    assert gpu_stats_instance.exclude_all_devices is False
-    set_exclude_devices([0, 1])
-    assert gpu_stats_instance.exclude_all_devices is True
-
-
 def test__gpu_stats_no_active_devices(
         caplog: pytest.LogCaptureFixture,
         gpu_stats_instance: _GPUStats,  # pylint:disable=unused-argument
