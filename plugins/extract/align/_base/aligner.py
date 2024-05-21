@@ -75,10 +75,10 @@ class AlignerBatch(ExtractorBatch):
     """
     batch_id: int = 0
     detected_faces: list[DetectedFace] = field(default_factory=list)
-    landmarks: np.ndarray = np.array([])
+    landmarks: np.ndarray = field(default_factory=lambda: np.array([]))
     refeeds: list[np.ndarray] = field(default_factory=list)
     second_pass: bool = False
-    second_pass_masks: np.ndarray = np.array([])
+    second_pass_masks: np.ndarray = field(default_factory=lambda: np.array([]))
 
     def __repr__(self):
         """ Prettier repr for debug printing """

@@ -59,7 +59,7 @@ class DetectorBatch(ExtractorBatch):
     rotation_matrix: list[np.ndarray] = field(default_factory=list)
     scale: list[float] = field(default_factory=list)
     pad: list[tuple[int, int]] = field(default_factory=list)
-    initial_feed: np.ndarray = np.array([])
+    initial_feed: np.ndarray = field(default_factory=lambda: np.array([]))
 
     def __repr__(self):
         """ Prettier repr for debug printing """

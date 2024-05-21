@@ -81,8 +81,8 @@ class ExtractorBatch:
     image: list[np.ndarray] = field(default_factory=list)
     detected_faces: Sequence[DetectedFace | list[DetectedFace]] = field(default_factory=list)
     filename: list[str] = field(default_factory=list)
-    feed: np.ndarray = np.array([])
-    prediction: np.ndarray = np.array([])
+    feed: np.ndarray = field(default_factory=lambda: np.array([]))
+    prediction: np.ndarray = field(default_factory=lambda: np.array([]))
     data: list[dict[str, T.Any]] = field(default_factory=list)
 
     def __repr__(self) -> str:
