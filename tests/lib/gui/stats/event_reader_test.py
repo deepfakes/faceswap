@@ -297,7 +297,10 @@ class TestTensorBoardLogs:
         tblogs_instance = TensorBoardLogs(tmp_path, False)
 
         def teardown():
-            rmtree(tmp_path)
+            try:
+                rmtree(tmp_path)
+            except PermissionError:
+                pass
 
         request.addfinalizer(teardown)
         return tblogs_instance
