@@ -293,6 +293,22 @@ class GroupNormalization(layers.Layer):  # pylint:disable=too-many-ancestors,abs
         var_x = ops.reshape(var_x, (batch_size, channels, height, width))
         return self.gamma * var_x + self.beta
 
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> tuple[int, ...]:
+        """ Calculate the output shape from this layer.
+
+        Parameters
+        ----------
+        input_shape: tuple
+            The input shape to the layer
+
+        Returns
+        -------
+        int
+            The output shape to the layer
+        """
+        return input_shape
+
     def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
              ) -> KerasTensor:
         """This is where the layer's logic lives.
@@ -462,6 +478,22 @@ class InstanceNormalization(layers.Layer):  # pylint:disable=too-many-ancestors,
         else:
             self.beta = None
         self.built = True  # pylint:disable=attribute-defined-outside-init
+
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> tuple[int, ...]:
+        """ Calculate the output shape from this layer.
+
+        Parameters
+        ----------
+        input_shape: tuple
+            The input shape to the layer
+
+        Returns
+        -------
+        int
+            The output shape to the layer
+        """
+        return input_shape
 
     def call(self, inputs: KerasTensor  # pylint:disable=arguments-differ
              ) -> KerasTensor:
@@ -646,10 +678,7 @@ class RMSNormalization(layers.Layer):  # pylint:disable=too-many-ancestors,abstr
             mean_square = ops.mean(ops.square(inputs), axis=self.axis, keepdims=True)
         else:
             partial_size = int(layer_size * self.partial)
-            partial_x, _ = ops.split(
-                inputs,
-                [partial_size, layer_size - partial_size],
-                axis=self.axis)
+            partial_x, _ = ops.split(inputs, [partial_size], axis=self.axis)
             mean_square = ops.mean(ops.square(partial_x), axis=self.axis, keepdims=True)
 
         recip_square_root = ops.rsqrt(mean_square + self.epsilon)
