@@ -870,7 +870,7 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
         if not self._cuda_keys:  # Cuda environment variable not found
             return
         self.cuda_version = self._cuda_keys[0].lower().replace("cuda_path_v", "").replace("_", ".")
-        self.cuda_path = os.environ[self._cuda_keys[0][0]]
+        self.cuda_path = os.environ.get(self._cuda_keys[0], "")
 
     def _cudnn_check_files(self) -> bool:
         """ Check header files for cuDNN version """
