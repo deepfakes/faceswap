@@ -205,6 +205,17 @@ class L2Normalize(Layer):  # pylint:disable=too-many-ancestors,abstract-method
         super().__init__(**kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> tuple[int, ...]:
+        """ Compute the output shape based on the input shape.
+
+        Parameters
+        ----------
+        input_shape: tuple
+            The input shape to the layer
+        """
+        return input_shape
+
     def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
              ) -> KerasTensor:
         """This is where the layer's logic lives.
@@ -372,7 +383,7 @@ class PixelShuffler(Layer):  # pylint:disable=too-many-ancestors,abstract-method
                       channels,
                       height,
                       width)
-        elif self.data_format == "channels_last":
+        else:
             height = None
             width = None
             if input_shape[1] is not None:
@@ -426,6 +437,17 @@ class QuickGELU(Layer):  # pylint:disable=too-many-ancestors,abstract-method
         logger.debug(parse_class_init(locals()))
         super().__init__(name=name, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> tuple[int, ...]:
+        """ Compute the output shape based on the input shape.
+
+        Parameters
+        ----------
+        input_shape: tuple
+            The input shape to the layer
+        """
+        return input_shape
 
     def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
              ) -> KerasTensor:
@@ -598,6 +620,17 @@ class Swish(Layer):  # pylint:disable=too-many-ancestors,abstract-method
         super().__init__(**kwargs)
         self.beta = beta
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> tuple[int, ...]:
+        """ Compute the output shape based on the input shape.
+
+        Parameters
+        ----------
+        input_shape: tuple
+            The input shape to the layer
+        """
+        return input_shape
 
     def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
              ) -> KerasTensor:
