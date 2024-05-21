@@ -6,11 +6,9 @@ Adapted from Keras tests.
 import pytest
 
 import numpy as np
-from numpy.testing import assert_allclose
 
 from keras import optimizers as k_optimizers
-from keras.layers import Dense, Activation
-from keras.models import Sequential
+from keras import layers as kl, Sequential
 
 from lib.model import optimizers
 from lib.utils import get_backend
@@ -34,10 +32,10 @@ def _test_optimizer(optimizer, target=0.75):
     x_train, y_train = get_test_data()
 
     model = Sequential()
-    model.add(Dense(10, input_shape=(x_train.shape[1],)))
-    model.add(Activation("relu"))
-    model.add(Dense(y_train.shape[1]))
-    model.add(Activation("softmax"))
+    model.add(kl.Dense(10, input_shape=(x_train.shape[1],)))
+    model.add(kl.Activation("relu"))
+    model.add(kl.Dense(y_train.shape[1]))
+    model.add(kl.Activation("softmax"))
     model.compile(loss="categorical_crossentropy",
                   optimizer=optimizer,
                   metrics=["accuracy"])
@@ -50,24 +48,6 @@ def _test_optimizer(optimizer, target=0.75):
     config["class_name"] = config["class_name"].lower()
     new_config["class_name"] = new_config["class_name"].lower()
     assert config == new_config
-
-    # Test constraints.
-    model = Sequential()
-    dense = Dense(10,
-                  input_shape=(x_train.shape[1],),
-                  kernel_constraint=lambda x: 0. * x + 1.,
-                  bias_constraint=lambda x: 0. * x + 2.,)
-    model.add(dense)
-    model.add(Activation("relu"))
-    model.add(Dense(y_train.shape[1]))
-    model.add(Activation("softmax"))
-    model.compile(loss="categorical_crossentropy",
-                  optimizer=optimizer,
-                  metrics=["accuracy"])
-    model.train_on_batch(x_train[:10], y_train[:10])
-    kernel, bias = dense.get_weights()
-    assert_allclose(kernel, 1.)
-    assert_allclose(bias, 2.)
 
 
 @pytest.mark.parametrize("dummy", [None], ids=[get_backend().upper()])

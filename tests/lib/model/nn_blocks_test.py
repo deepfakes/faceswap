@@ -33,7 +33,7 @@ def block_test(layer_func, kwargs={}, input_shape=None):
     # test in functional API
     inp = Input(shape=input_shape[1:], dtype=input_dtype)
     outp = layer_func(inp, **kwargs)
-    assert K.dtype(outp) == expected_output_dtype
+    assert outp.dtype == expected_output_dtype
 
     # check with the functional API
     model = Model(inp, outp)

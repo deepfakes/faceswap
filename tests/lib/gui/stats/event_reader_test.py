@@ -447,6 +447,7 @@ class TestTensorBoardLogs:
         """
         tb_logs = tensorboardlogs_instance
 
+        mocker.patch("lib.gui.analysis.event_reader.RecordIterator")
         tb_logs.get_loss(3)
 
         check_cache = mocker.patch("lib.gui.analysis.event_reader.TensorBoardLogs._check_cache")
@@ -478,6 +479,8 @@ class TestTensorBoardLogs:
             Mocker for checking _cache_data is called
         """
         tb_logs = tensorboardlogs_instance
+        mocker.patch("lib.gui.analysis.event_reader.RecordIterator")
+
         tb_logs.get_timestamps(3)
 
         check_cache = mocker.patch("lib.gui.analysis.event_reader.TensorBoardLogs._check_cache")
@@ -706,9 +709,18 @@ class Test_EventParser:  # pylint:disable=invalid-name
         model_config = {"output_layers": outputs}
 
         expected = np.array([[out] for out in outputs])
-        actual = event_parser_instance._get_outputs(model_config)
+        actual = event_parser_instance._get_outputs(model_config, is_sub_model=False)
         assert isinstance(actual, np.ndarray)
         assert actual.shape == (2, 1, 3)
+        np.testing.assert_equal(expected, actual)
+
+        outputs = [["encoder", 1, 0]]
+        model_config = {"output_layers": outputs}
+
+        expected = np.array([outputs])
+        actual = event_parser_instance._get_outputs(model_config, is_sub_model=True)
+        assert isinstance(actual, np.ndarray)
+        assert actual.shape == (1, 1, 3)
         np.testing.assert_equal(expected, actual)
 
     def test__process_event(self, event_parser_instance: _EventParser) -> None:

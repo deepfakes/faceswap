@@ -7,8 +7,7 @@ Adapted from Keras tests.
 import pytest
 import numpy as np
 
-from keras import backend as K
-from keras import initializers as k_initializers
+from keras import initializers as k_initializers, Variable
 
 from lib.model import initializers
 from lib.utils import get_backend
@@ -19,8 +18,8 @@ CONV_ID = get_backend().upper()
 
 def _runner(init, shape, target_mean=None, target_std=None,
             target_max=None, target_min=None):
-    variable = K.variable(init(shape))
-    output = K.get_value(variable)
+    variable = Variable(init(shape))
+    output = variable.numpy()
     lim = 3e-2
     if target_std is not None:
         assert abs(output.std() - target_std) < lim

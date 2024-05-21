@@ -61,7 +61,7 @@ def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,  # noqa
     else:
         inp = Input(shape=input_shape[1:], dtype=input_dtype)
     outp = layer(inp)
-    assert K.dtype(outp) == expected_output_dtype
+    assert outp.dtype == expected_output_dtype
 
     # check with the functional API
     model = Model(inp, outp)
@@ -93,7 +93,6 @@ def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,  # noqa
 
     # test instantiation from layer config
     layer_config = layer.get_config()
-    layer_config['batch_input_shape'] = input_shape
     layer = layer.__class__.from_config(layer_config)
 
     # for further checks in the caller function

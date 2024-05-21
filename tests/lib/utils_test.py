@@ -78,7 +78,7 @@ def test__backend(monkeypatch: pytest.MonkeyPatch) -> None:
     assert backend.backend == "cpu"
 
     monkeypatch.setattr("os.path.isfile", lambda x: False)  # no config file, dummy in user input
-    monkeypatch.setattr("builtins.input", lambda x: "3")
+    monkeypatch.setattr("builtins.input", lambda x: "2")
     backend = _Backend()
     assert backend._configure_backend() == "nvidia"
 
