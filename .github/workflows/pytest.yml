@@ -39,6 +39,7 @@ jobs:
         uses: conda-incubator/setup-miniconda@v2
         with:
           python-version: "3.10"
+          miniconda-version: "latest"
           auto-update-conda: true
           activate-environment: faceswap
       - name: Conda info
