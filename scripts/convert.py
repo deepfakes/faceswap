@@ -59,7 +59,7 @@ class ConvertItem:
     inbound: ExtractMedia
     feed_faces: list[AlignedFace] = field(default_factory=list)
     reference_faces: list[AlignedFace] = field(default_factory=list)
-    swapped_faces: np.ndarray = np.array([])
+    swapped_faces: np.ndarray = field(default_factory=lambda: np.array([]))
 
 
 class Convert():
