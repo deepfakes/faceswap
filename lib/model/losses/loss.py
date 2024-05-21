@@ -533,9 +533,10 @@ class LaplacianPyramidLoss(Loss):
         pyramid_true = self._get_laplacian_pyramid(y_true)
         pyramid_pred = self._get_laplacian_pyramid(y_pred)
 
-        losses = ops.stack([ops.sum(ops.abs(ppred - ptrue)) / ops.cast(ops.prod(ops.shape(ptrue)),
-                                                                       "float32")
-                            for ptrue, ppred in zip(pyramid_true, pyramid_pred)])
+        losses = ops.stack(
+            [ops.sum(ops.abs(ppred - ptrue)) / ops.cast(ops.prod(Variable(ops.shape(ptrue))),
+                                                        "float32")
+             for ptrue, ppred in zip(pyramid_true, pyramid_pred)])
         loss = ops.sum(losses * self._weights)
 
         return loss
