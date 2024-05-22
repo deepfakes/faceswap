@@ -9,16 +9,16 @@ import numpy as np
 
 from keras import device, losses as k_losses, Variable
 
-
 from lib.model import losses
 from lib.utils import get_backend
 
-_PARAMS = [(losses.GeneralizedLoss(), (2, 16, 16)),
-           (losses.GradientLoss(), (2, 16, 16)),
-           # TODO Make sure these output dimensions are correct
-           (losses.GMSDLoss(), (2, 1, 1)),
-           # TODO Make sure these output dimensions are correct
-           (losses.LInfNorm(), (2, 1, 1))]
+with device("cpu"):
+    _PARAMS = [(losses.GeneralizedLoss(), (2, 16, 16)),
+               (losses.GradientLoss(), (2, 16, 16)),
+               # TODO Make sure these output dimensions are correct
+               (losses.GMSDLoss(), (2, 1, 1)),
+               # TODO Make sure these output dimensions are correct
+               (losses.LInfNorm(), (2, 1, 1))]
 _IDS = ["GeneralizedLoss", "GradientLoss", "GMSDLoss", "LInfNorm"]
 _IDS = [f"{loss}[{get_backend().upper()}]" for loss in _IDS]
 
