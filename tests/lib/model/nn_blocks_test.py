@@ -11,7 +11,7 @@ import numpy as np
 
 from numpy.testing import assert_allclose
 
-from keras import Input, Model, backend as K
+from keras import device, Input, Model, backend as K
 
 from lib.model import nn_blocks
 from lib.utils import get_backend
@@ -66,10 +66,11 @@ def test_blocks(use_icnr_init, use_convaware_init, use_reflect_padding):
               "conv_aware_init": use_convaware_init,
               "reflect_padding": use_reflect_padding}
     nn_blocks.set_config(config)
-    block_test(nn_blocks.Conv2DOutput(64, 3), input_shape=(2, 8, 8, 32))
-    block_test(nn_blocks.Conv2DBlock(64), input_shape=(2, 8, 8, 32))
-    block_test(nn_blocks.SeparableConv2DBlock(64), input_shape=(2, 8, 8, 32))
-    block_test(nn_blocks.UpscaleBlock(64), input_shape=(2, 4, 4, 128))
-    block_test(nn_blocks.Upscale2xBlock(64, fast=True), input_shape=(2, 4, 4, 128))
-    block_test(nn_blocks.Upscale2xBlock(64, fast=False), input_shape=(2, 4, 4, 128))
-    block_test(nn_blocks.ResidualBlock(64), input_shape=(2, 4, 4, 64))
+    with device("cpu"):
+        block_test(nn_blocks.Conv2DOutput(64, 3), input_shape=(2, 8, 8, 32))
+        block_test(nn_blocks.Conv2DBlock(64), input_shape=(2, 8, 8, 32))
+        block_test(nn_blocks.SeparableConv2DBlock(64), input_shape=(2, 8, 8, 32))
+        block_test(nn_blocks.UpscaleBlock(64), input_shape=(2, 4, 4, 128))
+        block_test(nn_blocks.Upscale2xBlock(64, fast=True), input_shape=(2, 4, 4, 128))
+        block_test(nn_blocks.Upscale2xBlock(64, fast=False), input_shape=(2, 4, 4, 128))
+        block_test(nn_blocks.ResidualBlock(64), input_shape=(2, 4, 4, 64))

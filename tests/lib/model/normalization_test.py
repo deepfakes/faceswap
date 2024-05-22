@@ -8,7 +8,7 @@ from itertools import product
 import numpy as np
 import pytest
 
-from keras import regularizers, models, layers
+from keras import device, regularizers, models, layers
 
 from lib.model import normalization
 from lib.utils import get_backend
@@ -72,18 +72,19 @@ _IDS = [f"{'|'.join([_PARAMS[idx] for idx, b in enumerate(v) if b])}[{get_backen
 @pytest.mark.parametrize(_PARAMS, _VALUES, ids=_IDS)
 def test_adain_normalization(center, scale):
     """ Basic test for Ada Instance Normalization. """
-    norm = normalization.AdaInstanceNormalization(center=center, scale=scale)
-    shapes = [(4, 8, 8, 1280), (4, 1, 1, 1280), (4, 1, 1, 1280)]
-    norm.build(shapes)
-    expected_output_shape = norm.compute_output_shape(shapes)
-    inputs = [layers.Input(shape=shapes[0][1:]),
-              layers.Input(shape=shapes[1][1:]),
-              layers.Input(shape=shapes[2][1:])]
-    model = models.Model(inputs, norm(inputs))
-    data = [10 * np.random.random(shape) for shape in shapes]
+    with device("cpu"):
+        norm = normalization.AdaInstanceNormalization(center=center, scale=scale)
+        shapes = [(4, 8, 8, 1280), (4, 1, 1, 1280), (4, 1, 1, 1280)]
+        norm.build(shapes)
+        expected_output_shape = norm.compute_output_shape(shapes)
+        inputs = [layers.Input(shape=shapes[0][1:]),
+                  layers.Input(shape=shapes[1][1:]),
+                  layers.Input(shape=shapes[2][1:])]
+        model = models.Model(inputs, norm(inputs))
+        data = [10 * np.random.random(shape) for shape in shapes]
 
-    actual_output = model.predict(data, verbose=0)
-    actual_output_shape = actual_output.shape
+        actual_output = model.predict(data, verbose=0)
+        actual_output_shape = actual_output.shape
 
     for expected_dim, actual_dim in zip(expected_output_shape,
                                         actual_output_shape):

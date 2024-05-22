@@ -7,8 +7,7 @@ import pytest
 
 import numpy as np
 
-from keras import optimizers as k_optimizers
-from keras import layers as kl, Sequential
+from keras import device, layers as kl, optimizers as k_optimizers, Sequential
 
 from lib.model import optimizers
 from lib.utils import get_backend
@@ -37,8 +36,8 @@ def _test_optimizer(optimizer, target=0.75):
     model.add(kl.Dense(y_train.shape[1]))
     model.add(kl.Activation("softmax"))
     model.compile(loss="categorical_crossentropy",
-                  optimizer=optimizer,
-                  metrics=["accuracy"])
+                    optimizer=optimizer,
+                    metrics=["accuracy"])
 
     history = model.fit(x_train, y_train, epochs=2, batch_size=16, verbose=0)
     assert history.history["accuracy"][-1] >= target
@@ -53,4 +52,5 @@ def _test_optimizer(optimizer, target=0.75):
 @pytest.mark.parametrize("dummy", [None], ids=[get_backend().upper()])
 def test_adabelief(dummy):  # pylint:disable=unused-argument
     """ Test for custom Adam optimizer """
-    _test_optimizer(optimizers.AdaBelief(), target=0.20)
+    with device("cpu"):
+        _test_optimizer(optimizers.AdaBelief(), target=0.20)
