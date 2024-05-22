@@ -23,6 +23,7 @@ from keras import layers, models as kmodels
 
 from lib.logger import parse_class_init
 from lib.model.backup_restore import Backup
+from lib.model.layers import ScalarOp
 from lib.model.networks import TypeModelsViT, ViT
 from lib.utils import FaceswapError
 
@@ -660,6 +661,36 @@ class Legacy:  # pylint:disable=too-few-public-methods
         logger.debug("Got new config for '%s' at input size: %s: %s", net_name, input_size, retval)
         return retval
 
+    def _convert_lambda_config(self, layer: dict[str, T.Any]):
+        """ Keras 2 TFLambdaOps are not compatible with Keras 3. Scalar operations can be
+        relatively easily substituted with a :class:`~lib.model.layers.ScalarOp` layer
+
+        Parameters
+        ----------
+        layer: dict[str, Any]
+            An existing Keras 2 TFLambdaOp layer
+
+        Raises
+        ------
+        FaceswapError
+            If the TFLambdaOp is not currently supported
+        """
+        name = layer["config"]["name"]
+        operation = name.rsplit(".", maxsplit=1)[-1]
+        if operation not in ("multiply", "truediv", "add", "subtract"):
+            raise FaceswapError(f"The TFLambdaOp '{name}' is not supported")
+        value = layer["inbound_nodes"][0][-1]["y"]
+        new_layer = ScalarOp(operation, value, name=name, dtype=layer["config"]["dtype"])
+
+        logger.debug("Converting legacy TFLambdaOp: %s", layer)
+
+        layer["class_name"] = "ScalarOp"
+        layer["config"] = new_layer.get_config()
+        for n in layer["inbound_nodes"]:
+            n[-1] = {}
+        layer["inbound_nodes"] = [layer["inbound_nodes"]]
+        logger.debug("Converted legacy TFLambdaOp to %s", layer)
+
     def _process_deprecations(self, layer: dict[str, T.Any]) -> None:
         """ Some layer kwargs are deprecated between Keras 2 and Keras 3. Some are not mission
         critical, but updating these here prevents Keras from outputting warnings about deprecated
@@ -685,6 +716,15 @@ class Legacy:  # pylint:disable=too-few-public-methods
             logger.debug("Getting new config for 'visual' model")
             layer["config"] = self._get_clip_config()
 
+        if layer["class_name"] == "TFOpLambda":
+            # TFLambdaOp are not supported
+            self._convert_lambda_config(layer)
+
+        if layer["class_name"] == "DepthwiseConv2D" and "groups" in layer["config"]:
+            # groups parameter doesn't exist in Keras 3. Hopefully it still works the same
+            logger.debug("Removing groups from DepthwiseConv2D '%s'", layer["name"])
+            del layer["config"]["groups"]
+
     def _process_inbounds(self,
                           layer_name: str,
                           inbound_nodes: list[list[list[str | int]]] | list[list[str | int]]
@@ -699,11 +739,11 @@ class Legacy:  # pylint:disable=too-few-public-methods
         inbound_nodes: list[list[list[str | int]]] | list[list[str | int]]
             The inbound nodes from a Keras 2 config dict to process
         """
-        to_proccess = T.cast(
+        to_process = T.cast(
             list[list[list[str | int]]],
             inbound_nodes if isinstance(inbound_nodes[0][0], list) else [inbound_nodes])
 
-        for inbound in to_proccess:
+        for inbound in to_process:
             for node in inbound:
                 name, node_index = node[0], node[1]
                 assert isinstance(name, str) and isinstance(node_index, int)

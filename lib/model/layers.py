@@ -2,9 +2,10 @@
 """ Custom Layers for faceswap.py. """
 from __future__ import annotations
 
-import logging
-import sys
 import inspect
+import logging
+import operator
+import sys
 import typing as T
 
 from keras import InputSpec, Layer, ops, saving
@@ -660,6 +661,65 @@ class Swish(Layer):  # pylint:disable=too-many-ancestors,abstract-method
         """
         config = super().get_config()
         config["beta"] = self.beta
+        return config
+
+
+class ScalarOp(Layer):  # pylint:disable=too-many-ancestors,abstract-method
+    """ A layer for scalar operations for migrating TFLambdaOps in Keras 2 models to Keras 3. This
+    layer should not be used directly
+
+    Parameters
+    ----------
+    operation: Literal["multiply", "truediv", "add", "subtract"]
+        The scalar operation to perform
+    value: float
+        The scalar value to use
+    """
+    def __init__(self,
+                 operation: T.Literal["multiply", "truediv", "add", "subtract"],
+                 value: float,
+                 **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
+        assert operation in ("multiply", "truediv", "add", "subtract")
+        self._operation = operation
+        self._operator = {"multiply": operator.mul,
+                          "truediv": operator.truediv,
+                          "add": operator.add,
+                          "subtract": operator.sub}[operation]
+        self._value = value
+
+        if "name" not in kwargs:
+            kwargs["name"] = f"ScalarOp_{operation}"
+        super().__init__(**kwargs)
+
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
+        """ Call the Scalar operation function.
+
+        Parameters
+        ----------
+        inputs: tensor
+            Input tensor, or list/tuple of input tensors
+
+        Returns
+        -------
+        :class:`keras.KerasTensor`
+            A tensor or list/tuple of tensors
+        """
+        return self._operator(inputs, self._value)
+
+    def get_config(self):
+        """Returns the config of the layer.
+        Returns
+        --------
+        dict
+            A python dictionary containing the layer configuration
+        """
+        config = super().get_config()
+        config["operation"] = self._operation
+        config["value"] = self._value
         return config
 
 
