@@ -381,10 +381,13 @@ class _Cache():
         """
         detected_face = DetectedFace()
         detected_face.from_png_meta(alignments)
+        y_offset = self._config["vertical_offset"] 
+        assert isinstance(y_offset, int)
         detected_face.load_aligned(None,
                                    size=self._size,
                                    centering=self._centering,
                                    coverage_ratio=self._coverage_ratio,
+                                   y_offset=y_offset / 100.,
                                    is_aligned=True,
                                    is_legacy=self._extract_version == 1.0)
         logger.trace("Cached aligned face for: %s", filename)  # type: ignore
@@ -453,7 +456,8 @@ class _Cache():
         mask.set_sub_crop(pose.offset[mask.stored_centering],
                           pose.offset[self._centering],
                           self._centering,
-                          self._coverage_ratio)
+                          self._coverage_ratio,
+                          detected_face.aligned.y_offset)
         face_mask = mask.mask
         if self._size != face_mask.shape[0]:
             interpolator = cv2.INTER_CUBIC if mask.stored_size < self._size else cv2.INTER_AREA

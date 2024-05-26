@@ -663,11 +663,14 @@ class PreviewDataGenerator(DataGenerator):
 
         assert self._config["centering"] in T.get_args(CenteringType)
         retval = np.empty((full_size, full_size, 3), dtype="float32")
+        y_offset = self._config["vertical_offset"]
+        assert isinstance(y_offset, int)
         retval = self._to_float32(np.array([
             AlignedFace(face.landmarks_xy,
                         image=images[idx],
                         centering=T.cast(CenteringType,
                                          self._config["centering"]),
+                        y_offset=y_offset / 100.,
                         size=full_size,
                         dtype="uint8",
                         is_aligned=True).face

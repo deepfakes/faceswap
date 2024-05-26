@@ -431,6 +431,7 @@ class DetectedFace():
                      dtype: str | None = None,
                      centering: CenteringType = "head",
                      coverage_ratio: float = 1.0,
+                     y_offset: float = 0.0,
                      force: bool = False,
                      is_aligned: bool = False,
                      is_legacy: bool = False) -> None:
@@ -463,6 +464,9 @@ class DetectedFace():
             The amount of the aligned image to return. A ratio of 1.0 will return the full contents
             of the aligned image. A ratio of 0.5 will return an image of the given size, but will
             crop to the central 50%% of the image. Default: `1.0`
+        y_offset: float, optional
+            The amount to adjust the aligned face along the y_axis in -1. to 1. range.
+            Default: `0.0`
         force: bool, optional
             Force an update of the aligned face, even if it is already loaded. Default: ``False``
         is_aligned: bool, optional
@@ -487,6 +491,7 @@ class DetectedFace():
                                         centering=centering,
                                         size=size,
                                         coverage_ratio=coverage_ratio,
+                                        y_offset=y_offset,
                                         dtype=dtype,
                                         is_aligned=is_aligned,
                                         is_legacy=is_aligned and is_legacy)

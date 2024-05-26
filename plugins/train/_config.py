@@ -163,6 +163,20 @@ class Config(FaceswapConfig):
                 "\n\t100.0% is a mugshot."))
         self.add_item(
             section=section,
+            title="vertical_offset",
+            datatype=int,
+            default=0,
+            min_max=(-25, 25),
+            rounding=1,
+            fixed=True,
+            group=_("face"),
+            info=_(
+                "How much to adjust the vertical position of the aligned face as a percentage of "
+                "face image size. Negative values move the face up (expose more chin and less "
+                "forehead). Positive values move the face down (expose less chin and more "
+                "forehead)"))
+        self.add_item(
+            section=section,
             title="icnr_init",
             datatype=bool,
             default=False,
