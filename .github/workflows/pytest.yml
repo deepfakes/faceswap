@@ -9,7 +9,7 @@ on:
 
 jobs:
   build_conda:
-    name: conda (${{ matrix.os }}, ${{ matrix.backend }})
+    name: conda (${{ matrix.os }}, ${{ matrix.backend }} ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -74,7 +74,7 @@ jobs:
           KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
 
   build_linux:
-    name: "pip (ubuntu-latest, ${{ matrix.backend }})"
+    name: "pip (ubuntu-latest, ${{ matrix.backend }} ${{ matrix.python-version }})"
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -117,7 +117,7 @@ jobs:
           KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
 
   build_windows:
-    name: "pip (windows-latest, ${{ matrix.backend }})"
+    name: "pip (windows-latest, ${{ matrix.backend }} ${{ matrix.python-version }})"
     runs-on: windows-latest
     strategy:
       fail-fast: false
