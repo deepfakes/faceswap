@@ -62,7 +62,7 @@ _GROUPS = [["pytorch*", "torch*", "cpuonly"]]
 """list[list[str]]: Packages that should be installed collectively at the same time """
 
 _DEV_TOOLS = ["flake8", "mypy", "pylint", "pytest", "pytest-mock",
-              "types-setuptools", "types-PyYAML"]
+              "types-setuptools", "types-PyYAML", "types-psutil"]
 """list[str]: Development packages to install if `--dev` cli arg passed"""
 
 # Force output to utf-8

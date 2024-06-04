@@ -111,6 +111,7 @@ def test__gpu_stats_get_card_most_free(mocker: pytest_mock.MockerFixture,
                                                             free=2048,
                                                             total=2048)
 
+
 def test__gpu_stats_no_active_devices(
         caplog: pytest.LogCaptureFixture,
         gpu_stats_instance: _GPUStats,  # pylint:disable=unused-argument

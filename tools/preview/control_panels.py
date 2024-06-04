@@ -517,7 +517,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                 action = self._app.config_tools.reset_config_to_saved
 
             btnutl = ttk.Button(frame,
-                                image=img,
+                                image=img,  # type:ignore[arg-type]
                                 command=action)
             btnutl.pack(padx=2, side=tk.RIGHT)
             Tooltip(btnutl, text=text, wrap_length=200)
@@ -674,8 +674,8 @@ class ConfigFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                 action = parent.config_tools.reset_config_to_saved
 
             btnutl = ttk.Button(btn_frame,
-                                image=img,
-                                command=lambda cmd=action: cmd(config_key))  # type: ignore
+                                image=img,  # type:ignore[arg-type]
+                                command=lambda cmd=action: cmd(config_key))  # type:ignore[misc]
             btnutl.pack(padx=2, side=tk.RIGHT)
             Tooltip(btnutl, text=text, wrap_length=200)
         logger.debug("Added util buttons")

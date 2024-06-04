@@ -973,7 +973,7 @@ class SortHistogram(SortMethod):
         method = arguments.group_method if self._is_group else arguments.sort_method
         self._is_dissim = method == "hist-dissim"
         self._threshold: float = 0.3 if arguments.threshold < 0.0 else arguments.threshold
-        
+
     def _calc_histogram(self,
                         image: np.ndarray,
                         alignments: PNGHeaderAlignmentsDict | None) -> np.ndarray:

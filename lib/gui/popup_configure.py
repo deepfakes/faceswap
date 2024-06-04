@@ -403,7 +403,7 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
     """
     def __init__(self, top_level, parent, configurations, tree, theme):
         super().__init__(parent)
-        self._configs: dict[str, FaceswapConfig] = configurations
+        self._configs: dict[str, FaceswapConfig] = configurations  # type:ignore[annotation-unchecked]  # noqa:E501
         self._theme = theme
         self._tree = tree
         self._vars = {}

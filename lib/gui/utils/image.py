@@ -397,11 +397,11 @@ class PreviewExtract():
         placeholder = Image.new("RGB", (thumbnail_size, thumbnail_size))
         draw = ImageDraw.Draw(placeholder)
         draw.rectangle(((0, 0), (thumbnail_size, thumbnail_size)), outline="#E5E5E5", width=1)
-        placeholder = np.array(placeholder)
-        self._placeholder = placeholder
-        logger.debug("Created placeholder. shape: %s", placeholder.shape)
+        nplaceholder = np.array(placeholder)
+        self._placeholder = nplaceholder
+        logger.debug("Created placeholder. shape: %s", nplaceholder.shape)
 
-    def _place_previews(self, frame_dims: tuple[int, int]) -> Image.Image:
+    def _place_previews(self, frame_dims: tuple[int, int]) -> Image.Image | None:
         """ Format the preview thumbnails stored in the cache into a grid fitting the display
         panel.
 
@@ -412,7 +412,7 @@ class PreviewExtract():
 
         Returns
         -------
-        :class:`PIL.Image`:
+        :class:`PIL.Image`: | None
             The final preview display image
         """
         if self._images is None:
@@ -572,8 +572,8 @@ class Images():
             if ext != ".png":
                 continue
             img = Image.open(os.path.join(pathicons, fname))
-            img = ImageTk.PhotoImage(img.resize((size, size), resample=Image.HAMMING))
-            icons[name] = img
+            pimg = ImageTk.PhotoImage(img.resize((size, size), resample=Image.Resampling.HAMMING))
+            icons[name] = pimg
         logger.debug(icons)
         return icons
 

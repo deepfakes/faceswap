@@ -36,8 +36,8 @@ def _test_optimizer(optimizer, target=0.75):
     model.add(kl.Dense(y_train.shape[1]))
     model.add(kl.Activation("softmax"))
     model.compile(loss="categorical_crossentropy",
-                    optimizer=optimizer,
-                    metrics=["accuracy"])
+                  optimizer=optimizer,
+                  metrics=["accuracy"])
 
     history = model.fit(x_train, y_train, epochs=2, batch_size=16, verbose=0)
     assert history.history["accuracy"][-1] >= target

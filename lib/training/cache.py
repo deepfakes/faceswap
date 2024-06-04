@@ -381,7 +381,7 @@ class _Cache():
         """
         detected_face = DetectedFace()
         detected_face.from_png_meta(alignments)
-        y_offset = self._config["vertical_offset"] 
+        y_offset = self._config["vertical_offset"]
         assert isinstance(y_offset, int)
         detected_face.load_aligned(None,
                                    size=self._size,

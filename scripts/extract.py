@@ -429,7 +429,7 @@ class Filter():
             self._extractor.launch()
             desc = "Obtaining reference face Identity"
             if self._extractor.passes > 1:
-                desc = (f"{desc } pass {phase + 1} of {self._extractor.passes}: "
+                desc = (f"{desc} pass {phase + 1} of {self._extractor.passes}: "
                         f"{self._extractor.phase_text}")
             for extract_media in tqdm(self._extractor.detected_faces(),
                                       total=len(file_list),

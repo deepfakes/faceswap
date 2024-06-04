@@ -4,6 +4,7 @@
 """
 import cv2
 import numpy as np
+import typing as T
 
 from ._base import Output, logger
 
@@ -104,7 +105,7 @@ class Writer(Output):
         retval.insert(0, cv2.imencode(self._extension,
                                       image,
                                       self._args)[1])
-        return retval
+        return T.cast(list[bytes], retval)
 
     def close(self) -> None:
         """ Does nothing as OpenCV writer does not need a close method """
