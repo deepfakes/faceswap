@@ -18,6 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+        python-version: ["3.10", "3.11", "3.12"]
         backend: ["nvidia", "cpu"]
         include:
           - os: "ubuntu-latest"
@@ -38,7 +39,7 @@ jobs:
       - name: Set up Conda
         uses: conda-incubator/setup-miniconda@v2
         with:
-          python-version: "3.10"
+          python-version: ${{ matrix.python-version }}
           miniconda-version: "latest"
           auto-update-conda: true
           activate-environment: faceswap
@@ -78,7 +79,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10"]
+        python-version: ["3.10", "3.11", "3.12"]
         backend: ["cpu"]
         include:
           - backend: "cpu"
@@ -121,7 +122,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10"]
+        python-version: ["3.10", "3.11", "3.12"]
         backend: ["cpu"]
         include:
           - backend: "cpu"
