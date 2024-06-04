@@ -23,6 +23,9 @@ jobs:
         include:
           - os: "ubuntu-latest"
             backend: "rocm"
+        exclude:
+          - os: "macos-latest"
+            python-version: "3.12"
     steps:
       - uses: actions/checkout@v3
       - name: Set cache date
