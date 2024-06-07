@@ -325,6 +325,7 @@ class ModelBase():
         else:
             # print to logger
             print_fn = self._summary_to_log
+        parent = self.model
         for idx, model in enumerate(get_all_sub_models(self.model)):
             if idx == 0:
                 parent = model
@@ -349,7 +350,7 @@ class ModelBase():
 
         self._loss.configure(self.model)
         losses = list(self._loss.functions.values())
-        self.model.compile(optimizer=optimizer, loss=losses, metrics=losses)
+        self.model.compile(optimizer=optimizer, loss=losses)
         self._state.add_session_loss_names(self._loss.names)
         logger.debug("Compiled Model: %s", self.model)
 
