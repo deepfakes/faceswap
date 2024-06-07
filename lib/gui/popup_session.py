@@ -311,7 +311,7 @@ class SessionPopUp(tk.Toplevel):
         for btntype in ("reload", "save"):
             cmd = getattr(self, f"_option_button_{btntype}")
             btn = ttk.Button(btnframe,
-                             image=get_images().icons[btntype],
+                             image=get_images().icons[btntype],  # type:ignore[arg-type]
                              command=cmd)
             hlp = self._set_help(btntype)
             Tooltip(btn, text=hlp, wrap_length=200)

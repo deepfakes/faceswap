@@ -10,10 +10,7 @@
 import logging
 import sys
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras.initializers import RandomNormal  # pylint:disable=import-error
-from tensorflow.keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape  # noqa:E501  # pylint:disable=import-error
-from tensorflow.keras.models import Model as KModel  # pylint:disable=import-error
+from keras import initializers, Input, layers, Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
 from ._base import ModelBase
@@ -28,7 +25,7 @@ class Model(ModelBase):
         self.input_shape = (self.config["input_size"], self.config["input_size"], 3)
         self.check_input_output()
         self.dense_width, self.upscalers_no = self.get_dense_width_upscalers_numbers()
-        self.kernel_initializer = RandomNormal(0, 0.02)
+        self.kernel_initializer = initializers.RandomNormal(0, 0.02)
 
     @property
     def downscalers_no(self):
@@ -74,7 +71,7 @@ class Model(ModelBase):
         encoder_a = encoder(inputs[0])
         encoder_b = encoder(inputs[1])
 
-        outputs = [self.decoder_a()(encoder_a), self.decoder_b()(encoder_b)]
+        outputs = self.decoder_a()(encoder_a) + self.decoder_b()(encoder_b)
 
         autoencoder = KModel(inputs, outputs, name=self.model_name)
         return autoencoder
@@ -88,7 +85,7 @@ class Model(ModelBase):
 
         for idx in range(self.downscalers_no - 1):
             var_x = Conv2DBlock(encoder_complexity * 2**idx, activation=None)(var_x)
-            var_x = LeakyReLU(alpha=0.2)(var_x)
+            var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
             var_x = ResidualBlock(encoder_complexity * 2**idx, use_bias=True)(var_x)
             var_x = ResidualBlock(encoder_complexity * 2**idx, use_bias=True)(var_x)
 
@@ -104,19 +101,19 @@ class Model(ModelBase):
 
         var_xy = input_
 
-        var_xy = Dense(self.config["dense_nodes"])(Flatten()(var_xy))
-        var_xy = Dense(self.dense_width * self.dense_width * self.dense_filters)(var_xy)
-        var_xy = Reshape((self.dense_width, self.dense_width, self.dense_filters))(var_xy)
+        var_xy = layers.Dense(self.config["dense_nodes"])(layers.Flatten()(var_xy))
+        var_xy = layers.Dense(self.dense_width * self.dense_width * self.dense_filters)(var_xy)
+        var_xy = layers.Reshape((self.dense_width, self.dense_width, self.dense_filters))(var_xy)
         var_xy = UpscaleBlock(self.dense_filters, activation=None)(var_xy)
 
         var_x = var_xy
-        var_x = LeakyReLU(alpha=0.2)(var_x)
+        var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
         var_x = ResidualBlock(self.dense_filters, use_bias=False)(var_x)
 
         decoder_b_complexity = self.config["complexity_decoder"]
         for idx in range(self.upscalers_no - 2):
             var_x = UpscaleBlock(decoder_b_complexity // 2**idx, activation=None)(var_x)
-            var_x = LeakyReLU(alpha=0.2)(var_x)
+            var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
             var_x = ResidualBlock(decoder_b_complexity // 2**idx, use_bias=False)(var_x)
             var_x = ResidualBlock(decoder_b_complexity // 2**idx, use_bias=True)(var_x)
         var_x = UpscaleBlock(decoder_b_complexity // 2**(idx + 1), activation="leakyrelu")(var_x)
@@ -127,7 +124,7 @@ class Model(ModelBase):
 
         if self.config.get("learn_mask", False):
             var_y = var_xy
-            var_y = LeakyReLU(alpha=0.1)(var_y)
+            var_y = layers.LeakyReLU(negative_slope=0.1)(var_y)
 
             mask_b_complexity = 384
             for idx in range(self.upscalers_no-2):
@@ -151,14 +148,14 @@ class Model(ModelBase):
         dense_nodes = int(self.config["dense_nodes"]/1.5)
         dense_filters = int(self.dense_filters/1.5)
 
-        var_xy = Dense(dense_nodes)(Flatten()(var_xy))
-        var_xy = Dense(self.dense_width * self.dense_width * dense_filters)(var_xy)
-        var_xy = Reshape((self.dense_width, self.dense_width, dense_filters))(var_xy)
+        var_xy = layers.Dense(dense_nodes)(layers.Flatten()(var_xy))
+        var_xy = layers.Dense(self.dense_width * self.dense_width * dense_filters)(var_xy)
+        var_xy = layers.Reshape((self.dense_width, self.dense_width, dense_filters))(var_xy)
 
         var_xy = UpscaleBlock(dense_filters, activation=None)(var_xy)
 
         var_x = var_xy
-        var_x = LeakyReLU(alpha=0.2)(var_x)
+        var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
         var_x = ResidualBlock(dense_filters, use_bias=False)(var_x)
 
         decoder_a_complexity = int(self.config["complexity_decoder"] / 1.5)
@@ -172,7 +169,7 @@ class Model(ModelBase):
 
         if self.config.get("learn_mask", False):
             var_y = var_xy
-            var_y = LeakyReLU(alpha=0.1)(var_y)
+            var_y = layers.LeakyReLU(negative_slope=0.1)(var_y)
 
             mask_a_complexity = 384
             for idx in range(self.upscalers_no-2):
@@ -184,9 +181,3 @@ class Model(ModelBase):
             outputs += [var_y]
 
         return KModel(input_, outputs=outputs, name="decoder_a")
-
-    def _legacy_mapping(self):
-        """ The mapping of legacy separate model names to single model names """
-        return {f"{self.name}_encoder.h5": "encoder",
-                f"{self.name}_decoder_A.h5": "decoder_a",
-                f"{self.name}_decoder_B.h5": "decoder_b"}

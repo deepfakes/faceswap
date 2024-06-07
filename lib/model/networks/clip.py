@@ -8,17 +8,19 @@ import inspect
 import logging
 import typing as T
 import sys
+import warnings
 
 from dataclasses import dataclass
 
-import tensorflow as tf
+from keras import layers, ops, Variable, models, saving
+import numpy as np
 
 from lib.model.layers import QuickGELU
 from lib.utils import GetModel
 
-keras = tf.keras
-layers = tf.keras.layers
-K = tf.keras.backend
+if T.TYPE_CHECKING:
+    from keras import KerasTensor
+
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +90,7 @@ ModelConfig: dict[TypeModels, ViTConfig] = {  # Each model has a different set o
 # VISUAL TRANSFORMER #
 # ################## #
 
-class Transformer():  # pylint:disable=too-few-public-methods
+class Transformer():
     """ A class representing a Transformer model with attention mechanism and residual connections.
 
     Parameters
@@ -99,14 +101,14 @@ class Transformer():  # pylint:disable=too-few-public-methods
         The number of layers in the Transformer.
     heads: int
         The number of attention heads.
-    attn_mask: tf.Tensor, optional
+    attn_mask: :class:`keras.KerasTensor`, optional
         The attention mask, by default None.
     name: str, optional
         The name of the Transformer model, by default "transformer".
 
     Methods
     -------
-    __call__() -> Model:
+    __call__() -> :class:`keras.models.Model`:
         Calls the Transformer layers.
     """
     _layer_names: dict[str, int] = {}
@@ -116,7 +118,7 @@ class Transformer():  # pylint:disable=too-few-public-methods
                  width: int,
                  num_layers: int,
                  heads: int,
-                 attn_mask: tf.Tensor = None,
+                 attn_mask: KerasTensor = None,
                  name: str = "transformer") -> None:
         logger.debug("Initializing: %s (width: %s, num_layers: %s, heads: %s, attn_mask: %s, "
                      "name: %s)",
@@ -151,12 +153,12 @@ class Transformer():  # pylint:disable=too-few-public-methods
         return name
 
     @classmethod
-    def _mlp(cls, inputs: tf.Tensor, key_dim: int, name: str) -> tf.Tensor:
+    def _mlp(cls, inputs: KerasTensor, key_dim: int, name: str) -> KerasTensor:
         """" Multilayer Perecptron for Block Ateention
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input to the MLP
         key_dim: int
             key dimension per head for MultiHeadAttention
@@ -165,7 +167,7 @@ class Transformer():  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The output from the MLP
         """
         name = f"{name}.mlp"
@@ -175,29 +177,29 @@ class Transformer():  # pylint:disable=too-few-public-methods
         return var_x
 
     def residual_attention_block(self,
-                                 inputs: tf.Tensor,
+                                 inputs: KerasTensor,
                                  key_dim: int,
                                  num_heads: int,
-                                 attn_mask: tf.Tensor,
-                                 name: str = "ResidualAttentionBlock") -> tf.Tensor:
+                                 attn_mask: KerasTensor,
+                                 name: str = "ResidualAttentionBlock") -> KerasTensor:
         """ Call the residual attention block
 
         Parameters
         ----------
-        inputs: :class:`tf.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input Tensor
         key_dim: int
             key dimension per head for MultiHeadAttention
         num_heads: int
             Number of heads for MultiHeadAttention
-        attn_mask: :class:`tensorflow.Tensor`, optional
+        attn_mask: :class:`keras.KerasTensor`, optional
             Default: ``None``
         name: str, optional
             The name for the layer. Default: "ResidualAttentionBlock"
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`keras.KerasTensor`
             The return Tensor
         """
         name = self._get_name(name)
@@ -213,17 +215,17 @@ class Transformer():  # pylint:disable=too-few-public-methods
         var_x = layers.Add()([var_y, self._mlp(var_x, key_dim, name)])
         return var_x
 
-    def __call__(self, inputs: tf.Tensor) -> tf.Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the Transformer layers
 
         Parameters
         ----------
-        inputs: :class:`tf.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input Tensor
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`keras.KerasTensor`
             The return Tensor
         """
         logger.debug("Calling %s with input: %s", self.__class__.__name__, inputs.shape)
@@ -237,7 +239,7 @@ class Transformer():  # pylint:disable=too-few-public-methods
         return var_x
 
 
-class EmbeddingLayer(tf.keras.layers.Layer):
+class EmbeddingLayer(layers.Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Parent class for trainable embedding variables
 
     Parameters
@@ -261,7 +263,7 @@ class EmbeddingLayer(tf.keras.layers.Layer):
         super().__init__(name=name, dtype=dtype, *args, **kwargs)
         self._input_shape = input_shape
         self._scale = scale
-        self._var: tf.Variable
+        self._var: KerasTensor
 
     def build(self, input_shape: tuple[int, ...]) -> None:
         """ Add the weights
@@ -271,10 +273,9 @@ class EmbeddingLayer(tf.keras.layers.Layer):
         input_shape: tuple[int, ...
             The input shape of the incoming tensor
         """
-        self._var = tf.Variable(self._scale * tf.random.normal(self._input_shape,
-                                                               dtype=self.dtype),
-                                trainable=True,
-                                dtype=self.dtype)
+        self._var = Variable(self._scale * np.random.normal(size=self._input_shape),
+                             trainable=True,
+                             dtype=self.dtype)
         super().build(input_shape)
 
     def get_config(self) -> dict[str, T.Any]:
@@ -291,61 +292,64 @@ class EmbeddingLayer(tf.keras.layers.Layer):
         return retval
 
 
-class ClassEmbedding(EmbeddingLayer):
+class ClassEmbedding(EmbeddingLayer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Trainable Class Embedding layer """
-    def call(self, inputs: tf.Tensor, *args, **kwargs) -> tf.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """ Get the Class Embedding layer
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor to the embedding layer
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The class embedding layer shaped for the input tensor
         """
-        return K.tile(self._var[None, None], [K.shape(inputs)[0], 1, 1])
+        return ops.tile(self._var[None, None], [inputs.shape[0], 1, 1])
 
 
-class PositionalEmbedding(EmbeddingLayer):
+class PositionalEmbedding(EmbeddingLayer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Trainable Positional Embedding layer """
-    def call(self, inputs: tf.Tensor, *args, **kwargs) -> tf.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """ Get the Positional Embedding layer
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor to the embedding layer
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The positional embedding layer shaped for the input tensor
         """
-        return K.tile(self._var[None], [K.shape(inputs)[0], 1, 1])
+        return ops.tile(self._var[None], [inputs.shape[0], 1, 1])
 
 
-class Projection(EmbeddingLayer):
+class Projection(EmbeddingLayer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Trainable Projection Embedding Layer """
-    def call(self, inputs: tf.Tensor, *args, **kwargs) -> tf.Tensor:
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """ Get the Projection layer
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             Input tensor to the embedding layer
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The Projection layer expanded to the batch dimension and transposed for matmul
         """
-        return K.tile(K.transpose(self._var)[None], [K.shape(inputs)[0], 1, 1])
+        return ops.tile(ops.transpose(self._var)[None], [inputs.shape[0], 1, 1])
 
 
-class VisualTransformer():  # pylint:disable=too-few-public-methods
+class VisualTransformer():
     """ A class representing a Visual Transformer model for image classification tasks.
 
     Parameters
@@ -367,7 +371,7 @@ class VisualTransformer():  # pylint:disable=too-few-public-methods
 
     Methods
     -------
-    __call__() -> Model:
+    __call__() -> :class:`keras.models.Model`:
         Builds and returns the Visual Transformer model.
     """
     def __init__(self,
@@ -391,20 +395,20 @@ class VisualTransformer():  # pylint:disable=too-few-public-methods
         self._name = name
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def __call__(self) -> tf.keras.models.Model:
+    def __call__(self) -> models.Model:
         """ Builds and returns the Visual Transformer model.
 
         Returns
         -------
-        Model
+        :class:`keras.models.Model`
             The Visual Transformer model.
         """
         inputs = layers.Input([self._input_resolution, self._input_resolution, 3])
-        var_x: tf.Tensor = layers.Conv2D(self._width,  # shape = [*, grid, grid, width]
-                                         self._patch_size,
-                                         strides=self._patch_size,
-                                         use_bias=False,
-                                         name=f"{self._name}.conv1")(inputs)
+        var_x: KerasTensor = layers.Conv2D(self._width,  # shape = [*, grid, grid, width]
+                                           self._patch_size,
+                                           strides=self._patch_size,
+                                           use_bias=False,
+                                           name=f"{self._name}.conv1")(inputs)
 
         var_x = layers.Reshape((-1, self._width))(var_x)  # shape = [*, grid ** 2, width]
 
@@ -429,13 +433,13 @@ class VisualTransformer():  # pylint:disable=too-few-public-methods
                           self._width ** -0.5,
                           name=f"{self._name}.proj")(var_x)
         var_x = layers.Dot(axes=-1)([var_x, proj])
-        return keras.models.Model(inputs=inputs, outputs=[var_x], name=self._name)
+        return models.Model(inputs=inputs, outputs=var_x, name=self._name)
 
 
 # ################ #
 # MODIEFIED RESNET #
 # ################ #
-class Bottleneck():  # pylint:disable=too-few-public-methods
+class Bottleneck():
     """ A ResNet bottleneck block that performs a sequence of convolutions, batch normalization,
     and ReLU activation operations on an input tensor.
 
@@ -467,17 +471,17 @@ class Bottleneck():  # pylint:disable=too-few-public-methods
         self._name = name
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _downsample(self, inputs: tf.Tensor) -> tf.Tensor:
+    def _downsample(self, inputs: KerasTensor) -> KerasTensor:
         """ Perform downsample if required
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input the downsample
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The original tensor, if downsizing not required, otherwise the downsized tensor
         """
         if self._stride <= 1 and self._inplanes == self._planes * self.expansion:
@@ -493,7 +497,7 @@ class Bottleneck():  # pylint:disable=too-few-public-methods
         out = layers.BatchNormalization(name=f"{name}.1", epsilon=1e-5)(out)
         return out
 
-    def __call__(self, inputs: tf.Tensor) -> tf.Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Performs the forward pass for a Bottleneck block.
 
         All conv layers have stride 1. an avgpool is performed after the second convolution when
@@ -501,12 +505,12 @@ class Bottleneck():  # pylint:disable=too-few-public-methods
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input tensor to the Bottleneck block.
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The result of the forward pass through the Bottleneck block.
         """
         out = layers.Conv2D(self._planes, 1, use_bias=False, name=f"{self._name}.conv1")(inputs)
@@ -534,7 +538,7 @@ class Bottleneck():  # pylint:disable=too-few-public-methods
         return out
 
 
-class AttentionPool2d():  # pylint:disable=too-few-public-methods
+class AttentionPool2d():
     """ An Attention Pooling layer that applies a multi-head self-attention mechanism over a
     spatial grid of features.
 
@@ -568,22 +572,22 @@ class AttentionPool2d():  # pylint:disable=too-few-public-methods
         self._name = name
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def __call__(self, inputs: tf.Tensor) -> tf.Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """Performs the attention pooling operation on the input tensor.
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`:
+        inputs: :class:`keras.KerasTensor`:
                 The input tensor of shape [batch_size, height, width, embed_dim].
 
         Returns
         -------
-        :class:`tensorflow.Tensor`:: The result of the attention pooling operation
+        :class:`keras.KerasTensor`:: The result of the attention pooling operation
         """
-        var_x: tf.Tensor
+        var_x: KerasTensor
         var_x = layers.Reshape((-1, inputs.shape[-1]))(inputs)  # NHWC -> N(HW)C
-        var_x = layers.Concatenate(axis=1)([K.mean(var_x, axis=1,  # N(HW)C -> N(HW+1)C
-                                                   keepdims=True), var_x])
+        var_x = layers.Concatenate(axis=1)([ops.mean(var_x, axis=1,  # N(HW)C -> N(HW+1)C
+                                                     keepdims=True), var_x])
         pos_embed = PositionalEmbedding((self._spatial_dim ** 2 + 1, self._embed_dim),  # N(HW+1)C
                                         self._embed_dim ** 0.5,
                                         name=f"{self._name}.positional_embedding")(var_x)
@@ -600,7 +604,7 @@ class AttentionPool2d():  # pylint:disable=too-few-public-methods
         return var_x[:, 0, ...]
 
 
-class ModifiedResNet():  # pylint:disable=too-few-public-methods
+class ModifiedResNet():
     """ A ResNet class that is similar to torchvision's but contains the following changes:
 
     - There are now 3 "stem" convolutions as opposed to 1, with an average pool instead of a max
@@ -638,19 +642,19 @@ class ModifiedResNet():  # pylint:disable=too-few-public-methods
         self._output_dim = output_dim
         self._name = name
 
-    def _stem(self, inputs: tf.Tensor) -> tf.Tensor:
+    def _stem(self, inputs: KerasTensor) -> KerasTensor:
         """ Applies the stem operation to the input tensor, which consists of 3 convolutional
             layers with BatchNormalization and ReLU activation, followed by an average pooling
             layer.
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
                 The input tensor
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The output tensor after applying the stem operation.
         """
         var_x = inputs
@@ -669,17 +673,17 @@ class ModifiedResNet():  # pylint:disable=too-few-public-methods
         return var_x
 
     def _bottleneck(self,
-                    inputs: tf.Tensor,
+                    inputs: KerasTensor,
                     planes: int,
                     blocks: int,
                     stride: int = 1,
-                    name: str = "layer") -> tf.Tensor:
+                    name: str = "layer") -> KerasTensor:
         """ A private method that creates a sequential layer of Bottleneck blocks for the
         ModifiedResNet model.
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
                 The input tensor
         planes: int
             The number of output channels for the layer.
@@ -692,10 +696,10 @@ class ModifiedResNet():  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             Sequential block of bottlenecks
         """
-        retval: tf.Tensor
+        retval: KerasTensor
         retval = Bottleneck(planes, planes, stride, name=f"{name}.0")(inputs)
         for i in range(1, blocks):
             retval = Bottleneck(planes * Bottleneck.expansion,
@@ -703,12 +707,12 @@ class ModifiedResNet():  # pylint:disable=too-few-public-methods
                                 name=f"{name}.{i}")(retval)
         return retval
 
-    def __call__(self) -> tf.keras.models.Model:
+    def __call__(self) -> models.Model:
         """ Implements the forward pass of the ModifiedResNet model.
 
         Returns
         -------
-        :class:`tensorflow.keras.models.Model`
+        :class:`keras.models.Model`
             The modified resnet model.
         """
         inputs = layers.Input((self._input_resolution, self._input_resolution, 3))
@@ -727,13 +731,13 @@ class ModifiedResNet():  # pylint:disable=too-few-public-methods
                                 self._heads,
                                 self._output_dim,
                                 name=f"{self._name}.attnpool")(var_x)
-        return keras.models.Model(inputs, outputs=[var_x], name=self._name)
+        return models.Model(inputs, outputs=var_x, name=self._name)
 
 
 # ### #
 # VIT #
 # ### #
-class ViT():  # pylint:disable=too-few-public-methods
+class ViT():
     """ Visiual Transform from CLIP
 
     A Convolutional Language-Image Pre-Training (CLIP) model that encodes images and text into a
@@ -780,7 +784,7 @@ class ViT():  # pylint:disable=too-few-public-methods
                         width: int,
                         embed_dim: int,
                         resolution: int,
-                        patch_size: int) -> tf.keras.models.Model:
+                        patch_size: int) -> models.Model:
         """ Obtain the network for the vision layets
 
         Parameters
@@ -799,7 +803,7 @@ class ViT():  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        :class:`tensorflow.keras.models.Model`
+        :class:`keras.models.Model`
             The :class:`ModifiedResNet` or :class:`VisualTransformer` vision model to use
         """
         if isinstance(layer_config, (tuple, list)):
@@ -819,28 +823,33 @@ class ViT():  # pylint:disable=too-few-public-methods
                                  patch_size=patch_size,
                                  name="visual")
 
-    def __call__(self) -> tf.keras.Model:
+    def __call__(self) -> models.Model:
         """ Get the configured ViT model
 
         Returns
         -------
-        :class:`tensorflow.keras.models.Model`
+        :class:`keras.models.Model`
             The requested Visual Transformer model
         """
-        net: tf.keras.models.Model = self._net()
+        net: models.Model = self._net()
         if self._load_weights and not self._git_id:
             logger.warning("Trained weights are not available for '%s'", self._name)
             return net
         if self._load_weights:
             model_path = GetModel(f"CLIPv_{self._name}_v1.h5", self._git_id).model_path
             logger.info("Loading CLIPv trained weights for '%s'", self._name)
-            net.load_weights(model_path, by_name=True, skip_mismatch=True)
+            with warnings.catch_warnings():
+                # TODO There is a potential bug in keras load_weights_by_name that tries to load
+                # top_level_weights where they don't exist. This always generates a scary looking
+                # warning, so it supressed for now
+                warnings.simplefilter("ignore")
+                net.load_weights(model_path, by_name=True, skip_mismatch=True)
 
         return net
 
 
 # Update layers into Keras custom objects
 for name_, obj in inspect.getmembers(sys.modules[__name__]):
-    if (inspect.isclass(obj) and issubclass(obj, tf.keras.layers.Layer)
+    if (inspect.isclass(obj) and issubclass(obj, layers.Layer)
             and obj.__module__ == __name__):
-        keras.utils.get_custom_objects().update({name_: obj})
+        saving.get_custom_objects().update({name_: obj})

@@ -57,7 +57,7 @@ class Manual(tk.Tk):
         self._initialize_tkinter()
         self._globals = TkGlobals(arguments.frames)
 
-        extractor = Aligner(self._globals, arguments.exclude_gpus)
+        extractor = Aligner(self._globals)
         self._detected_faces = DetectedFaces(self._globals,
                                              arguments.alignments_path,
                                              arguments.frames,
@@ -646,15 +646,11 @@ class Aligner():
     ----------
     tk_globals: :class:`~tools.manual.manual.TkGlobals`
         The tkinter variables that apply to the whole of the GUI
-    exclude_gpus: list or ``None``
-        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
-        ``None`` to not exclude any GPUs.
     """
-    def __init__(self, tk_globals: TkGlobals, exclude_gpus: list[int] | None) -> None:
-        logger.debug("Initializing: %s (tk_globals: %s, exclude_gpus: %s)",
-                     self.__class__.__name__, tk_globals, exclude_gpus)
+    def __init__(self, tk_globals: TkGlobals) -> None:
+        logger.debug("Initializing: %s (tk_globals: %s)",
+                     self.__class__.__name__, tk_globals)
         self._globals = tk_globals
-        self._exclude_gpus = exclude_gpus
 
         self._detected_faces: DetectedFaces | None = None
         self._frame_index: int | None = None
@@ -726,11 +722,9 @@ class Aligner():
         for model in T.get_args(TypeManualExtractor):
             logger.debug("Initializing aligner: %s", model)
             plugin = None if model == "mask" else model
-            exclude_gpus = self._exclude_gpus if model == "FAN" else None
             aligner = Extractor(None,
                                 plugin,
                                 ["components", "extended"],
-                                exclude_gpus=exclude_gpus,
                                 multiprocess=True,
                                 normalize_method="hist",
                                 disable_filter=True)

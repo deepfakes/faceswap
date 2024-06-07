@@ -126,11 +126,13 @@ class GlobalSession():
         if self._model_dir == model_folder and self._model_name == model_name:
             if is_training:
                 assert self._tb_logs is not None
-                self._tb_logs.set_training(is_training)
+                if not self._tb_logs.set_training(is_training):
+                    logger.debug("Resetting summary for updated log files")
+                    self._summary = SessionsSummary(self)
                 self._load_state_file()
-                self._is_training = True
-            logger.debug("Requested session is already loaded. Not initializing: (model_folder: "
-                         "%s, model_name: %s)", model_folder, model_name)
+                self._is_training = is_training
+            logger.debug("Requested session is already loaded. Not initializing: "
+                         "(model_folder: %s, model_name: %s)", model_folder, model_name)
             return
 
         self._is_training = is_training

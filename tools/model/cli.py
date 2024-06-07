@@ -49,19 +49,6 @@ class ModelArgs(FaceSwapArgs):
                 "\nL|'nan-scan' - Scan the model file for NaNs or Infs (invalid data)."
                 "\nL|'restore' - Restore a model from backup.")})
         argument_list.append({
-            "opts": ("-f", "--format"),
-            "action": Radio,
-            "type": str,
-            "choices": ("h5", "saved-model"),
-            "default": "h5",
-            "group": _("inference"),
-            "help": _(
-                "R|The format to save the model as. Note: Only used for 'inference' job."
-                "\nL|'h5' - Standard Keras H5 format. Does not store any custom layer "
-                "information. Layers will need to be loaded from Faceswap to use."
-                "\nL|'saved-model' - Tensorflow's Saved Model format. Contains all information "
-                "required to load the model outside of Faceswap.")})
-        argument_list.append({
             "opts": ("-s", "--swap-model"),
             "action": "store_true",
             "dest": "swap_model",

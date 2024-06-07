@@ -21,8 +21,7 @@ from time import sleep
 
 import cv2
 import numpy as np
-
-from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module # noqa
+from torch.cuda import OutOfMemoryError
 
 from lib.align import LandmarkType
 from lib.utils import FaceswapError
@@ -76,10 +75,10 @@ class AlignerBatch(ExtractorBatch):
     """
     batch_id: int = 0
     detected_faces: list[DetectedFace] = field(default_factory=list)
-    landmarks: np.ndarray = np.array([])
+    landmarks: np.ndarray = field(default_factory=lambda: np.array([]))
     refeeds: list[np.ndarray] = field(default_factory=list)
     second_pass: bool = False
-    second_pass_masks: np.ndarray = np.array([])
+    second_pass_masks: np.ndarray = field(default_factory=lambda: np.array([]))
 
     def __repr__(self):
         """ Prettier repr for debug printing """
@@ -150,7 +149,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                          configfile=configfile,
                          instance=instance,
                          **kwargs)
-        self._plugin_type = "align"
+        self._info.plugin_type = "align"
         self.realign_centering: CenteringType = "face"  # overide for plugin specific centering
 
         # Override for specific landmark type:
@@ -301,14 +300,15 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                 if idx == self.batchsize:
                     frame_faces = len(item.detected_faces)
                     if f_idx + 1 != frame_faces:
-                        self._rollover = ExtractMedia(
+                        self._tracker.rollover = ExtractMedia(
                             item.filename,
                             item.image,
                             detected_faces=item.detected_faces[f_idx + 1:],
                             is_aligned=item.is_aligned)
                         logger.trace("Rolled over %s faces of %s to "  # type: ignore[attr-defined]
-                                     "next batch for '%s'", len(self._rollover.detected_faces),
-                                     frame_faces, item.filename)
+                                     "next batch for '%s'",
+                                     len(self._tracker.rollover.detected_faces), frame_faces,
+                                     item.filename)
                     break
         if batch.filename:
             logger.trace("Returning batch: %s", batch)  # type: ignore[attr-defined]
@@ -366,16 +366,17 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         logger.trace("Item out: %s", batch)  # type: ignore[attr-defined]
 
         for frame, filename, face in zip(batch.image, batch.filename, batch.detected_faces):
-            self._output_faces.append(face)
-            if len(self._output_faces) != self._faces_per_filename[filename]:
+            self._tracker.output_faces.append(face)
+            if len(self._tracker.output_faces) != self._tracker.faces_per_filename[filename]:
                 continue
 
-            self._output_faces, folders = self._filter(self._output_faces, min(frame.shape[:2]))
+            self._tracker.output_faces, folders = self._filter(self._tracker.output_faces,
+                                                               min(frame.shape[:2]))
 
             output = self._extract_media.pop(filename)
-            output.add_detected_faces(self._output_faces)
+            output.add_detected_faces(self._tracker.output_faces)
             output.add_sub_folders(folders)
-            self._output_faces = []
+            self._tracker.output_faces = []
 
             logger.trace("Final Output: (filename: '%s', image "  # type: ignore[attr-defined]
                          "shape: %s, detected_faces: %s, item: %s)", output.filename,
@@ -533,6 +534,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             preds = [self.predict(feed) for feed in batch.refeeds]
             try:
                 batch.prediction = np.array(preds)
+                logger.trace("Aligner out: %s",  # type:ignore[attr-defined]
+                             batch.prediction.shape)
             except ValueError as err:
                 # If refeed batches are different sizes, Numpy will error, so we need to explicitly
                 # set the dtype to 'object' rather than let it infer
@@ -548,8 +551,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                 else:
                     raise
 
-            return batch
-        except tf_errors.ResourceExhaustedError as err:
+        except OutOfMemoryError as err:
             msg = ("You do not have enough GPU memory available to run detection at the "
                    "selected batch size. You can try a number of things:"
                    "\n1) Close any other application that is using your GPU (web browsers are "
@@ -559,6 +561,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                    "CLI: Edit the file faceswap/config/extract.ini)."
                    "\n3) Enable 'Single Process' mode.")
             raise FaceswapError(msg) from err
+
+        return batch
 
     def _process_refeeds(self, batch: AlignerBatch) -> list[AlignerBatch]:
         """ Process the output for each selected re-feed

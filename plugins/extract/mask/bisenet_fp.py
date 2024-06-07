@@ -10,18 +10,18 @@ import typing as T
 
 import numpy as np
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras import backend as K  # pylint:disable=import-error
-from tensorflow.keras.layers import (  # pylint:disable=import-error
+import keras.backend as K
+from keras.layers import (
     Activation, Add, BatchNormalization, Concatenate, Conv2D, GlobalAveragePooling2D, Input,
     MaxPooling2D, Multiply, Reshape, UpSampling2D, ZeroPadding2D)
+from keras.models import Model
 
-from lib.model.session import KSession
+from lib.logger import parse_class_init
 from plugins.extract._base import _get_config
 from ._base import BatchType, Masker, MaskerBatch
 
 if T.TYPE_CHECKING:
-    from tensorflow import Tensor
+    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +35,12 @@ class Mask(Masker):
         model_filename = f"bisnet_face_parsing_v{version}.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
 
-        self.model: KSession
+        self.model: BiSeNet
         self.name = "BiSeNet - Face Parsing"
         self.input_size = 512
         self.color_format = "RGB"
-        self.vram = 2304 if not self.config["cpu"] else 0
-        self.vram_warnings = 256 if not self.config["cpu"] else 0
-        self.vram_per_batch = 64 if not self.config["cpu"] else 0
+        self.vram = 384 if not self.config["cpu"] else 0  # 378 in testing
+        self.vram_per_batch = 384 if not self.config["cpu"] else 0  # ~328 in testing
         self.batchsize = self.config["batch-size"]
 
         self._segment_indices = self._get_segment_indices()
@@ -107,16 +106,12 @@ class Mask(Masker):
         """ Initialize the BiSeNet Face Parsing model. """
         assert isinstance(self.model_path, str)
         lbls = 5 if self._is_faceswap else 19
-        self.model = BiSeNet(self.model_path,
-                             self.config["allow_growth"],
-                             self._exclude_gpus,
-                             self.input_size,
-                             lbls,
-                             self.config["cpu"])
-
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")
-        self.model.predict(placeholder)
+
+        with self.get_device_context(self.config["cpu"]):
+            self.model = BiSeNet(self.model_path, self.batchsize, self.input_size, lbls)
+            self.model(placeholder)
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
@@ -127,11 +122,12 @@ class Mask(Masker):
         batch.feed = ((np.array([T.cast(np.ndarray, feed.face)[..., :3]
                                  for feed in batch.feed_faces],
                                 dtype="float32") / 255.0) - mean) / std
-        logger.trace("feed shape: %s", batch.feed.shape)  # type:ignore
+        logger.trace("feed shape: %s", batch.feed.shape)  # type:ignore[attr-defined]
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions """
-        return self.model.predict(feed)[0]
+        with self.get_device_context(self.config["cpu"]):
+            return self.model(feed)[0]
 
     def process_output(self, batch: BatchType) -> None:
         """ Compile found faces for output """
@@ -197,7 +193,7 @@ def _get_name(name: str, start_idx: int = 1) -> str:
     return retval
 
 
-class ConvBn():  # pylint:disable=too-few-public-methods
+class ConvBn():
     """ Convolutional 3D with Batch Normalization block.
 
     Parameters
@@ -235,17 +231,17 @@ class ConvBn():  # pylint:disable=too-few-public-methods
         self._prefix = f"{prefix}." if prefix else prefix
         self._start_idx = start_idx
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the Convolutional Batch Normalization block.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         var_x = inputs
@@ -270,17 +266,21 @@ class ConvBn():  # pylint:disable=too-few-public-methods
         return var_x
 
 
-class ResNet18():  # pylint:disable=too-few-public-methods
+class ResNet18():
     """ ResNet 18 block. Used at the start of BiSeNet Face Parsing. """
     def __init__(self):
         self._feature_index = 1 if K.image_data_format() == "channels_first" else -1
 
-    def _basic_block(self, inputs: Tensor, prefix: str, filters: int, strides: int = 1) -> Tensor:
+    def _basic_block(self,
+                     inputs: KerasTensor,
+                     prefix: str,
+                     filters: int,
+                     strides: int = 1) -> KerasTensor:
         """ The basic building block for ResNet 18.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
         prefix: str
             The prefix to name the layers within the block
@@ -292,14 +292,14 @@ class ResNet18():  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         res = ConvBn(filters, strides=strides, padding=1, prefix=prefix)(inputs)
         res = ConvBn(filters, strides=1, padding=1, activation=False, prefix=prefix)(res)
 
         shortcut = inputs
-        filts = (K.int_shape(shortcut)[self._feature_index], K.int_shape(res)[self._feature_index])
+        filts = (shortcut.shape[self._feature_index], res.shape[self._feature_index])
         if strides != 1 or filts[0] != filts[1]:  # Downsample
             name = f"{prefix}.downsample."
             shortcut = Conv2D(filters, 1,
@@ -314,16 +314,16 @@ class ResNet18():  # pylint:disable=too-few-public-methods
         return var_x
 
     def _basic_layer(self,
-                     inputs: Tensor,
+                     inputs: KerasTensor,
                      prefix: str,
                      filters: int,
                      num_blocks: int,
-                     strides: int = 1) -> Tensor:
+                     strides: int = 1) -> KerasTensor:
         """ The basic layer for ResNet 18. Recursively builds from :func:`_basic_block`.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
         prefix: str
             The prefix to name the layers within the block
@@ -337,7 +337,7 @@ class ResNet18():  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         var_x = self._basic_block(inputs, f"{prefix}.0", filters, strides=strides)
@@ -345,17 +345,17 @@ class ResNet18():  # pylint:disable=too-few-public-methods
             var_x = self._basic_block(var_x, f"{prefix}.{i + 1}", filters, strides=1)
         return var_x
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the ResNet 18 block.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         var_x = ConvBn(64, kernel_size=7, strides=2, padding=3, prefix="cp.resnet")(inputs)
@@ -370,7 +370,7 @@ class ResNet18():  # pylint:disable=too-few-public-methods
         return feat8, feat16, feat32
 
 
-class AttentionRefinementModule():  # pylint:disable=too-few-public-methods
+class AttentionRefinementModule():
     """ The Attention Refinement block for BiSeNet Face Parsing
 
     Parameters
@@ -382,25 +382,25 @@ class AttentionRefinementModule():  # pylint:disable=too-few-public-methods
     def __init__(self, filters: int) -> None:
         self._filters = filters
 
-    def __call__(self, inputs: Tensor, feats: int) -> Tensor:
+    def __call__(self, inputs: KerasTensor, feats: int) -> KerasTensor:
         """ Call the Attention Refinement block.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
         feats: int
             The number of features. Used for naming.
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         prefix = f"cp.arm{feats}"
         feat = ConvBn(self._filters, prefix=f"{prefix}.conv", start_idx=-1, padding=-1)(inputs)
         atten = GlobalAveragePooling2D(name=f"{prefix}.avgpool")(feat)
-        atten = Reshape((1, 1, K.int_shape(atten)[-1]))(atten)
+        atten = Reshape((1, 1, atten.shape[-1]))(atten)
         atten = Conv2D(self._filters, 1, use_bias=False, name=f"{prefix}.conv_atten")(atten)
         atten = BatchNormalization(epsilon=1e-5, name=f"{prefix}.bn_atten")(atten)
         atten = Activation("sigmoid", name=f"{prefix}.sigmoid")(atten)
@@ -408,31 +408,31 @@ class AttentionRefinementModule():  # pylint:disable=too-few-public-methods
         return var_x
 
 
-class ContextPath():  # pylint:disable=too-few-public-methods
+class ContextPath():
     """ The Context Path block for BiSeNet Face Parsing. """
     def __init__(self):
         self._resnet = ResNet18()
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the Context Path block.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         feat8, feat16, feat32 = self._resnet(inputs)
 
         avg = GlobalAveragePooling2D(name="cp.avgpool")(feat32)
-        avg = Reshape((1, 1, K.int_shape(avg)[-1]))(avg)
+        avg = Reshape((1, 1, avg.shape[-1]))(avg)
         avg = ConvBn(128, kernel_size=1, padding=0, prefix="cp.conv_avg", start_idx=-1)(avg)
 
-        avg_up = UpSampling2D(size=K.int_shape(feat32)[1:3], name="cp.upsample")(avg)
+        avg_up = UpSampling2D(size=feat32.shape[1:3], name="cp.upsample")(avg)
 
         feat32 = AttentionRefinementModule(128)(feat32, 32)
         feat32 = Add(name="cp.add")([feat32, avg_up])
@@ -447,7 +447,7 @@ class ContextPath():  # pylint:disable=too-few-public-methods
         return feat8, feat16, feat32
 
 
-class FeatureFusionModule():  # pylint:disable=too-few-public-methods
+class FeatureFusionModule():
     """ The Feature Fusion block for BiSeNet Face Parsing
 
     Parameters
@@ -459,17 +459,17 @@ class FeatureFusionModule():  # pylint:disable=too-few-public-methods
     def __init__(self, filters: int) -> None:
         self._filters = filters
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the Feature Fusion block.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         feat = Concatenate(name="ffm.concat")(inputs)
@@ -480,7 +480,7 @@ class FeatureFusionModule():  # pylint:disable=too-few-public-methods
                       start_idx=-1)(feat)
 
         atten = GlobalAveragePooling2D(name="ffm.avgpool")(feat)
-        atten = Reshape((1, 1, K.int_shape(atten)[-1]))(atten)
+        atten = Reshape((1, 1, atten.shape[-1]))(atten)
         atten = Conv2D(self._filters // 4, 1, use_bias=False, name="ffm.conv1")(atten)
         atten = Activation("relu", name="ffm.relu")(atten)
         atten = Conv2D(self._filters, 1, use_bias=False, name="ffm.conv2")(atten)
@@ -491,7 +491,7 @@ class FeatureFusionModule():  # pylint:disable=too-few-public-methods
         return var_x
 
 
-class BiSeNetOutput():  # pylint:disable=too-few-public-methods
+class BiSeNetOutput():
     """ The BiSeNet Output block for Face Parsing
 
     Parameters
@@ -509,17 +509,17 @@ class BiSeNetOutput():  # pylint:disable=too-few-public-methods
         self._num_classes = num_classes
         self._label = label
 
-    def __call__(self, inputs: Tensor) -> Tensor:
+    def __call__(self, inputs: KerasTensor) -> KerasTensor:
         """ Call the BiSeNet Output block.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             The input to the block
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             The output from the block
         """
         var_x = ConvBn(self._filters, prefix=f"conv_out{self._label}.conv", start_idx=-1)(inputs)
@@ -528,75 +528,78 @@ class BiSeNetOutput():  # pylint:disable=too-few-public-methods
         return var_x
 
 
-class BiSeNet(KSession):
+class BiSeNet():
     """ BiSeNet Face-Parsing Mask from https://github.com/zllrunning/face-parsing.PyTorch
 
     PyTorch model implemented in Keras by TorzDF
 
     Parameters
     ----------
-    model_path: str
-        The path to the keras model file
-    allow_growth: bool
-        Enable the Tensorflow GPU allow_growth configuration option. This option prevents
-        Tensorflow from allocating all of the GPU VRAM, but can lead to higher fragmentation and
-        slower performance
-    exclude_gpus: list
-        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
-        ``None`` to not exclude any GPUs
+    weights_path: str
+        The path to the keras weights file
+    batch_size: int
+        The batch size to feed the model
     input_size: int
         The input size to the model
     num_classes: int
         The number of segmentation classes to create
-    cpu_mode: bool, optional
-        ``True`` run the model on CPU. Default: ``False``
     """
     def __init__(self,
-                 model_path: str,
-                 allow_growth: bool,
-                 exclude_gpus: list[int] | None,
+                 weights_path: str,
+                 batch_size: int,
                  input_size: int,
-                 num_classes: int,
-                 cpu_mode: bool) -> None:
-        super().__init__("BiSeNet Face Parsing",
-                         model_path,
-                         allow_growth=allow_growth,
-                         exclude_gpus=exclude_gpus,
-                         cpu_mode=cpu_mode)
+                 num_classes: int) -> None:
+        logger.debug(parse_class_init(locals()))
+        self._batch_size = batch_size
         self._input_size = input_size
         self._num_classes = num_classes
         self._cp = ContextPath()
-        self.define_model(self._model_definition)
-        self.load_model_weights()
+        self._model = self._load_model(weights_path)
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _model_definition(self) -> tuple[Tensor, list[Tensor]]:
-        """ Definition of the VGG Obstructed Model.
+    def _load_model(self, weights_path: str) -> Model:
+        """ Definition of the BiSeNet-FP  Model.
+
+        Parameters
+        ----------
+        weights_path: str
+            Full path to the model's weights
 
         Returns
         -------
-        tuple
-            The tensor input to the model and tensor output to the model for compilation by
-            :func`define_model`
+        :class:`keras.models.Model`
+            The BiSeNet-FP model
         """
         input_ = Input((self._input_size, self._input_size, 3))
 
         features = self._cp(input_)  # res8, cp8, cp16
         feat_fuse = FeatureFusionModule(256)([features[0], features[1]])
 
-        feat_out = BiSeNetOutput(256, self._num_classes)(feat_fuse)
-        feat_out16 = BiSeNetOutput(64, self._num_classes, label="16")(features[1])
-        feat_out32 = BiSeNetOutput(64, self._num_classes, label="32")(features[2])
+        feats = [BiSeNetOutput(256, self._num_classes)(feat_fuse),
+                 BiSeNetOutput(64, self._num_classes, label="16")(features[1]),
+                 BiSeNetOutput(64, self._num_classes, label="32")(features[2])]
 
-        height, width = K.int_shape(input_)[1:3]
-        f_h, f_w = K.int_shape(feat_out)[1:3]
-        f_h16, f_w16 = K.int_shape(feat_out16)[1:3]
-        f_h32, f_w32 = K.int_shape(feat_out32)[1:3]
+        height, width = input_.shape[1:3]
+        output = [UpSampling2D(size=(height // feat.shape[1], width // feat.shape[2]),
+                               interpolation="bilinear")(feat)
+                  for feat in feats]
 
-        feat_out = UpSampling2D(size=(height // f_h, width // f_w),
-                                interpolation="bilinear")(feat_out)
-        feat_out16 = UpSampling2D(size=(height // f_h16, width // f_w16),
-                                  interpolation="bilinear")(feat_out16)
-        feat_out32 = UpSampling2D(size=(height // f_h32, width // f_w32),
-                                  interpolation="bilinear")(feat_out32)
+        retval = Model(input_, output)
+        retval.load_weights(weights_path)
+        retval.make_predict_function()
+        return retval
 
-        return input_, [feat_out, feat_out16, feat_out32]
+    def __call__(self, inputs: np.ndarray) -> np.ndarray:
+        """ Get predictions from the BiSeNet-FP model
+
+        Parameters
+        ----------
+        inputs: :class:`numpy.ndarray`
+            The input to BiSeNet-FP
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The output from BiSeNet-FP
+        """
+        return self._model.predict(inputs, verbose=0, batch_size=self._batch_size)

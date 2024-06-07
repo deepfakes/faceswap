@@ -59,7 +59,7 @@ class ConvertItem:
     inbound: ExtractMedia
     feed_faces: list[AlignedFace] = field(default_factory=list)
     reference_faces: list[AlignedFace] = field(default_factory=list)
-    swapped_faces: np.ndarray = np.array([])
+    swapped_faces: np.ndarray = field(default_factory=lambda: np.array([]))
 
 
 class Convert():
@@ -747,6 +747,7 @@ class Predict():
         self._batchsize = self._get_batchsize(queue_size)
         self._sizes = self._get_io_sizes()
         self._coverage_ratio = self._model.coverage_ratio
+        self._y_offset = self._model.config["vertical_offset"] / 100.
         self._centering = self._model.config["centering"]
 
         self._thread: MultiThread | None = None
@@ -1000,6 +1001,7 @@ class Predict():
                                     centering=self._centering,
                                     size=self._sizes["input"],
                                     coverage_ratio=self._coverage_ratio,
+                                    y_offset=self._y_offset,
                                     dtype="float32")
             if self._sizes["input"] == self._sizes["output"]:
                 reference_faces.append(feed_face)
@@ -1009,6 +1011,7 @@ class Predict():
                                                    centering=self._centering,
                                                    size=self._sizes["output"],
                                                    coverage_ratio=self._coverage_ratio,
+                                                   y_offset=self._y_offset,
                                                    dtype="float32"))
             feed_faces.append(feed_face)
         item.feed_faces = feed_faces

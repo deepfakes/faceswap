@@ -717,8 +717,8 @@ class TKFace():
 
     # << PUBLIC PROPERTIES >> #
     @property
-    def photo(self) -> tk.PhotoImage:
-        """ :class:`tkinter.PhotoImage`: The face in a format that can be placed on the
+    def photo(self) -> ImageTk.PhotoImage:
+        """ :class:`PIL.ImageTk.PhotoImage`: The face in a format that can be placed on the
          :class:`~tools.manual.faceviewer.frame.FacesViewer` canvas. """
         return self._photo
 

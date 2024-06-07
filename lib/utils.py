@@ -1,5 +1,7 @@
 #!/usr/bin python3
 """ Utilities available across all scripts """
+# NOTE: Do not import keras/pytorch in this script, as it is accessed before they should be loaded
+
 from __future__ import annotations
 import json
 import logging
@@ -7,7 +9,6 @@ import os
 import sys
 import tkinter as tk
 import typing as T
-import warnings
 import zipfile
 
 from multiprocessing import current_process
@@ -28,8 +29,9 @@ if T.TYPE_CHECKING:
 IMAGE_EXTENSIONS = [".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
 VIDEO_EXTENSIONS = [".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
                     ".ts", ".vob"]
-_TF_VERS: tuple[int, int] | None = None
-ValidBackends = T.Literal["nvidia", "cpu", "apple_silicon", "directml", "rocm"]
+_TORCH_VERS: tuple[int, int] | None = None
+_KERAS_VERS: tuple[int, int] | None = None
+ValidBackends = T.Literal["nvidia", "cpu", "apple_silicon", "rocm"]
 
 
 class _Backend():  # pylint:disable=too-few-public-methods
@@ -39,10 +41,9 @@ class _Backend():  # pylint:disable=too-few-public-methods
     If file doesn't exist and a variable hasn't been set, create the config file. """
     def __init__(self) -> None:
         self._backends: dict[str, ValidBackends] = {"1": "cpu",
-                                                    "2": "directml",
-                                                    "3": "nvidia",
-                                                    "4": "apple_silicon",
-                                                    "5": "rocm"}
+                                                    "2": "nvidia",
+                                                    "3": "apple_silicon",
+                                                    "4": "rocm"}
         self._valid_backends = list(self._backends.values())
         self._config_file = self._get_config_file()
         self.backend = self._get_backend()
@@ -131,7 +132,7 @@ def get_backend() -> ValidBackends:
     Returns
     -------
     str
-        The backend configuration in use by Faceswap. One of  ["cpu", "directml", "nvidia", "rocm",
+        The backend configuration in use by Faceswap. One of  ["cpu", "nvidia", "rocm",
         "apple_silicon"]
 
     Example
@@ -148,7 +149,7 @@ def set_backend(backend: str) -> None:
 
     Parameters
     ----------
-    backend: ["cpu", "directml", "nvidia", "rocm", "apple_silicon"]
+    backend: ["cpu", "nvidia", "rocm", "apple_silicon"]
         The backend to set faceswap to
 
     Example
@@ -161,26 +162,48 @@ def set_backend(backend: str) -> None:
     _FS_BACKEND = backend
 
 
-def get_tf_version() -> tuple[int, int]:
-    """ Obtain the major. minor version of currently installed Tensorflow.
+def get_torch_version() -> tuple[int, int]:
+    """ Obtain the major. minor version of currently installed PyTorch.
 
     Returns
     -------
     tuple[int, int]
-        A tuple of the form (major, minor) representing the version of TensorFlow that is installed
+        A tuple of the form (major, minor) representing the version of PyTorch that is installed
 
     Example
     -------
-    >>> from lib.utils import get_tf_version
-    >>> get_tf_version()
-    (2, 10)
+    >>> from lib.utils import get_torch_version
+    >>> get_torch_version()
+    (2, 2)
     """
-    global _TF_VERS  # pylint:disable=global-statement
-    if _TF_VERS is None:
-        import tensorflow as tf  # pylint:disable=import-outside-toplevel
-        split = tf.__version__.split(".")[:2]
-        _TF_VERS = (int(split[0]), int(split[1]))
-    return _TF_VERS
+    global _TORCH_VERS  # pylint:disable=global-statement
+    if _TORCH_VERS is None:
+        import torch  # pylint:disable=import-outside-toplevel
+        split = torch.__version__.split(".")[:2]
+        _TORCH_VERS = (int(split[0]), int(split[1]))
+    return _TORCH_VERS
+
+
+def get_keras_version() -> tuple[int, int]:
+    """ Obtain the major. minor version of currently installed Keras.
+
+    Returns
+    -------
+    tuple[int, int]
+        A tuple of the form (major, minor) representing the version of Keras that is installed
+
+    Example
+    -------
+    >>> from lib.utils import get_torch_version
+    >>> get_torch_version()
+    (2, 2)
+    """
+    global _KERAS_VERS  # pylint:disable=global-statement
+    if _KERAS_VERS is None:
+        import keras  # pylint:disable=import-outside-toplevel
+        split = keras.__version__.split(".")[:2]
+        _KERAS_VERS = (int(split[0]), int(split[1]))
+    return _KERAS_VERS
 
 
 def get_folder(path: str, make_folder: bool = True) -> str:
@@ -369,39 +392,6 @@ def full_path_split(path: str) -> list[str]:
     # Remove any empty strings which may have got inserted
     allparts = [part for part in allparts if part]
     return allparts
-
-
-def set_system_verbosity(log_level: str):
-    """ Set the verbosity level of tensorflow and suppresses future and deprecation warnings from
-    any modules.
-
-    This function sets the `TF_CPP_MIN_LOG_LEVEL` environment variable to control the verbosity of
-    TensorFlow output, as well as filters certain warning types to be ignored. The log level is
-    determined based on the input string `log_level`.
-
-    Parameters
-    ----------
-    log_level: str
-        The requested Faceswap log level.
-
-    References
-    ----------
-    https://stackoverflow.com/questions/35911252/disable-tensorflow-debugging-information
-
-    Example
-    -------
-    >>> from lib.utils import set_system_verbosity
-    >>> set_system_verbosity('warning')
-    """
-    logger = logging.getLogger(__name__)
-    from lib.logger import get_loglevel  # pylint:disable=import-outside-toplevel
-    numeric_level = get_loglevel(log_level)
-    log_level = "3" if numeric_level > 15 else "0"
-    logger.debug("System Verbosity level: %s", log_level)
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = log_level
-    if log_level != '0':
-        for warncat in (FutureWarning, DeprecationWarning, UserWarning):
-            warnings.simplefilter(action='ignore', category=warncat)
 
 
 def deprecation_warning(function: str, additional_info: str | None = None) -> None:

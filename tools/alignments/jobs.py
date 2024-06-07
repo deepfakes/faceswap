@@ -327,7 +327,7 @@ class Check:
         """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         folder_name = (f"{self._get_filename_prefix()}"
-                       f"{self.output_message.replace(' ','_').lower()}_{now}")
+                       f"{self.output_message.replace(' ', '_').lower()}_{now}")
         dst_dir = self._get_output_folder()
         output_folder = os.path.join(dst_dir, folder_name)
         logger.debug("Creating folder: '%s'", output_folder)

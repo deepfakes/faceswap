@@ -568,8 +568,8 @@ class TaskBar(ttk.Frame):  # pylint:disable=too-many-ancestors
             loader, kwargs = self._loader_and_kwargs(btntype)
             cmd = getattr(self._config.project, loader)
             btn = ttk.Button(frame,
-                             image=get_images().icons[btntype],
-                             command=lambda fn=cmd, kw=kwargs: fn(**kw))  # type:ignore
+                             image=get_images().icons[btntype],  # type:ignore[arg-type]
+                             command=lambda fn=cmd, kw=kwargs: fn(**kw))  # type:ignore[misc]
             btn.pack(side=tk.LEFT, anchor=tk.W)
             hlp = self._set_help(btntype)
             Tooltip(btn, text=hlp, wrap_length=200)
@@ -589,8 +589,8 @@ class TaskBar(ttk.Frame):  # pylint:disable=too-many-ancestors
             cmd = getattr(self._config.tasks, loader)
             btn = ttk.Button(
                 frame,
-                image=get_images().icons[btntype],
-                command=lambda fn=cmd, kw=kwargs: fn(**kw))  # type:ignore
+                image=get_images().icons[btntype],  # type:ignore[arg-type]
+                command=lambda fn=cmd, kw=kwargs: fn(**kw))  # type:ignore[misc]
             btn.pack(side=tk.LEFT, anchor=tk.W)
             hlp = self._set_help(btntype)
             Tooltip(btn, text=hlp, wrap_length=200)
@@ -606,8 +606,8 @@ class TaskBar(ttk.Frame):  # pylint:disable=too-many-ancestors
             logger.debug("Adding button: '%s'", btntype)
             btn = ttk.Button(
                 frame,
-                image=get_images().icons[btntype],
-                command=lambda n=name: open_popup(name=n))  # type:ignore
+                image=get_images().icons[btntype],  # type:ignore[arg-type]
+                command=lambda n=name: open_popup(name=n))  # type:ignore[misc]
             btn.pack(side=tk.LEFT, anchor=tk.W)
             hlp = _("Configure {} settings...").format(name.title())
             Tooltip(btn, text=hlp, wrap_length=200)

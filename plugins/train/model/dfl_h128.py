@@ -3,9 +3,7 @@
     Based on https://github.com/iperov/DeepFaceLab
 """
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras.layers import Dense, Flatten, Input, Reshape  # noqa:E501  # pylint:disable=import-error
-from tensorflow.keras.models import Model as KModel  # pylint:disable=import-error
+from keras import Input, layers, Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
 from .original import Model as OriginalModel
@@ -25,9 +23,9 @@ class Model(OriginalModel):
         var_x = Conv2DBlock(256, activation="leakyrelu")(var_x)
         var_x = Conv2DBlock(512, activation="leakyrelu")(var_x)
         var_x = Conv2DBlock(1024, activation="leakyrelu")(var_x)
-        var_x = Dense(self.encoder_dim)(Flatten()(var_x))
-        var_x = Dense(8 * 8 * self.encoder_dim)(var_x)
-        var_x = Reshape((8, 8, self.encoder_dim))(var_x)
+        var_x = layers.Dense(self.encoder_dim)(layers.Flatten()(var_x))
+        var_x = layers.Dense(8 * 8 * self.encoder_dim)(var_x)
+        var_x = layers.Reshape((8, 8, self.encoder_dim))(var_x)
         var_x = UpscaleBlock(self.encoder_dim, activation="leakyrelu")(var_x)
         return KModel(input_, var_x, name="encoder")
 

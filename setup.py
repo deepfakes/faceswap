@@ -20,44 +20,50 @@ from pkg_resources import parse_requirements
 from lib.logger import log_setup
 
 logger = logging.getLogger(__name__)
-backend_type: T.TypeAlias = T.Literal['nvidia', 'apple_silicon', 'directml', 'cpu', 'rocm', "all"]
+backend_type: T.TypeAlias = T.Literal['nvidia', 'apple_silicon', 'cpu', 'rocm', "all"]
 
 _INSTALL_FAILED = False
 # Packages that are explicitly required for setup.py
 _INSTALLER_REQUIREMENTS: list[tuple[str, str]] = [("pexpect>=4.8.0", "!Windows"),
-                                                  ("pywinpty==2.0.2", "Windows")]
+                                                  ("pywinpty>=2.0.2", "Windows")]
 # Conda packages that are required for a specific backend
 # TODO zlib-wapi is required on some Windows installs where cuDNN complains:
 # Could not locate zlibwapi.dll. Please make sure it is in your library path!
 # This only seems to occur on Anaconda cuDNN not conda-forge
 _BACKEND_SPECIFIC_CONDA: dict[backend_type, list[str]] = {
-    "nvidia": ["cudatoolkit", "cudnn", "zlib-wapi"],
-    "apple_silicon": ["libblas"]}
+    "nvidia": ["zlib-wapi", "pytorch-cuda==12.1"],
+    "apple_silicon": ["libblas"],
+    "cpu": ["cpuonly==2.0"]}
 # Packages that should only be installed through pip
 _FORCE_PIP: dict[backend_type, list[str]] = {
-    "nvidia": ["tensorflow"],
     "all": [
-        "tensorflow-cpu",  # conda-forge leads to flatbuffer errors because of mixed sources
-        "imageio-ffmpeg"]}  # 17/11/23 Conda forge uses incorrect ffmpeg, so fallback to pip
-# Revisions of tensorflow GPU and cuda/cudnn requirements. These relate specifically to the
-# Tensorflow builds available from pypi
-_TENSORFLOW_REQUIREMENTS = {">=2.10.0,<2.11.0": [">=11.2,<11.3", ">=8.1,<8.2"]}
-# ROCm min/max version requirements for Tensorflow
-_TENSORFLOW_ROCM_REQUIREMENTS = {">=2.10.0,<2.11.0": ((5, 2, 0), (5, 4, 0))}
-# TODO tensorflow-metal versioning
+        "ffmpy",  # 17/04/24 Can pull in incompatible ffmpeg
+        "imageio-ffmpeg",  # 17/11/23 Conda forge uses incorrect ffmpeg, so fallback to pip
+        "numexpr",  # 15/05/24  Numexpr likes to pull in all kinds of incorrect libs
+        "opencv-python"],  # Not directly in Conda
+    "rocm": ["torch", "torchvision", "torchaudio"]}  # 15/05/24 Pytorch ROCM has no Conda install
+
+_TORCH_ROCM_REQUIREMENTS = {">=2.2.1,<2.4.0": ((6, 0), (6, 0))}
+"""dict[str, tuple[tuple[int, int], tuple[int, int]]]: Minumum and maximum ROCm versions """
 
 # Mapping of Python packages to their conda names if different from pip or in non-default channel
-_CONDA_MAPPING: dict[str, tuple[str, str]] = {
-    "cudatoolkit": ("cudatoolkit", "conda-forge"),
-    "cudnn": ("cudnn", "conda-forge"),
-    "fastcluster": ("fastcluster", "conda-forge"),
-    "ffmpy": ("ffmpy", "conda-forge"),
-    # "imageio-ffmpeg": ("imageio-ffmpeg", "conda-forge"),
-    "nvidia-ml-py": ("nvidia-ml-py", "conda-forge"),
-    "tensorflow-deps": ("tensorflow-deps", "apple"),
-    "libblas": ("libblas", "conda-forge"),
-    "zlib-wapi": ("zlib-wapi", "conda-forge"),
-    "xorg-libxft": ("xorg-libxft", "conda-forge")}
+_CONDA_MAPPING: dict[str, tuple[str, tuple[str, ...]]] = {
+    "pytorch-cuda": ("pytorch-cuda", ("pytorch", "nvidia")),
+    "torch": ("pytorch", ("pytorch", )),  # As we group torch imports, only specify channel once
+    "fastcluster": ("fastcluster", ("conda-forge", )),
+    # "ffmpy": ("ffmpy", ("conda-forge", )),
+    # "imageio-ffmpeg": ("imageio-ffmpeg", ("conda-forge", )),
+    "nvidia-ml-py": ("nvidia-ml-py", ("conda-forge", )),
+    "libblas": ("libblas", ("conda-forge", )),
+    "zlib-wapi": ("zlib-wapi", ("conda-forge", )),
+    "xorg-libxft": ("xorg-libxft", ("conda-forge", ))}
+
+_GROUPS = [["pytorch*", "torch*", "cpuonly"]]
+"""list[list[str]]: Packages that should be installed collectively at the same time """
+
+_DEV_TOOLS = ["flake8", "mypy", "pylint", "pytest", "pytest-mock",
+              "types-setuptools", "types-PyYAML", "types-psutil"]
+"""list[str]: Development packages to install if `--dev` cli arg passed"""
 
 # Force output to utf-8
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type:ignore[attr-defined]
@@ -73,12 +79,13 @@ class Environment():
         setup is running. Default: ``False``
     """
 
-    _backends = (("nvidia", "apple_silicon", "directml", "rocm", "cpu"))
+    _backends = (("nvidia", "apple_silicon", "rocm", "cpu"))
 
     def __init__(self, updater: bool = False) -> None:
         self.updater = updater
         # Flag that setup is being run by installer so steps can be skipped
         self.is_installer: bool = False
+        self.include_dev_tools: bool = False
         self.backend: backend_type | None = None
         self.enable_docker: bool = False
         self.cuda_cudnn = ["", ""]
@@ -155,6 +162,10 @@ class Environment():
         for arg in args:
             if arg == "--installer":
                 self.is_installer = True
+                continue
+            if arg == "--dev":
+                self.include_dev_tools = True
+                continue
             if not self.backend and (arg.startswith("--") and
                                      arg.replace("--", "") in self._backends):
                 self.backend = arg.replace("--", "").lower()  # type:ignore
@@ -192,8 +203,8 @@ class Environment():
         if self.updater:
             return
 
-        if not ((3, 10) <= sys.version_info < (3, 11) and self.py_version[1] == "64bit"):
-            logger.error("Please run this script with Python version 3.10 64bit and try "
+        if not ((3, 10) <= sys.version_info < (3, 13) and self.py_version[1] == "64bit"):
+            logger.error("Please run this script with Python version 3.10 to 3.12 64bit and try "
                          "again.")
             sys.exit(1)
 
@@ -230,6 +241,33 @@ class Environment():
         pip_version = pip.__version__
         logger.info("Installed pip: %s", pip_version)
 
+    def _configure_keras(self) -> None:
+        """ Set up the keras.json file to use Torch as the backend """
+        if "KERAS_HOME" in os.environ:
+            keras_dir = os.environ["KERAS_HOME"]
+        else:
+            keras_base_dir = os.path.expanduser("~")
+            if not os.access(keras_base_dir, os.W_OK):
+                keras_base_dir = "/tmp"
+            keras_dir = os.path.join(keras_base_dir, ".keras")
+
+        keras_dir = os.path.expanduser(keras_dir)
+        os.makedirs(keras_dir, exist_ok=True)
+
+        conf_file = os.path.join(keras_dir, "keras.json")
+        config = {}
+        if os.path.exists(conf_file):
+            try:
+                with open(conf_file, "r", encoding="utf-8") as c_file:
+                    config = json.load(c_file)
+            except ValueError:
+                pass
+
+        config["backend"] = "torch"
+        with open(conf_file, "w", encoding="utf-8") as c_file:
+            c_file.write(json.dumps(config, indent=4))
+        logger.info("Keras config written to: %s", conf_file)
+
     def set_config(self) -> None:
         """ Set the backend in the faceswap config file """
         config = {"backend": self.backend}
@@ -238,6 +276,7 @@ class Environment():
         with open(config_file, "w", encoding="utf8") as cnf:
             json.dump(config, cnf)
         logger.info("Faceswap config written to: %s", config_file)
+        self._configure_keras()
 
     def _set_env_vars(self) -> None:
         """ There are some foibles under Conda which need to be worked around in different
@@ -249,10 +288,10 @@ class Environment():
 
         Notes
         -----
-        From Tensorflow 2.7, installing Cuda Toolkit from conda-forge and tensorflow from pip
-        causes tensorflow to not be able to locate shared libs and hence not use the GPU.
-        We update the environment variable for all instances using Conda as it shouldn't hurt
-        anything and may help avoid conflicts with globally installed Cuda
+        Installing Cuda Toolkit from conda-forge and sometimes means Faceswap is not be able to
+        locate shared libs and hence not use the GPU. We update the environment variable for all
+        instances using Conda as it shouldn't hurt anything and may help avoid conflicts with
+        globally installed Cuda
         """
         if not self.is_conda:
             return
@@ -306,15 +345,19 @@ class Packages():
 
         # Default TK has bad fonts under Linux. There is a better build in Conda-Forge, so set
         # channel accordingly
-        tk_channel = "conda-forge" if self._env.os_version[0].lower() == "linux" else "default"
-        self._conda_required_packages: list[tuple[list[str] | str, str]] = [("tk", tk_channel),
-                                                                            ("git", "default")]
+        tk_channel = "conda-forge" if self._env.os_version[0].lower() == "linux" else "defaults"
+
+        self._required_packages: list[tuple[str, list[tuple[str, str]]]] = []
+        self._missing_packages: list[tuple[str, list[tuple[str, str]]]] = []
+        self._conda_missing_packages: list[tuple[str, tuple[str, ...]]] = []
+        self._pip_args: list[str] = []
+
+        self._conda_required_packages: list[tuple[str, tuple[str, ...]]] = [
+            ("tk", (tk_channel, )),
+            ("git", ("defaults", ))]
         self._update_backend_specific_conda()
         self._installed_packages = self._get_installed_packages()
         self._conda_installed_packages = self._get_installed_conda_packages()
-        self._required_packages: list[tuple[str, list[tuple[str, str]]]] = []
-        self._missing_packages: list[tuple[str, list[tuple[str, str]]]] = []
-        self._conda_missing_packages: list[tuple[list[str] | str, str]] = []
 
     @property
     def prerequisites(self) -> list[tuple[str, list[tuple[str, str]]]]:
@@ -343,8 +386,9 @@ class Packages():
         return self._missing_packages
 
     @property
-    def to_install_conda(self) -> list[tuple[list[str] | str, str]]:
-        """ list: The required conda packages that need to be installed """
+    def to_install_conda(self) -> list[tuple[str, tuple[str, ...]]]:
+        """ list[tuple[str, tuple[str, ...]]]: The required conda packages that need to be and the
+        channel they should be installed from """
         return self._conda_missing_packages
 
     @property
@@ -353,36 +397,42 @@ class Packages():
         pip and conda """
         return {**self._installed_packages, **self._conda_installed_packages}
 
+    @property
+    def pip_arguments(self) -> list[str]:
+        """ list[str] Any additional pip arguments that are required for installing from pip for
+        the given backend """
+        return self._pip_args
+
     def _update_backend_specific_conda(self) -> None:
         """ Add backend specific packages to Conda required packages """
         assert self._env.backend is not None
         to_add = _BACKEND_SPECIFIC_CONDA.get(self._env.backend)
+
         if not to_add:
             logger.debug("No backend packages to add for '%s'. All optional packages: %s",
                          self._env.backend, _BACKEND_SPECIFIC_CONDA)
             return
 
-        combined_cuda = []
+        if self._env.backend == "nvidia" and self._env.os_version[0] == "Darwin":
+            to_add = [p for p in to_add if "cuda" not in p]
+
+        clean_groups = [tuple(item.replace("*", "") for item in group) for group in _GROUPS]
+
         for pkg in to_add:
-            pkg, channel = _CONDA_MAPPING.get(pkg, (pkg, ""))
+            pkg, channel = _CONDA_MAPPING.get(pkg, (pkg, ("defaults", )))
             if pkg == "zlib-wapi" and self._env.os_version[0].lower() != "windows":
                 # TODO move this front and center
                 continue
-            if pkg in ("cudatoolkit", "cudnn"):  # TODO Handle multiple cuda/cudnn requirements
-                idx = 0 if pkg == "cudatoolkit" else 1
-                pkg = f"{pkg}{list(_TENSORFLOW_REQUIREMENTS.values())[0][idx]}"
 
-                combined_cuda.append(pkg)
+            if any(pkg.startswith(items) for items in clean_groups):
+                # Required torch packages need to be put into main package list so they can be
+                # installed with the wider pytorch group
+                self._required_packages.extend(self._format_requirements([pkg]))
                 continue
 
             self._conda_required_packages.append((pkg, channel))
             logger.info("Adding conda required package '%s' for backend '%s')",
                         pkg, self._env.backend)
-
-        if combined_cuda:
-            self._conda_required_packages.append((combined_cuda, channel))
-            logger.info("Adding conda required package '%s' for backend '%s')",
-                        combined_cuda, self._env.backend)
 
     @classmethod
     def _format_requirements(cls, packages: list[str]
@@ -470,102 +520,17 @@ class Packages():
             with open(requirements_file, encoding="utf8") as req:
                 for package in req.readlines():
                     package = package.strip()
+                    if package and package.startswith("-") and not package.startswith("-r"):
+                        self._pip_args.append(package)
+                        continue
                     if package and (not package.startswith(("#", "-r"))):
                         requirements.append(package)
 
-        self._required_packages = self._format_requirements(requirements)
+        if self._env.include_dev_tools:
+            requirements.extend(_DEV_TOOLS)
+
+        self._required_packages.extend(self._format_requirements(requirements))
         logger.debug(self._required_packages)
-
-    def _update_tf_dep_nvidia(self) -> None:
-        """ Update the Tensorflow dependency for global Cuda installs """
-        if self._env.is_conda:  # Conda handles Cuda and cuDNN so nothing to do here
-            return
-        tf_ver = None
-        cuda_inst = self._env.cuda_version
-        cudnn_inst = self._env.cudnn_version
-        if len(cudnn_inst) == 1:  # Sometimes only major version is reported
-            cudnn_inst = f"{cudnn_inst}.0"
-        for key, val in _TENSORFLOW_REQUIREMENTS.items():
-            cuda_req = next(parse_requirements(f"cuda{val[0]}")).specs
-            cudnn_req = next(parse_requirements(f"cudnn{val[1]}")).specs
-            if (self._validate_spec(cuda_req, cuda_inst)
-                    and self._validate_spec(cudnn_req, cudnn_inst)):
-                tf_ver = key
-                break
-
-        if tf_ver:
-            # Remove the version of tensorflow in requirements file and add the correct version
-            # that corresponds to the installed Cuda/cuDNN versions
-            self._required_packages = [pkg for pkg in self._required_packages
-                                       if pkg[0] != "tensorflow"]
-            tf_ver = f"tensorflow{tf_ver}"
-            self._required_packages.append(("tensorflow", next(parse_requirements(tf_ver)).specs))
-            return
-
-        logger.warning(
-            "The minimum Tensorflow requirement is 2.10 \n"
-            "Tensorflow currently has no official prebuild for your CUDA, cuDNN combination.\n"
-            "Either install a combination that Tensorflow supports or build and install your own "
-            "tensorflow.\r\n"
-            "CUDA Version: %s\r\n"
-            "cuDNN Version: %s\r\n"
-            "Help:\n"
-            "Building Tensorflow: https://www.tensorflow.org/install/install_sources\r\n"
-            "Tensorflow supported versions: "
-            "https://www.tensorflow.org/install/source#tested_build_configurations",
-            self._env.cuda_version, self._env.cudnn_version)
-
-        custom_tf = input("Location of custom tensorflow wheel (leave blank to manually "
-                          "install): ")
-        if not custom_tf:
-            return
-
-        custom_tf = os.path.realpath(os.path.expanduser(custom_tf))
-        global _INSTALL_FAILED  # pylint:disable=global-statement
-        if not os.path.isfile(custom_tf):
-            logger.error("%s not found", custom_tf)
-            _INSTALL_FAILED = True
-        elif os.path.splitext(custom_tf)[1] != ".whl":
-            logger.error("%s is not a valid pip wheel", custom_tf)
-            _INSTALL_FAILED = True
-        elif custom_tf:
-            self._required_packages.append((custom_tf, [(custom_tf, "")]))
-
-    def _update_tf_dep_rocm(self) -> None:
-        """ Update the Tensorflow dependency for global ROCm installs """
-        if not any(self._env.rocm_version):  # ROCm was not found and the install will be aborted
-            return
-
-        global _INSTALL_FAILED  # pylint:disable=global-statement
-        candidates = [key for key, val in _TENSORFLOW_ROCM_REQUIREMENTS.items()
-                      if val[0] <= self._env.rocm_version <= val[1]]
-
-        if not candidates:
-            _INSTALL_FAILED = True
-            logger.error("No matching Tensorflow candidates found for ROCm %s in %s",
-                         ".".join(str(v) for v in self._env.rocm_version),
-                         _TENSORFLOW_ROCM_REQUIREMENTS)
-            return
-
-        # set tf_ver to the minimum and maximum compatible range
-        tf_ver = f"{candidates[0].split(',')[0]},{candidates[-1].split(',')[-1]}"
-        # Remove the version of tensorflow-rocm in requirements file and add the correct version
-        # that corresponds to the installed ROCm version
-        self._required_packages = [pkg for pkg in self._required_packages
-                                   if not pkg[0].startswith("tensorflow-rocm")]
-        tf_ver = f"tensorflow-rocm{tf_ver}"
-        self._required_packages.append(("tensorflow-rocm",
-                                        next(parse_requirements(tf_ver)).specs))
-
-    def update_tf_dep(self) -> None:
-        """ Update Tensorflow Dependency.
-
-        Selects a compatible version of Tensorflow for a globally installed GPU library
-        """
-        if self._env.backend == "nvidia":
-            self._update_tf_dep_nvidia()
-        if self._env.backend == "rocm":
-            self._update_tf_dep_rocm()
 
     def _check_conda_missing_dependencies(self) -> None:
         """ Check for conda missing dependencies and add to :attr:`_conda_missing_packages` """
@@ -596,9 +561,12 @@ class Packages():
 
     def check_missing_dependencies(self) -> None:
         """ Check for missing dependencies and add to :attr:`_missing_packages` """
+        assert self._env.backend is not None
+        force_pip = _FORCE_PIP.get("all", []) + _FORCE_PIP.get(self._env.backend, [])
         for key, specs in self._required_packages:
 
-            if self._env.is_conda:  # Get Conda alias for Key
+            if self._env.is_conda and key not in force_pip:
+                # Get Conda alias for Key
                 key = _CONDA_MAPPING.get(key, (key, None))[0]
 
             if key not in self._all_installed_packages:
@@ -647,20 +615,8 @@ class Checks():  # pylint:disable=too-few-public-methods
             logger.info("ROCm Support Enabled")
             self._env.backend = "rocm"
 
-    def _directml_ask_enable(self) -> None:
-        """ Set backend to 'directml' if OS is Windows and DirectML support required """
-        if self._env.os_version[0] != "Windows":
-            return
-        logger.info("DirectML support:\r\nIf you are using an AMD or Intel GPU, then select 'yes'."
-                    "\r\nNvidia users should answer 'no'.")
-        i = input("Enable DirectML Support? [y/N] ")
-        if i in ("Y", "y"):
-            logger.info("DirectML Support Enabled")
-            self._env.backend = "directml"
-
     def _user_input(self) -> None:
-        """ Get user input for AMD/DirectML/ROCm/Cuda/Docker """
-        self._directml_ask_enable()
+        """ Get user input for AMD/ROCm/Cuda/Docker """
         self._rocm_ask_enable()
         if not self._env.backend:
             self._docker_ask_enable()
@@ -814,12 +770,13 @@ def _check_ld_config(lib: str) -> str:
     return retval
 
 
-class ROCmCheck():  # pylint:disable=too-few-public-methods
+class ROCmCheck():
     """ Find the location of system installed ROCm on Linux """
+    # TODO
     def __init__(self) -> None:
-        self.version_min = min(v[0] for v in _TENSORFLOW_ROCM_REQUIREMENTS.values())
-        self.version_max = max(v[1] for v in _TENSORFLOW_ROCM_REQUIREMENTS.values())
-        self.rocm_version: tuple[int, ...] = (0, 0, 0)
+        self.version_min = min(v[0] for v in _TORCH_ROCM_REQUIREMENTS.values())
+        self.version_max = max(v[1] for v in _TORCH_ROCM_REQUIREMENTS.values())
+        self.rocm_version: tuple[int, ...] = (0, 0)
         if platform.system() == "Linux":
             self._rocm_check()
 
@@ -843,7 +800,7 @@ class ROCmCheck():  # pylint:disable=too-few-public-methods
         if version is None:
             return
         try:
-            self.rocm_version = tuple(int(v) for v in version.groups()[0].split("."))
+            self.rocm_version = tuple(int(v) for v in version.groups()[0].split("."))[:2]
         except ValueError:
             return
 
@@ -913,7 +870,7 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
         if not self._cuda_keys:  # Cuda environment variable not found
             return
         self.cuda_version = self._cuda_keys[0].lower().replace("cuda_path_v", "").replace("_", ".")
-        self.cuda_path = os.environ[self._cuda_keys[0][0]]
+        self.cuda_path = os.environ.get(self._cuda_keys[0], "")
 
     def _cudnn_check_files(self) -> bool:
         """ Check header files for cuDNN version """
@@ -1025,7 +982,6 @@ class Install():  # pylint:disable=too-few-public-methods
             self._ask_continue()
 
         self._packages.get_required_packages()
-        self._packages.update_tf_dep()
         self._packages.check_missing_dependencies()
 
         if self._env.updater and not self._packages.packages_need_install:
@@ -1102,12 +1058,39 @@ class Install():  # pylint:disable=too-few-public-methods
                 logger.error("Unable to install package: %s. Process aborted", clean_pkg)
                 sys.exit(1)
 
+    def _install_grouped_packages(self) -> None:
+        """ Install packages that should be installed collectively as a group """
+        assert self._env.backend is not None
+        force_pip = _FORCE_PIP.get("all", []) + _FORCE_PIP.get(self._env.backend, [])
+        use_pip = False
+        packages = []
+        channels: set[str] = set()
+        for group in _GROUPS:
+            for item in group:
+                for idx, pkg in reversed(list(enumerate(self._packages.to_install))):
+                    if item != pkg[0] and not (item.endswith("*") and
+                                               pkg[0].startswith(item[:-1])):
+                        continue
+                    i_pkg = self._packages.to_install.pop(idx)
+                    if i_pkg[0] in force_pip:
+                        use_pip = True
+                    packages.append(self._format_package(*i_pkg))
+                    channels.update(next((v[1] for v in _CONDA_MAPPING.values()
+                                          if v[0] == i_pkg[0]),
+                                         ("defaults", )))
+        if not packages:
+            return
+
+        if use_pip:
+            self._from_pip(packages, " ".join(self._packages.pip_arguments))
+        else:
+            self._from_conda(packages, tuple(channels), conda_only=True)
+
     def _install_conda_packages(self) -> None:
         """ Install required conda packages """
         logger.info("Installing Required Conda Packages. This may take some time...")
-        for pkg in self._packages.to_install_conda:
-            channel = "" if len(pkg) != 2 else pkg[1]
-            self._from_conda(pkg[0], channel=channel, conda_only=True)
+        for pkg, channels in self._packages.to_install_conda:
+            self._from_conda(pkg, channels, conda_only=True)
 
     def _install_python_packages(self) -> None:
         """ Install required pip packages """
@@ -1115,24 +1098,23 @@ class Install():  # pylint:disable=too-few-public-methods
         assert self._env.backend is not None
         for pkg, version in self._packages.to_install:
             if self._env.is_conda:
-                mapping = _CONDA_MAPPING.get(pkg, (pkg, ""))
-                channel = "" if mapping[1] is None else mapping[1]
-                pkg = mapping[0]
+                pkg, channels = _CONDA_MAPPING.get(pkg, (pkg, ("defaults", )))
                 pip_only = pkg in _FORCE_PIP.get(self._env.backend, []) or pkg in _FORCE_PIP["all"]
             pkg = self._format_package(pkg, version) if version else pkg
             if self._env.is_conda and not pip_only:
-                if self._from_conda(pkg, channel=channel, conda_only=conda_only):
+                if self._from_conda(pkg, channels=channels, conda_only=conda_only):
                     continue
             self._from_pip(pkg)
 
     def _install_missing_dep(self) -> None:
         """ Install missing dependencies """
-        self._install_conda_packages()  # Install conda packages first
+        self._install_conda_packages()  # Install required conda packages first
+        self._install_grouped_packages()  # Then install grouped packages
         self._install_python_packages()
 
     def _from_conda(self,
                     package: list[str] | str,
-                    channel: str = "",
+                    channels: tuple[str, ...],
                     conda_only: bool = False) -> bool:
         """ Install a conda package
 
@@ -1140,9 +1122,8 @@ class Install():  # pylint:disable=too-few-public-methods
         ----------
         package: list[str] | str
             The full formatted package(s), with version(s), to be installed
-        channel: str, optional
-            The Conda channel to install from. Select empty string for default channel.
-            Default: ``""`` (empty string)
+        channels: tuple[str, ...] | None
+            The Conda channel(s) to install from.
         conda_only: bool, optional
             ``True`` if the package is only available in Conda. Default: ``False``
 
@@ -1154,8 +1135,9 @@ class Install():  # pylint:disable=too-few-public-methods
         #  Packages with special characters need to be enclosed in double quotes
         success = True
         condaexe = ["conda", "install", "-y"]
-        if channel:
-            condaexe.extend(["-c", channel])
+        if channels is not None:
+            for channel in channels:
+                condaexe.extend(["-c", channel])
 
         pkgs = package if isinstance(package, list) else [package]
 
@@ -1176,21 +1158,26 @@ class Install():  # pylint:disable=too-few-public-methods
         success = retcode == 0 and success
         return success
 
-    def _from_pip(self, package: str) -> None:
+    def _from_pip(self, package: list[str] | str, extra_args: str = "") -> None:
         """ Install a pip package
 
         Parameters
         ----------
-        package: str
-            The full formatted package, with version, to be installed
+        package: list[str] | str
+            The full formatted package(s), with version(s), to be installed
+        extra_args: str, optional
+            Any extra arguments to provide to pip. Default: "" (no extra arguments)
         """
+        packages = package if isinstance(package, list) else [package]
         pipexe = [sys.executable, "-u", "-m", "pip", "install", "--no-cache-dir"]
         # install as user to solve perm restriction
         if not self._env.is_admin and not self._env.is_virtualenv:
             pipexe.append("--user")
-        pipexe.append(package)
+        if extra_args:
+            pipexe.extend(extra_args.split(" "))
+        pipexe.extend(packages)
 
-        installer = self._installer(self._env, package, pipexe, self._is_gui)
+        installer = self._installer(self._env, " ".join(packages), pipexe, self._is_gui)
         if installer() != 0:
             logger.warning("Couldn't install %s with pip. Please install this package manually",
                            package)
@@ -1434,7 +1421,7 @@ class Installer():
         self._seen_lines.add(text)
 
 
-class PexpectInstaller(Installer):  # pylint:disable=too-few-public-methods
+class PexpectInstaller(Installer):
     """ Package installer for Linux/macOS using Pexpect
 
     Uses Pexpect for installing packages allowing access to realtime feedback
@@ -1472,7 +1459,7 @@ class PexpectInstaller(Installer):  # pylint:disable=too-few-public-methods
         return proc.exitstatus
 
 
-class WinPTYInstaller(Installer):  # pylint:disable=too-few-public-methods
+class WinPTYInstaller(Installer):
     """ Package installer for Windows using WinPTY
 
     Spawns a pseudo PTY for installing packages allowing access to realtime feedback

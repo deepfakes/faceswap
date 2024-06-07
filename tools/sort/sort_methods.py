@@ -611,7 +611,7 @@ class SortBlur(SortMethod):
             image = self._mask_face(image, alignments)
         if image.ndim == 3:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blur_map = cv2.Laplacian(image, cv2.CV_32F)
+        blur_map = T.cast(np.ndarray, cv2.Laplacian(image, cv2.CV_32F))
         score = np.var(blur_map) / np.sqrt(image.shape[0] * image.shape[1])
         return score
 
@@ -851,7 +851,7 @@ class SortFace(SortMethod):
 
     def __init__(self, arguments: Namespace, is_group: bool = False) -> None:
         super().__init__(arguments, loader_type="all", is_group=is_group)
-        self._vgg_face = VGGFace(exclude_gpus=arguments.exclude_gpus)
+        self._vgg_face = VGGFace()
         self._vgg_face.init_model()
         threshold = arguments.threshold
         self._output_update_info = True
@@ -983,25 +983,27 @@ class SortHistogram(SortMethod):
 
     def _sort_dissim(self) -> None:
         """ Sort histograms by dissimilarity """
-        img_list_len = len(self._result)
+        result = T.cast(list[tuple[str, np.ndarray]], self._result)
+        img_list_len = len(result)
         for i in tqdm(range(0, img_list_len),
                       desc="Comparing histograms",
                       file=sys.stdout,
                       leave=False):
-            score_total = 0
+            score_total = 0.0
             for j in range(0, img_list_len):
                 if i == j:
                     continue
-                score_total += cv2.compareHist(self._result[i][1],
-                                               self._result[j][1],
+                score_total += cv2.compareHist(result[i][1],
+                                               result[j][1],
                                                cv2.HISTCMP_BHATTACHARYYA)
-            self._result[i][2] = score_total
+            result[i][2] = score_total
 
-        self._result = sorted(self._result, key=operator.itemgetter(2), reverse=True)
+        self._result = sorted(result, key=operator.itemgetter(2), reverse=True)
 
     def _sort_sim(self) -> None:
         """ Sort histograms by similarity """
-        img_list_len = len(self._result)
+        result = T.cast(list[tuple[str, np.ndarray]], self._result)
+        img_list_len = len(result)
         for i in tqdm(range(0, img_list_len - 1),
                       desc="Comparing histograms",
                       file=sys.stdout,
@@ -1009,14 +1011,13 @@ class SortHistogram(SortMethod):
             min_score = float("inf")
             j_min_score = i + 1
             for j in range(i + 1, img_list_len):
-                score = cv2.compareHist(self._result[i][1],
-                                        self._result[j][1],
+                score = cv2.compareHist(result[i][1],
+                                        result[j][1],
                                         cv2.HISTCMP_BHATTACHARYYA)
                 if score < min_score:
                     min_score = score
                     j_min_score = j
-            (self._result[i + 1], self._result[j_min_score]) = (self._result[j_min_score],
-                                                                self._result[i + 1])
+            (self._result[i + 1], self._result[j_min_score]) = (result[j_min_score], result[i + 1])
 
     @classmethod
     def _get_avg_score(cls, image: np.ndarray, references: list[np.ndarray]) -> float:

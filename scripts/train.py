@@ -256,12 +256,11 @@ class Train():
             if trainer.exit_early:
                 self._stop = True
                 return
-            self._run_training_cycle(model, trainer)
+            self._run_training_cycle(trainer)
         except KeyboardInterrupt:
             try:
                 logger.debug("Keyboard Interrupt Caught. Saving Weights and exiting")
-                model.io.save(is_exit=True)
-                trainer.clear_tensorboard()
+                trainer.save(is_exit=True)
             except KeyboardInterrupt:
                 logger.info("Saving model weights has been cancelled!")
             sys.exit(0)
@@ -308,7 +307,7 @@ class Train():
         logger.debug("Loaded Trainer")
         return trainer
 
-    def _run_training_cycle(self, model: ModelBase, trainer: TrainerBase) -> None:
+    def _run_training_cycle(self, trainer: TrainerBase) -> None:
         """ Perform the training cycle.
 
         Handles the background training, updating previews/time-lapse on each save interval,
@@ -316,8 +315,6 @@ class Train():
 
         Parameters
         ----------
-        model: :file:`plugins.train.model` plugin
-            The requested model plugin
         trainer: :file:`plugins.train.trainer` plugin
             The requested model trainer plugin
         """
@@ -348,7 +345,7 @@ class Train():
 
             if viewer is not None and not save_iteration:
                 # Spammy but required by GUI to know to update window
-                print("")
+                print("\x1b[2K", end="\r")  # Clear last line
                 logger.info("[Preview Updated]")
 
             if self._stop:
@@ -358,13 +355,12 @@ class Train():
             if save_iteration or self._save_now:
                 logger.debug("Saving (save_iterations: %s, save_now: %s) Iteration: "
                              "(iteration: %s)", save_iteration, self._save_now, iteration)
-                model.io.save(is_exit=False)
+                trainer.save(is_exit=False)
                 self._save_now = False
                 update_preview_images = True
 
         logger.debug("Training cycle complete")
-        model.io.save(is_exit=True)
-        trainer.clear_tensorboard()
+        trainer.save(is_exit=True)
         self._stop = True
 
     def _output_startup_info(self) -> None:
@@ -425,7 +421,7 @@ class Train():
                 logger.debug("Removing gui trigger file: %s", filename)
                 os.remove(filename)
                 if trigger == "refresh":
-                    print("")  # Let log print on different line from loss output
+                    print("\x1b[2K", end="\r")  # Clear last line
                     logger.info("Refresh preview requested...")
         return retval
 

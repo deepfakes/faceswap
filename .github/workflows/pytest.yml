@@ -9,7 +9,7 @@ on:
 
 jobs:
   build_conda:
-    name: conda (${{ matrix.os }}, ${{ matrix.backend }})
+    name: conda (${{ matrix.os }}, ${{ matrix.backend }} ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -18,12 +18,14 @@ jobs:
       fail-fast: false
       matrix:
         os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+        python-version: ["3.10", "3.11", "3.12"]
         backend: ["nvidia", "cpu"]
         include:
           - os: "ubuntu-latest"
             backend: "rocm"
-          - os: "windows-latest"
-            backend: "directml"
+        exclude:
+          - os: "macos-latest"
+            python-version: "3.12"
     steps:
       - uses: actions/checkout@v3
       - name: Set cache date
@@ -40,7 +42,8 @@ jobs:
       - name: Set up Conda
         uses: conda-incubator/setup-miniconda@v2
         with:
-          python-version: "3.10"
+          python-version: ${{ matrix.python-version }}
+          miniconda-version: "latest"
           auto-update-conda: true
           activate-environment: faceswap
       - name: Conda info
@@ -63,23 +66,23 @@ jobs:
         run: python -c "from lib.sysinfo import sysinfo ;  print(sysinfo)"
       - name: Simple Tests
         # These backends will fail as GPU drivers not available
-        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia' && matrix.backend != 'directml'
+        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia'
         run: |
-          FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
+         KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
       - name: End to End Tests
         # These backends will fail as GPU drivers not available
         # macOS fails on first extract test with 'died with <Signals.SIGSEGV: 11>'
-        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia' && matrix.backend != 'directml' && matrix.os != 'macos-latest'
+        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia' && matrix.os != 'macos-latest'
         run: |
-          FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
+          KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
 
   build_linux:
-    name: "pip (ubuntu-latest, ${{ matrix.backend }})"
+    name: "pip (ubuntu-latest, ${{ matrix.backend }} ${{ matrix.python-version }})"
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10"]
+        python-version: ["3.10", "3.11", "3.12"]
         backend: ["cpu"]
         include:
           - backend: "cpu"
@@ -111,22 +114,21 @@ jobs:
           mypy .
       - name: Simple Tests
         run: |
-          FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
+          KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
       - name: End to End Tests
         run: |
-          FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
+          KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
 
   build_windows:
-    name: "pip (windows-latest, ${{ matrix.backend }})"
+    name: "pip (windows-latest, ${{ matrix.backend }} ${{ matrix.python-version }})"
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10"]
-        backend: ["cpu", "directml"]
+        python-version: ["3.10", "3.11", "3.12"]
+        backend: ["cpu"]
         include:
           - backend: "cpu"
-          - backend: "directml"
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
@@ -143,8 +145,10 @@ jobs:
           pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
       - name: List installed packages
         run: pip freeze
-      - name: Set Backend EnvVar
+      - name: Set Faceswap Backend EnvVar
         run: echo "FACESWAP_BACKEND=${{ matrix.backend }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Set Keras Backend EnvVar
+        run: echo "KERAS_BACKEND=torch" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names

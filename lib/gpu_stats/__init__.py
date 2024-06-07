@@ -6,7 +6,7 @@ import platform
 
 from lib.utils import get_backend
 
-from ._base import set_exclude_devices, GPUInfo
+from ._base import GPUInfo
 
 backend = get_backend()
 
@@ -16,8 +16,6 @@ elif backend == "nvidia":
     from .nvidia import NvidiaStats as GPUStats  # type:ignore
 elif backend == "apple_silicon":
     from .apple_silicon import AppleSiliconStats as GPUStats  # type:ignore
-elif backend == "directml":
-    from .directml import DirectML as GPUStats  # type:ignore
 elif backend == "rocm":
     from .rocm import ROCm as GPUStats  # type:ignore
 else:

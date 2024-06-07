@@ -12,6 +12,7 @@ from multiprocessing import Process
 
 import numpy as np
 from tqdm import tqdm
+import torch
 from lib.align.alignments import PNGHeaderDict
 
 from lib.image import encode_image, generate_thumbnail, ImagesLoader, ImagesSaver, read_image_meta
@@ -64,7 +65,6 @@ class Extract():
                                     recognition=recognition,
                                     configfile=configfile,
                                     multiprocess=not self._args.singleprocess,
-                                    exclude_gpus=self._args.exclude_gpus,
                                     rotate_images=self._args.rotate_images,
                                     min_size=self._args.min_size,
                                     normalize_method=normalization,
@@ -429,7 +429,7 @@ class Filter():
             self._extractor.launch()
             desc = "Obtaining reference face Identity"
             if self._extractor.passes > 1:
-                desc = (f"{desc } pass {phase + 1} of {self._extractor.passes}: "
+                desc = (f"{desc} pass {phase + 1} of {self._extractor.passes}: "
                         f"{self._extractor.phase_text}")
             for extract_media in tqdm(self._extractor.detected_faces(),
                                       total=len(file_list),
@@ -741,7 +741,8 @@ class _Extract():
                     detected_faces[extract_media.filename] = extract_media
 
             if not is_final:
-                logger.debug("Reloading images")
+                logger.debug("Reloading images and resetting PyTorch memory cache")
+                torch.cuda.empty_cache()
                 self._loader.reload(detected_faces)
         if saver is not None:
             saver.close()

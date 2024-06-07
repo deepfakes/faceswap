@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-""" Handles the loading and collation of events from Tensorflow event log files. """
+""" Handles the loading and collation of events from Tensorboard event log files. """
 from __future__ import annotations
 import logging
 import os
+import struct
 import re
 import typing as T
 import zlib
@@ -10,10 +11,7 @@ import zlib
 from dataclasses import dataclass, field
 
 import numpy as np
-import tensorflow as tf
-from tensorflow.core.util import event_pb2  # pylint:disable=no-name-in-module
-from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
-    errors_impl as tf_errors)
+from tensorboard.compat.proto import event_pb2  # type:ignore[import-untyped]
 
 from lib.logger import parse_class_init
 from lib.serializer import get_serializer
@@ -26,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class EventData:
-    """ Holds data collected from Tensorflow Event Files
+    """ Holds data collected from Tensorboard Event Files
 
     Parameters
     ----------
@@ -40,7 +38,7 @@ class EventData:
 
 
 class _LogFiles():
-    """ Holds the filenames of the Tensorflow Event logs that require parsing.
+    """ Holds the filenames of the Tensorboard Event logs that require parsing.
 
     Parameters
     ----------
@@ -51,7 +49,7 @@ class _LogFiles():
         logger.debug(parse_class_init(locals()))
         self._logs_folder = logs_folder
         self._filenames = self._get_log_filenames()
-        logger.debug("Initialized: %s", self.__class__.__name__)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def session_ids(self) -> list[int]:
@@ -59,7 +57,7 @@ class _LogFiles():
         return list(sorted(self._filenames))
 
     def _get_log_filenames(self) -> dict[int, str]:
-        """ Get the Tensorflow event filenames for all existing sessions.
+        """ Get the Tensorboard event filenames for all existing sessions.
 
         Returns
         -------
@@ -86,7 +84,7 @@ class _LogFiles():
         Parameters
         ----------
         folder: str
-            The full path to the folder that contains the session's Tensorflow Event Log
+            The full path to the folder that contains the session's Tensorboard Event Log
 
         Returns
         -------
@@ -109,7 +107,7 @@ class _LogFiles():
         Parameters
         ----------
         folder: str
-            The full path to the folder that contains the session's Tensorflow Event Log
+            The full path to the folder that contains the session's Tensorboard Event Log
         filenames: list[str]
             List of filenames that exist within the given folder
 
@@ -123,10 +121,23 @@ class _LogFiles():
         logger.debug("logfiles: %s, selected: '%s'", logfiles, retval)
         return retval
 
-    def refresh(self) -> None:
-        """ Refresh the list of log filenames. """
+    def refresh(self) -> bool:
+        """ Refresh the list of log filenames.
+
+        Returns
+        -------
+        bool
+            ``True`` if the pre-existing log files are a subset of the new log files, otherwise
+            ``False``
+        """
         logger.debug("Refreshing log filenames")
-        self._filenames = self._get_log_filenames()
+        old_filenames = self._filenames
+        new_filenames = self._get_log_filenames()
+        retval = set(old_filenames.values()).issubset(set(new_filenames.values()))
+        self._filenames = new_filenames
+        logger.debug("old filenames are %sa subset of new filenames %s",
+                     "" if retval else "not ", self._filenames)
+        return retval
 
     def get(self, session_id: int) -> str:
         """ Obtain the log filename for the given session id.
@@ -147,7 +158,7 @@ class _LogFiles():
 
 
 class _CacheData():
-    """ Holds cached data that has been retrieved from Tensorflow Event Files and is compressed
+    """ Holds cached data that has been retrieved from Tensorboard Event Files and is compressed
     in memory for a single or live training session
 
     Parameters
@@ -215,13 +226,13 @@ class _CacheData():
 
 
 class _Cache():
-    """ Holds parsed Tensorflow log event data in a compressed cache in memory. """
+    """ Holds parsed Tensorboard log event data in a compressed cache in memory. """
     def __init__(self) -> None:
         logger.debug(parse_class_init(locals()))
         self._data: dict[int, _CacheData] = {}
         self._carry_over: dict[int, EventData] = {}
         self._loss_labels: list[str] = []
-        logger.debug("Initialized: %s", self.__class__.__name__)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def is_cached(self, session_id: int) -> bool:
         """ Check if the given session_id's data is already cached
@@ -287,7 +298,7 @@ class _Cache():
         Parameters
         ----------
         data: dict
-            The incoming tensorflow event data in dictionary form per step
+            The incoming Tensorboard event data in dictionary form per step
         is_live: bool, optional
             ``True`` if the data to be cached is from a live training session otherwise ``False``.
             Default: ``False``
@@ -367,7 +378,7 @@ class _Cache():
         Parameters
         ----------
         data: dict
-            The incoming tensorflow event data in dictionary form per step
+            The incoming Tensorboard event data in dictionary form per step
         is_live: bool
             ``True`` if the data to be cached is from a live training session otherwise ``False``.
 
@@ -457,6 +468,91 @@ class _Cache():
                       for session_id, data in retval.items()})
         return retval
 
+    def reset(self) -> None:
+        """ Remove all information stored within the cache and reset to default """
+        logger.debug("Resetting cache")
+        del self._data
+        del self._carry_over
+        del self._loss_labels
+        self._data = {}
+        self._carry_over = {}
+        self._loss_labels = []
+
+
+class RecordIterator:
+    """ A replacement for tensorflow's :func:`compat.v1.io.tf_record_iterator`
+
+    Parameters
+    ----------
+    log_file: str
+        The event log file to obtain records from
+    is_live: bool, optional
+        ``True`` if the log file is for a live training session that will constantly provide data.
+        Default: ``False``
+    """
+    def __init__(self, log_file, is_live: bool = False) -> None:
+        logger.debug(parse_class_init(locals()))
+        self._file_path = log_file
+        self._log_file = open(self._file_path, "rb")  # pylint:disable=consider-using-with
+        self._is_live = is_live
+        self._position = 0
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def __iter__(self) -> RecordIterator:
+        """ Iterate over a Tensorboard event file"""
+        return self
+
+    def _on_file_read(self) -> None:
+        """ If the file is closed and we are reading live data, re-open the file and seek to the
+        correct position """
+        if not self._is_live or not self._log_file.closed:
+            return
+
+        logger.trace("Re-opening '%s' and Seeking to %s",  # type:ignore[attr-defined]
+                     self._file_path, self._position)
+        self._log_file = open(self._file_path, "rb")  # pylint:disable=consider-using-with
+        self._log_file.seek(self._position, 0)
+
+    def _on_file_end(self) -> None:
+        """ Close the event file. If live data, record the current position"""
+        if self._is_live:
+            self._position = self._log_file.tell()
+            logger.trace("Setting live position to %s",  # type:ignore[attr-defined]
+                         self._position)
+
+        logger.trace("EOF. Closing '%s'", self._file_path)  # type:ignore[attr-defined]
+        self._log_file.close()
+
+    def __next__(self) -> bytes:
+        """ Get the next event log from a Tensorboard event file
+
+        Returns
+        -------
+        bytes
+            A Tensorboard event log
+
+        Raises
+        ------
+        StopIteration
+            When the event log is fully consumed
+        """
+        self._on_file_read()
+
+        b_header = self._log_file.read(8)
+
+        if not b_header:
+            self._on_file_end()
+            raise StopIteration
+
+        read_len = int(struct.unpack('Q', b_header)[0])
+        self._log_file.seek(4, 1)
+        data = self._log_file.read(read_len)
+
+        self._log_file.seek(4, 1)
+        logger.trace("Returning event data of len %s", read_len)  # type:ignore[attr-defined]
+
+        return data
+
 
 class TensorBoardLogs():
     """ Parse data from TensorBoard logs.
@@ -475,21 +571,21 @@ class TensorBoardLogs():
     def __init__(self, logs_folder: str, is_training: bool) -> None:
         logger.debug(parse_class_init(locals()))
         self._is_training = False
-        self._training_iterator = None
+        self._training_iterator: RecordIterator | None = None
 
         self._log_files = _LogFiles(logs_folder)
         self.set_training(is_training)
 
         self._cache = _Cache()
 
-        logger.debug("Initialized: %s", self.__class__.__name__)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def session_ids(self) -> list[int]:
         """ list[int]: Sorted list of integers of available session ids. """
         return self._log_files.session_ids
 
-    def set_training(self, is_training: bool) -> None:
+    def set_training(self, is_training: bool) -> bool:
         """ Set the internal training flag to the given `is_training` value.
 
         If a new training session is being instigated, refresh the log filenames
@@ -499,22 +595,32 @@ class TensorBoardLogs():
         is_training: bool
             ``True`` to indicate that the logs to be read are from the currently training
             session otherwise ``False``
+
+        Returns
+        -------
+        bool
+            ``True`` if the session that is starting training belongs to the session already loaded
+            otherwise ``False``
         """
+        retval = True
         if self._is_training == is_training:
             logger.debug("Training flag already set to %s. Returning", is_training)
-            return
+            return retval
 
         logger.debug("Setting is_training to %s", is_training)
         self._is_training = is_training
         if is_training:
-            self._log_files.refresh()
+            retval = self._log_files.refresh()
+            if not retval:
+                self._cache.reset()
             log_file = self._log_files.get(self.session_ids[-1])
             logger.debug("Setting training iterator for log file: '%s'", log_file)
-            self._training_iterator = tf.compat.v1.io.tf_record_iterator(log_file)
+            self._training_iterator = RecordIterator(log_file, is_live=True)
         else:
             logger.debug("Removing training iterator")
             del self._training_iterator
             self._training_iterator = None
+        return retval
 
     def _cache_data(self, session_id: int) -> None:
         """ Cache TensorBoard logs for the given session ID on first access.
@@ -530,7 +636,7 @@ class TensorBoardLogs():
             The session ID to cache the data for
         """
         live_data = self._is_training and session_id == max(self.session_ids)
-        iterator = self._training_iterator if live_data else tf.compat.v1.io.tf_record_iterator(
+        iterator = self._training_iterator if live_data else RecordIterator(
             self._log_files.get(session_id))
         assert iterator is not None
         parser = _EventParser(iterator, self._cache, live_data)
@@ -619,12 +725,12 @@ class TensorBoardLogs():
 
 
 class _EventParser():
-    """ Parses Tensorflow event and populates data to :class:`_Cache`.
+    """ Parses Tensorboard event and populates data to :class:`_Cache`.
 
     Parameters
     ----------
-    iterator: :func:`tf.compat.v1.io.tf_record_iterator`
-        The iterator to use for reading Tensorflow event logs
+    iterator: :class:`RecordIterator`
+        The iterator to use for reading Tensorboard event logs
     cache: :class:`_Cache`
         The cache object to store the collected parsed events to
     live_data: bool
@@ -638,7 +744,7 @@ class _EventParser():
         self._iterator = self._get_latest_live(iterator) if live_data else iterator
         self._loss_labels: list[str] = []
         self._num_strip = re.compile(r"_\d+$")
-        logger.debug("Initialized: %s", self.__class__.__name__)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @classmethod
     def _get_latest_live(cls, iterator: Iterator[bytes]) -> Generator[bytes, None, None]:
@@ -648,13 +754,13 @@ class _EventParser():
 
         Parameters
         ----------
-        iterator: :func:`tf.compat.v1.io.tf_record_iterator`
-            The live training iterator to use for reading Tensorflow event logs
+        iterator: :class:`RecordIterator`
+            The live training iterator to use for reading Tensorboard event logs
 
         Yields
         ------
         dict
-            A Tensorflow event in dictionary form for a single step
+            A Tensorboard event in dictionary form for a single step
         """
         i = 0
         while True:
@@ -664,15 +770,10 @@ class _EventParser():
             except StopIteration:
                 logger.debug("End of data reached")
                 break
-            except tf.errors.DataLossError as err:
-                # Truncated records are ignored. The iterator holds the offset, so the record will
-                # be completed at the next call.
-                logger.debug("Truncated record. Original Error: %s", err)
-                break
         logger.debug("Collected %s records from live log file", i)
 
     def cache_events(self, session_id: int) -> None:
-        """ Parse the Tensorflow events logs and add to :attr:`_cache`.
+        """ Parse the Tensorboard events logs and add to :attr:`_cache`.
 
         Parameters
         ----------
@@ -681,21 +782,15 @@ class _EventParser():
         """
         assert self._iterator is not None
         data: dict[int, EventData] = {}
-        try:
-            for record in self._iterator:
-                event = event_pb2.Event.FromString(record)  # pylint:disable=no-member
-                if not event.summary.value:
-                    continue
-                if event.summary.value[0].tag == "keras":
-                    self._parse_outputs(event)
-                if event.summary.value[0].tag.startswith("batch_"):
-                    data[event.step] = self._process_event(event,
-                                                           data.get(event.step, EventData()))
-
-        except tf_errors.DataLossError as err:
-            logger.warning("The logs for Session %s are corrupted and cannot be displayed. "
-                           "The totals do not include this session. Original error message: "
-                           "'%s'", session_id, str(err))
+        for record in self._iterator:
+            event = event_pb2.Event.FromString(record)  # pylint:disable=no-member
+            if not event.summary.value:
+                continue
+            if event.summary.value[0].tag.split("/", maxsplit=1)[0] == "keras":
+                self._parse_outputs(event)
+            if event.summary.value[0].tag.startswith("batch_"):
+                data[event.step] = self._process_event(event,
+                                                       data.get(event.step, EventData()))
 
         self._cache.cache_data(session_id, data, self._loss_labels, is_live=self._live_data)
 
@@ -712,24 +807,26 @@ class _EventParser():
 
         Parameters
         ----------
-        event: :class:`tensorflow.core.util.event_pb2`
+        event: :class:`tensorboard.compat.proto.event_pb2`
             The event data containing the keras model structure to be parsed
         """
         serializer = get_serializer("json")
-        struct = event.summary.value[0].tensor.string_val[0]
+        structure = event.summary.value[0].tensor.string_val[0]
 
-        config = serializer.unmarshal(struct)["config"]
-        model_outputs = self._get_outputs(config)
+        config = serializer.unmarshal(structure)["config"]
+        model_outputs = self._get_outputs(config, False)
 
         for side_outputs, side in zip(model_outputs, ("a", "b")):
-            logger.debug("side: '%s', outputs: '%s'", side, side_outputs)
+            logger.debug("side: '%s', outputs: %s", side, side_outputs)
             layer_name = side_outputs[0][0]
 
             output_config = next(layer for layer in config["layers"]
                                  if layer["name"] == layer_name)["config"]
-            layer_outputs = self._get_outputs(output_config)
-            for output in layer_outputs:  # Drill into sub-model to get the actual output names
-                loss_name = self._num_strip.sub("", output[0][0])  # strip trailing numbers
+            layer_outputs = self._get_outputs(output_config, True)
+            logger.debug("Layer name: %s, layer_outputs: %s", layer_name, layer_outputs)
+            for output in layer_outputs[0]:  # Drill into sub-model to get the actual output names
+                logger.debug("Parsing output: %s", output)
+                loss_name = self._num_strip.sub("", output[0])  # strip trailing numbers
                 if loss_name[-2:] not in ("_a", "_b"):  # Rename losses to reflect the side output
                     new_name = f"{loss_name.replace('_both', '')}_{side}"
                     logger.debug("Renaming loss output from '%s' to '%s'", loss_name, new_name)
@@ -740,7 +837,7 @@ class _EventParser():
         logger.debug("Collated loss labels: %s", self._loss_labels)
 
     @classmethod
-    def _get_outputs(cls, model_config: dict[str, T.Any]) -> np.ndarray:
+    def _get_outputs(cls, model_config: dict[str, T.Any], is_sub_model: bool) -> np.ndarray:
         """ Obtain the output names, instance index and output index for the given model.
 
         If there is only a single output, the shape of the array is expanded to remain consistent
@@ -750,6 +847,9 @@ class _EventParser():
         ----------
         model_config: dict
             The saved Keras model configuration dictionary
+        is_sub_model: bool
+            ``True`` if the model_config is for a sub-model. ``False`` if it is for the main
+            faceswap model.
 
         Returns
         -------
@@ -757,27 +857,27 @@ class _EventParser():
             The layer output names, their instance index and their output index
         """
         outputs = np.array(model_config["output_layers"])
-        logger.debug("Obtained model outputs: %s, shape: %s", outputs, outputs.shape)
-        if outputs.ndim == 2:  # Insert extra dimension for non learn mask models
-            outputs = np.expand_dims(outputs, axis=1)
-            logger.debug("Expanded dimensions for single output model. outputs: %s, shape: %s",
-                         outputs, outputs.shape)
+        logger.debug("Obtained model outputs. is_sub_model: %s, outputs: %s, shape: %s",
+                     is_sub_model, outputs, outputs.shape)
+        # Reshape the outputs to (side, outputs per side, output info)
+        outputs = outputs.reshape((1 if is_sub_model else 2, -1, outputs.shape[-1]))
+        logger.debug("Reshaped model outputs: %s, shape: %s", outputs, outputs.shape)
         return outputs
 
     @classmethod
     def _process_event(cls, event: event_pb2.Event, step: EventData) -> EventData:
-        """ Process a single Tensorflow event.
+        """ Process a single Tensorboard event.
 
         Adds timestamp to the step `dict` if a total loss value is received, process the labels for
         any new loss entries and adds the side loss value to the step `dict`.
 
         Parameters
         ----------
-        event: :class:`tensorflow.core.util.event_pb2`
+        event: :class:`tensorboard.compat.proto.event_pb2`
             The event data to be processed
         step: :class:`EventData`
             The currently processing dictionary to be populated with the extracted data from the
-            tensorflow event for this step
+            Tensorboard event for this step
 
         Returns
         -------
@@ -796,7 +896,7 @@ class _EventParser():
             # in logging or may be due to work around put in place in FS training function for the
             # following bug in TF 2.8/2.9 when writing records:
             #  https://github.com/keras-team/keras/issues/16173
-            loss = float(tf.make_ndarray(summary.tensor))
+            loss = float(np.frombuffer(summary.tensor.tensor_content, dtype="float32"))
 
         step.loss.append(loss)
 

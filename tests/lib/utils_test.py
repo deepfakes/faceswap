@@ -4,7 +4,6 @@ import os
 import platform
 import time
 import typing as T
-import warnings
 import zipfile
 
 from io import StringIO
@@ -19,8 +18,8 @@ import pytest_mock
 from lib import utils
 from lib.utils import (
     _Backend, camel_case_split, convert_to_secs, DebugTimes, deprecation_warning, FaceswapError,
-    full_path_split, get_backend, get_dpi, get_folder, get_image_paths, get_tf_version, GetModel,
-    safe_shutdown, set_backend, set_system_verbosity)
+    full_path_split, get_backend, get_dpi, get_folder, get_image_paths, get_torch_version,
+    GetModel, safe_shutdown, set_backend)
 
 from lib.logger import log_setup
 # Need to setup logging to avoid trace/verbose errors
@@ -40,8 +39,8 @@ def test_set_backend(monkeypatch: pytest.MonkeyPatch) -> None:
         Monkey patching _FS_BACKEND
     """
     monkeypatch.setattr(utils, "_FS_BACKEND", "cpu")  # _FS_BACKEND already defined
-    set_backend("directml")
-    assert utils._FS_BACKEND == "directml"
+    set_backend("nvidia")
+    assert utils._FS_BACKEND == "nvidia"
     monkeypatch.delattr(utils, "_FS_BACKEND")  # _FS_BACKEND is not already defined
     set_backend("rocm")
     assert utils._FS_BACKEND == "rocm"
@@ -79,7 +78,7 @@ def test__backend(monkeypatch: pytest.MonkeyPatch) -> None:
     assert backend.backend == "cpu"
 
     monkeypatch.setattr("os.path.isfile", lambda x: False)  # no config file, dummy in user input
-    monkeypatch.setattr("builtins.input", lambda x: "3")
+    monkeypatch.setattr("builtins.input", lambda x: "2")
     backend = _Backend()
     assert backend._configure_backend() == "nvidia"
 
@@ -205,10 +204,11 @@ def test_camel_case_split(text: str, result: list[str]) -> None:
 
 
 # General utils
-def test_get_tf_version() -> None:
-    """ Test the :func:`~lib.utils.get_tf_version` function version returns correctly in range """
-    tf_version = get_tf_version()
-    assert (2, 10) <= tf_version < (2, 11)
+def test_get_torch_version() -> None:
+    """ Test the :func:`~lib.utils.get_torch_version` function version returns correctly in
+    range """
+    torch_version = get_torch_version()
+    assert (2, 2) <= torch_version < (2, 4)
 
 
 def test_get_dpi() -> None:
@@ -249,31 +249,6 @@ def test_convert_to_secs(args: tuple[int, ...], result: int) -> None:
     secs = convert_to_secs(*args)
     assert isinstance(secs, int)
     assert secs == result
-
-
-@pytest.mark.parametrize("log_level", ["DEBUG", "INFO", "WARNING", "ERROR"])
-def test_set_system_verbosity(log_level: str) -> None:
-    """ Test the :func:`~lib.utils.set_system_verbosity` function works correctly
-
-    Parameters
-    ----------
-    log_level: str
-        The logging loglevel in upper text format
-    """
-    # Set TF Env Variable
-    tf_set_level = "0" if log_level == "DEBUG" else "3"
-    set_system_verbosity(log_level)
-    tf_get_level = os.environ["TF_CPP_MIN_LOG_LEVEL"]
-    assert tf_get_level == tf_set_level
-    warn_filters = [filt for filt in warnings.filters
-                    if filt[0] == "ignore"
-                    and filt[2] in (FutureWarning, DeprecationWarning, UserWarning)]
-    # Python Warnings
-    # DeprecationWarning is already ignored by default, so there should be 1 warning for debug
-    # warning. 3 for the rest
-    num_warnings = 1 if log_level == "DEBUG" else 3
-    warn_count = len(warn_filters)
-    assert warn_count == num_warnings
 
 
 @pytest.mark.parametrize("additional_info", [None, "additional information"])

@@ -96,3 +96,13 @@ class CPUStats(_GPUStats):
         vram: list[int] = []
         self._log("debug", f"GPU VRAM free: {vram}")
         return vram
+
+    def exclude_devices(self, devices: list[int]) -> None:
+        """ CPU does not support excluding devices
+
+        Parameters
+        ----------
+        devices: list[int]
+            The GPU device IDS to be excluded
+        """
+        self._log("warning", "CPU does not support excluding GPUs. This option has been ignored")

@@ -203,7 +203,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
             lookup = "landmarks" if display == "mesh" else display
             button = ttk.Button(frame,
-                                image=get_images().icons[lookup],
+                                image=get_images().icons[lookup],  # type:ignore[arg-type]
                                 command=T.cast(T.Callable, lambda t=display: self.on_click(t)),
                                 style="display_deselected.TButton")
             button.state(["!pressed", "!focus"])

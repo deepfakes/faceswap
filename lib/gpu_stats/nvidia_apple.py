@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """ Collects and returns Information on available Nvidia GPUs connected to Apple Macs. """
+import os
+
 import pynvx
 
 from lib.utils import FaceswapError
 
-from ._base import _GPUStats
+from ._base import _GPUStats, _EXCLUDE_DEVICES
 
 
 class NvidiaAppleStats(_GPUStats):
@@ -47,6 +49,8 @@ class NvidiaAppleStats(_GPUStats):
             msg = ("An unhandled exception occured reading from the Nvidia Machine Learning "
                    f"Library. Original error: {str(err)}")
             raise FaceswapError(msg) from err
+
+        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
         super()._initialize()
 
     def _shutdown(self) -> None:
@@ -133,3 +137,26 @@ class NvidiaAppleStats(_GPUStats):
             for handle in self._handles]
         self._log("debug", f"GPU VRAM free: {vram}")
         return vram
+
+    def exclude_devices(self, devices: list[int]) -> None:
+        """ Exclude GPU devices from being used by Faceswap. Sets the CUDA_VISIBLE_DEVICES
+        environment variable. This must be called before Torch/Keras are imported
+
+        Parameters
+        ----------
+        devices: list[int]
+            The GPU device IDS to be excluded
+        """
+        if not devices:
+            return
+        self._log("debug", f"Excluding GPU indicies: {devices}")
+
+        _EXCLUDE_DEVICES.extend(devices)
+
+        active = self._get_active_devices()
+
+        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(str(d) for d in active
+                                                      if d not in _EXCLUDE_DEVICES)
+
+        env_vars = [f"{k}: {v}" for k, v in os.environ.items() if k.lower().startswith("cuda")]
+        self._log("debug", f"Cuda environmet variables: {env_vars}")

@@ -294,14 +294,13 @@ class TestMediaLoader:
         output = list(media_loader.stream())
         assert output == expected
 
-        loader.reset_mock()
-
+        skip_call = mocker.patch("tools.alignments.media.ImagesLoader.add_skip_list")
         skip_list = [0]
         expected = [expected[1]]
         loader.side_effect = [expected]
         output = list(media_loader.stream(skip_list))
         assert output == expected
-        assert loader.add_skip_list.called_once_with(skip_list)
+        skip_call.assert_called_once_with(skip_list)
 
     def test_save_image(self,
                         media_loader_instance: MediaLoader,

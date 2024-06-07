@@ -7,7 +7,9 @@ import sys
 
 # Translations don't work by default in Windows, so hack in environment variable
 if sys.platform.startswith("win"):
-    os.environ["LANG"], _ = locale.getdefaultlocale()
+    import ctypes
+    windll = ctypes.windll.kernel32
+    os.environ["LANG"] = locale.windows_locale[windll.GetUserDefaultUILanguage()]
 
 from lib.cli import args as cli_args  # pylint:disable=wrong-import-position
 from lib.cli.args_train import TrainArgs  # pylint:disable=wrong-import-position

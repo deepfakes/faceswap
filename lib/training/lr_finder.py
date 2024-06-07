@@ -8,19 +8,18 @@ import typing as T
 from datetime import datetime
 from enum import Enum
 
-import tensorflow as tf
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
+from lib.logger import parse_class_init
+
 if T.TYPE_CHECKING:
+    from keras import optimizers
     from lib.config import ConfigValueType
     from lib.training import Feeder
     from plugins.train.model._base import ModelBase
-
-keras = tf.keras
-K = keras.backend
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +36,7 @@ class LearningRateFinder:
 
     Parameters
     ----------
-    model: :class:`tensorflow.keras.models.Model`
+    model: :class:`keras.models.Model`
         The keras model to find the optimal learning rate for
     config: dict
         The configuration options for the model
@@ -54,10 +53,7 @@ class LearningRateFinder:
                  feeder: Feeder,
                  stop_factor: int = 4,
                  beta: float = 0.98) -> None:
-        logger.debug("Initializing %s: (model: %s, config: %s, feeder: %s, stop_factor: %s, "
-                     "beta: %s)",
-                     self.__class__.__name__, model, config, feeder, stop_factor, beta)
-
+        logger.debug(parse_class_init(locals()))
         self._iterations = T.cast(int, config["lr_finder_iterations"])
         self._save_graph = config["lr_finder_mode"] in ("graph_and_set", "graph_and_exit")
         self._strength = LRStrength[T.cast(str, config["lr_finder_strength"]).upper()].value
@@ -89,7 +85,7 @@ class LearningRateFinder:
         loss: float
             The loss value for the current batch
         """
-        learning_rate = K.get_value(self._model.model.optimizer.lr)
+        learning_rate = self._model.model.optimizer.learning_rate.numpy()
         self._metrics["learning_rates"].append(learning_rate)
 
         self._loss["avg"] = (self._beta * self._loss["avg"]) + ((1 - self._beta) * loss)
@@ -107,7 +103,7 @@ class LearningRateFinder:
 
         learning_rate *= self._lr_multiplier
 
-        K.set_value(self._model.model.optimizer.lr, learning_rate)
+        self._model.model.optimizer.learning_rate.assign(learning_rate)
 
     def _update_description(self, progress_bar: tqdm) -> None:
         """ Update the description of the progress bar for the current iteration
@@ -137,6 +133,24 @@ class LearningRateFinder:
             self._on_batch_end(idx, loss[0])
             self._update_description(pbar)
 
+    def _rebuild_optimizer(self, optimizer: optimizers.Optimizer) -> optimizers.Optimizer:
+        """ Pass through nested Optimizers (eg LossScaleOptimizer) and create new nested
+        optimizers based on their original config
+
+        Returns
+        -------
+        :class:`keras.optimizers.Optimizer`
+            A new optimizer of the same type as the given one, with the same config
+        """
+        logger.debug("Processing optimizer: '%s'", optimizer.name)
+        config = optimizer.get_config()
+        if hasattr(optimizer, "inner_optimizer"):
+            config["inner_optimizer"] = self._rebuild_optimizer(optimizer.inner_optimizer)
+        retval = optimizer.__class__(**config)
+        logger.debug("Created optimizer '%s': (old: %s, new: %s)",
+                     optimizer.name, optimizer, retval)
+        return retval
+
     def _reset_model(self, original_lr: float, new_lr: float) -> None:
         """ Reset the model's weights to initial values, reset the model's optimizer and set the
         learning rate
@@ -151,19 +165,22 @@ class LearningRateFinder:
         self._model.state.update_session_config("learning_rate", new_lr)
         self._model.state.save()
 
-        logger.debug("Loading initial weights")
-        self._model.model.load_weights(self._model.io.filename)
-
         if self._config["lr_finder_mode"] == "graph_and_exit":
             return
 
-        opt_conf = self._model.model.optimizer.get_config()
-        logger.debug("Recompiling model to reset optimizer state. Optimizer config: %s", opt_conf)
-        new_opt = self._model.model.optimizer.__class__(**opt_conf)
-        self._model.model.compile(optimizer=new_opt, loss=self._model.model.loss)
+        logger.debug("Resetting optimizer")
+        optimizer = self._rebuild_optimizer(self._model.model.optimizer)
+        del self._model.model.optimizer
+
+        logger.info("Loading initial weights")
+        self._model.model.load_weights(self._model.io.filename)
+
+        self._model.model.compile(optimizer=optimizer,
+                                  loss=self._model.model.loss,
+                                  metrics=self._model.model.loss)
 
         logger.info("Updating Learning Rate from %s to %s", f"{original_lr:.1e}", f"{new_lr:.1e}")
-        K.set_value(self._model.model.optimizer.lr, new_lr)
+        self._model.model.optimizer.learning_rate.assign(new_lr)
 
     def find(self) -> bool:
         """ Find the optimal learning rate
@@ -176,11 +193,11 @@ class LearningRateFinder:
         if not self._model.io.model_exists:
             self._model.io.save()
 
-        original_lr = K.get_value(self._model.model.optimizer.lr)
-        K.set_value(self._model.model.optimizer.lr, self._start_lr)
+        original_lr = self._model.model.optimizer.learning_rate.numpy()
+        self._model.model.optimizer.learning_rate.assign(self._start_lr)
 
         self._train()
-        print()
+        print("\x1b[2K", end="\r")  # Clear line
 
         best_idx = self._metrics["losses"].index(self._loss["best"])
         new_lr = self._metrics["learning_rates"][best_idx] / self._strength

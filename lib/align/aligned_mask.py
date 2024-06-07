@@ -258,7 +258,8 @@ class Mask():
                      source_offset: np.ndarray,
                      target_offset: np.ndarray,
                      centering: CenteringType,
-                     coverage_ratio: float = 1.0) -> None:
+                     coverage_ratio: float = 1.0,
+                     y_offset: float = 0.0) -> None:
         """ Set the internal crop area of the mask to be returned.
 
         This impacts the returned mask from :attr:`mask` if the requested mask is required for
@@ -275,6 +276,8 @@ class Mask():
         coverage_ratio: float, optional
             The coverage ratio to be applied to the target image. ``None`` for default (1.0).
             Default: ``None``
+        y_offset: float, optional
+            Amount to additionally adjust the masks's offset along the y-axis. Default: 0.0
         """
         if centering == self.stored_centering and coverage_ratio == 1.0:
             return
@@ -282,7 +285,8 @@ class Mask():
         center = get_adjusted_center(self.stored_size,
                                      source_offset,
                                      target_offset,
-                                     self.stored_centering)
+                                     self.stored_centering,
+                                     y_offset)
         crop_size = get_centered_size(self.stored_centering,
                                       centering,
                                       self.stored_size,

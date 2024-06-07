@@ -109,7 +109,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                       all_files],
             "ini": [("Faceswap config files", "*.ini"), all_files],
             "json": [("JSON file", "*.json"), all_files],
-            "model": [("Keras model files", "*.h5"), all_files],
+            "model": [("Keras model files", "*.keras"), all_files],
             "state": [("State files", "*.json"), all_files],
             "log": [("Log files", "*.log"), all_files],
             "video": [("Audio Video Interleave", "*.avi"),
