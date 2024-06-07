@@ -57,10 +57,37 @@ model.original module
 trainer package
 ===============
 
+This package contains the training loop for Faceswap
+
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+
+   ~plugins.train.trainer._base
+   ~plugins.train.model._display
+   ~plugins.train.model._tensorboard
+
 trainer._base module
 ----------------------
 
 .. automodule:: plugins.train.trainer._base
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+trainer._display module
+-----------------------
+
+.. automodule:: plugins.train.trainer._display
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+trainer._tensorboard module
+---------------------------
+
+.. automodule:: plugins.train.trainer._tensorboard
    :members:
    :undoc-members:
    :show-inheritance:

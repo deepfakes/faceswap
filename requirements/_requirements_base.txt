@@ -14,4 +14,4 @@ pywin32>=305 ; sys_platform == "win32"
 torchvision>=0.17.2,<0.19.0
 torchaudio>=2.2.2,<2.4.0
 tensorboard>=2.12.1
-keras>=3.3.3
+keras==3.3.3
