@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-03-28 23:51+0000\n"
-"PO-Revision-Date: 2024-03-29 00:01+0000\n"
+"POT-Creation-Date: 2024-06-28 13:45+0100\n"
+"PO-Revision-Date: 2024-06-28 13:47+0100\n"
 "Last-Translator: \n"
 "Language-Team: tokafondo\n"
 "Language: es_ES\n"
@@ -16,7 +16,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 3.4.2\n"
+"X-Generator: Poedit 3.4.4\n"
 
 #: tools/mask/cli.py:15
 msgid ""
@@ -181,7 +181,7 @@ msgstr ""
 "файл выравниваний. Примечание. «custom» должен быть выбранным «masker», а "
 "маски должны быть в том же формате, что и «input-type» (frames или faces)."
 
-#: tools/mask/cli.py:135 tools/mask/cli.py:154 tools/mask/cli.py:174
+#: tools/mask/cli.py:135 tools/mask/cli.py:154 tools/mask/cli.py:176
 msgid "import"
 msgstr "importar"
 
@@ -216,9 +216,11 @@ msgstr ""
 
 #: tools/mask/cli.py:156
 msgid ""
-"R|Import only. The centering to use when importing masks. Note: For any job "
-"other than 'import' this option is ignored as mask centering is handled "
-"internally.\n"
+"R|Import/Output only. When importing masks, this is the centering to use. "
+"For output this is only used for outputting custom imported masks, and "
+"should correspond to the centering used when importing the mask. Note: For "
+"any job other than 'import' and 'output' this option is ignored as mask "
+"centering is handled internally.\n"
 "L|face: Centers the mask on the center of the face, adjusting for pitch and "
 "yaw. Outside of requirements for full head masking/training, this is likely "
 "to be the best choice.\n"
@@ -230,9 +232,12 @@ msgid ""
 "the nose with and crops closely to the face. Can result in the edges of the "
 "mask appearing outside of the training area."
 msgstr ""
-"R|Sólo importar. El centrado a utilizar al importar máscaras. Nota: Para "
-"cualquier trabajo que no sea \"importar\", esta opción se ignora ya que el "
-"centrado de la máscara se maneja internamente.\n"
+"R|Solo importación/salida. Al importar máscaras, este es el centrado que se "
+"debe utilizar. Para la salida, esto solo se utiliza para generar máscaras "
+"importadas personalizadas y debe corresponder al centrado utilizado al "
+"importar la máscara. Nota: Para cualquier trabajo que no sea \"importación\" "
+"y \"salida\", esta opción se ignora ya que el centrado de la máscara se "
+"maneja internamente.\n"
 "L|cara: centra la máscara en el centro de la cara, ajustando el tono y la "
 "orientación. Aparte de los requisitos para el entrenamiento/enmascaramiento "
 "de cabeza completa, esta probablemente sea la mejor opción.\n"
@@ -244,7 +249,7 @@ msgstr ""
 "nariz y la recorta cerca de la cara. Puede provocar que los bordes de la "
 "máscara aparezcan fuera del área de entrenamiento."
 
-#: tools/mask/cli.py:179
+#: tools/mask/cli.py:181
 msgid ""
 "Import only. The size, in pixels to internally store the mask at.\n"
 "The default is 128 which is fine for nearly all usecases. Larger sizes will "
@@ -256,12 +261,12 @@ msgstr ""
 "uso. Los tamaños más grandes darán como resultado archivos de alineaciones "
 "más grandes y un procesamiento más largo."
 
-#: tools/mask/cli.py:187 tools/mask/cli.py:195 tools/mask/cli.py:209
-#: tools/mask/cli.py:223 tools/mask/cli.py:233
+#: tools/mask/cli.py:189 tools/mask/cli.py:197 tools/mask/cli.py:211
+#: tools/mask/cli.py:225 tools/mask/cli.py:235
 msgid "output"
 msgstr "salida"
 
-#: tools/mask/cli.py:189
+#: tools/mask/cli.py:191
 msgid ""
 "Optional output location. If provided, a preview of the masks created will "
 "be output in the given folder."
@@ -269,7 +274,7 @@ msgstr ""
 "Ubicación de salida opcional. Si se proporciona, se obtendrá una vista "
 "previa de las máscaras creadas en la carpeta indicada."
 
-#: tools/mask/cli.py:200
+#: tools/mask/cli.py:202
 msgid ""
 "Apply gaussian blur to the mask output. Has the effect of smoothing the "
 "edges of the mask giving less of a hard edge. the size is in pixels. This "
@@ -282,7 +287,7 @@ msgstr ""
 "redondeará al siguiente número impar. NB: Sólo afecta a la vista previa de "
 "salida. Si se ajusta a 0, se desactiva"
 
-#: tools/mask/cli.py:214
+#: tools/mask/cli.py:216
 msgid ""
 "Helps reduce 'blotchiness' on some masks by making light shades white and "
 "dark shades black. Higher values will impact more of the mask. NB: Only "
@@ -293,7 +298,7 @@ msgstr ""
 "más a la máscara. NB: Sólo afecta a la vista previa de salida. Si se ajusta "
 "a 0, se desactiva"
 
-#: tools/mask/cli.py:225
+#: tools/mask/cli.py:227
 msgid ""
 "R|How to format the output when processing is set to 'output'.\n"
 "L|combined: The image contains the face/frame, face mask and masked face.\n"
@@ -308,7 +313,7 @@ msgstr ""
 "enmascarada.\n"
 "L|mask: Sólo emite la máscara como una imagen de un solo canal."
 
-#: tools/mask/cli.py:235
+#: tools/mask/cli.py:237
 msgid ""
 "R|Whether to output the whole frame or only the face box when using output "
 "processing. Only has an effect when using frames as input."
