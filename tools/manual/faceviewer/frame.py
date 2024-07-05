@@ -38,7 +38,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     Parameters
     ----------
-    parent: :class:`ttk.PanedWindow`
+    parent: :class:`ttk.Frame`
         The paned window that the faces frame resides in
     tk_globals: :class:`~tools.manual.manual.TkGlobals`
         The tkinter variables that apply to the whole of the GUI
@@ -48,7 +48,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         The section of the Manual Tool that holds the frames viewer
     """
     def __init__(self,
-                 parent: ttk.PanedWindow,
+                 parent: ttk.Frame,
                  tk_globals: TkGlobals,
                  detected_faces: DetectedFaces,
                  display_frame: DisplayFrame) -> None:
@@ -282,7 +282,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     def face_size(self) -> int:
         """ int: The currently selected thumbnail size in pixels """
         scaling = get_config().scaling_factor
-        size = self._sizes[self._globals.tk_faces_size.get().lower().replace(" ", "")]
+        size = self._sizes[self._globals.var_faces_size.get().lower().replace(" ", "")]
         scaled = size * scaling
         return int(round(scaled / 2) * 2)
 
@@ -328,10 +328,11 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         Updates the mask type when the user changes the selected mask types
         Toggles the face viewer annotations on an optional annotation button press.
         """
-        for var in (self._globals.tk_faces_size, self._globals.tk_filter_mode):
-            var.trace_add("write", lambda *e, v=var: self.refresh_grid(v))
-        var = detected_faces.tk_face_count_changed
-        var.trace_add("write", lambda *e, v=var: self.refresh_grid(v, retain_position=True))
+        for strvar in (self._globals.var_faces_size, self._globals.var_filter_mode):
+            strvar.trace_add("write", lambda *e, v=strvar: self.refresh_grid(v))
+        boolvar = detected_faces.tk_face_count_changed
+        boolvar.trace_add("write",
+                          lambda *e, v=boolvar: self.refresh_grid(v, retain_position=True))
 
         self._display_frame.tk_control_colors["Mesh"].trace_add(
             "write", lambda *e: self._update_mesh_color())

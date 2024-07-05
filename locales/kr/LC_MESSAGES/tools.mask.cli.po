@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-03-28 23:51+0000\n"
-"PO-Revision-Date: 2024-03-29 00:05+0000\n"
+"POT-Creation-Date: 2024-06-28 13:45+0100\n"
+"PO-Revision-Date: 2024-06-28 13:48+0100\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -16,7 +16,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Poedit 3.4.2\n"
+"X-Generator: Poedit 3.4.4\n"
 
 #: tools/mask/cli.py:15
 msgid ""
@@ -165,7 +165,7 @@ msgstr ""
 "'custom'은 선택된 'masker'여야 하며 마스크는 'input-type'(frames 또는 faces)"
 "과 동일한 형식이어야 합니다."
 
-#: tools/mask/cli.py:135 tools/mask/cli.py:154 tools/mask/cli.py:174
+#: tools/mask/cli.py:135 tools/mask/cli.py:154 tools/mask/cli.py:176
 msgid "import"
 msgstr "수입"
 
@@ -196,9 +196,11 @@ msgstr ""
 
 #: tools/mask/cli.py:156
 msgid ""
-"R|Import only. The centering to use when importing masks. Note: For any job "
-"other than 'import' this option is ignored as mask centering is handled "
-"internally.\n"
+"R|Import/Output only. When importing masks, this is the centering to use. "
+"For output this is only used for outputting custom imported masks, and "
+"should correspond to the centering used when importing the mask. Note: For "
+"any job other than 'import' and 'output' this option is ignored as mask "
+"centering is handled internally.\n"
 "L|face: Centers the mask on the center of the face, adjusting for pitch and "
 "yaw. Outside of requirements for full head masking/training, this is likely "
 "to be the best choice.\n"
@@ -210,9 +212,11 @@ msgid ""
 "the nose with and crops closely to the face. Can result in the edges of the "
 "mask appearing outside of the training area."
 msgstr ""
-"R|가져오기만. 마스크를 가져올 때 사용할 센터링입니다. 참고: '가져오기' 이외"
-"의 모든 작업의 경우 마스크 센터링이 내부적으로 처리되므로 이 옵션은 무시됩니"
-"다.\n"
+"R|Import/Output only. 마스크를 가져올 때, 이것은 사용할 중앙 정렬입니다. 출력"
+"의 경우, 이것은 사용자 지정 가져온 마스크를 출력하는 데만 사용되며, 마스크를 "
+"가져올 때 사용된 중앙 정렬과 일치해야 합니다. 참고: 'import' 및 'output' 이외"
+"의 모든 작업의 ​​경우 마스크 중앙 정렬이 내부적으로 처리되므로 이 옵션은 무시됩"
+"니다.\n"
 "L|면: 피치와 요를 조정하여 마스크를 얼굴 중앙에 배치합니다. 머리 전체 마스킹/"
 "훈련에 대한 요구 사항을 제외하면 이것이 최선의 선택일 가능성이 높습니다.\n"
 "L|head: 마스크를 머리 중앙에 배치하여 피치와 요를 조정합니다. 참고: 마스크 내"
@@ -221,7 +225,7 @@ msgstr ""
 "L|레거시: '원래' 추출 기술입니다. 마스크를 코 근처 중앙에 배치하고 얼굴에 가"
 "깝게 자릅니다. 마스크 가장자리가 훈련 영역 외부에 나타날 수 있습니다."
 
-#: tools/mask/cli.py:179
+#: tools/mask/cli.py:181
 msgid ""
 "Import only. The size, in pixels to internally store the mask at.\n"
 "The default is 128 which is fine for nearly all usecases. Larger sizes will "
@@ -231,12 +235,12 @@ msgstr ""
 "기본값은 128이며 거의 모든 사용 사례에 적합합니다. 크기가 클수록 정렬 파일도 "
 "커지고 처리 시간도 길어집니다."
 
-#: tools/mask/cli.py:187 tools/mask/cli.py:195 tools/mask/cli.py:209
-#: tools/mask/cli.py:223 tools/mask/cli.py:233
+#: tools/mask/cli.py:189 tools/mask/cli.py:197 tools/mask/cli.py:211
+#: tools/mask/cli.py:225 tools/mask/cli.py:235
 msgid "output"
 msgstr "출력"
 
-#: tools/mask/cli.py:189
+#: tools/mask/cli.py:191
 msgid ""
 "Optional output location. If provided, a preview of the masks created will "
 "be output in the given folder."
@@ -244,7 +248,7 @@ msgstr ""
 "선택적 출력 위치. 만약 값이 제공된다면 생성된 마스크 미리 보기가 주어진 폴더"
 "에 출력됩니다."
 
-#: tools/mask/cli.py:200
+#: tools/mask/cli.py:202
 msgid ""
 "Apply gaussian blur to the mask output. Has the effect of smoothing the "
 "edges of the mask giving less of a hard edge. the size is in pixels. This "
@@ -256,7 +260,7 @@ msgstr ""
 "은 홀수여야 하며 짝수가 전달되면 다음 홀수로 반올림됩니다. NB: 출력 미리 보기"
 "에만 영향을 줍니다. 0으로 설정하면 꺼집니다"
 
-#: tools/mask/cli.py:214
+#: tools/mask/cli.py:216
 msgid ""
 "Helps reduce 'blotchiness' on some masks by making light shades white and "
 "dark shades black. Higher values will impact more of the mask. NB: Only "
@@ -266,7 +270,7 @@ msgstr ""
 "줄이는 데 도움이 됩니다. 값이 클수록 마스크에 더 많은 영향을 미칩니다. NB: 출"
 "력 미리 보기에만 영향을 줍니다. 0으로 설정하면 꺼집니다"
 
-#: tools/mask/cli.py:225
+#: tools/mask/cli.py:227
 msgid ""
 "R|How to format the output when processing is set to 'output'.\n"
 "L|combined: The image contains the face/frame, face mask and masked face.\n"
@@ -279,7 +283,7 @@ msgstr ""
 "L|masked: 마스크된 얼굴/프레임을 Rgba 이미지로 출력합니다.\n"
 "L|mask: 마스크를 단일 채널 이미지로만 출력합니다."
 
-#: tools/mask/cli.py:235
+#: tools/mask/cli.py:237
 msgid ""
 "R|Whether to output the whole frame or only the face box when using output "
 "processing. Only has an effect when using frames as input."

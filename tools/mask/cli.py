@@ -153,9 +153,11 @@ class MaskArgs(FaceSwapArgs):
             "default": "face",
             "group": _("import"),
             "help": _(
-                "R|Import only. The centering to use when importing masks. Note: For any job "
-                "other than 'import' this option is ignored as mask centering is handled "
-                "internally."
+                "R|Import/Output only. When importing masks, this is the centering to use. For "
+                "output this is only used for outputting custom imported masks, and should "
+                "correspond to the centering used when importing the mask. Note: For any job "
+                "other than 'import' and 'output' this option is ignored as mask centering is "
+                "handled internally."
                 "\nL|face: Centers the mask on the center of the face, adjusting for "
                 "pitch and yaw. Outside of requirements for full head masking/training, this "
                 "is likely to be the best choice."

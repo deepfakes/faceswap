@@ -48,11 +48,11 @@ class Navigation():
         frame_count = self._det_faces.filter.count
         if self._current_nav_frame_count == frame_count:
             logger.trace("Filtered count has not changed. Returning")
-        if self._globals.tk_filter_mode.get() == "Misaligned Faces":
+        if self._globals.var_filter_mode.get() == "Misaligned Faces":
             self._det_faces.tk_face_count_changed.set(True)
         self._update_total_frame_count()
         if reset_progress:
-            self._globals.tk_transport_index.set(0)
+            self._globals.var_transport_index.set(0)
 
     def _update_total_frame_count(self, *args):  # pylint:disable=unused-argument
         """ Update the displayed number of total frames that meet the current filter criteria.
@@ -70,7 +70,7 @@ class Navigation():
         logger.debug("Filtered frame count has changed. Updating from %s to %s",
                      self._current_nav_frame_count, frame_count)
         self._nav["scale"].config(to=max_frame)
-        self._nav["label"].config(text="/{}".format(max_frame))
+        self._nav["label"].config(text=f"/{max_frame}")
         state = "disabled" if max_frame == 0 else "normal"
         self._nav["entry"].config(state=state)
 
@@ -106,7 +106,7 @@ class Navigation():
             logger.debug("End of Stream. Not incrementing")
             self.stop_playback()
             return
-        self._globals.tk_transport_index.set(min(position + 1, max(0, frame_count - 1)))
+        self._globals.var_transport_index.set(min(position + 1, max(0, frame_count - 1)))
 
     def decrement_frame(self):
         """ Update The frame navigation position to the previous frame based on filter. """
@@ -116,11 +116,11 @@ class Navigation():
         if not face_count_change and (self._det_faces.filter.count == 0 or position == 0):
             logger.debug("End of Stream. Not decrementing")
             return
-        self._globals.tk_transport_index.set(min(max(0, self._det_faces.filter.count - 1),
-                                                 max(0, position - 1)))
+        self._globals.var_transport_index.set(min(max(0, self._det_faces.filter.count - 1),
+                                                  max(0, position - 1)))
 
     def _get_safe_frame_index(self):
-        """ Obtain the current frame position from the tk_transport_index variable in
+        """ Obtain the current frame position from the var_transport_index variable in
         a safe manner (i.e. handle for non-numeric)
 
         Returns
@@ -129,32 +129,32 @@ class Navigation():
             The current transport frame index
         """
         try:
-            retval = self._globals.tk_transport_index.get()
+            retval = self._globals.var_transport_index.get()
         except tk.TclError as err:
             if "expected floating-point" not in str(err):
                 raise
-            val = str(err).split(" ")[-1].replace("\"", "")
+            val = str(err).rsplit(" ", maxsplit=1)[-1].replace("\"", "")
             retval = "".join(ch for ch in val if ch.isdigit())
             retval = 0 if not retval else int(retval)
-            self._globals.tk_transport_index.set(retval)
+            self._globals.var_transport_index.set(retval)
         return retval
 
     def goto_first_frame(self):
         """ Go to the first frame that meets the filter criteria. """
         self.stop_playback()
-        position = self._globals.tk_transport_index.get()
+        position = self._globals.var_transport_index.get()
         if position == 0:
             return
-        self._globals.tk_transport_index.set(0)
+        self._globals.var_transport_index.set(0)
 
     def goto_last_frame(self):
         """ Go to the last frame that meets the filter criteria. """
         self.stop_playback()
-        position = self._globals.tk_transport_index.get()
+        position = self._globals.var_transport_index.get()
         frame_count = self._det_faces.filter.count
         if position == frame_count - 1:
             return
-        self._globals.tk_transport_index.set(frame_count - 1)
+        self._globals.var_transport_index.set(frame_count - 1)
 
 
 class BackgroundImage():
@@ -190,7 +190,7 @@ class BackgroundImage():
         """
         self._switch_image(view_mode)
         logger.trace("Updating background frame")
-        getattr(self, "_update_tk_{}".format(self._current_view_mode))()
+        getattr(self, f"_update_tk_{self._current_view_mode}")()
 
     def _switch_image(self, view_mode):
         """ Switch the image between the full frame image and the zoomed face image.
@@ -206,10 +206,10 @@ class BackgroundImage():
         self._zoomed_centering = self._canvas.active_editor.zoomed_centering
         logger.trace("Switching background image from '%s' to '%s'",
                      self._current_view_mode, view_mode)
-        img = getattr(self, "_tk_{}".format(view_mode))
+        img = getattr(self, f"_tk_{view_mode}")
         self._canvas.itemconfig(self._image, image=img)
-        self._globals.tk_is_zoomed.set(view_mode == "face")
-        self._globals.tk_face_index.set(0)
+        self._globals.set_zoomed(view_mode == "face")
+        self._globals.set_face_index(0)
 
     def _update_tk_face(self):
         """ Update the currently zoomed face. """
@@ -239,14 +239,14 @@ class BackgroundImage():
         if face_idx + 1 > faces_in_frame:
             logger.debug("Resetting face index to 0 for more faces in frame than current index: ("
                          "faces_in_frame: %s, zoomed_face_index: %s", faces_in_frame, face_idx)
-            self._globals.tk_face_index.set(0)
+            self._globals.set_face_index(0)
 
         if faces_in_frame == 0:
             face = np.ones((size, size, 3), dtype="uint8")
         else:
             det_face = self._det_faces.current_faces[frame_idx][face_idx]
             face = AlignedFace(det_face.landmarks_xy,
-                               image=self._globals.current_frame["image"],
+                               image=self._globals.current_frame.image,
                                centering=self._zoomed_centering,
                                size=size).face
         logger.trace("face shape: %s", face.shape)
@@ -254,9 +254,9 @@ class BackgroundImage():
 
     def _update_tk_frame(self):
         """ Place the currently held frame into :attr:`_tk_frame`. """
-        img = cv2.resize(self._globals.current_frame["image"],
-                         self._globals.current_frame["display_dims"],
-                         interpolation=self._globals.current_frame["interpolation"])[..., 2::-1]
+        img = cv2.resize(self._globals.current_frame.image,
+                         self._globals.current_frame.display_dims,
+                         interpolation=self._globals.current_frame.interpolation)[..., 2::-1]
         padding = self._get_padding(img.shape[:2])
         if any(padding):
             img = cv2.copyMakeBorder(img, *padding, cv2.BORDER_CONSTANT)

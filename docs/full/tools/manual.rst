@@ -23,11 +23,10 @@ The Manual Module is the main entry point into the Manual Editor Tool.
 
 .. autosummary::
    :nosignatures:
-   
+
    ~tools.manual.manual.Aligner
    ~tools.manual.manual.FrameLoader
    ~tools.manual.manual.Manual
-   ~tools.manual.manual.TkGlobals
 
 .. rubric:: Module
 
@@ -43,7 +42,7 @@ detected_faces module
 
 .. autosummary::
    :nosignatures:
-   
+
    ~tools.manual.detected_faces.DetectedFaces
    ~tools.manual.detected_faces.FaceUpdate
    ~tools.manual.detected_faces.Filter
@@ -54,6 +53,26 @@ detected_faces module
    :members:
    :undoc-members:
    :show-inheritance:
+
+globals module
+==============
+
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+
+   ~tools.manual.globals.CurrentFrame
+   ~tools.manual.globals.TkGlobals
+   ~tools.manual.globals.TKVars
+
+.. rubric:: Module
+
+.. automodule:: tools.manual.globals
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 
 thumbnails module
 ==================

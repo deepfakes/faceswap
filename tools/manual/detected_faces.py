@@ -69,7 +69,6 @@ class DetectedFaces():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # <<<< PUBLIC PROPERTIES >>>> #
-    # << SUBCLASSES >> #
     @property
     def extractor(self) -> manual.Aligner:
         """ :class:`~tools.manual.manual.Aligner`: The pipeline for passing faces through the
@@ -108,6 +107,11 @@ class DetectedFaces():
         return self._tk_vars["face_count_changed"]
 
     # << STATISTICS >> #
+    @property
+    def frame_list(self) -> list[str]:
+        """ list[str]: The list of all frame names that appear in the alignments file """
+        return list(self._alignments.data)
+
     @property
     def available_masks(self) -> dict[str, int]:
         """ dict[str, int]: The mask type names stored in the alignments; type as key with the
@@ -343,7 +347,7 @@ class _DiskIO():
             self._tk_face_count_changed.set(True)
         else:
             self._tk_edited.set(True)
-        self._globals.tk_update.set(True)
+        self._globals.var_full_update.set(True)
 
     @classmethod
     def _add_remove_faces(cls,
@@ -485,7 +489,7 @@ class Filter():
     def frame_meets_criteria(self) -> bool:
         """ bool: ``True`` if the current frame meets the selected filter criteria otherwise
         ``False`` """
-        filter_mode = self._globals.filter_mode
+        filter_mode = self._globals.var_filter_mode.get()
         frame_faces = self._detected_faces.current_faces[self._globals.frame_index]
         distance = self._filter_distance
 
@@ -505,7 +509,7 @@ class Filter():
     def _filter_distance(self) -> float:
         """ float: The currently selected distance when Misaligned Faces filter is selected. """
         try:
-            retval = self._globals.tk_filter_distance.get()
+            retval = self._globals.var_filter_distance.get()
         except tk.TclError:
             # Suppress error when distance box is empty
             retval = 0
@@ -514,22 +518,22 @@ class Filter():
     @property
     def count(self) -> int:
         """ int: The number of frames that meet the filter criteria returned by
-        :attr:`~tools.manual.manual.TkGlobals.filter_mode`. """
+        :attr:`~tools.manual.manual.TkGlobals.var_filter_mode.get()`. """
         face_count_per_index = self._detected_faces.face_count_per_index
-        if self._globals.filter_mode == "No Faces":
+        if self._globals.var_filter_mode.get() == "No Faces":
             retval = sum(1 for fcount in face_count_per_index if fcount == 0)
-        elif self._globals.filter_mode == "Has Face(s)":
+        elif self._globals.var_filter_mode.get() == "Has Face(s)":
             retval = sum(1 for fcount in face_count_per_index if fcount != 0)
-        elif self._globals.filter_mode == "Multiple Faces":
+        elif self._globals.var_filter_mode.get() == "Multiple Faces":
             retval = sum(1 for fcount in face_count_per_index if fcount > 1)
-        elif self._globals.filter_mode == "Misaligned Faces":
+        elif self._globals.var_filter_mode.get() == "Misaligned Faces":
             distance = self._filter_distance
             retval = sum(1 for frame in self._detected_faces.current_faces
                          if any(face.aligned.average_distance > distance for face in frame))
         else:
             retval = len(face_count_per_index)
         logger.trace("filter mode: %s, frame count: %s",  # type:ignore[attr-defined]
-                     self._globals.filter_mode, retval)
+                     self._globals.var_filter_mode.get(), retval)
         return retval
 
     @property
@@ -554,22 +558,22 @@ class Filter():
     @property
     def frames_list(self) -> list[int]:
         """ list[int]: The list of frame indices that meet the filter criteria returned by
-        :attr:`~tools.manual.manual.TkGlobals.filter_mode`. """
+        :attr:`~tools.manual.manual.TkGlobals.var_filter_mode.get()`. """
         face_count_per_index = self._detected_faces.face_count_per_index
-        if self._globals.filter_mode == "No Faces":
+        if self._globals.var_filter_mode.get() == "No Faces":
             retval = [idx for idx, count in enumerate(face_count_per_index) if count == 0]
-        elif self._globals.filter_mode == "Multiple Faces":
+        elif self._globals.var_filter_mode.get() == "Multiple Faces":
             retval = [idx for idx, count in enumerate(face_count_per_index) if count > 1]
-        elif self._globals.filter_mode == "Has Face(s)":
+        elif self._globals.var_filter_mode.get() == "Has Face(s)":
             retval = [idx for idx, count in enumerate(face_count_per_index) if count != 0]
-        elif self._globals.filter_mode == "Misaligned Faces":
+        elif self._globals.var_filter_mode.get() == "Misaligned Faces":
             distance = self._filter_distance
             retval = [idx for idx, frame in enumerate(self._detected_faces.current_faces)
                       if any(face.aligned.average_distance > distance for face in frame)]
         else:
             retval = list(range(len(face_count_per_index)))
         logger.trace("filter mode: %s, number_frames: %s",  # type:ignore[attr-defined]
-                     self._globals.filter_mode, len(retval))
+                     self._globals.var_filter_mode.get(), len(retval))
         return retval
 
 
@@ -677,7 +681,7 @@ class FaceUpdate():
         faces = self._faces_at_frame_index(frame_index)
         del faces[face_index]
         self._tk_face_count_changed.set(True)
-        self._globals.tk_update.set(True)
+        self._globals.var_full_update.set(True)
 
     def bounding_box(self,
                      frame_index: int,
@@ -717,7 +721,7 @@ class FaceUpdate():
         face.top = pnt_y
         face.height = height
         face.add_landmarks_xy(self._extractor.get_landmarks(frame_index, face_index, aligner))
-        self._globals.tk_update.set(True)
+        self._globals.var_full_update.set(True)
 
     def landmark(self,
                  frame_index: int, face_index: int,
@@ -764,7 +768,7 @@ class FaceUpdate():
                     face.landmarks_xy[idx] = lmk
         else:
             face.landmarks_xy[landmark_index] += (shift_x, shift_y)
-        self._globals.tk_update.set(True)
+        self._globals.var_full_update.set(True)
 
     def landmarks(self, frame_index: int, face_index: int, shift_x: int, shift_y: int) -> None:
         """ Shift all of the landmarks and bounding box for the
@@ -792,7 +796,7 @@ class FaceUpdate():
         face.left += shift_x
         face.top += shift_y
         face.add_landmarks_xy(face.landmarks_xy + (shift_x, shift_y))
-        self._globals.tk_update.set(True)
+        self._globals.var_full_update.set(True)
 
     def landmarks_rotate(self,
                          frame_index: int,
@@ -818,7 +822,7 @@ class FaceUpdate():
         rot_mat = cv2.getRotationMatrix2D(tuple(center.astype("float32")), angle, 1.)
         face.add_landmarks_xy(cv2.transform(np.expand_dims(face.landmarks_xy, axis=0),
                                             rot_mat).squeeze())
-        self._globals.tk_update.set(True)
+        self._globals.var_full_update.set(True)
 
     def landmarks_scale(self,
                         frame_index: int,
@@ -842,7 +846,7 @@ class FaceUpdate():
         """
         face = self._faces_at_frame_index(frame_index)[face_index]
         face.add_landmarks_xy(((face.landmarks_xy - center) * scale) + center)
-        self._globals.tk_update.set(True)
+        self._globals.var_full_update.set(True)
 
     def mask(self, frame_index: int, face_index: int, mask: np.ndarray, mask_type: str) -> None:
         """ Update the mask on an edit for the :class:`~lib.align.DetectedFace` object at
@@ -862,7 +866,7 @@ class FaceUpdate():
         face = self._faces_at_frame_index(frame_index)[face_index]
         face.mask[mask_type].replace_mask(mask)
         self._tk_edited.set(True)
-        self._globals.tk_update.set(True)
+        self._globals.var_full_update.set(True)
 
     def copy(self, frame_index: int, direction: T.Literal["prev", "next"]) -> None:
         """ Copy the alignments from the previous or next frame that has alignments
@@ -903,7 +907,7 @@ class FaceUpdate():
 
         faces.extend(copied)
         self._tk_face_count_changed.set(True)
-        self._globals.tk_update.set(True)
+        self._globals.var_full_update.set(True)
 
     def post_edit_trigger(self, frame_index: int, face_index: int) -> None:
         """ Update the jpg thumbnail, the viewport thumbnail, the landmark masks and the aligned
@@ -922,11 +926,11 @@ class FaceUpdate():
         face.clear_all_identities()
 
         aligned = AlignedFace(face.landmarks_xy,
-                              image=self._globals.current_frame["image"],
+                              image=self._globals.current_frame.image,
                               centering="head",
                               size=96)
         assert aligned.face is not None
         face.thumbnail = generate_thumbnail(aligned.face, size=96)
-        if self._globals.filter_mode == "Misaligned Faces":
+        if self._globals.var_filter_mode.get() == "Misaligned Faces":
             self._detected_faces.tk_face_count_changed.set(True)
         self._tk_edited.set(True)

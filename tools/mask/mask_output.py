@@ -49,6 +49,7 @@ class Output:
         self._type: T.Literal["combined", "masked", "mask"] = arguments.output_type
         self._full_frame: bool = arguments.full_frame
         self._mask_type = arguments.masker
+        self._centering: CenteringType = arguments.centering
 
         self._input_is_faces = arguments.input_type == "faces"
         self._saver = self._set_saver(arguments.output, arguments.processing)
@@ -444,6 +445,9 @@ class Output:
             mask_types = [f"{self._mask_type}_{area}" for area in ("face", "head")]
         else:
             mask_types = [self._mask_type]
+
+        if self._mask_type == "custom":
+            mask_types.append(f"{self._mask_type}_{self._centering}")
 
         final_masks = set()
         for idx in reversed(range(len(detected_faces))):

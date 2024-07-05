@@ -61,9 +61,9 @@ class ExtractBox(Editor):
                 aligned = AlignedFace(face.landmarks_xy, centering="face")
                 box = self._scale_to_display(aligned.original_roi).flatten()
             top_left = box[:2] - 10
-            kwargs = dict(fill=color, font=("Default", 20, "bold"), text=str(idx))
+            kwargs = {"fill": color, "font": ('Default', 20, 'bold'), "text": str(idx)}
             self._object_tracker("eb_text", "text", idx, top_left, kwargs)
-            kwargs = dict(fill="", outline=color, width=1)
+            kwargs = {"fill": '', "outline": color, "width": 1}
             self._object_tracker("eb_box", "polygon", idx, box, kwargs)
             self._update_anchor_annotation(idx, box, color)
         logger.trace("Updated extract box annotations")
@@ -93,10 +93,10 @@ class ExtractBox(Editor):
                                                  extract_box[4:6],
                                                  extract_box[6:]))
         for idx, (anc_dsp, anc_grb) in enumerate(zip(*anchor_points)):
-            dsp_kwargs = dict(outline=color, fill=fill_color, width=1)
-            grb_kwargs = dict(outline="", fill="", width=1, activefill=activefill_color)
-            dsp_key = "eb_anc_dsp_{}".format(idx)
-            grb_key = "eb_anc_grb_{}".format(idx)
+            dsp_kwargs = {"outline": color, "fill": fill_color, "width": 1}
+            grb_kwargs = {"outline": '', "fill": '', "width": 1, "activefill": activefill_color}
+            dsp_key = f"eb_anc_dsp_{idx}"
+            grb_key = f"eb_anc_grb_{idx}"
             self._object_tracker(dsp_key, "oval", face_index, anc_dsp, dsp_kwargs)
             self._object_tracker(grb_key, "oval", face_index, anc_grb, grb_kwargs)
         logger.trace("Updated extract box anchor annotations")
@@ -143,7 +143,8 @@ class ExtractBox(Editor):
                               if tag.startswith("eb_anc_grb_")
                               and "face_" not in tag).split("_")[-1])
 
-        self._canvas.config(cursor="{}_{}_corner".format(*self._corner_order[corner_idx]))
+        pos_x, pos_y = self._corner_order[corner_idx]
+        self._canvas.config(cursor=f"{pos_x}_{pos_y}_corner")
         self._mouse_location = ("anchor", face_idx, corner_idx)
         return True
 
@@ -222,11 +223,11 @@ class ExtractBox(Editor):
             The tkinter mouse event.
         """
         if self._mouse_location is None:
-            self._drag_data = dict()
+            self._drag_data = {}
             self._drag_callback = None
             return
         self._drag_data["current_location"] = np.array((event.x, event.y))
-        callback = dict(anchor=self._resize, rotate=self._rotate, box=self._move)
+        callback = {"anchor": self._resize, "rotate": self._rotate, "box": self._move}
         self._drag_callback = callback[self._mouse_location[0]]
 
     def _drag_stop(self, event):  # pylint:disable=unused-argument
@@ -270,7 +271,7 @@ class ExtractBox(Editor):
             The tkinter mouse event.
         """
         face_idx = self._mouse_location[1]
-        face_tag = "eb_box_face_{}".format(face_idx)
+        face_tag = f"eb_box_face_{face_idx}"
         position = np.array((event.x, event.y))
         box = np.array(self._canvas.coords(face_tag))
         center = np.array((sum(box[0::2]) / 4, sum(box[1::2]) / 4))
@@ -365,7 +366,7 @@ class ExtractBox(Editor):
             The tkinter mouse event.
         """
         face_idx = self._mouse_location[1]
-        face_tag = "eb_box_face_{}".format(face_idx)
+        face_tag = f"eb_box_face_{face_idx}"
         box = np.array(self._canvas.coords(face_tag))
         position = np.array((event.x, event.y))
 
