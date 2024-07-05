@@ -1466,7 +1466,10 @@ class SingleFrameLoader(ImagesLoader):
             image = self._reader.get_data(index)[..., ::-1]
             filename = self._dummy_video_framename(index)
         else:
-            filename = self.file_list[index]
+            file_list = [f for idx, f in enumerate(self._file_list)
+                         if idx not in self._skip_list] if self._skip_list else self._file_list
+                                                                     
+            filename = file_list[index]
             image = read_image(filename, raise_error=True)
             filename = os.path.basename(filename)
         logger.trace("index: %s, filename: %s image shape: %s", index, filename, image.shape)

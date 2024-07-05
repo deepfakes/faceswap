@@ -36,7 +36,7 @@ class Landmarks(Editor):
         super().__init__(canvas, detected_faces, control_text)
         # Clear selection box on an editor or frame change
         self._canvas._tk_action_var.trace("w", lambda *e: self._reset_selection())
-        self._globals.tk_frame_index.trace("w", lambda *e: self._reset_selection())
+        self._globals.var_frame_index.trace_add("write", lambda *e: self._reset_selection())
 
     def _add_actions(self):
         """ Add the optional action buttons to the viewer. Current actions are Point, Select
@@ -55,7 +55,7 @@ class Landmarks(Editor):
             tkinter callback arguments. Required but unused.
         """
         self._reset_selection()
-        self._globals.tk_update.set(True)
+        self._globals.var_full_update.set(True)
 
     def _reset_selection(self, event=None):  # pylint:disable=unused-argument
         """ Reset the selection box and the selected landmark annotations. """

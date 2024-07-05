@@ -83,7 +83,7 @@ class HoverBox():
         is_zoomed = self._globals.is_zoomed
         if (-1 in face or (frame_idx == self._globals.frame_index
                            and (not is_zoomed or
-                                (is_zoomed and face_idx == self._globals.tk_face_index.get())))):
+                                (is_zoomed and face_idx == self._globals.face_index)))):
             self._clear()
             self._canvas.config(cursor="")
             self._current_frame_index = None
@@ -125,14 +125,14 @@ class HoverBox():
         if frame_id is None or (frame_id == self._globals.frame_index and not is_zoomed):
             return
         face_idx = self._current_face_index if is_zoomed else 0
-        self._globals.tk_face_index.set(face_idx)
+        self._globals.set_face_index(face_idx)
         transport_id = self._grid.transport_index_from_frame(frame_id)
         logger.trace("frame_index: %s, transport_id: %s, face_idx: %s",
                      frame_id, transport_id, face_idx)
         if transport_id is None:
             return
         self._navigation.stop_playback()
-        self._globals.tk_transport_index.set(transport_id)
+        self._globals.var_transport_index.set(transport_id)
         self._viewport.move_active_to_top()
         self.on_hover(None)
 
@@ -192,8 +192,8 @@ class ActiveFrame():
             "edited": tk_edited_variable}
         self._assets: Asset = Asset([], [], [], [])
 
-        self._globals.tk_update_active_viewport.trace_add("write",
-                                                          lambda *e: self._reload_callback())
+        self._globals.var_update_active_viewport.trace_add("write",
+                                                           lambda *e: self._reload_callback())
         tk_edited_variable.trace_add("write", lambda *e: self._update_on_edit())
         logger.debug("Initialized: %s", self.__class__.__name__)
 
@@ -205,7 +205,7 @@ class ActiveFrame():
     @property
     def current_frame(self) -> np.ndarray:
         """ :class:`numpy.ndarray`: A BGR version of the frame currently being displayed. """
-        return self._globals.current_frame["image"]
+        return self._globals.current_frame.image
 
     @property
     def _size(self) -> int:
@@ -221,7 +221,7 @@ class ActiveFrame():
     def _reload_callback(self) -> None:
         """ If a frame has changed, triggering the variable, then update the active frame. Return
         having done nothing if the variable is resetting. """
-        if self._globals.tk_update_active_viewport.get():
+        if self._globals.var_update_active_viewport.get():
             self.reload_annotations()
 
     def reload_annotations(self) -> None:
@@ -249,7 +249,7 @@ class ActiveFrame():
 
         self._update_face()
         self._canvas.tag_raise("active_highlighter")
-        self._globals.tk_update_active_viewport.set(False)
+        self._globals.var_update_active_viewport.set(False)
         self._last_execution["frame_index"] = self.frame_index
 
     def _clear_previous(self) -> None:

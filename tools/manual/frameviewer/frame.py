@@ -146,41 +146,41 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         lbl_frame.pack(side=tk.RIGHT)
         tbox = ttk.Entry(lbl_frame,
                          width=7,
-                         textvariable=self._globals.tk_transport_index,
+                         textvariable=self._globals.var_transport_index,
                          justify=tk.RIGHT)
         tbox.pack(padx=0, side=tk.LEFT)
         lbl = ttk.Label(lbl_frame, text=f"/{max_frame}")
         lbl.pack(side=tk.RIGHT)
 
         cmd = partial(set_slider_rounding,
-                      var=self._globals.tk_transport_index,
+                      var=self._globals.var_transport_index,
                       d_type=int,
                       round_to=1,
                       min_max=(0, max_frame))
 
         nav = ttk.Scale(frame,
-                        variable=self._globals.tk_transport_index,
+                        variable=self._globals.var_transport_index,
                         from_=0,
                         to=max_frame,
                         command=cmd)
         nav.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self._globals.tk_transport_index.trace("w", self._set_frame_index)
+        self._globals.var_transport_index.trace_add("write", self._set_frame_index)
         return {"entry": tbox, "scale": nav, "label": lbl}
 
     def _set_frame_index(self, *args):  # pylint:disable=unused-argument
         """ Set the actual frame index based on current slider position and filter mode. """
         try:
-            slider_position = self._globals.tk_transport_index.get()
+            slider_position = self._globals.var_transport_index.get()
         except TclError:
             # don't update the slider when the entry box has been cleared of any value
             return
         frames = self._det_faces.filter.frames_list
         actual_position = max(0, min(len(frames) - 1, slider_position))
         if actual_position != slider_position:
-            self._globals.tk_transport_index.set(actual_position)
+            self._globals.var_transport_index.set(actual_position)
         frame_idx = frames[actual_position] if frames else -1
         logger.trace("slider_position: %s, frame_idx: %s", actual_position, frame_idx)
-        self._globals.tk_frame_index.set(frame_idx)
+        self._globals.var_frame_index.set(frame_idx)
 
     def _add_transport(self):
         """ Add video transport controls """
@@ -237,14 +237,14 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         frame: :class:`tkinter.ttk.Frame`
             The Filter Frame that holds the filter combo box
         """
-        self._globals.tk_filter_mode.set("All Frames")
-        self._globals.tk_filter_mode.trace("w", self._navigation.nav_scale_callback)
+        self._globals.var_filter_mode.set("All Frames")
+        self._globals.var_filter_mode.trace("w", self._navigation.nav_scale_callback)
         nav_frame = ttk.Frame(frame)
         lbl = ttk.Label(nav_frame, text="Filter:")
         lbl.pack(side=tk.LEFT, padx=(0, 5))
         combo = ttk.Combobox(
             nav_frame,
-            textvariable=self._globals.tk_filter_mode,
+            textvariable=self._globals.var_filter_mode,
             state="readonly",
             values=self._filter_modes)
         combo.pack(side=tk.RIGHT)
@@ -260,7 +260,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             The Filter Frame that holds the filter threshold slider
         """
         slider_frame = ttk.Frame(frame)
-        tk_var = self._globals.tk_filter_distance
+        tk_var = self._globals.var_filter_distance
 
         min_max = (5, 20)
         ctl_frame = ttk.Frame(slider_frame)
@@ -284,22 +284,22 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             Tooltip(item,
                     text=self._helptext["distance"],
                     wrap_length=200)
-        tk_var.trace("w", self._navigation.nav_scale_callback)
+        tk_var.trace_add("write", self._navigation.nav_scale_callback)
         self._optional_widgets["distance_slider"] = slider_frame
 
     def pack_threshold_slider(self):
         """ Display or hide the threshold slider depending on the current filter mode. For
         misaligned faces filter, display the slider. Hide for all other filters. """
-        if self._globals.tk_filter_mode.get() == "Misaligned Faces":
+        if self._globals.var_filter_mode.get() == "Misaligned Faces":
             self._optional_widgets["distance_slider"].pack(side=tk.LEFT)
         else:
             self._optional_widgets["distance_slider"].pack_forget()
 
     def cycle_filter_mode(self):
         """ Cycle the navigation mode combo entry """
-        current_mode = self._globals.filter_mode
+        current_mode = self._globals.var_filter_mode.get()
         idx = (self._filter_modes.index(current_mode) + 1) % len(self._filter_modes)
-        self._globals.tk_filter_mode.set(self._filter_modes[idx])
+        self._globals.var_filter_mode.set(self._filter_modes[idx])
 
     def set_action(self, key):
         """ Set the current action based on keyboard shortcut
@@ -318,7 +318,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         framesize = (event.width, event.height)
         logger.trace("Resizing video frame. Framesize: %s", framesize)
         self._globals.set_frame_display_dims(*framesize)
-        self._globals.tk_update.set(True)
+        self._globals.var_full_update.set(True)
 
     # << TRANSPORT >> #
     def _play(self, *args, frame_count=None):  # pylint:disable=unused-argument
@@ -475,17 +475,16 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         sep = ttk.Frame(frame, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=5, side=tk.TOP)
         buttons = {}
-        tk_frame_index = self._globals.tk_frame_index
         for action in ("copy_prev", "copy_next", "reload"):
             if action == "reload":
                 icon = "reload3"
-                cmd = lambda f=tk_frame_index: self._det_faces.revert_to_saved(f.get())  # noqa:E731  # pylint:disable=line-too-long,unnecessary-lambda-assignment
+                cmd = lambda f=self._globals: self._det_faces.revert_to_saved(f.frame_index)  # noqa:E731,E501  # pylint:disable=line-too-long,unnecessary-lambda-assignment
                 helptext = _("Revert to saved Alignments ({})").format(lookup[action][1])
             else:
                 icon = action
                 direction = action.replace("copy_", "")
-                cmd = lambda f=tk_frame_index, d=direction: self._det_faces.update.copy(  # noqa:E731  # pylint:disable=line-too-long,unnecessary-lambda-assignment
-                    f.get(), d)
+                cmd = lambda f=self._globals, d=direction: self._det_faces.update.copy(  # noqa:E731,E501  # pylint:disable=line-too-long,unnecessary-lambda-assignment
+                    f.frame_index, d)
                 helptext = _("Copy {} Alignments ({})").format(*lookup[action])
             state = ["!disabled"] if action == "copy_next" else ["disabled"]
             button = ttk.Button(frame,
@@ -496,8 +495,8 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             button.pack()
             Tooltip(button, text=helptext)
             buttons[action] = button
-        self._globals.tk_frame_index.trace("w", self._disable_enable_copy_buttons)
-        self._globals.tk_update.trace("w", self._disable_enable_reload_button)
+        self._globals.var_frame_index.trace_add("write", self._disable_enable_copy_buttons)
+        self._globals.var_full_update.trace_add("write", self._disable_enable_reload_button)
         return buttons
 
     def _disable_enable_copy_buttons(self, *args):  # pylint:disable=unused-argument
@@ -707,7 +706,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
     def offset(self):
         """ tuple: The (`width`, `height`) offset of the canvas based on the size of the currently
         displayed image """
-        frame_dims = self._globals.current_frame["display_dims"]
+        frame_dims = self._globals.current_frame.display_dims
         offset_x = (self._globals.frame_display_dims[0] - frame_dims[0]) / 2
         offset_y = (self._globals.frame_display_dims[1] - frame_dims[1]) / 2
         logger.trace("offset_x: %s, offset_y: %s", offset_x, offset_y)
@@ -733,11 +732,11 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         """ Add the callback trace functions to the :class:`tkinter.Variable` s
 
         Adds callbacks for:
-            :attr:`_globals.tk_update` Update the display for the current image
+            :attr:`_globals.var_full_update` Update the display for the current image
             :attr:`__tk_action_var` Update the mouse display tracking for current action
         """
-        self._globals.tk_update.trace("w", self._update_display)
-        self._tk_action_var.trace("w", self._change_active_editor)
+        self._globals.var_full_update.trace_add("write", self._update_display)
+        self._tk_action_var.trace_add("write", self._change_active_editor)
 
     def _change_active_editor(self, *args):  # pylint:disable=unused-argument
         """ Update the display for the active editor.
@@ -757,7 +756,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
 
         self.active_editor.bind_mouse_motion()
         self.active_editor.set_mouse_click_actions()
-        self._globals.tk_update.set(True)
+        self._globals.var_full_update.set(True)
 
     def _update_display(self, *args):  # pylint:disable=unused-argument
         """ Update the display on frame cache update
@@ -767,7 +766,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         A little hacky, but the editors to display or hide are processed in alphabetical
         order, so that they are always processed in the same order (for tag lowering and raising)
         """
-        if not self._globals.tk_update.get():
+        if not self._globals.var_full_update.get():
             return
         zoomed_centering = self.active_editor.zoomed_centering
         self._image.refresh(self.active_editor.view_mode)
@@ -779,7 +778,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         if zoomed_centering != self.active_editor.zoomed_centering:
             # Refresh the image if editor annotation has changed the zoom centering of the image
             self._image.refresh(self.active_editor.view_mode)
-        self._globals.tk_update.set(False)
+        self._globals.var_full_update.set(False)
         self.update_idletasks()
 
     def _hide_additional_faces(self):

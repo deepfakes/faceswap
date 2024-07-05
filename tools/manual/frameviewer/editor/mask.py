@@ -82,7 +82,9 @@ class Mask(Editor):
                          group=None, hotkey="M")
         self._add_action("draw", "draw", _("Draw Tool"), group="paint", hotkey="D")
         self._add_action("erase", "erase", _("Erase Tool"), group="paint", hotkey="E")
-        self._actions["magnify"]["tk_var"].trace("w", lambda *e: self._globals.tk_update.set(True))
+        self._actions["magnify"]["tk_var"].trace(
+            "w",
+            lambda *e: self._globals.var_full_update.set(True))
 
     def _add_controls(self):
         """ Add the mask specific control panel controls.
@@ -143,21 +145,21 @@ class Mask(Editor):
         mask_type = self._control_vars["display"]["MaskType"].get()
         if mask_type == self._mask_type:
             return
-        self._meta = dict(position=self._globals.frame_index)
+        self._meta = {"position": self._globals.frame_index}
         self._mask_type = mask_type
-        self._globals.tk_update.set(True)
+        self._globals.var_full_update.set(True)
 
     def hide_annotation(self, tag=None):
         """ Clear the mask :attr:`_meta` dict when hiding the annotation. """
         super().hide_annotation()
-        self._meta = dict()
+        self._meta = {}
 
     def update_annotation(self):
         """ Update the mask annotation with the latest mask. """
         position = self._globals.frame_index
         if position != self._meta.get("position", -1):
             # Reset meta information when moving to a new frame
-            self._meta = dict(position=position)
+            self._meta = {"position": position}
         key = self.__class__.__name__
         mask_type = self._control_vars["display"]["MaskType"].get().lower()
         color = self._control_color[1:]
@@ -221,21 +223,21 @@ class Mask(Editor):
             - slices: The (`x`, `y`) slice objects required to extract the mask ROI
             from the full frame
         """
-        frame_dims = self._globals.current_frame["display_dims"]
+        frame_dims = self._globals.current_frame.display_dims
         scaled_mask_roi = np.rint(mask.original_roi *
-                                  self._globals.current_frame["scale"]).astype("int32")
+                                  self._globals.current_frame.scale).astype("int32")
 
         # Scale and clip the ROI to fit within display frame boundaries
         clipped_roi = scaled_mask_roi.clip(min=(0, 0), max=frame_dims)
 
         # Obtain min and max points to get ROI as a rectangle
-        min_max = dict(min=clipped_roi.min(axis=0), max=clipped_roi.max(axis=0))
+        min_max = {"min": clipped_roi.min(axis=0), "max": clipped_roi.max(axis=0)}
 
         # Create a bounding box rectangle ROI
         roi_dims = np.rint((min_max["max"][1] - min_max["min"][1],
                             min_max["max"][0] - min_max["min"][0])).astype("uint16")
-        roi = dict(mask=np.zeros(roi_dims, dtype="uint8")[..., None],
-                   corners=np.expand_dims(scaled_mask_roi - min_max["min"], axis=0))
+        roi = {"mask": np.zeros(roi_dims, dtype="uint8")[..., None],
+               "corners": np.expand_dims(scaled_mask_roi - min_max["min"], axis=0)}
         # Block out areas outside of the actual mask ROI polygon
         cv2.fillPoly(roi["mask"], roi["corners"], 255)
         logger.trace("Setting Full Frame mask ROI. shape: %s", roi["mask"].shape)
@@ -246,8 +248,8 @@ class Mask(Editor):
 
         # Adjust affine matrix for internal mask size and display dimensions
         adjustments = (np.array([[mask_scale, 0., 0.], [0., mask_scale, 0.]]),
-                       np.array([[1 / self._globals.current_frame["scale"], 0., 0.],
-                                 [0., 1 / self._globals.current_frame["scale"], 0.],
+                       np.array([[1 / self._globals.current_frame.scale, 0., 0.],
+                                 [0., 1 / self._globals.current_frame.scale, 0.],
                                  [0., 0., 1.]]))
         in_matrix = np.dot(adjustments[0],
                            np.concatenate((mask.affine_matrix, np.array([[0., 0., 1.]]))))
@@ -285,7 +287,7 @@ class Mask(Editor):
             top_left = self._zoomed_roi[:2]
             # Hide all masks and only display selected
             self._canvas.itemconfig("Mask", state="hidden")
-            self._canvas.itemconfig("Mask_face_{}".format(face_index), state="normal")
+            self._canvas.itemconfig(f"Mask_face_{face_index}", state="normal")
         else:
             display_image = self._update_mask_image_full_frame(mask, rgb_color, face_index)
             top_left = self._meta["top_left"][face_index]
@@ -305,7 +307,7 @@ class Mask(Editor):
                              "image",
                              face_index,
                              top_left,
-                             dict(image=self._tk_faces[face_index], anchor=tk.NW))
+                             {"image": self._tk_faces[face_index], "anchor": tk.NW})
 
     def _update_mask_image_zoomed(self, mask, rgb_color):
         """ Update the mask image when zoomed in.
@@ -346,7 +348,7 @@ class Mask(Editor):
         :class: `PIL.Image`
             The full frame mask image formatted for display
         """
-        frame_dims = self._globals.current_frame["display_dims"]
+        frame_dims = self._globals.current_frame.display_dims
         frame = np.zeros(frame_dims + (1, ), dtype="uint8")
         interpolator = self._meta["interpolator"][face_index]
         slices = self._meta["slices"][face_index]
@@ -377,13 +379,13 @@ class Mask(Editor):
         else:
             box = self._scale_to_display(mask.original_roi).flatten()
         top_left = box[:2] - 10
-        kwargs = dict(fill=color, font=("Default", 20, "bold"), text=str(face_index))
+        kwargs = {"fill": color, "font": ("Default", 20, "bold"), "text": str(face_index)}
         self._object_tracker("mask_text", "text", face_index, top_left, kwargs)
-        kwargs = dict(fill="", outline=color, width=1)
+        kwargs = {"fill": "", "outline": color, "width": 1}
         self._object_tracker("mask_roi", "polygon", face_index, box, kwargs)
         if self._globals.is_zoomed:
             # Raise box above zoomed image
-            self._canvas.tag_raise("mask_roi_face_{}".format(face_index))
+            self._canvas.tag_raise(f"mask_roi_face_{face_index}")
 
     # << MOUSE HANDLING >>
     # Mouse cursor display
@@ -450,7 +452,7 @@ class Mask(Editor):
         """
         face_idx = self._mouse_location[1]
         if face_idx is None:
-            self._drag_data = dict()
+            self._drag_data = {}
             self._drag_callback = None
         else:
             self._drag_data["starting_location"] = np.array((event.x, event.y))
@@ -532,7 +534,7 @@ class Mask(Editor):
         if np.array_equal(self._drag_data["starting_location"], location[0]):
             self._get_cursor_shape_mark(self._meta["mask"][face_idx], location, face_idx)
         self._mask_to_alignments(face_idx)
-        self._drag_data = dict()
+        self._drag_data = {}
         self._update_cursor(event)
 
     def _get_cursor_shape_mark(self, img, location, face_idx):
@@ -562,11 +564,10 @@ class Mask(Editor):
         else:
             cv2.circle(img, tuple(points), radius, color, thickness=-1)
 
-    def _get_cursor_shape(self, x1=0, y1=0, x2=0, y2=0, outline="black", state="hidden"):
+    def _get_cursor_shape(self, x_1=0, y_1=0, x_2=0, y_2=0, outline="black", state="hidden"):
         if self._cursor_shape_name == "Rectangle":
-            return self._canvas.create_rectangle(x1, y1, x2, y2, outline=outline, state=state)
-        else:
-            return self._canvas.create_oval(x1, y1, x2, y2, outline=outline, state=state)
+            return self._canvas.create_rectangle(x_1, y_1, x_2, y_2, outline=outline, state=state)
+        return self._canvas.create_oval(x_1, y_1, x_2, y_2, outline=outline, state=state)
 
     def _mask_to_alignments(self, face_index):
         """ Update the annotated mask to alignments.
