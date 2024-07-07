@@ -1,7 +1,7 @@
 tqdm>=4.66
 psutil>=5.9.0
 numexpr>=2.10.0
-numpy>=1.26.4
+numpy>=1.26.4,<2.0.0
 opencv-python>=4.9.0.0
 pillow>=10.3.0
 scikit-learn>=1.4.2
