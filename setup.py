@@ -1138,6 +1138,7 @@ class Install():  # pylint:disable=too-few-public-methods
         if channels is not None:
             for channel in channels:
                 condaexe.extend(["-c", channel])
+            condaexe.append("--override-channels")
 
         pkgs = package if isinstance(package, list) else [package]
 
