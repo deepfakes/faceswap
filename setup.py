@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """ Install packages for faceswap.py """
 # pylint:disable=too-many-lines
+from __future__ import annotations
 
 import logging
 import ctypes
 import json
 import locale
 import platform
-import operator
 import os
 import re
 import sys
@@ -15,12 +15,19 @@ import typing as T
 from shutil import which
 from subprocess import list2cmdline, PIPE, Popen, run, STDOUT
 
-from pkg_resources import parse_requirements
-
 from lib.logger import log_setup
 
+
+_PACKAGING_AVAILABLE = True
+try:
+    from packaging.requirements import Requirement
+    from packaging.specifiers import Specifier
+except ImportError:
+    _PACKAGING_AVAILABLE = False
+
+
 logger = logging.getLogger(__name__)
-backend_type: T.TypeAlias = T.Literal['nvidia', 'apple_silicon', 'cpu', 'rocm', "all"]
+BackendType: T.TypeAlias = T.Literal['nvidia', 'apple_silicon', 'cpu', 'rocm', "all"]
 
 _INSTALL_FAILED = False
 # Packages that are explicitly required for setup.py
@@ -30,16 +37,15 @@ _INSTALLER_REQUIREMENTS: list[tuple[str, str]] = [("pexpect>=4.8.0", "!Windows")
 # TODO zlib-wapi is required on some Windows installs where cuDNN complains:
 # Could not locate zlibwapi.dll. Please make sure it is in your library path!
 # This only seems to occur on Anaconda cuDNN not conda-forge
-_BACKEND_SPECIFIC_CONDA: dict[backend_type, list[str]] = {
+_BACKEND_SPECIFIC_CONDA: dict[BackendType, list[str]] = {
     "nvidia": ["zlib-wapi", "pytorch-cuda==12.1"],
     "apple_silicon": ["libblas"],
     "cpu": ["cpuonly==2.0"]}
 # Packages that should only be installed through pip
-_FORCE_PIP: dict[backend_type, list[str]] = {
+_FORCE_PIP: dict[BackendType, list[str]] = {
     "all": [
         "ffmpy",  # 17/04/24 Can pull in incompatible ffmpeg
         "imageio-ffmpeg",  # 17/11/23 Conda forge uses incorrect ffmpeg, so fallback to pip
-        "numexpr",  # 15/05/24  Numexpr likes to pull in all kinds of incorrect libs
         "opencv-python"],  # Not directly in Conda
     "rocm": ["torch", "torchvision", "torchaudio"]}  # 15/05/24 Pytorch ROCM has no Conda install
 
@@ -50,15 +56,14 @@ _TORCH_ROCM_REQUIREMENTS = {">=2.2.1,<2.4.0": ((6, 0), (6, 0))}
 _CONDA_MAPPING: dict[str, tuple[str, tuple[str, ...]]] = {
     "pytorch-cuda": ("pytorch-cuda", ("pytorch", "nvidia")),
     "torch": ("pytorch", ("pytorch", )),  # As we group torch imports, only specify channel once
-    "fastcluster": ("fastcluster", ("conda-forge", )),
     # "ffmpy": ("ffmpy", ("conda-forge", )),
     # "imageio-ffmpeg": ("imageio-ffmpeg", ("conda-forge", )),
-    "nvidia-ml-py": ("nvidia-ml-py", ("conda-forge", )),
     "libblas": ("libblas", ("conda-forge", )),
     "zlib-wapi": ("zlib-wapi", ("conda-forge", )),
     "xorg-libxft": ("xorg-libxft", ("conda-forge", ))}
 
-_GROUPS = [["pytorch*", "torch*", "cpuonly"]]
+# Include Pillow + Numpy here to avoid installing twice for updated version
+_GROUPS = [["pytorch*", "torch*", "cpuonly", "numpy", "pillow"]]
 """list[list[str]]: Packages that should be installed collectively at the same time """
 
 _DEV_TOOLS = ["flake8", "mypy", "pylint", "pytest", "pytest-mock",
@@ -86,7 +91,7 @@ class Environment():
         # Flag that setup is being run by installer so steps can be skipped
         self.is_installer: bool = False
         self.include_dev_tools: bool = False
-        self.backend: backend_type | None = None
+        self.backend: BackendType | None = None
         self.enable_docker: bool = False
         self.cuda_cudnn = ["", ""]
         self.rocm_version: tuple[int, ...] = (0, 0, 0)
@@ -98,6 +103,7 @@ class Environment():
         self._output_runtime_info()
         self._check_pip()
         self._upgrade_pip()
+        self._check_packaging()
         self._set_env_vars()
 
     @property
@@ -241,6 +247,29 @@ class Environment():
         pip_version = pip.__version__
         logger.info("Installed pip: %s", pip_version)
 
+    def _check_packaging(self) -> None:
+        """ Install packaging if it is not available  """
+        if self.updater or _PACKAGING_AVAILABLE:
+            return
+
+        pkg = "packaging"
+        cmd = ["install", "-y", pkg]
+        if self.is_conda:
+            cmd = ["conda"] + cmd + ["-c", "defaults", "--override-channels"]
+        else:
+            cmd = [sys.executable, "-m", "pip"] + cmd
+
+        installer = SubProcInstaller(self, "packaging", cmd, False)
+        if installer() != 0:
+            logger.error("Unable to install package: %s. Process aborted", "packaging")
+            sys.exit(1)
+
+        global Requirement  # pylint:disable=global-statement,invalid-name
+        global Specifier  # pylint:disable=global-statement,invalid-name
+        # pylint:disable=import-outside-toplevel,redefined-outer-name
+        from packaging.requirements import Requirement
+        from packaging.specifiers import Specifier
+
     def _configure_keras(self) -> None:
         """ Set up the keras.json file to use Torch as the backend """
         if "KERAS_HOME" in os.environ:
@@ -347,8 +376,8 @@ class Packages():
         # channel accordingly
         tk_channel = "conda-forge" if self._env.os_version[0].lower() == "linux" else "defaults"
 
-        self._required_packages: list[tuple[str, list[tuple[str, str]]]] = []
-        self._missing_packages: list[tuple[str, list[tuple[str, str]]]] = []
+        self._required_packages: list[Requirement] = []
+        self._missing_packages: list[Requirement] = []
         self._conda_missing_packages: list[tuple[str, tuple[str, ...]]] = []
         self._pip_args: list[str] = []
 
@@ -360,19 +389,19 @@ class Packages():
         self._conda_installed_packages = self._get_installed_conda_packages()
 
     @property
-    def prerequisites(self) -> list[tuple[str, list[tuple[str, str]]]]:
-        """ list: Any required packages that the installer needs prior to installing the faceswap
-        environment on the specific platform that are not already installed """
+    def prerequisites(self) -> list[Requirement]:
+        """ list[:class:`packaging.requirements.Requirement]`: Any required packages that the
+        installer needs prior to installing the faceswap environment on the specific platform that
+        are not already installed """
         all_installed = self._all_installed_packages
-        candidates = self._format_requirements(
+        candidates = self._parse_requirements(
             [pkg for pkg, plat in _INSTALLER_REQUIREMENTS
              if self._env.os_version[0] == plat or (plat[0] == "!" and
                                                     self._env.os_version[0] != plat[1:])])
-        retval = [(pkg, spec) for pkg, spec in candidates
-                  if pkg not in all_installed or (
-                    pkg in all_installed and
-                    not self._validate_spec(spec, all_installed.get(pkg, ""))
-                  )]
+        retval = [pkg for pkg in candidates
+                  if pkg.name not in all_installed or (
+                      pkg.name in all_installed and
+                      not pkg.specifier.contains(all_installed[pkg.name]))]
         return retval
 
     @property
@@ -381,7 +410,7 @@ class Packages():
         return bool(self._missing_packages or self._conda_missing_packages)
 
     @property
-    def to_install(self) -> list[tuple[str, list[tuple[str, str]]]]:
+    def to_install(self) -> list[Requirement]:
         """ list: The required packages that need to be installed """
         return self._missing_packages
 
@@ -427,47 +456,57 @@ class Packages():
             if any(pkg.startswith(items) for items in clean_groups):
                 # Required torch packages need to be put into main package list so they can be
                 # installed with the wider pytorch group
-                self._required_packages.extend(self._format_requirements([pkg]))
+                self._required_packages.extend(self._parse_requirements([pkg]))
                 continue
 
             self._conda_required_packages.append((pkg, channel))
-            logger.info("Adding conda required package '%s' for backend '%s')",
-                        pkg, self._env.backend)
+            logger.debug("Adding conda required package '%s' for backend '%s')",
+                         pkg, self._env.backend)
 
     @classmethod
-    def _format_requirements(cls, packages: list[str]
-                             ) -> list[tuple[str, list[tuple[str, str]]]]:
-        """ Parse a list of requirements.txt formatted package strings to a list of pkgresource
-        formatted requirements """
-        return [(package.unsafe_name, package.specs)
-                for package in parse_requirements(packages)
-                if package.marker is None or package.marker.evaluate()]
+    def _parse_requirements(cls, packages: list[str]) -> list[Requirement]:
+        """ Drop in replacement for deprecated pkg_resources.parse_requirements
 
-    @classmethod
-    def _validate_spec(cls,
-                       required: list[tuple[str, str]],
-                       existing: str) -> bool:
-        """ Validate whether the required specification for a package is met by the installed
-        version.
-
-        required: list[tuple[str, str]]
-            The required package version spec to check
-        existing: str
-            The version of the installed package
+        Parameters
+        ----------
+        packages: list[str]
+            List of packages formatted from a requirements.txt file
 
         Returns
         -------
-        bool
-            ``True`` if the required specification is met by the existing specification
+        list[:class:`packaging.Requirement`]
+            List of Requirement objects that are valid for the current environment
         """
-        ops = {"==": operator.eq, ">=": operator.ge, "<=": operator.le,
-               ">": operator.gt, "<": operator.lt}
-        if not required:
-            return True
+        requirements = [Requirement(p) for p in packages]
+        retval = [r for r in requirements if r.marker is None or r.marker.evaluate()]
+        if len(retval) != len(requirements):
+            logger.debug("Filtered invalid packages %s",
+                         [(r.name, r.marker) for r in set(requirements).difference(set(retval))])
+        logger.debug("Parsed requirements %s: %s", packages, retval)
+        return retval
 
-        return all(ops[spec[0]]([int(s) for s in existing.split(".")],
-                                [int(s) for s in spec[1].split(".")])
-                   for spec in required)
+    def _format_requirements(self, packages: list[str]
+                             ) -> list[tuple[str, list[tuple[str, str]]]]:
+        """ Parse a list of requirements.txt formatted package strings to a list of valid
+        required packages formatted by name and version specification
+
+        Parameters
+        ----------
+        packages: list[str]
+            List of packages formatted from a requirements.txt file
+
+        Returns
+        -------
+        list[str, list[tuple[str, str]]]
+            List of valid package names with list of tuple of valid version specifications
+        """
+        valid = self._parse_requirements(packages)
+        specs = [[Specifier(s) for s in str(r.specifier).split(",")] for r in valid]
+
+        retval = [(req.name, [(s.operator, s.version) for s in spec])
+                  for req, spec in zip(valid, specs)]
+        logger.debug("Formatted packages %s: %s", packages, retval)
+        return retval
 
     def _get_installed_packages(self) -> dict[str, str]:
         """ Get currently installed packages and add to :attr:`_installed_packages`
@@ -529,18 +568,16 @@ class Packages():
         if self._env.include_dev_tools:
             requirements.extend(_DEV_TOOLS)
 
-        self._required_packages.extend(self._format_requirements(requirements))
+        self._required_packages.extend(self._parse_requirements(requirements))
         logger.debug(self._required_packages)
 
     def _check_conda_missing_dependencies(self) -> None:
         """ Check for conda missing dependencies and add to :attr:`_conda_missing_packages` """
         if not self._env.is_conda:
             return
-        for pkg in self._conda_required_packages:
-            reqs = next(parse_requirements(pkg[0]))  # TODO Handle '=' vs '==' for conda
-            key = reqs.unsafe_name
-            specs = reqs.specs
 
+        requirements = self._parse_requirements([p[0] for p in self._conda_required_packages])
+        for req, pkg in zip(requirements, self._conda_required_packages):
             if pkg[0] == "tk" and self._env.os_version[0].lower() == "linux":
                 # Default tk has bad fonts under Linux. We pull in an explicit build from
                 # Conda-Forge that is compiled with better fonts.
@@ -551,11 +588,11 @@ class Packages():
                 self._conda_missing_packages.append(_CONDA_MAPPING["xorg-libxft"])
                 continue
 
-            if key not in self._conda_installed_packages:
+            if req.name not in self._conda_installed_packages:
                 self._conda_missing_packages.append(pkg)
                 continue
 
-            if not self._validate_spec(specs, self._conda_installed_packages[key]):
+            if not req.specifier.contains(self._conda_installed_packages[req.name]):
                 self._conda_missing_packages.append(pkg)
         logger.debug(self._conda_missing_packages)
 
@@ -563,19 +600,21 @@ class Packages():
         """ Check for missing dependencies and add to :attr:`_missing_packages` """
         assert self._env.backend is not None
         force_pip = _FORCE_PIP.get("all", []) + _FORCE_PIP.get(self._env.backend, [])
-        for key, specs in self._required_packages:
+        for req in self._required_packages:
 
-            if self._env.is_conda and key not in force_pip:
+            if self._env.is_conda and req.name not in force_pip:
                 # Get Conda alias for Key
-                key = _CONDA_MAPPING.get(key, (key, None))[0]
+                new_name = _CONDA_MAPPING.get(req.name, (req.name, None))[0]
+                req = Requirement(str(req).replace(req.name, new_name))
 
-            if key not in self._all_installed_packages:
+            installed_version = self._all_installed_packages.get(req.name, "")
+            if not installed_version:
                 # Add not installed packages to missing packages list
-                self._missing_packages.append((key, specs))
+                self._missing_packages.append(req)
                 continue
 
-            if not self._validate_spec(specs, self._all_installed_packages.get(key, "")):
-                self._missing_packages.append((key, specs))
+            if not req.specifier.contains(installed_version):
+                self._missing_packages.append(req)
 
         logger.debug(self._missing_packages)
         self._check_conda_missing_dependencies()
@@ -704,7 +743,7 @@ class Checks():  # pylint:disable=too-few-public-methods
     def _check_rocm(self) -> None:
         """ Check for ROCm version """
         if self._env.backend != "rocm" or self._env.os_version[0] != "Linux":
-            logger.info("Skipping ROCm checks as not enabled")
+            logger.debug("Skipping ROCm checks as not enabled")
             return
 
         global _INSTALL_FAILED  # pylint:disable=global-statement
@@ -881,6 +920,7 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
             return False
 
         found = 0
+        major = minor = patchlevel = ""
         with open(cudnn_checkfile, "r", encoding="utf8") as ofile:
             for line in ofile:
                 if line.lower().startswith("#define cudnn_major"):
@@ -1015,25 +1055,6 @@ class Install():  # pylint:disable=too-few-public-methods
             logger.error("Please install system dependencies to continue")
             sys.exit(1)
 
-    @classmethod
-    def _format_package(cls, package: str, version: list[tuple[str, str]]) -> str:
-        """ Format a parsed requirement package and version string to a format that can be used by
-        the installer.
-
-        Parameters
-        ----------
-        package: str
-            The package name
-        version: list
-            The parsed requirement version strings
-
-        Returns
-        -------
-        str
-            The formatted full package and version string
-        """
-        return f"{package}{','.join(''.join(spec) for spec in version)}"
-
     def _install_setup_packages(self) -> None:
         """ Install any packages that are required for the setup.py installer to work. This
         includes the pexpect package if it is not already installed.
@@ -1041,9 +1062,9 @@ class Install():  # pylint:disable=too-few-public-methods
         Subprocess is used as we do not currently have pexpect
         """
         for pkg in self._packages.prerequisites:
-            pkg_str = self._format_package(*pkg)
+            pkg_str = str(pkg)
             if self._env.is_conda:
-                cmd = ["conda", "install", "-y"]
+                cmd = ["conda", "install", "-y", "-c", "defaults", "--override-channels"]
                 if any(char in pkg_str for char in (" ", "<", ">", "*", "|")):
                     pkg_str = f"\"{pkg_str}\""
             else:
@@ -1068,15 +1089,15 @@ class Install():  # pylint:disable=too-few-public-methods
         for group in _GROUPS:
             for item in group:
                 for idx, pkg in reversed(list(enumerate(self._packages.to_install))):
-                    if item != pkg[0] and not (item.endswith("*") and
-                                               pkg[0].startswith(item[:-1])):
+                    if item != pkg.name and not (item.endswith("*") and
+                                                 pkg.name.startswith(item[:-1])):
                         continue
                     i_pkg = self._packages.to_install.pop(idx)
-                    if i_pkg[0] in force_pip:
+                    if i_pkg.name in force_pip:
                         use_pip = True
-                    packages.append(self._format_package(*i_pkg))
+                    packages.append(str(i_pkg))
                     channels.update(next((v[1] for v in _CONDA_MAPPING.values()
-                                          if v[0] == i_pkg[0]),
+                                          if v[0] == i_pkg.name),
                                          ("defaults", )))
         if not packages:
             return
@@ -1096,20 +1117,22 @@ class Install():  # pylint:disable=too-few-public-methods
         """ Install required pip packages """
         conda_only = False
         assert self._env.backend is not None
-        for pkg, version in self._packages.to_install:
+        for pkg in self._packages.to_install:
+            name = pkg.name
             if self._env.is_conda:
-                pkg, channels = _CONDA_MAPPING.get(pkg, (pkg, ("defaults", )))
-                pip_only = pkg in _FORCE_PIP.get(self._env.backend, []) or pkg in _FORCE_PIP["all"]
-            pkg = self._format_package(pkg, version) if version else pkg
-            if self._env.is_conda and not pip_only:
-                if self._from_conda(pkg, channels=channels, conda_only=conda_only):
+                name, channels = _CONDA_MAPPING.get(name, (name, ("defaults", )))
+                pip_only = name in _FORCE_PIP.get(self._env.backend, []) + _FORCE_PIP["all"]
+                if not pip_only and self._from_conda(str(pkg),
+                                                     channels=channels,
+                                                     conda_only=conda_only):
                     continue
-            self._from_pip(pkg)
+
+            self._from_pip(str(pkg))
 
     def _install_missing_dep(self) -> None:
         """ Install missing dependencies """
-        self._install_conda_packages()  # Install required conda packages first
-        self._install_grouped_packages()  # Then install grouped packages
+        self._install_grouped_packages()  # Install grouped packages first
+        self._install_conda_packages()  # Then required conda packages first
         self._install_python_packages()
 
     def _from_conda(self,
@@ -1622,6 +1645,7 @@ class SubProcInstaller(Installer):
         """
         with Popen(self._command,
                    bufsize=0, stdout=PIPE, stderr=STDOUT, shell=self._shell) as proc:
+            lines = b""
             while True:
                 if proc.stdout is not None:
                     lines = proc.stdout.readline()
