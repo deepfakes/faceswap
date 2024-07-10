@@ -11,7 +11,7 @@ from importlib import import_module
 
 from lib.gpu_stats import GPUStats
 from lib.logger import crash_log, log_setup
-from lib.utils import FaceswapError, get_torch_version, safe_shutdown, set_backend
+from lib.utils import FaceswapError, get_backend, get_torch_version, safe_shutdown, set_backend
 
 if T.TYPE_CHECKING:
     import argparse
@@ -46,6 +46,10 @@ class ScriptExecutor():
             os.environ.pop("OMP_NUM_THREADS")
         logger.debug("Setting NUMEXPR_MAX_THREADS to %s", allocate)
         os.environ["NUMEXPR_MAX_THREADS"] = str(allocate)
+
+        if get_backend() == "apple_silicon":  # Let apple put unsupported ops on the CPU
+            logger.debug("Enabling unsupported Ops on CPU for Apple Silicon")
+            os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
     def _import_script(self) -> Callable:
         """ Imports the relevant script as indicated by :attr:`_command` from the scripts folder.
