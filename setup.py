@@ -1159,6 +1159,9 @@ class Install():  # pylint:disable=too-few-public-methods
         success = True
         condaexe = ["conda", "install", "-y"]
         if channels is not None:
+            if len(channels) > 1 and "defaults" in channels:
+                logger.debug("Setting default channel to lowest priority")
+                channels = [c for c in channels if c != "defaults"] + ["defaults"]
             for channel in channels:
                 condaexe.extend(["-c", channel])
             condaexe.append("--override-channels")
