@@ -410,6 +410,11 @@ class Packages():
         return bool(self._missing_packages or self._conda_missing_packages)
 
     @property
+    def required_packages(self) -> list[Requirement]:
+        """ list: The full list of required packages """
+        return self._required_packages
+
+    @property
     def to_install(self) -> list[Requirement]:
         """ list: The required packages that need to be installed """
         return self._missing_packages
@@ -1031,6 +1036,7 @@ class Install():  # pylint:disable=too-few-public-methods
         logger.info("Installing Required Python Packages. This may take some time...")
         self._install_setup_packages()
         self._install_missing_dep()
+        self._post_install_checks()
         if self._env.updater:
             return
         if not _INSTALL_FAILED:
@@ -1161,7 +1167,7 @@ class Install():  # pylint:disable=too-few-public-methods
         if channels is not None:
             if len(channels) > 1 and "defaults" in channels:
                 logger.debug("Setting default channel to lowest priority")
-                channels = [c for c in channels if c != "defaults"] + ["defaults"]
+                channels = tuple([c for c in channels if c != "defaults"] + ["defaults"])
             for channel in channels:
                 condaexe.extend(["-c", channel])
             condaexe.append("--override-channels")
@@ -1210,6 +1216,42 @@ class Install():  # pylint:disable=too-few-public-methods
                            package)
             global _INSTALL_FAILED  # pylint:disable=global-statement
             _INSTALL_FAILED = True
+
+    def _downgrade_pillow(self) -> None:
+        """ Downgrade pillow from the Conda version to the pip version. This is generally seen as
+         a bad idea, but is currently the best solution available. """
+        pillow = next((p for p in self._packages.required_packages if p.name == "pillow"), "")
+        if not pillow:
+            logger.debug("Pillow is not a required package")
+            return
+        logger.debug("Re-installing pillow from pip")
+        self._from_pip(str(pillow), extra_args="--upgrade --force-reinstall")
+
+    def _post_install_checks(self) -> None:
+        """ Any post installation actions to perform.
+
+        Currently there is an issue on some Conda Windows installs where the following error
+        occurs when importing Pillow:
+
+        ImportError: DLL load failed while importing _imaging: The specified module could not be
+        found.
+
+        At the time of writing there is no clear indication of why this occurs, but the
+        installation of Pillow from pip appears to remedy the situation
+        """
+        if self._env.os_version[0] != "Windows" or not self._env.is_conda:
+            return
+
+        try:
+            from PIL import Image  # noqa:F401 pylint:disable=unused-import,import-outside-toplevel
+        except ImportError as err:
+            if "DLL load failed while importing _imaging" in str(err):
+                logger.debug("Handling pillow import error: '%s'", str(err))
+                self._downgrade_pillow()
+                return
+            logger.warning("Unhandled error when checking Pillow: %s", str(err))
+            return
+        logger.debug("Pillow check passed")
 
 
 class ProgressBar():
@@ -1407,7 +1449,7 @@ class Installer():
         """
         pkg = self._re_pip_pkg.match(text)
         if pkg:
-            logger.debug("Collected pip package '%s'", pkg)
+            logger.debug("Collected pip package %s", pkg)
             self._pip_pkg = pkg.groupdict()["lib"].decode("utf-8", errors="replace")
             return
         data = self._re_pip.search(text)
