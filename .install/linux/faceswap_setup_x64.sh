@@ -380,7 +380,9 @@ activate_env() {
 install_git() {
     # Install git inside conda environment
     info "Installing Git..."
-    yellow ; conda install git -q -y
+    # TODO On linux version 2.45.2 makes the font fixed TK pull in Python from
+    # graalpy, which breaks pretty much everything
+    yellow ; conda install "git<2.45" -q -y
 }
 
 delete_faceswap() {
