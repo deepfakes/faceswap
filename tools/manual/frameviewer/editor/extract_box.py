@@ -56,7 +56,7 @@ class ExtractBox(Editor):
         for idx, face in enumerate(self._face_iterator):
             logger.trace("Drawing Extract Box: (idx: %s)", idx)
             if self._globals.is_zoomed:
-                box = np.array((roi[0], roi[1], roi[2], roi[1], roi[2], roi[3], roi[0], roi[3]))
+                box = np.asarray((roi[0], roi[1], roi[2], roi[1], roi[2], roi[3], roi[0], roi[3]))
             else:
                 aligned = AlignedFace(face.landmarks_xy, centering="face")
                 box = self._scale_to_display(aligned.original_roi).flatten()
@@ -193,10 +193,10 @@ class ExtractBox(Editor):
             ``True`` if cursor is over a rotate point otherwise ``False``
         """
         distance = 30
-        boxes = np.array([np.array(self._canvas.coords(item_id)).reshape(4, 2)
+        boxes = np.asarray([np.asarray(self._canvas.coords(item_id)).reshape(4, 2)
                           for item_id in self._canvas.find_withtag("eb_box")
                           if self._canvas.itemcget(item_id, "state") != "hidden"])
-        position = np.array((event.x, event.y)).astype("float32")
+        position = np.asarray((event.x, event.y)).astype("float32")
         for face_idx, points in enumerate(boxes):
             if any(np.all(position > point - distance) and np.all(position < point + distance)
                    for point in points):
@@ -226,7 +226,7 @@ class ExtractBox(Editor):
             self._drag_data = {}
             self._drag_callback = None
             return
-        self._drag_data["current_location"] = np.array((event.x, event.y))
+        self._drag_data["current_location"] = np.asarray((event.x, event.y))
         callback = {"anchor": self._resize, "rotate": self._rotate, "box": self._move}
         self._drag_callback = callback[self._mouse_location[0]]
 
@@ -256,7 +256,7 @@ class ExtractBox(Editor):
             return
         shift_x = event.x - self._drag_data["current_location"][0]
         shift_y = event.y - self._drag_data["current_location"][1]
-        scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
+        scaled_shift = self.scale_from_display(np.asarray((shift_x, shift_y)), do_offset=False)
         self._det_faces.update.landmarks(self._globals.frame_index,
                                          self._mouse_location[1],
                                          *scaled_shift)
@@ -272,9 +272,9 @@ class ExtractBox(Editor):
         """
         face_idx = self._mouse_location[1]
         face_tag = f"eb_box_face_{face_idx}"
-        position = np.array((event.x, event.y))
-        box = np.array(self._canvas.coords(face_tag))
-        center = np.array((sum(box[0::2]) / 4, sum(box[1::2]) / 4))
+        position = np.asarray((event.x, event.y))
+        box = np.asarray(self._canvas.coords(face_tag))
+        center = np.asarray((sum(box[0::2]) / 4, sum(box[1::2]) / 4))
         if not self._check_in_bounds(center, box, position):
             logger.trace("Drag out of bounds. Not updating")
             self._drag_data["current_location"] = position
@@ -319,11 +319,11 @@ class ExtractBox(Editor):
             ``True`` if the drag operation does not cross the center point otherwise ``False``
         """
         # Generate lines that span the full frame (x and y) along the center point
-        center_x = np.array(((center[0], 0), (center[0], self._globals.frame_display_dims[1])))
-        center_y = np.array(((0, center[1]), (self._globals.frame_display_dims[0], center[1])))
+        center_x = np.asarray(((center[0], 0), (center[0], self._globals.frame_display_dims[1])))
+        center_y = np.asarray(((0, center[1]), (self._globals.frame_display_dims[0], center[1])))
 
         # Generate a line coming from the current corner location to the current cursor position
-        full_line = np.array((box[self._mouse_location[2] * 2:self._mouse_location[2] * 2 + 2],
+        full_line = np.asarray((box[self._mouse_location[2] * 2:self._mouse_location[2] * 2 + 2],
                               position))
         logger.trace("center: %s, center_x_line: %s, center_y_line: %s, full_line: %s",
                      center, center_x, center_y, full_line)
@@ -367,10 +367,10 @@ class ExtractBox(Editor):
         """
         face_idx = self._mouse_location[1]
         face_tag = f"eb_box_face_{face_idx}"
-        box = np.array(self._canvas.coords(face_tag))
-        position = np.array((event.x, event.y))
+        box = np.asarray(self._canvas.coords(face_tag))
+        position = np.asarray((event.x, event.y))
 
-        center = np.array((sum(box[0::2]) / 4, sum(box[1::2]) / 4))
+        center = np.asarray((sum(box[0::2]) / 4, sum(box[1::2]) / 4))
         init_to_center = self._drag_data["current_location"] - center
         new_to_center = position - center
         angle = np.rad2deg(np.arctan2(*new_to_center) - np.arctan2(*init_to_center))

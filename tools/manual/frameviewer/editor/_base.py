@@ -93,7 +93,7 @@ class Editor():
         top = 0
         right = self._globals.frame_display_dims[0] / 2 + half_size
         bottom = self._globals.frame_display_dims[1]
-        retval = np.rint(np.array((left, top, right, bottom))).astype("int32")
+        retval = np.rint(np.asarray((left, top, right, bottom))).astype("int32")
         logger.trace("Zoomed ROI: %s", retval)
         return retval
 

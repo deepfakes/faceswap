@@ -108,7 +108,7 @@ class FromFaces():
             alignments file in positin 2
         """
         alignment = metadata["alignments"]
-        alignment["landmarks_xy"] = np.array(alignment["landmarks_xy"], dtype="float32")
+        alignment["landmarks_xy"] = np.asarray(alignment["landmarks_xy"], dtype="float32")
 
         src = metadata["source"]
         frame_name = src["source_filename"]
