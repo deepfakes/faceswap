@@ -418,7 +418,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
         self.images: dict[T.Literal["a", "b"], list[np.ndarray]] = {}
         self._coverage_ratio = coverage_ratio
         self._mask_opacity = mask_opacity / 100.0
-        self._mask_color = np.array(hex_to_rgb(mask_color))[..., 2::-1] / 255.
+        self._mask_color = np.asarray(hex_to_rgb(mask_color))[..., 2::-1] / 255.
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def toggle_mask_display(self) -> None:
@@ -479,7 +479,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
         logger.debug("Resizing sample: (side: '%s', sample.shape: %s, target_size: %s, scale: %s)",
                      side, sample.shape, target_size, scale)
         interpn = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA
-        retval = np.array([cv2.resize(img, (target_size, target_size), interpolation=interpn)
+        retval = np.asarray([cv2.resize(img, (target_size, target_size), interpolation=interpn)
                            for img in sample])
         logger.debug("Resized sample: (side: '%s' shape: %s)", side, retval.shape)
         return retval
@@ -916,7 +916,7 @@ def _stack_images(images: np.ndarray) -> np.ndarray:
             x_axes = list(range(1, num - 1, 2))
         return y_axes, x_axes, [num - 1]
 
-    images_shape = np.array(images.shape)
+    images_shape = np.asarray(images.shape)
     new_axes = get_transpose_axes(len(images_shape))
     new_shape = [np.prod(images_shape[x]) for x in new_axes]
     logger.debug("Stacked images")

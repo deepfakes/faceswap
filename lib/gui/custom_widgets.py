@@ -841,10 +841,10 @@ class PopupProgress(tk.Toplevel):
         self._lbl_title = self._set_title(title)
         self._progress_bar = self._get_progress_bar()
 
-        offset = np.array((self.master.winfo_rootx(), self.master.winfo_rooty()))
+        offset = np.asarray((self.master.winfo_rootx(), self.master.winfo_rooty()))
         # TODO find way to get dimensions of the pop up without it flicking onto the screen
         self.update_idletasks()
-        center = np.array((
+        center = np.asarray((
             (self.master.winfo_width() // 2) - (self.winfo_width() // 2),
             (self.master.winfo_height() // 2) - (self.winfo_height() // 2))) + offset
         self.wm_geometry(f"+{center[0]}+{center[1]}")

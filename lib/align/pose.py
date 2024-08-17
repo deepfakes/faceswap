@@ -55,7 +55,7 @@ class PoseEstimate():
         """ :class:`numpy.ndarray` projected (x, y) coordinates for each x, y, z point at a
         constant distance from adjusted center of the skull (0.5, 0.5) in the 2D space. """
         if self._xyz_2d is None:
-            xyz = cv2.projectPoints(np.array([[6., 0., -2.3],
+            xyz = cv2.projectPoints(np.asarray([[6., 0., -2.3],
                                               [0., 6., -2.3],
                                               [0., 0., 3.7]]).astype("float32"),
                                     self._rotation,
@@ -119,7 +119,7 @@ class PoseEstimate():
             An estimated camera matrix
         """
         focal_length = 4
-        camera_matrix = np.array([[focal_length, 0, 0.5],
+        camera_matrix = np.asarray([[focal_length, 0, 0.5],
                                   [0, focal_length, 0.5],
                                   [0, 0, 1]], dtype="double")
         logger.trace("camera_matrix: %s", camera_matrix)  # type:ignore[attr-defined]
@@ -145,7 +145,7 @@ class PoseEstimate():
         """
         if self._landmarks_type != LandmarkType.LM_2D_68:
             points: np.ndarray = np.empty([])
-            rotation = np.array([[0.0], [0.0], [0.0]])
+            rotation = np.asarray([[0.0], [0.0], [0.0]])
             translation = rotation.copy()
         else:
             points = landmarks[[6, 7, 8, 9, 10, 17, 21, 22, 26, 31, 32, 33, 34,
@@ -168,20 +168,20 @@ class PoseEstimate():
         :class:`numpy.ndarray`
             The x, y offset of the new center from the old center.
         """
-        offset: dict[CenteringType, np.ndarray] = {"legacy": np.array([0.0, 0.0])}
+        offset: dict[CenteringType, np.ndarray] = {"legacy": np.asarray([0.0, 0.0])}
         if self._landmarks_type != LandmarkType.LM_2D_68:
-            offset["face"] = np.array([0.0, 0.0])
-            offset["head"] = np.array([0.0, 0.0])
+            offset["face"] = np.asarray([0.0, 0.0])
+            offset["head"] = np.asarray([0.0, 0.0])
         else:
             points: dict[T.Literal["face", "head"], tuple[float, ...]] = {"head": (0.0, 0.0, -2.3),
                                                                           "face": (0.0, -1.5, 4.2)}
             for key, pnts in points.items():
-                center = cv2.projectPoints(np.array([pnts]).astype("float32"),
+                center = cv2.projectPoints(np.asarray([pnts]).astype("float32"),
                                            self._rotation,
                                            self._translation,
                                            self._camera_matrix,
                                            self._distortion_coefficients)[0].squeeze()
                 logger.trace("center %s: %s", key, center)  # type:ignore[attr-defined]
-                offset[key] = center - np.array([0.5, 0.5])
+                offset[key] = center - np.asarray([0.5, 0.5])
         logger.trace("offset: %s", offset)  # type:ignore[attr-defined]
         return offset

@@ -248,7 +248,7 @@ class ListToNumpy(_Updater):
             for alignment in val["faces"]:
                 test = alignment["landmarks_xy"]
                 if not isinstance(test, np.ndarray):
-                    alignment["landmarks_xy"] = np.array(test, dtype="float32")
+                    alignment["landmarks_xy"] = np.asarray(test, dtype="float32")
                     update_count += 1
         return update_count
 

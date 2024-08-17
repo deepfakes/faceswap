@@ -388,7 +388,7 @@ class IdentityFilter():
         """
         encodings = self._filter if filter_type == "filter" else self._nfilter
         assert encodings is not None
-        distances = np.array([self._find_cosine_similiarity(encodings, identity)
+        distances = np.asarray([self._find_cosine_similiarity(encodings, identity)
                               for identity in identities])
         is_match = np.any(distances >= self._threshold, axis=-1)
         # Invert for filter (set the `True` match to `False` for should filter)
@@ -462,7 +462,7 @@ class IdentityFilter():
         if not self._active:
             return faces
 
-        identities = np.array([face.identity["vggface2"] for face, fldr in zip(faces, sub_folders)
+        identities = np.asarray([face.identity["vggface2"] for face, fldr in zip(faces, sub_folders)
                                if fldr is None])
         logger.trace("face_count: %s, already_filtered: %s, identity_shape: %s",  # type: ignore
                      len(faces), sum(x is not None for x in sub_folders), identities.shape)
@@ -478,7 +478,7 @@ class IdentityFilter():
             should_filter.append(self._get_matches(f_type, identities))
 
         # If any of the filter or nfilter evaluate to 'should filter' then filter out face
-        final_filter: list[bool] = np.array(should_filter).max(axis=0).tolist()
+        final_filter: list[bool] = np.asarray(should_filter).max(axis=0).tolist()
         logger.trace("should_filter: %s, final_filter: %s",  # type: ignore
                      should_filter, final_filter)
         return self._filter_faces(faces, sub_folders, final_filter)

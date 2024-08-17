@@ -76,7 +76,7 @@ class Detect(Detector):
         batch: :class:`~plugins.extract.detect._base.DetectorBatch`
             Contains the batch that is currently being passed through the plugin process
         """
-        batch.feed = (np.array(batch.image, dtype="float32") - 127.5) / 127.5
+        batch.feed = (np.asarray(batch.image, dtype="float32") - 127.5) / 127.5
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions
@@ -271,7 +271,7 @@ class PNet(KSession):
                 rectangles[idx].extend(rect)
                 scores[idx].extend(score)
 
-        return [nms(np.array(rect), np.array(score), 0.7, "iou")[0]  # don't output scores
+        return [nms(np.asarray(rect), np.asarray(score), 0.7, "iou")[0]  # don't output scores
                 for rect, score in zip(rectangles, scores)]
 
     def _detect_face_12net(self,
@@ -300,14 +300,14 @@ class PNet(KSession):
         in_side = 2 * size + 11
         stride = 0. if size == 1 else float(in_side - 12) / (size - 1)
         (var_x, var_y) = np.nonzero(class_probabilities >= self._threshold)
-        boundingbox = np.array([var_x, var_y]).T
+        boundingbox = np.asarray([var_x, var_y]).T
 
         boundingbox = np.concatenate((np.fix((stride * (boundingbox) + 0) * scale),
                                       np.fix((stride * (boundingbox) + 11) * scale)), axis=1)
         offset = roi[:4, var_x, var_y].T
         boundingbox = boundingbox + offset * 12.0 * scale
         rectangles = np.concatenate((boundingbox,
-                                     np.array([class_probabilities[var_x, var_y]]).T), axis=1)
+                                     np.asarray([class_probabilities[var_x, var_y]]).T), axis=1)
         rectangles = rect2square(rectangles)
 
         np.clip(rectangles[..., :4], 0., self._input_size, out=rectangles[..., :4])
@@ -402,7 +402,7 @@ class RNet(KSession):
         ret: list[np.ndarray] = []
         for idx, (rectangles, image) in enumerate(zip(rectangle_batch, images)):
             if not np.any(rectangles):
-                ret.append(np.array([]))
+                ret.append(np.asarray([]))
                 continue
 
             feed_batch = np.empty((rectangles.shape[0], 24, 24, 3), dtype="float32")
@@ -441,7 +441,7 @@ class RNet(KSession):
         pick = np.nonzero(prob >= self._threshold)
 
         bbox = rectangles.T[:4, pick]
-        scores = np.array([prob[pick]]).T.ravel()
+        scores = np.asarray([prob[pick]]).T.ravel()
         deltas = roi.T[:4, pick]
 
         dims = np.tile([bbox[2] - bbox[0], bbox[3] - bbox[1]], (2, 1, 1))
@@ -575,10 +575,10 @@ class ONet(KSession):
         """
         prob = class_probabilities[:, 1]
         pick = np.nonzero(prob >= self._threshold)[0]
-        scores = np.array([prob[pick]]).T.ravel()
+        scores = np.asarray([prob[pick]]).T.ravel()
 
         bbox = rectangles[pick]
-        dims = np.array([bbox[..., 2] - bbox[..., 0], bbox[..., 3] - bbox[..., 1]]).T
+        dims = np.asarray([bbox[..., 2] - bbox[..., 0], bbox[..., 3] - bbox[..., 1]]).T
 
         pts = np.vstack(
             np.hsplit(points[pick], 2)).reshape(2, -1, 5).transpose(1, 2, 0).reshape(-1, 10)
@@ -678,7 +678,7 @@ class MTCNN():  # pylint:disable=too-few-public-methods
         rectangles = self._rnet(batch, rectangles)
 
         ret_boxes, ret_points = zip(*self._onet(batch, rectangles))
-        return np.array(ret_boxes, dtype="object"), ret_points
+        return np.asarray(ret_boxes, dtype="object"), ret_points
 
 
 def nms(rectangles: np.ndarray,

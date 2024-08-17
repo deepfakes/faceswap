@@ -154,7 +154,7 @@ class Draw():
         face: :class:`lib.align.DetectedFace`
             The aligned face loaded for head centering
         """
-        center = np.array((face.aligned.size / 2,
+        center = np.asarray((face.aligned.size / 2,
                            face.aligned.size / 2)).astype("int32").reshape(1, 2)
         center = np.rint(face.aligned.transform_points(center, invert=True)).astype("int32")
         points = face.aligned.pose.xyz_2d * face.aligned.size
@@ -456,11 +456,11 @@ class Extract():
             new_size = int(size + (size * EXTRACT_RATIOS["face"]) / 2)
 
             shift = np.rint(offset * (size - (size * EXTRACT_RATIOS["face"]))).astype("int32")
-            pos = np.array([(new_size // 2 - size // 2) - shift[1],
+            pos = np.asarray([(new_size // 2 - size // 2) - shift[1],
                             (new_size // 2) + (size // 2) - shift[1],
                             (new_size // 2 - size // 2) - shift[0],
                             (new_size // 2) + (size // 2) - shift[0]])
-            bounds = np.array([max(0, pos[0]), min(new_size, pos[1]),
+            bounds = np.asarray([max(0, pos[0]), min(new_size, pos[1]),
                                max(0, pos[2]), min(new_size, pos[3])])
 
             slice_in = [slice(0 - (pos[0] - bounds[0]), size - (pos[1] - bounds[1])),

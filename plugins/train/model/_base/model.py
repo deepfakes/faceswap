@@ -818,7 +818,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
         list
             The (node name, output index) for each node passed in
         """
-        anodes = np.array(nodes, dtype="object")[..., :3]
+        anodes = np.asarray(nodes, dtype="object")[..., :3]
         num_layers = anodes.shape[0]
         anodes = anodes[self._output_idx] if num_layers == 2 else anodes[0]
 
@@ -891,7 +891,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
             The layer name as key with the input name and output index as value.
         """
         # Filter output layer
-        out = np.array(self._config["output_layers"], dtype="object")
+        out = np.asarray(self._config["output_layers"], dtype="object")
         if out.ndim == 2:
             out = np.expand_dims(out, axis=1)  # Needs to be expanded for _get_nodes
         outputs = self._get_nodes(out)

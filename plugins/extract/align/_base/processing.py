@@ -352,8 +352,8 @@ class ReAlign():
         with self._queue_lock:
             logger.trace("Queueing for second pass: %s", batch)  # type: ignore[attr-defined]
             batch.second_pass = True
-            batch.feed = np.array([])
-            batch.prediction = np.array([])
+            batch.feed = np.asarray([])
+            batch.prediction = np.asarray([])
             batch.refeeds = []
             batch.data = []
             self._queued.append(batch)
@@ -397,7 +397,7 @@ class ReAlign():
                                              centering=self._centering)
                                  for image, lms, msk in zip(batch.image, landmarks, masks)
                                  if not msk]
-                faces = np.array([aligned.face for aligned in aligned_faces
+                faces = np.asarray([aligned.face for aligned in aligned_faces
                                  if aligned.face is not None])
                 retval.append(faces)
                 batch.data.append({"aligned_faces": aligned_faces})
@@ -408,7 +408,7 @@ class ReAlign():
 
         with self._tracked_lock:
             self._tracked_batchs[batch.batch_id] = {"filtered_landmarks": filtered_landmarks}
-        batch.landmarks = np.array([])  # Clear the old landmarks
+        batch.landmarks = np.asarray([])  # Clear the old landmarks
         return retval
 
     def _transform_to_frame(self, batch: AlignerBatch) -> np.ndarray:
@@ -427,7 +427,7 @@ class ReAlign():
             The landmarks transformed to frame space
         """
         faces: list[AlignedFace] = batch.data[0]["aligned_faces"]
-        retval = np.array([aligned.transform_points(landmarks, invert=True)
+        retval = np.asarray([aligned.transform_points(landmarks, invert=True)
                            for landmarks, aligned in zip(batch.landmarks, faces)])
         logger.trace("Transformed points: original max: %s, "  # type: ignore[attr-defined]
                      "new max: %s", batch.landmarks.max(), retval.max())

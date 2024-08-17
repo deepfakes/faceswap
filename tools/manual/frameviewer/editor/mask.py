@@ -163,7 +163,7 @@ class Mask(Editor):
         key = self.__class__.__name__
         mask_type = self._control_vars["display"]["MaskType"].get().lower()
         color = self._control_color[1:]
-        rgb_color = np.array(tuple(int(color[i:i + 2], 16) for i in (0, 2, 4)))
+        rgb_color = np.asarray(tuple(int(color[i:i + 2], 16) for i in (0, 2, 4)))
         roi_color = self._annotation_formats["ExtractBox"]["color"].get()
         opacity = self._opacity
         for idx, face in enumerate(self._face_iterator):
@@ -247,12 +247,12 @@ class Mask(Editor):
                      slice(int(round(min_max["min"][0])), int(round(min_max["max"][0]))))
 
         # Adjust affine matrix for internal mask size and display dimensions
-        adjustments = (np.array([[mask_scale, 0., 0.], [0., mask_scale, 0.]]),
-                       np.array([[1 / self._globals.current_frame.scale, 0., 0.],
+        adjustments = (np.asarray([[mask_scale, 0., 0.], [0., mask_scale, 0.]]),
+                       np.asarray([[1 / self._globals.current_frame.scale, 0., 0.],
                                  [0., 1 / self._globals.current_frame.scale, 0.],
                                  [0., 0., 1.]]))
         in_matrix = np.dot(adjustments[0],
-                           np.concatenate((mask.affine_matrix, np.array([[0., 0., 1.]]))))
+                           np.concatenate((mask.affine_matrix, np.asarray([[0., 0., 1.]]))))
         affine_matrix = np.dot(in_matrix, adjustments[1])
 
         # Get the size of the mask roi box in the frame
@@ -375,7 +375,7 @@ class Mask(Editor):
         """
         if self._globals.is_zoomed:
             roi = self._zoomed_roi
-            box = np.array((roi[0], roi[1], roi[2], roi[1], roi[2], roi[3], roi[0], roi[3]))
+            box = np.asarray((roi[0], roi[1], roi[2], roi[1], roi[2], roi[3], roi[0], roi[3]))
         else:
             box = self._scale_to_display(mask.original_roi).flatten()
         top_left = box[:2] - 10
@@ -455,14 +455,14 @@ class Mask(Editor):
             self._drag_data = {}
             self._drag_callback = None
         else:
-            self._drag_data["starting_location"] = np.array((event.x, event.y))
+            self._drag_data["starting_location"] = np.asarray((event.x, event.y))
             self._drag_data["control_click"] = control_click
-            self._drag_data["color"] = np.array(tuple(int(self._control_color[1:][i:i + 2], 16)
+            self._drag_data["color"] = np.asarray(tuple(int(self._control_color[1:][i:i + 2], 16)
                                                       for i in (0, 2, 4)))
             self._drag_data["opacity"] = self._opacity
             self._get_cursor_shape_mark(
                 self._meta["mask"][face_idx],
-                np.array(((event.x, event.y), )),
+                np.asarray(((event.x, event.y), )),
                 face_idx)
             self._drag_callback = self._paint
 
@@ -475,7 +475,7 @@ class Mask(Editor):
             The tkinter mouse event.
         """
         face_idx = self._mouse_location[1]
-        line = np.array((self._drag_data["starting_location"], (event.x, event.y)))
+        line = np.asarray((self._drag_data["starting_location"], (event.x, event.y)))
         line, scale = self._transform_points(face_idx, line)
         brush_radius = int(round(self._brush_radius * scale))
         color = 0 if self._edit_mode == "erase" else 255
@@ -490,7 +490,7 @@ class Mask(Editor):
                                 face_idx,
                                 self._drag_data["color"],
                                 self._drag_data["opacity"])
-        self._drag_data["starting_location"] = np.array((event.x, event.y))
+        self._drag_data["starting_location"] = np.asarray((event.x, event.y))
         self._update_cursor(event)
 
     def _transform_points(self, face_index, points):
@@ -530,8 +530,8 @@ class Mask(Editor):
         if not self._drag_data:
             return
         face_idx = self._mouse_location[1]
-        location = np.array(((event.x, event.y), ))
-        if np.array_equal(self._drag_data["starting_location"], location[0]):
+        location = np.asarray(((event.x, event.y), ))
+        if np.asarray_equal(self._drag_data["starting_location"], location[0]):
             self._get_cursor_shape_mark(self._meta["mask"][face_idx], location, face_idx)
         self._mask_to_alignments(face_idx)
         self._drag_data = {}

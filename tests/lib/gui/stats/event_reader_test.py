@@ -67,8 +67,8 @@ def test__logfiles(tmp_path: str):
 def test__cachedata():
     """ Test the _CacheData class operates correctly """
     labels = ["label_a", "label_b"]
-    timestamps = np.array([1.23, 4.56], dtype="float64")
-    loss = np.array([[2.34, 5.67], [3.45, 6.78]], dtype="float32")
+    timestamps = np.asarray([1.23, 4.56], dtype="float64")
+    loss = np.asarray([[2.34, 5.67], [3.45, 6.78]], dtype="float32")
 
     # Initial test
     cache = _CacheData(labels, timestamps, loss)
@@ -79,8 +79,8 @@ def test__cachedata():
     np.testing.assert_array_equal(cache.loss, loss)
 
     # Add data test
-    new_timestamps = np.array([2.34, 6.78], dtype="float64")
-    new_loss = np.array([[3.45, 7.89], [8.90, 1.23]], dtype="float32")
+    new_timestamps = np.asarray([2.34, 6.78], dtype="float64")
+    new_loss = np.asarray([[3.45, 7.89], [8.90, 1.23]], dtype="float32")
 
     expected_timestamps = np.concatenate([timestamps, new_timestamps])
     expected_loss = np.concatenate([loss, new_loss])
@@ -113,8 +113,8 @@ class Test_Cache:  # pylint:disable=invalid-name
         cache = _Cache()
 
         data = _CacheData(["test_1", "test_2"],
-                          np.array([1.23, ], dtype="float64"),
-                          np.array([[2.34, ], [4.56]], dtype="float32"))
+                          np.asarray([1.23, ], dtype="float64"),
+                          np.asarray([[2.34, ], [4.56]], dtype="float32"))
         cache._data[1] = data
         assert cache.is_cached(1)
         assert not cache.is_cached(2)
@@ -138,8 +138,8 @@ class Test_Cache:  # pylint:disable=invalid-name
         cache.cache_data(session_id, data, labels, is_live)
         assert cache._loss_labels == labels
         assert cache.is_cached(session_id)
-        np.testing.assert_array_equal(cache._data[session_id].timestamps, np.array([4., 5.]))
-        np.testing.assert_array_equal(cache._data[session_id].loss, np.array([[1., 2.], [3., 4.]]))
+        np.testing.assert_array_equal(cache._data[session_id].timestamps, np.asarray([4., 5.]))
+        np.testing.assert_array_equal(cache._data[session_id].loss, np.asarray([[1., 2.], [3., 4.]]))
 
         add_live = mocker.patch("lib.gui.analysis.event_reader._Cache._add_latest_live")
         is_live = True
@@ -156,22 +156,22 @@ class Test_Cache:  # pylint:disable=invalid-name
         # Non-live
         is_live = False
         times, loss = cache._to_numpy(data, is_live)
-        np.testing.assert_array_equal(times, np.array([4., 5.]))
-        np.testing.assert_array_equal(loss, np.array([[1., 2.], [3., 4.]]))
+        np.testing.assert_array_equal(times, np.asarray([4., 5.]))
+        np.testing.assert_array_equal(loss, np.asarray([[1., 2.], [3., 4.]]))
 
         # Correctly collected live
         is_live = True
         times, loss = cache._to_numpy(data, is_live)
-        np.testing.assert_array_equal(times, np.array([4., 5.]))
-        np.testing.assert_array_equal(loss, np.array([[1., 2.], [3., 4.]]))
+        np.testing.assert_array_equal(times, np.asarray([4., 5.]))
+        np.testing.assert_array_equal(loss, np.asarray([[1., 2.], [3., 4.]]))
 
         # Incorrectly collected live
         live_data = {1: EventData(4., [1., 2.]),
                      2: EventData(5., [3.]),
                      3: EventData(6., [4., 5., 6.])}
         times, loss = cache._to_numpy(live_data, is_live)
-        np.testing.assert_array_equal(times, np.array([4.]))
-        np.testing.assert_array_equal(loss, np.array([[1., 2.]]))
+        np.testing.assert_array_equal(times, np.asarray([4.]))
+        np.testing.assert_array_equal(loss, np.asarray([[1., 2.]]))
 
     @staticmethod
     def test__collect_carry_over() -> None:
@@ -195,8 +195,8 @@ class Test_Cache:  # pylint:disable=invalid-name
                 2: EventData(5., [7., 8.]),
                 3: EventData(6., [9.])}
         is_live = False
-        expected_timestamps = np.array([4., 5.])
-        expected_loss = np.array([[5., 6.], [7., 8.]])
+        expected_timestamps = np.asarray([4., 5.])
+        expected_loss = np.asarray([[5., 6.], [7., 8.]])
         expected_carry_over = {3: EventData(6., [9.])}
 
         timestamps, loss = cache._process_data(data, is_live)
@@ -216,10 +216,10 @@ class Test_Cache:  # pylint:disable=invalid-name
         session_id = 1
         labels = ['label1', 'label2']
         data = {1: EventData(3., [5., 6.]), 2: EventData(4., [7., 8.])}
-        new_timestamp = np.array([5.], dtype="float64")
-        new_loss = np.array([[8., 9.]], dtype="float32")
-        expected_timestamps = np.array([3., 4., 5.])
-        expected_loss = np.array([[5., 6.], [7., 8.], [8., 9.]])
+        new_timestamp = np.asarray([5.], dtype="float64")
+        new_loss = np.asarray([[8., 9.]], dtype="float32")
+        expected_timestamps = np.asarray([3., 4., 5.])
+        expected_loss = np.asarray([[5., 6.], [7., 8.], [8., 9.]])
 
         cache = _Cache()
         cache.cache_data(session_id, data, labels)  # Initial data
@@ -241,8 +241,8 @@ class Test_Cache:  # pylint:disable=invalid-name
 
         labels = ['label1', 'label2']
         data = {1: EventData(3., [5., 6.]), 2: EventData(4., [7., 8.])}
-        expected_timestamps = np.array([3., 4.])
-        expected_loss = np.array([[5., 6.], [7., 8.]])
+        expected_timestamps = np.asarray([3., 4.])
+        expected_loss = np.asarray([[5., 6.], [7., 8.]])
 
         cache.cache_data(session_id, data, labels, is_live=False)
         get_timestamps = cache.get_data(session_id, "timestamps")
@@ -708,7 +708,7 @@ class Test_EventParser:  # pylint:disable=invalid-name
         outputs = [["decoder_a", 1, 0], ["decoder_b", 1, 0]]
         model_config = {"output_layers": outputs}
 
-        expected = np.array([[out] for out in outputs])
+        expected = np.asarray([[out] for out in outputs])
         actual = event_parser_instance._get_outputs(model_config)
         assert isinstance(actual, np.ndarray)
         assert actual.shape == (2, 1, 3)

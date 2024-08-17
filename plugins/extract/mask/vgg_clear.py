@@ -47,7 +47,7 @@ class Mask(Masker):
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
         assert isinstance(batch, MaskerBatch)
-        input_ = np.array([T.cast(np.ndarray, feed.face)[..., :3]
+        input_ = np.asarray([T.cast(np.ndarray, feed.face)[..., :3]
                            for feed in batch.feed_faces], dtype="float32")
         batch.feed = input_ - np.mean(input_, axis=(1, 2))[:, None, None, :]
         logger.trace("feed shape: %s", batch.feed.shape)  # type: ignore

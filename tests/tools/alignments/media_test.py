@@ -819,9 +819,9 @@ class TestExtractedFaces:
         faces.get_faces_in_frame(frame, update=True, image=img)
         faces.get_faces.assert_called_once_with(frame, image=img)
 
-    _params = [(np.array(([[25, 47], [32, 232], [244, 237], [240, 21]])), 216),
-               (np.array(([[127, 392], [403, 510], [32, 237], [19, 210]])), 211),
-               (np.array(([[26, 1927], [112, 1234], [1683, 1433], [78, 1155]])), 773)]
+    _params = [(np.asarray(([[25, 47], [32, 232], [244, 237], [240, 21]])), 216),
+               (np.asarray(([[127, 392], [403, 510], [32, 237], [19, 210]])), 211),
+               (np.asarray(([[26, 1927], [112, 1234], [1683, 1433], [78, 1155]])), 773)]
 
     @pytest.mark.parametrize("roi,expected", _params)
     def test_get_roi_size_for_frame(self,

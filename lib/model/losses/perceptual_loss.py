@@ -214,7 +214,7 @@ class GMSDLoss():  # pylint:disable=too-few-public-methods
         image_shape = K.shape(image)
 
         # 5x5 modified Scharr kernel ( reshape to (5,5,1,2) )
-        matrix = np.array([[[[0.00070, 0.00070]],
+        matrix = np.asarray([[[[0.00070, 0.00070]],
                             [[0.00520, 0.00370]],
                             [[0.03700, 0.00000]],
                             [[0.00520, -0.0037]],
@@ -540,7 +540,7 @@ class _SpatialFilters():  # pylint:disable=too-few-public-methods
                                                      mapping["BY"]["b1"],
                                                      mapping["BY"]["b2"])
 
-        weights = np.array([self._generate_weights(mapping[channel], domain)
+        weights = np.asarray([self._generate_weights(mapping[channel], domain)
                             for channel in ("A", "RG", "BY")])
         weights = K.constant(np.moveaxis(weights, 0, -1), dtype="float32")
 

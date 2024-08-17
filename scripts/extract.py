@@ -208,8 +208,8 @@ class Filter():
             logger.debug("Filter not selected. Exiting %s", self.__class__.__name__)
             return
 
-        self._embeddings: list[np.ndarray] = [np.array([]) for _ in self._filter_files]
-        self._nembeddings: list[np.ndarray] = [np.array([]) for _ in self._nfilter_files]
+        self._embeddings: list[np.ndarray] = [np.asarray([]) for _ in self._filter_files]
+        self._nembeddings: list[np.ndarray] = [np.asarray([]) for _ in self._nfilter_files]
         self._extractor = extractor
 
         self._get_embeddings()
@@ -230,7 +230,7 @@ class Filter():
         if self._embeddings and all(np.any(e) for e in self._embeddings):
             retval = np.concatenate(self._embeddings, axis=0)
         else:
-            retval = np.array([])
+            retval = np.asarray([])
         return retval
 
     @property
@@ -239,7 +239,7 @@ class Filter():
         if self._nembeddings and all(np.any(e) for e in self._nembeddings):
             retval = np.concatenate(self._nembeddings, axis=0)
         else:
-            retval = np.array([])
+            retval = np.asarray([])
         return retval
 
     @classmethod
@@ -341,19 +341,19 @@ class Filter():
         """
         if os.path.splitext(filename)[-1].lower() != ".png":
             logger.debug("'%s' not a png. Returning empty array", filename)
-            return np.array([]), False
+            return np.asarray([]), False
 
         meta = read_image_meta(filename)
         if "itxt" not in meta or "alignments" not in meta["itxt"]:
             logger.debug("'%s' does not contain faceswap data. Returning empty array", filename)
-            return np.array([]), False
+            return np.asarray([]), False
 
         align: "PNGHeaderAlignmentsDict" = meta["itxt"]["alignments"]
         if "identity" not in align or "vggface2" not in align["identity"]:
             logger.debug("'%s' does not contain identity data. Returning empty array", filename)
-            return np.array([]), True
+            return np.asarray([]), True
 
-        retval = np.array(align["identity"]["vggface2"])
+        retval = np.asarray(align["identity"]["vggface2"])
         logger.debug("Obtained identity for '%s'. Shape: %s", filename, retval.shape)
 
         return retval, True
@@ -376,7 +376,7 @@ class Filter():
         lbl = "filter" if is_filter else "nfilter"
         filelist = self._filter_files if is_filter else self._nfilter_files
         embeddings = self._embeddings if is_filter else self._nembeddings
-        identities = np.array([face.identity["vggface2"] for face in item.detected_faces])
+        identities = np.asarray([face.identity["vggface2"] for face in item.detected_faces])
         idx = filelist.index(item.filename)
 
         if len(item.detected_faces) == 0:

@@ -105,7 +105,7 @@ class Mask():
     def original_roi(self) -> np.ndarray:
         """ :class: `numpy.ndarray`: The original region of interest of the mask in the
         source frame. """
-        points = np.array([[0, 0],
+        points = np.asarray([[0, 0],
                            [0, self.stored_size - 1],
                            [self.stored_size - 1, self.stored_size - 1],
                            [self.stored_size - 1, 0]], np.int32).reshape((-1, 1, 2))
@@ -287,7 +287,7 @@ class Mask():
                                       centering,
                                       self.stored_size,
                                       coverage_ratio=coverage_ratio)
-        roi = np.array([center - crop_size // 2, center + crop_size // 2]).ravel()
+        roi = np.asarray([center - crop_size // 2, center + crop_size // 2]).ravel()
 
         self._sub_crop_size = crop_size
         self._sub_crop_slices["in"] = [slice(max(roi[1], 0), max(roi[3], 0)),
@@ -318,8 +318,8 @@ class Mask():
             The affine matrix adjusted for the mask at its stored dimensions.
         """
         zoom = self.stored_size / mask_size
-        zoom_mat = np.array([[zoom, 0, 0.], [0, zoom, 0.]])
-        adjust_mat = np.dot(zoom_mat, np.concatenate((affine_matrix, np.array([[0., 0., 1.]]))))
+        zoom_mat = np.asarray([[zoom, 0, 0.], [0, zoom, 0.]])
+        adjust_mat = np.dot(zoom_mat, np.concatenate((affine_matrix, np.asarray([[0., 0., 1.]]))))
         logger.trace("storage_size: %s, mask_size: %s, zoom: %s, "  # type:ignore[attr-defined]
                      "original matrix: %s, adjusted_matrix: %s", self.stored_size, mask_size, zoom,
                      affine_matrix.shape, adjust_mat.shape)
@@ -374,7 +374,7 @@ class Mask():
         self._mask = mask_dict["mask"]
         affine_matrix = mask_dict["affine_matrix"]
         self._affine_matrix = (affine_matrix if isinstance(affine_matrix, np.ndarray)
-                               else np.array(affine_matrix, dtype="float64"))
+                               else np.asarray(affine_matrix, dtype="float64"))
         self._interpolator = mask_dict["interpolator"]
         self.stored_size = mask_dict["stored_size"]
         centering = mask_dict.get("stored_centering")

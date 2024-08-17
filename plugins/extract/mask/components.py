@@ -47,7 +47,7 @@ class Mask(Masker):
                 # Called from the manual tool. # TODO This will only work with BS1
                 feed = np.zeros_like(feed)
                 continue
-            parts = self.parse_parts(np.array(face.landmarks))
+            parts = self.parse_parts(np.asarray(face.landmarks))
             for item in parts:
                 a_item = np.rint(np.concatenate(item)).astype("int32")
                 hull = cv2.convexHull(a_item)

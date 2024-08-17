@@ -87,7 +87,7 @@ class SortAlignedMetric(SortMethod):
                    "alignments file to generate this data.")
             raise FaceswapError(msg)
 
-        face = AlignedFace(np.array(alignments["landmarks_xy"], dtype="float32"))
+        face = AlignedFace(np.asarray(alignments["landmarks_xy"], dtype="float32"))
         if (not self._logged_lm_count_once
                 and face.landmark_type == LandmarkType.LM_2D_4
                 and self.__class__.__name__ != "SortSize"):

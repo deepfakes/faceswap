@@ -530,7 +530,7 @@ class DebugLandmarks(PostProcessAction):
         cv2.rectangle(face.face, tuple(roi[:2]), tuple(roi[2:]), color, 1)
 
         # Size in top right corner
-        roi_pnts = np.array([[roi[0], roi[1]],
+        roi_pnts = np.asarray([[roi[0], roi[1]],
                              [roi[0], roi[3]],
                              [roi[2], roi[3]],
                              [roi[2], roi[1]]])

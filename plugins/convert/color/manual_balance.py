@@ -11,7 +11,7 @@ class Color(Adjustment):
 
     def process(self, old_face, new_face, raw_mask):
         image = self.convert_colorspace(new_face * 255.0)
-        adjustment = np.array([self.config["balance_1"] / 100.0,
+        adjustment = np.asarray([self.config["balance_1"] / 100.0,
                                self.config["balance_2"] / 100.0,
                                self.config["balance_3"] / 100.0]).astype("float32")
         for idx in range(3):

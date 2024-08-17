@@ -191,7 +191,7 @@ class GlobalSession():
             for key in sorted(loss_dict):
                 for loss_key, loss in loss_dict[key].items():
                     all_loss.setdefault(loss_key, []).extend(loss)
-            retval: dict[str, np.ndarray] = {key: np.array(val, dtype="float32")
+            retval: dict[str, np.ndarray] = {key: np.asarray(val, dtype="float32")
                                              for key, val in all_loss.items()}
         else:
             retval = loss_dict.get(session_id, {})
@@ -671,7 +671,7 @@ class Calculations():
             if len(iterations) > 1:
                 # Crop all losses to the same number of items
                 if self._iterations == 0:
-                    self._stats = {lossname: np.array([], dtype=loss.dtype)
+                    self._stats = {lossname: np.asarray([], dtype=loss.dtype)
                                    for lossname, loss in self.stats.items()}
                 else:
                     self._stats = {lossname: loss[:self._iterations]
@@ -760,7 +760,7 @@ class Calculations():
             batchsize = batchsizes[sess_id]
             timestamps = total_timestamps[sess_id]
             rate.extend((batchsize * 2) / np.diff(timestamps))
-        retval = np.array(rate)
+        retval = np.asarray(rate)
         logger.debug("Calculated totals rate: Item_count: %s", len(retval))
         return retval
 
@@ -801,7 +801,7 @@ class Calculations():
 
         if datapoints <= (self._args["avg_samples"] * 2):
             logger.info("Not enough data to compile rolling average")
-            return np.array([], dtype="float64")
+            return np.asarray([], dtype="float64")
 
         avgs = np.cumsum(np.nan_to_num(data), dtype="float64")
         avgs[window:] = avgs[window:] - avgs[:-window]
@@ -984,7 +984,7 @@ class _ExponentialMovingAverage():
         out /= scaling_factors[-2::-1]  # cumulative sums / scaling
 
         if offset != 0:
-            noffset = np.array(offset, copy=False).astype(self._dtype, copy=False)
+            noffset = np.asarray(offset, copy=False).astype(self._dtype, copy=False)
             out += noffset * scaling_factors[1:]
 
     def _ewma_vectorized_2d(self, data: np.ndarray, out: np.ndarray) -> None:

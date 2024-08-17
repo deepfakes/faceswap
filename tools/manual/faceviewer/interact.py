@@ -68,10 +68,10 @@ class HoverBox():
             mouse event) then the location of the cursor will be calculated
         """
         if event is None:
-            pnts = np.array((self._canvas.winfo_pointerx(), self._canvas.winfo_pointery()))
-            pnts -= np.array((self._canvas.winfo_rootx(), self._canvas.winfo_rooty()))
+            pnts = np.asarray((self._canvas.winfo_pointerx(), self._canvas.winfo_pointery()))
+            pnts -= np.asarray((self._canvas.winfo_rootx(), self._canvas.winfo_rooty()))
         else:
-            pnts = np.array((event.x, event.y))
+            pnts = np.asarray((event.x, event.y))
 
         coords = (int(self._canvas.canvasx(pnts[0])), int(self._canvas.canvasy(pnts[1])))
         face = self._viewport.face_from_point(*coords)

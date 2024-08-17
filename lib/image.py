@@ -376,7 +376,7 @@ def read_image_batch(filenames, with_metadata=False):
             else:
                 batch[ret_idx] = future.result()
 
-    batch = np.array(batch)
+    batch = np.asarray(batch)
     retval = (batch, meta) if with_metadata else batch
     logger.trace("Returning images: (filenames: %s, batch shape: %s, with_metadata: %s)",
                  filenames, batch.shape, with_metadata)

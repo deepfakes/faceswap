@@ -358,7 +358,7 @@ class SortMethod():
         list
             List of bins of filenames
         """
-        sizes = np.array([i[1] for i in self._result])
+        sizes = np.asarray([i[1] for i in self._result])
         thresholds = np.linspace(sizes.min(), sizes.max(), self._num_bins + 1)
         labels = self._get_unique_labels(thresholds * multiplier)
 
@@ -451,7 +451,7 @@ class SortMethod():
         """
         det_face = DetectedFace()
         det_face.from_png_meta(alignments)
-        aln_face = AlignedFace(np.array(alignments["landmarks_xy"], dtype="float32"),
+        aln_face = AlignedFace(np.asarray(alignments["landmarks_xy"], dtype="float32"),
                                image=image,
                                centering="legacy",
                                size=256,
@@ -729,9 +729,9 @@ class SortColor(SortMethod):
             The color converted image
         """
         if self._method == 'gray':
-            conversion = np.array([[0.0722], [0.7152], [0.2126]])
+            conversion = np.asarray([[0.0722], [0.7152], [0.2126]])
         else:
-            conversion = np.array([[0.25, 0.5, 0.25], [-0.5, 0.0, 0.5], [-0.25, 0.5, -0.25]])
+            conversion = np.asarray([[0.25, 0.5, 0.25], [-0.5, 0.0, 0.5], [-0.25, 0.5, -0.25]])
 
         operation = 'ijk, kl -> ijl' if self._method == "gray" else 'ijl, kl -> ijk'
         path = np.einsum_path(operation, image[..., :3], conversion, optimize='optimal')[0]
@@ -888,7 +888,7 @@ class SortFace(SortMethod):
             self._log_once = False
 
         if alignments.get("identity", {}).get("vggface2"):
-            embedding = np.array(alignments["identity"]["vggface2"], dtype="float32")
+            embedding = np.asarray(alignments["identity"]["vggface2"], dtype="float32")
 
             if not self._logged_lm_count_once and len(alignments["landmarks_xy"]) == 4:
                 logger.warning(self._warning)
@@ -902,7 +902,7 @@ class SortFace(SortMethod):
                         "Sorting by this method will be quicker next time")
             self._output_update_info = False
 
-        a_face = AlignedFace(np.array(alignments["landmarks_xy"], dtype="float32"),
+        a_face = AlignedFace(np.asarray(alignments["landmarks_xy"], dtype="float32"),
                              image=image,
                              centering="legacy",
                              size=self._vgg_face.input_size,
@@ -933,8 +933,8 @@ class SortFace(SortMethod):
             The original list, sorted for this metric
         """
         logger.info("Sorting by ward linkage. This may take some time...")
-        preds = np.array([item[1] for item in self._result])
-        indices = Cluster(np.array(preds), "ward", threshold=self._threshold)()
+        preds = np.asarray([item[1] for item in self._result])
+        indices = Cluster(np.asarray(preds), "ward", threshold=self._threshold)()
         self._result = [(self._result[idx][0], float(score)) for idx, score in indices]
 
     def binning(self) -> list[list[str]]:

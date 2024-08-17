@@ -281,7 +281,7 @@ class ConvolutionAware(keras.initializers.Initializer):  # type:ignore[name-defi
         """ Make the given tensor symmetrical. """
         var_b = np.transpose(var_a, axes=(0, 1, 3, 2))
         diag = var_a.diagonal(axis1=2, axis2=3)
-        var_c = np.array([[np.diag(arr) for arr in batch] for batch in diag])
+        var_c = np.asarray([[np.diag(arr) for arr in batch] for batch in diag])
         return var_a + var_b - var_c
 
     @staticmethod

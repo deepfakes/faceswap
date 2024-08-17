@@ -103,7 +103,7 @@ class BoundingBox(Editor):
         key = "bb_box"
         color = self._control_color
         for idx, face in enumerate(self._face_iterator):
-            box = np.array([(face.left, face.top), (face.right, face.bottom)])
+            box = np.asarray([(face.left, face.top), (face.right, face.bottom)])
             box = self._scale_to_display(box).astype("int32").flatten()
             kwargs = {"outline": color, "width": 1}
             logger.trace("frame_index: %s, face_index: %s, box: %s, kwargs: %s",
@@ -363,7 +363,7 @@ class BoundingBox(Editor):
         shift = (event.x - self._drag_data["current_location"][0],
                  event.y - self._drag_data["current_location"][1])
         face_tag = f"bb_box_face_{face_idx}"
-        coords = np.array(self._canvas.coords(face_tag)) + (*shift, *shift)
+        coords = np.asarray(self._canvas.coords(face_tag)) + (*shift, *shift)
         logger.trace("face_tag: %s, shift: %s, new co-ords: %s", face_tag, shift, coords)
         self._det_faces.update.bounding_box(self._globals.frame_index,
                                             face_idx,
@@ -382,7 +382,7 @@ class BoundingBox(Editor):
         """
         logger.trace("in: %s", coords)
         coords = self.scale_from_display(
-            np.array(coords).reshape((2, 2))).flatten().astype("int32")
+            np.asarray(coords).reshape((2, 2))).flatten().astype("int32")
         logger.trace("out: %s", coords)
         return (coords[0], coords[2] - coords[0], coords[1], coords[3] - coords[1])
 

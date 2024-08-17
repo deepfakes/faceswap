@@ -47,7 +47,7 @@ class Mask(Masker):
                 # Called from the manual tool. # TODO This will only work with BS1
                 feed = np.zeros_like(feed)
                 continue
-            parts = self.parse_parts(np.array(face.landmarks))
+            parts = self.parse_parts(np.asarray(face.landmarks))
             for item in parts:
                 a_item = np.rint(np.concatenate(item)).astype("int32")
                 hull = cv2.convexHull(a_item)
@@ -76,8 +76,8 @@ class Mask(Masker):
         qr_pnt = (landmarks[45] + mr_pnt) // 2
 
         # Top of the eye arrays
-        bot_l = np.array((ql_pnt, landmarks[36], landmarks[37], landmarks[38], landmarks[39]))
-        bot_r = np.array((landmarks[42], landmarks[43], landmarks[44], landmarks[45], qr_pnt))
+        bot_l = np.asarray((ql_pnt, landmarks[36], landmarks[37], landmarks[38], landmarks[39]))
+        bot_r = np.asarray((landmarks[42], landmarks[43], landmarks[44], landmarks[45], qr_pnt))
 
         # Eyebrow arrays
         top_l = landmarks[17:22]

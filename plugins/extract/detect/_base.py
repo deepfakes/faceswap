@@ -60,7 +60,7 @@ class DetectorBatch(ExtractorBatch):
     rotation_matrix: list[np.ndarray] = field(default_factory=list)
     scale: list[float] = field(default_factory=list)
     pad: list[tuple[int, int]] = field(default_factory=list)
-    initial_feed: np.ndarray = np.array([])
+    initial_feed: np.ndarray = np.asarray([])
 
     def __repr__(self):
         """ Prettier repr for debug printing """
@@ -282,8 +282,8 @@ class Detector(Extractor):  # pylint:disable=abstract-method
     def _predict(self, batch: BatchType) -> DetectorBatch:
         """ Wrap models predict function in rotations """
         assert isinstance(batch, DetectorBatch)
-        batch.rotation_matrix = [np.array([]) for _ in range(len(batch.feed))]
-        found_faces: list[np.ndarray] = [np.array([]) for _ in range(len(batch.feed))]
+        batch.rotation_matrix = [np.asarray([]) for _ in range(len(batch.feed))]
+        found_faces: list[np.ndarray] = [np.asarray([]) for _ in range(len(batch.feed))]
         for angle in self.rotation:
             # Rotate the batch and insert placeholders for already found faces
             self._rotate_batch(batch, angle)
@@ -293,7 +293,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                     batch.prediction = pred
                 else:
                     try:
-                        batch.prediction = np.array([b if b.any() else p
+                        batch.prediction = np.asarray([b if b.any() else p
                                                     for b, p in zip(batch.prediction, pred)])
                     except ValueError as err:
                         # If batches are different sizes after rotation Numpy will error, so we
@@ -303,7 +303,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                         # has an inhomogeneous shape after 1 dimensions. The detected shape was
                         # (8,) + inhomogeneous part
                         if "inhomogeneous" in str(err):
-                            batch.prediction = np.array([b if b.any() else p
+                            batch.prediction = np.asarray([b if b.any() else p
                                                          for b, p in zip(batch.prediction, pred)],
                                                         dtype="object")
                             logger.trace(  # type:ignore[attr-defined]
@@ -338,7 +338,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                 logger.trace("Faces found for all images")  # type:ignore[attr-defined]
                 break
 
-        batch.prediction = np.array(found_faces, dtype="object")
+        batch.prediction = np.asarray(found_faces, dtype="object")
         logger.trace("detect_prediction output: (filenames: %s, "  # type:ignore[attr-defined]
                      "prediction: %s, rotmat: %s)",
                      batch.filename, batch.prediction, batch.rotation_matrix)
@@ -585,7 +585,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                 image, matrix = self._rotate_image_by_angle(img, angle)
             feeds.append(image)
             rotmats.append(matrix)
-        batch.feed = np.array(feeds, dtype="float32")
+        batch.feed = np.asarray(feeds, dtype="float32")
         batch.rotation_matrix = rotmats
 
     @staticmethod
@@ -613,7 +613,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                         [face.left, face.bottom]]
         rotation_matrix = cv2.invertAffineTransform(rotation_matrix)
 
-        points = np.array(bounding_box, "int32")
+        points = np.asarray(bounding_box, "int32")
         points = np.expand_dims(points, axis=0)
         transformed = cv2.transform(points, rotation_matrix).astype("int32")
         rotated = transformed.squeeze()
