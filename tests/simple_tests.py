@@ -78,6 +78,20 @@ def download_file(url, filename):  # TODO: retry
     except urllib.error.URLError as err:
         print_fail(f"[-] Failed downloading: {err}")
         return None
+*********************************
+import requests
+def download_file(url, filename):
+    try:
+        response = requests.get(url, stream=True, timeout=10)
+        response.raise_for_status()
+        with open(filename, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        return filename
+    except requests.RequestException as err:
+        print_fail(f"[-] Failed downloading: {err}")
+        return None
+**************************
 
 
 def extract_args(detector, aligner, in_path, out_path, args=None):
