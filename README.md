@@ -1,4 +1,7 @@
 # deepfakes_faceswap
+
+### Important information for **Patreon** and **PayPal** supporters. Please see this forum post: https://forum.faceswap.dev/viewtopic.php?f=14&t=3120
+
 <p align="center">
   <a href="https://faceswap.dev"><img src="https://i.imgur.com/zHvjHnb.png"></img></a>
 <br />FaceSwap is a tool that utilizes deep learning to recognize and swap faces in pictures and videos.
@@ -21,11 +24,13 @@
 <br />Jennifer Lawrence/Steve Buscemi FaceSwap using the Villain model
 </p>
 
+
 ![Build Status](https://github.com/deepfakes/faceswap/actions/workflows/pytest.yml/badge.svg) [![Documentation Status](https://readthedocs.org/projects/faceswap/badge/?version=latest)](https://faceswap.readthedocs.io/en/latest/?badge=latest)
 
 Make sure you check out [INSTALL.md](INSTALL.md) before getting started.
 
-- [deepfakes_faceswap](#deepfakes_faceswap)
+- [deepfakes\_faceswap](#deepfakes_faceswap)
+    - [Important information for **Patreon** and **PayPal** supporters. Please see this forum post: https://forum.faceswap.dev/viewtopic.php?f=14\&t=3120](#important-information-for-patreon-and-paypal-supporters-please-see-this-forum-post-httpsforumfaceswapdevviewtopicphpf14t3120)
 - [Manifesto](#manifesto)
   - [FaceSwap has ethical uses.](#faceswap-has-ethical-uses)
 - [How To setup and run the project](#how-to-setup-and-run-the-project)
@@ -48,12 +53,6 @@ Make sure you check out [INSTALL.md](INSTALL.md) before getting started.
   - [For devs](#for-devs)
   - [For non-dev advanced users](#for-non-dev-advanced-users)
   - [For end-users](#for-end-users)
-  - [For haters](#for-haters)
-- [About github.com/deepfakes](#about-githubcomdeepfakes)
-  - [What is this repo?](#what-is-this-repo)
-  - [Why this repo?](#why-this-repo)
-  - [Why is it named 'deepfakes' if it is not /u/deepfakes?](#why-is-it-named-deepfakes-if-it-is-not-udeepfakes)
-  - [What if /u/deepfakes feels bad about that?](#what-if-udeepfakes-feels-bad-about-that)
 - [About machine learning](#about-machine-learning)
   - [How does a computer know how to recognize/shape faces? How does machine learning work? What is a neural network?](#how-does-a-computer-know-how-to-recognizeshape-faces-how-does-machine-learning-work-what-is-a-neural-network)
 
@@ -170,25 +169,6 @@ Creator of the Unbalanced and OHR models, as well as expanding various capabilit
  - You can also go to the [faceswap Forum](https://faceswap.dev/forum) and help or get help from others.
  - Be patient. This is a relatively new technology for developers as well. Much effort is already being put into making this program easy to use for the average user. It just takes time!
  - **Notice** Any issue related to running the code has to be opened in the [faceswap Forum](https://faceswap.dev/forum)!
-
-## For haters
-Sorry, no time for that.
-
-# About github.com/deepfakes
-
-## What is this repo?
-It is a community repository for active users.
-
-## Why this repo?
-The joshua-wu repo seems not active. Simple bugs like missing _http://_ in front of urls have not been solved since days.
-
-## Why is it named 'deepfakes' if it is not /u/deepfakes?
- 1. Because a typosquat would have happened sooner or later as project grows
- 2. Because we wanted to recognize the original author
- 3. Because it will better federate contributors and users
-
-## What if /u/deepfakes feels bad about that?
-This is a friendly typosquat, and it is fully dedicated to the project. If /u/deepfakes wants to take over this repo/user and drive the project, he is welcomed to do so (Raise an issue, and he will be contacted on Reddit). Please do not send /u/deepfakes messages for help with the code you find here.
 
 # About machine learning
 
