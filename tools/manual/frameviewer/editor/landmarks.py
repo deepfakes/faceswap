@@ -128,7 +128,7 @@ class Landmarks(Editor):
         """
         if not self._is_active:
             return
-        top_left = np.array(bounding_box[:2]) - 20
+        top_left = np.asarray(bounding_box[:2]) - 20
         # NB The text must be visible to be able to get the bounding box, so set to hidden
         # after the bounding box has been retrieved
 
@@ -341,7 +341,7 @@ class Landmarks(Editor):
         particularly true in zoomed mode. The selection box is therefore redrawn to bind just
         outside of the selected points.
         """
-        all_coords = np.array([self._canvas.coords(item_id)
+        all_coords = np.asarray([self._canvas.coords(item_id)
                                for item_id in self._canvas.find_withtag("lm_selected")])
         mins = np.min(all_coords, axis=0)
         maxes = np.max(all_coords, axis=0)
@@ -365,9 +365,9 @@ class Landmarks(Editor):
         shift_y = event.y - self._drag_data["start_location"][1]
 
         if self._globals.is_zoomed:
-            scaled_shift = np.array((shift_x, shift_y))
+            scaled_shift = np.asarray((shift_x, shift_y))
         else:
-            scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
+            scaled_shift = self.scale_from_display(np.asarray((shift_x, shift_y)), do_offset=False)
         self._det_faces.update.landmark(self._globals.frame_index,
                                         face_idx,
                                         lm_idx,
@@ -401,9 +401,9 @@ class Landmarks(Editor):
         shift_x = event.x - self._drag_data["start_location"][0]
         shift_y = event.y - self._drag_data["start_location"][1]
         if self._globals.is_zoomed:
-            scaled_shift = np.array((shift_x, shift_y))
+            scaled_shift = np.asarray((shift_x, shift_y))
         else:
-            scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
+            scaled_shift = self.scale_from_display(np.asarray((shift_x, shift_y)), do_offset=False)
         self._canvas.move(self._selection_box, shift_x, shift_y)
 
         self._det_faces.update.landmark(self._globals.frame_index,

@@ -59,7 +59,7 @@ class ConvertItem:
     inbound: ExtractMedia
     feed_faces: list[AlignedFace] = field(default_factory=list)
     reference_faces: list[AlignedFace] = field(default_factory=list)
-    swapped_faces: np.ndarray = np.array([])
+    swapped_faces: np.ndarray = np.asarray([])
 
 
 class Convert():
@@ -976,7 +976,7 @@ class Predict():
             batch_size = None
             predicted = self._predict(feed_faces, batch_size)
         else:
-            predicted = np.array([])
+            predicted = np.asarray([])
 
         self._queue_out_frames(batch, predicted)
 

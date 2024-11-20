@@ -53,7 +53,7 @@ class Recognition(Identity):
         self.batchsize = self.config["batch-size"]
 
         # Average image provided in https://github.com/ox-vgg/vgg_face2
-        self._average_img = np.array([91.4953, 103.8827, 131.0912])
+        self._average_img = np.asarray([91.4953, 103.8827, 131.0912])
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # <<< GET MODEL >>> #
@@ -72,7 +72,7 @@ class Recognition(Identity):
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
         assert isinstance(batch, RecogBatch)
-        batch.feed = np.array([T.cast(np.ndarray, feed.face)[..., :3]
+        batch.feed = np.asarray([T.cast(np.ndarray, feed.face)[..., :3]
                                for feed in batch.feed_faces],
                               dtype="float32") - self._average_img
         logger.trace("feed shape: %s", batch.feed.shape)  # type:ignore

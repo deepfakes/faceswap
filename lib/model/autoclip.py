@@ -64,7 +64,7 @@ class AutoClipper():
                                               constant_values=1)
             nan_batch_members = tf.reshape(nan_batch_members, shape=right_rank_matched_shape)
 
-            nan = np.array(np.nan, gathered_hist.dtype.as_numpy_dtype)
+            nan = np.asarray(np.nan, gathered_hist.dtype.as_numpy_dtype)
             gathered_hist = tf.where(nan_batch_members, nan, gathered_hist)
 
             return gathered_hist

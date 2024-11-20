@@ -89,7 +89,7 @@ class AugConstants:  # pylint:disable=too-many-instance-attributes,too-few-publi
         amount_l = int(color_lightness) / 100
         amount_ab = int(color_ab) / 100
 
-        self.lab_adjust = np.array([amount_l, amount_ab, amount_ab], dtype="float32")
+        self.lab_adjust = np.asarray([amount_l, amount_ab, amount_ab], dtype="float32")
         logger.debug("lab_adjust: %s", self.lab_adjust)
 
     def _load_transform(self) -> None:
@@ -137,7 +137,7 @@ class AugConstants:  # pylint:disable=too-many-instance-attributes,too-few-publi
         """
         p_mx = self._size - 1
         p_hf = (self._size // 2) - 1
-        edge_anchors = np.array([(0, 0), (0, p_mx), (p_mx, p_mx), (p_mx, 0),
+        edge_anchors = np.asarray([(0, 0), (0, p_mx), (p_mx, p_mx), (p_mx, 0),
                                  (p_hf, 0), (p_hf, p_mx), (p_mx, p_hf), (0, p_hf)]).astype("int32")
         edge_anchors = np.broadcast_to(edge_anchors, (batch_size, 8, 2))
         grids = np.mgrid[0: p_mx: complex(self._size),  # type:ignore[misc]
@@ -288,7 +288,7 @@ class ImageAugmentation():
         tform = np.random.uniform(-self._constants.transform_shift,
                                   self._constants.transform_shift,
                                   size=(self._batch_size, 2)).astype("float32")
-        mats = np.array(
+        mats = np.asarray(
             [cv2.getRotationMatrix2D((self._processing_size // 2, self._processing_size // 2),
                                      rot,
                                      scl)
@@ -372,10 +372,10 @@ class ImageAugmentation():
         rands = np.random.normal(size=(self._batch_size, 2, 5, 5),
                                  scale=self._warp_scale).astype("float32")
         batch_maps = ne.evaluate("m + r", local_dict={"m": self._constants.warp_maps, "r": rands})
-        batch_interp = np.array([[cv2.resize(map_, self._constants.warp_pad)[slices, slices]
+        batch_interp = np.asarray([[cv2.resize(map_, self._constants.warp_pad)[slices, slices]
                                   for map_ in maps]
                                  for maps in batch_maps])
-        warped_batch = np.array([cv2.remap(image, interp[0], interp[1], cv2.INTER_LINEAR)
+        warped_batch = np.asarray([cv2.remap(image, interp[0], interp[1], cv2.INTER_LINEAR)
                                  for image, interp in zip(batch, batch_interp)])
 
         logger.trace("Warped image shape: %s", warped_batch.shape)  # type:ignore[attr-defined]
@@ -425,14 +425,14 @@ class ImageAugmentation():
         lbatch_src = [np.delete(src, idxs, axis=0) for idxs, src in zip(rem_indices, batch_src)]
         lbatch_dst = [np.delete(dst, idxs, axis=0) for idxs, dst in zip(rem_indices, batch_dst)]
 
-        grid_z = np.array([griddata(dst, src, (grids[0], grids[1]), method="linear")
+        grid_z = np.asarray([griddata(dst, src, (grids[0], grids[1]), method="linear")
                            for src, dst in zip(lbatch_src, lbatch_dst)])
         maps = grid_z.reshape((self._batch_size,
                                self._processing_size,
                                self._processing_size,
                                2)).astype("float32")
 
-        warped_batch = np.array([cv2.remap(image,
+        warped_batch = np.asarray([cv2.remap(image,
                                            map_[..., 1],
                                            map_[..., 0],
                                            cv2.INTER_LINEAR,

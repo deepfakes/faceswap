@@ -369,7 +369,7 @@ class AlignedFace():
         frame. """
         with self._cache.lock("original_roi"):
             if self._cache.original_roi is None:
-                roi = np.array([[0, 0],
+                roi = np.asarray([[0, 0],
                                 [0, self._size - 1],
                                 [self._size - 1, self._size - 1],
                                 [self._size - 1, 0]])
@@ -650,7 +650,7 @@ class AlignedFace():
                                              self.pose.offset[centering],
                                              self._source_centering)
                 padding = target_size // 2
-                roi = np.array([center - padding, center + padding]).ravel()
+                roi = np.asarray([center - padding, center + padding]).ravel()
                 logger.trace(  # type:ignore[attr-defined]
                     "centering: '%s', center: %s, padding: %s, sub roi: %s",
                     centering, center, padding, roi)

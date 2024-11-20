@@ -66,8 +66,8 @@ class FacesDisplay():
 
         self._faces = _Faces()
         self._centering: CenteringType | None = None
-        self._faces_source: np.ndarray = np.array([])
-        self._faces_dest: np.ndarray = np.array([])
+        self._faces_source: np.ndarray = np.asarray([])
+        self._faces_dest: np.ndarray = np.asarray([])
         self._tk_image: ImageTk.PhotoImage | None = None
 
         # Set from Samples
