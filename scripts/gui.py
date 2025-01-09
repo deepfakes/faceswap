@@ -1,17 +1,17 @@
-#!/usr/bin python3
+#!/usr/bin/python3
 """ The optional GUI for faceswap """
 
 import logging
 import sys
 import tkinter as tk
 from tkinter import messagebox, ttk
+import tkinter.font
 
 from lib.gui import (TaskBar, CliOptions, CommandNotebook, ConsoleOut, DisplayNotebook,
                      get_images, initialize_images, initialize_config, LastSession,
                      MainMenuBar, preview_trigger, ProcessWrapper, StatusBar)
 
 logger = logging.getLogger(__name__)
-
 
 class FaceswapGui(tk.Tk):
     """ The Graphical User Interface """
@@ -28,110 +28,141 @@ class FaceswapGui(tk.Tk):
         self.wrapper = ProcessWrapper()
         self.objects = dict()
 
+        # Initial cleanup of images
         get_images().delete_preview()
         preview_trigger().clear(trigger_type=None)
+
         self.protocol("WM_DELETE_WINDOW", self.close_app)
         self.build_gui()
+
+        # Initialize last session data
         self._last_session = LastSession(self._config)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def initialize_globals(self):
         """ Initialize config and images global constants """
-        cliopts = CliOptions()
-        statusbar = StatusBar(self)
-        config = initialize_config(self, cliopts, statusbar)
-        initialize_images()
-        return config
+        try:
+            cliopts = CliOptions()
+            statusbar = StatusBar(self)
+            config = initialize_config(self, cliopts, statusbar)
+            initialize_images()
+            return config
+        except Exception as e:
+            logger.error(f"Error initializing globals: {e}")
+            sys.exit(1)
 
     def set_fonts(self):
         """ Set global default font """
-        tk.font.nametofont("TkFixedFont").configure(size=self._config.default_font[1])
-        for font in ("TkDefaultFont", "TkHeadingFont", "TkMenuFont"):
-            tk.font.nametofont(font).configure(family=self._config.default_font[0],
-                                               size=self._config.default_font[1])
+        try:
+            tk.font.nametofont("TkFixedFont").configure(size=self._config.default_font[1])
+            for font in ("TkDefaultFont", "TkHeadingFont", "TkMenuFont"):
+                tk.font.nametofont(font).configure(family=self._config.default_font[0],
+                                                   size=self._config.default_font[1])
+        except Exception as e:
+            logger.error(f"Error setting fonts: {e}")
+            sys.exit(1)
 
     def build_gui(self, rebuild=False):
         """ Build the GUI """
         logger.debug("Building GUI")
-        if not rebuild:
-            self.tk.call('wm', 'iconphoto', self._w, get_images().icons["favicon"])
-            self.configure(menu=MainMenuBar(self))
+        try:
+            if not rebuild:
+                self.tk.call('wm', 'iconphoto', self._w, get_images().icons["favicon"])
+                self.configure(menu=MainMenuBar(self))
 
-        if rebuild:
-            objects = list(self.objects.keys())
-            for obj in objects:
-                self.objects[obj].destroy()
-                del self.objects[obj]
+            if rebuild:
+                objects = list(self.objects.keys())
+                for obj in objects:
+                    self.objects[obj].destroy()
+                    del self.objects[obj]
 
-        self.objects["taskbar"] = TaskBar(self)
-        self.add_containers()
+            self.objects["taskbar"] = TaskBar(self)
+            self.add_containers()
 
-        self.objects["command"] = CommandNotebook(self.objects["container_top"])
-        self.objects["display"] = DisplayNotebook(self.objects["container_top"])
-        self.objects["console"] = ConsoleOut(self.objects["container_bottom"],
-                                             self._init_args["debug"])
-        self.set_initial_focus()
-        self.set_layout()
-        self._config.set_default_options()
-        logger.debug("Built GUI")
+            self.objects["command"] = CommandNotebook(self.objects["container_top"])
+            self.objects["display"] = DisplayNotebook(self.objects["container_top"])
+            self.objects["console"] = ConsoleOut(self.objects["container_bottom"],
+                                                 self._init_args["debug"])
+
+            self.set_initial_focus()
+            self.set_layout()
+
+            self._config.set_default_options()
+            logger.debug("GUI Built Successfully")
+        except Exception as e:
+            logger.error(f"Error building GUI: {e}")
+            sys.exit(1)
 
     def add_containers(self):
-        """ Add the paned window containers that
-            hold each main area of the gui """
+        """ Add the paned window containers that hold each main area of the gui """
         logger.debug("Adding containers")
-        maincontainer = ttk.PanedWindow(self,
-                                        orient=tk.VERTICAL,
-                                        name="pw_main")
-        maincontainer.pack(fill=tk.BOTH, expand=True)
+        try:
+            maincontainer = ttk.PanedWindow(self, orient=tk.VERTICAL, name="pw_main")
+            maincontainer.pack(fill=tk.BOTH, expand=True)
 
-        topcontainer = ttk.PanedWindow(maincontainer,
-                                       orient=tk.HORIZONTAL,
-                                       name="pw_top")
-        maincontainer.add(topcontainer)
+            topcontainer = ttk.PanedWindow(maincontainer, orient=tk.HORIZONTAL, name="pw_top")
+            maincontainer.add(topcontainer)
 
-        bottomcontainer = ttk.Frame(maincontainer, name="frame_bottom")
-        maincontainer.add(bottomcontainer)
-        self.objects["container_main"] = maincontainer
-        self.objects["container_top"] = topcontainer
-        self.objects["container_bottom"] = bottomcontainer
+            bottomcontainer = ttk.Frame(maincontainer, name="frame_bottom")
+            maincontainer.add(bottomcontainer)
+            self.objects["container_main"] = maincontainer
+            self.objects["container_top"] = topcontainer
+            self.objects["container_bottom"] = bottomcontainer
 
-        logger.debug("Added containers")
+            logger.debug("Containers added successfully")
+        except Exception as e:
+            logger.error(f"Error adding containers: {e}")
+            sys.exit(1)
 
     def set_initial_focus(self):
         """ Set the tab focus from settings """
         tab = self._config.user_config_dict["tab"]
         logger.debug("Setting focus for tab: %s", tab)
-        self._config.set_active_tab_by_name(tab)
-        logger.debug("Focus set to: %s", tab)
+        try:
+            self._config.set_active_tab_by_name(tab)
+            logger.debug("Focus set to: %s", tab)
+        except Exception as e:
+            logger.error(f"Error setting focus: {e}")
+            sys.exit(1)
 
     def set_layout(self):
         """ Set initial layout """
-        self.update_idletasks()
-        config_opts = self._config.user_config_dict
-        r_width = self.winfo_width()
-        r_height = self.winfo_height()
-        w_ratio = config_opts["options_panel_width"] / 100.0
-        h_ratio = 1 - (config_opts["console_panel_height"] / 100.0)
-        width = round(r_width * w_ratio)
-        height = round(r_height * h_ratio)
-        logger.debug("Setting Initial Layout: (root_width: %s, root_height: %s, width_ratio: %s, "
-                     "height_ratio: %s, width: %s, height: %s", r_width, r_height, w_ratio,
-                     h_ratio, width, height)
-        self.objects["container_top"].sashpos(0, width)
-        self.objects["container_main"].sashpos(0, height)
-        self.update_idletasks()
+        try:
+            self.update_idletasks()
+            config_opts = self._config.user_config_dict
+            r_width = self.winfo_width()
+            r_height = self.winfo_height()
+            w_ratio = config_opts["options_panel_width"] / 100.0
+            h_ratio = 1 - (config_opts["console_panel_height"] / 100.0)
+            width = round(r_width * w_ratio)
+            height = round(r_height * h_ratio)
+
+            logger.debug("Setting Initial Layout: (root_width: %s, root_height: %s, width_ratio: %s, "
+                         "height_ratio: %s, width: %s, height: %s", r_width, r_height, w_ratio,
+                         h_ratio, width, height)
+
+            self.objects["container_top"].sashpos(0, width)
+            self.objects["container_main"].sashpos(0, height)
+            self.update_idletasks()
+        except Exception as e:
+            logger.error(f"Error setting layout: {e}")
+            sys.exit(1)
 
     def rebuild(self):
         """ Rebuild the GUI on config change """
         logger.debug("Redrawing GUI")
-        session_state = self._last_session.to_dict()
-        self._config.refresh_config()
-        get_images().__init__()
-        self.set_fonts()
-        self.build_gui(rebuild=True)
-        if session_state is not None:
-            self._last_session.from_dict(session_state)
-        logger.debug("GUI Redrawn")
+        try:
+            session_state = self._last_session.to_dict()
+            self._config.refresh_config()
+            get_images().__init__()
+            self.set_fonts()
+            self.build_gui(rebuild=True)
+            if session_state is not None:
+                self._last_session.from_dict(session_state)
+            logger.debug("GUI Redrawn")
+        except Exception as e:
+            logger.error(f"Error rebuilding GUI: {e}")
+            sys.exit(1)
 
     def close_app(self, *args):  # pylint:disable=unused-argument
         """ Close Python. This is here because the graph
@@ -139,20 +170,24 @@ class FaceswapGui(tk.Tk):
             tkinter has gone away """
         logger.debug("Close Requested")
 
-        if not self._confirm_close_on_running_task():
-            return
-        if not self._config.project.confirm_close():
-            return
+        try:
+            if not self._confirm_close_on_running_task():
+                return
+            if not self._config.project.confirm_close():
+                return
 
-        if self._config.tk_vars.running_task.get():
-            self.wrapper.task.terminate()
+            if self._config.tk_vars.running_task.get():
+                self.wrapper.task.terminate()
 
-        self._last_session.save()
-        get_images().delete_preview()
-        preview_trigger().clear(trigger_type=None)
-        self.quit()
-        logger.debug("Closed GUI")
-        sys.exit(0)
+            self._last_session.save()
+            get_images().delete_preview()
+            preview_trigger().clear(trigger_type=None)
+            self.quit()
+            logger.debug("Closed GUI")
+            sys.exit(0)
+        except Exception as e:
+            logger.error(f"Error closing the app: {e}")
+            sys.exit(1)
 
     def _confirm_close_on_running_task(self):
         """ Pop a confirmation box to close the GUI if a task is running
@@ -169,6 +204,7 @@ class FaceswapGui(tk.Tk):
         if not messagebox.askokcancel("Close", confirmtxt, default="cancel", icon="warning"):
             logger.debug("Close Cancelled")
             return False
+
         logger.debug("Close confirmed")
         return True
 
@@ -180,4 +216,8 @@ class Gui():
 
     def process(self):
         """ Builds the GUI """
-        self.root.mainloop()
+        try:
+            self.root.mainloop()
+        except Exception as e:
+            logger.error(f"Error during GUI main loop: {e}")
+            sys.exit(1)
