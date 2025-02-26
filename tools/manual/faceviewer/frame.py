@@ -470,7 +470,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             The hex color code of the muted color
         """
         scale = 0.65
-        hls = np.array(colorsys.rgb_to_hls(*hex_to_rgb(self.control_colors[color_key])))
+        hls = np.asarray(colorsys.rgb_to_hls(*hex_to_rgb(self.control_colors[color_key])))
         scale = (1 - scale) + 1 if hls[1] < 120 else scale
         hls[1] = max(0., min(256., scale * hls[1]))
         rgb = np.clip(np.rint(colorsys.hls_to_rgb(*hls)).astype("uint8"), 0, 255)
@@ -669,7 +669,7 @@ class Grid():
                                num=labels.shape[1],
                                endpoint=False,
                                dtype="int")
-        self._grid = np.array((*labels, *np.meshgrid(x_coords, y_coords)), dtype="int")
+        self._grid = np.asarray((*labels, *np.meshgrid(x_coords, y_coords)), dtype="int")
         logger.debug(self._grid.shape)
 
     def _get_labels(self) -> np.ndarray | None:
@@ -692,7 +692,7 @@ class Grid():
         rows = ceil(face_count / columns)
         remainder = face_count % columns
         padding = [] if remainder == 0 else [-1 for _ in range(columns - remainder)]
-        labels = np.array((self._raw_indices["frame"] + padding,
+        labels = np.asarray((self._raw_indices["frame"] + padding,
                            self._raw_indices["face"] + padding),
                           dtype="int").reshape((2, rows, columns))
         logger.debug("face-count: %s, columns: %s, rows: %s, remainder: %s, padding: %s, labels "
@@ -714,7 +714,7 @@ class Grid():
         columns, rows = self.columns_rows
         face_count = len(self._raw_indices["frame"])
         padding = [None for _ in range(face_count, columns * rows)]
-        self._display_faces = np.array([None if idx is None else current_faces[idx][face_idx]
+        self._display_faces = np.asarray([None if idx is None else current_faces[idx][face_idx]
                                         for idx, face_idx
                                         in zip(self._raw_indices["frame"] + padding,
                                                self._raw_indices["face"] + padding)],

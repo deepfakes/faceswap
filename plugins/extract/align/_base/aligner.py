@@ -76,10 +76,10 @@ class AlignerBatch(ExtractorBatch):
     """
     batch_id: int = 0
     detected_faces: list[DetectedFace] = field(default_factory=list)
-    landmarks: np.ndarray = np.array([])
+    landmarks: np.ndarray = np.asarray([])
     refeeds: list[np.ndarray] = field(default_factory=list)
     second_pass: bool = False
-    second_pass_masks: np.ndarray = np.array([])
+    second_pass_masks: np.ndarray = np.asarray([])
 
     def __repr__(self):
         """ Prettier repr for debug printing """
@@ -360,7 +360,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             return
         for face, landmarks in zip(batch.detected_faces, batch.landmarks):
             if not isinstance(landmarks, np.ndarray):
-                landmarks = np.array(landmarks)
+                landmarks = np.asarray(landmarks)
             face.add_landmarks_xy(landmarks)
 
         logger.trace("Item out: %s", batch)  # type: ignore[attr-defined]
@@ -431,7 +431,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         batch: :class:`AlignerBatch`
             Contains the batch that is currently being passed through the plugin process
         """
-        original_boxes = np.array([(face.left, face.top, face.width, face.height)
+        original_boxes = np.asarray([(face.left, face.top, face.width, face.height)
                                    for face in batch.detected_faces])
         adjusted_boxes = self._get_adjusted_boxes(original_boxes)
 
@@ -532,7 +532,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         try:
             preds = [self.predict(feed) for feed in batch.refeeds]
             try:
-                batch.prediction = np.array(preds)
+                batch.prediction = np.asarray(preds)
             except ValueError as err:
                 # If refeed batches are different sizes, Numpy will error, so we need to explicitly
                 # set the dtype to 'object' rather than let it infer
@@ -544,7 +544,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                     logger.trace(  # type:ignore[attr-defined]
                         "Mismatched array sizes, setting dtype to object: %s",
                         [p.shape for p in preds])
-                    batch.prediction = np.array(preds, dtype="object")
+                    batch.prediction = np.asarray(preds, dtype="object")
                 else:
                     raise
 
@@ -586,7 +586,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                     data = batch.data[selected_idx] if batch.data else {}
                     selected_idx += 1
                 else:  # All resuts have been filtered out
-                    feed = pred = np.array([])
+                    feed = pred = np.asarray([])
                     data = {}
 
                 subbatch = AlignerBatch(batch_id=batch.batch_id,
@@ -698,7 +698,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             should be filtered out prior to further processing
         """
         masks = self._get_refeed_filter_masks(subbatches)
-        all_landmarks = np.array([sub.landmarks for sub in subbatches])
+        all_landmarks = np.asarray([sub.landmarks for sub in subbatches])
 
         # re-align not selected or not filtering the re-feeds
         if not self._re_align.do_refeeds:
@@ -722,7 +722,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         """
         self._re_align.process_output(subbatches, masks)
         masks = self._get_refeed_filter_masks(subbatches, original_masks=masks)
-        all_landmarks = np.array([sub.landmarks for sub in subbatches])
+        all_landmarks = np.asarray([sub.landmarks for sub in subbatches])
         return self._get_mean_landmarks(all_landmarks, masks)
 
     def _process_output(self, batch: BatchType) -> AlignerBatch:
@@ -771,7 +771,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             return faces
         logger.trace("Normalizing faces")  # type: ignore[attr-defined]
         meth = getattr(self, f"_normalize_{self._normalize_method.lower()}")
-        faces = np.array([meth(face) for face in faces])
+        faces = np.asarray([meth(face) for face in faces])
         logger.trace("Normalized faces")  # type: ignore[attr-defined]
         return faces
 

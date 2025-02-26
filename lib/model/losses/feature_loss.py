@@ -300,9 +300,9 @@ class LPIPSLoss():
         self._use_lpips = lpips
         self._normalize = normalize
         self._ret_per_layer = ret_per_layer
-        self._shift = K.constant(np.array([-.030, -.088, -.188],
+        self._shift = K.constant(np.asarray([-.030, -.088, -.188],
                                           dtype="float32")[None, None, None, :])
-        self._scale = K.constant(np.array([.458, .448, .450],
+        self._scale = K.constant(np.asarray([.458, .448, .450],
                                           dtype="float32")[None, None, None, :])
 
         # Loss needs to be done as fp32. We could cast at output, but better to update the model

@@ -627,7 +627,7 @@ class Spatial:
                 continue
             # We should only be normalizing a single face, so just take
             # the first landmarks found
-            landmarks = np.array(val[0]["landmarks_xy"]).reshape((lm_count, 2, 1))
+            landmarks = np.asarray(val[0]["landmarks_xy"]).reshape((lm_count, 2, 1))
             start = end
             end = start + landmarks.shape[2]
             # Store in one big array
