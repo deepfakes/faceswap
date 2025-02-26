@@ -1088,8 +1088,6 @@ class Install():  # pylint:disable=too-few-public-methods
             pkg_str = self._format_package(*pkg)
             if self._env.is_conda:
                 cmd = ["conda", "install", "-y"]
-                if any(char in pkg_str for char in (" ", "<", ">", "*", "|")):
-                    pkg_str = f"\"{pkg_str}\""
             else:
                 cmd = [sys.executable, "-m", "pip", "install", "--no-cache-dir"]
                 if self._env.is_admin:
