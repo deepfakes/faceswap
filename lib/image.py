@@ -149,7 +149,7 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):  # type:ignore
         return prev_pts_time, prev_keyframe
 
     def _initialize(self, index=0):  # noqa:C901
-        """ Replace ImageIO _initialize with a version that explictly uses keyframes.
+        """ Replace ImageIO _initialize with a version that explicitly uses keyframes.
 
         Notes
         -----
