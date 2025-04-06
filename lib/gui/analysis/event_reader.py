@@ -510,7 +510,7 @@ class TensorBoardLogs():
             self._log_files.refresh()
             log_file = self._log_files.get(self.session_ids[-1])
             logger.debug("Setting training iterator for log file: '%s'", log_file)
-            self._training_iterator = tf.compat.v1.io.tf_record_iterator(log_file)
+            self._training_iterator = iter(tf.data.TFRecordDataset(log_file))
         else:
             logger.debug("Removing training iterator")
             del self._training_iterator
@@ -530,8 +530,8 @@ class TensorBoardLogs():
             The session ID to cache the data for
         """
         live_data = self._is_training and session_id == max(self.session_ids)
-        iterator = self._training_iterator if live_data else tf.compat.v1.io.tf_record_iterator(
-            self._log_files.get(session_id))
+        iterator = self._training_iterator if live_data else iter(tf.data.TFRecordDataset(
+            self._log_files.get(session_id)))
         assert iterator is not None
         parser = _EventParser(iterator, self._cache, live_data)
         parser.cache_events(session_id)
