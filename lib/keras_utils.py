@@ -109,7 +109,7 @@ class ColorSpaceConvert():
             raise ValueError(f"The color transform {from_space} to {to_space} is not defined.")
 
         self._func = functions[func_name]
-        self._ref_illuminant = K.constant(np.array([[[0.950428545, 1.000000000, 1.088900371]]]),
+        self._ref_illuminant = K.constant(np.asarray([[[0.950428545, 1.000000000, 1.088900371]]]),
                                           dtype="float32")
         self._inv_ref_illuminant = 1. / self._ref_illuminant
 
@@ -125,7 +125,7 @@ class ColorSpaceConvert():
         tuple
             The mapping and inverse Tensors for rgb to xyz color space conversion
         """
-        mapping = np.array([[10135552 / 24577794,  8788810 / 24577794, 4435075 / 24577794],
+        mapping = np.asarray([[10135552 / 24577794,  8788810 / 24577794, 4435075 / 24577794],
                             [2613072 / 12288897, 8788810 / 12288897, 887015 / 12288897],
                             [1425312 / 73733382, 8788810 / 73733382, 70074185 / 73733382]])
         inverse = np.linalg.inv(mapping)

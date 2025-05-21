@@ -239,7 +239,7 @@ class Converter():
         else:
             mat = matrix * self._face_scale
             patch_center = (size / 2, size / 2)
-            mat[..., 2] += (1 - self._face_scale) * np.array(patch_center)
+            mat[..., 2] += (1 - self._face_scale) * np.asarray(patch_center)
 
         return mat
 
@@ -282,7 +282,7 @@ class Converter():
             kwargs: dict[str, T.Any] = {}
             if self.cli_arguments.writer == "patch":
                 kwargs["canvas_size"] = (background.shape[1], background.shape[0])
-                kwargs["matrices"] = np.array([self._get_warp_matrix(face.adjusted_matrix,
+                kwargs["matrices"] = np.asarray([self._get_warp_matrix(face.adjusted_matrix,
                                                                      patched_face.shape[1])
                                                for face in predicted.reference_faces],
                                               dtype="float32")
@@ -349,7 +349,7 @@ class Converter():
 
         placeholder = np.zeros((frame_size[1], frame_size[0], 4), dtype="float32")
         if self._full_frame_output:
-            background = predicted.inbound.image / np.array(255.0, dtype="float32")
+            background = predicted.inbound.image / np.asarray(255.0, dtype="float32")
             placeholder[:, :, :3] = background
         else:
             faces = []  # Collect the faces into final array
@@ -373,7 +373,7 @@ class Converter():
                 faces.append(new_face)
 
         if not self._full_frame_output:
-            placeholder = np.array(faces, dtype="float32")
+            placeholder = np.asarray(faces, dtype="float32")
 
         logger.trace("Got filename: '%s'. (placeholders: %s)",  # type: ignore[attr-defined]
                      predicted.inbound.filename, placeholder.shape)

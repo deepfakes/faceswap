@@ -63,7 +63,7 @@ def to_categorical(var_y, num_classes=None, dtype='float32'):
     >>>        [ 0.,  0.,  1.],
     >>>        [ 1.,  0.,  0.]], dtype=float32)
     """
-    var_y = np.array(var_y, dtype='int')
+    var_y = np.asarray(var_y, dtype='int')
     input_shape = var_y.shape
     if input_shape and input_shape[-1] == 1 and len(input_shape) > 1:
         input_shape = tuple(input_shape[:-1])

@@ -60,7 +60,7 @@ class Detect(Detector):
                               (predictions[0, 0, i, 5] * self.input_size),
                               (predictions[0, 0, i, 6] * self.input_size)])
         logger.trace("faces: %s", faces)  # type:ignore[attr-defined]
-        return np.array(faces)[None, ...]
+        return np.asarray(faces)[None, ...]
 
     def process_output(self, batch: BatchType) -> None:
         """ Compile found faces for output """

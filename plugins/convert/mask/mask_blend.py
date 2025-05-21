@@ -321,6 +321,6 @@ class Mask():
             if idx > 1:
                 pos = 0 if idx % 2 == 0 else 1
                 kernel[pos] = 1  # Set x/y to 1px based on whether eroding top/bottom, left/right
-            kernels.append(cv2.getStructuringElement(shape, kernel) if size else np.array(0))
+            kernels.append(cv2.getStructuringElement(shape, kernel) if size else np.asarray(0))
         logger.trace("Erosion kernels: %s", [k.shape for k in kernels])  # type: ignore
         return kernels
