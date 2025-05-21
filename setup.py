@@ -13,7 +13,7 @@ import re
 import sys
 import typing as T
 from shutil import which
-from subprocess import list2cmdline, PIPE, Popen, run, STDOUT
+from subprocess import PIPE, Popen, run, STDOUT
 
 from pkg_resources import parse_requirements
 
@@ -1076,7 +1076,9 @@ class Install():  # pylint:disable=too-few-public-methods
         str
             The formatted full package and version string
         """
-        return f"{package}{','.join(''.join(spec) for spec in version)}"
+        retval = f"{package}{','.join(''.join(spec) for spec in version)}"
+        logger.debug("Formatted package \"%s\" version \"%s\" to \"%s'", package, version, retval)
+        return retval
 
     def _install_setup_packages(self) -> None:
         """ Install any packages that are required for the setup.py installer to work. This
@@ -1493,7 +1495,7 @@ class WinPTYInstaller(Installer):  # pylint:disable=too-few-public-methods
                  is_gui: bool) -> None:
         super().__init__(environment, package, command, is_gui)
         self._cmd = which(command[0], path=os.environ.get('PATH', os.defpath))
-        self._cmdline = list2cmdline(command)
+        self._cmdline = " ".join(command)
         logger.debug("cmd: '%s', cmdline: '%s'", self._cmd, self._cmdline)
 
         self._pbar = re.compile(r"(?:eta\s[\d\W]+)|(?:\s+\|\s+\d+%)\Z")
