@@ -361,7 +361,7 @@ FunctionEnd
 Function SetEnvironment
     DetailPrint "Initializing Conda..."
     SetDetailsPrint listonly
-    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda tos accept && conda deactivate"
+    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\Scripts\conda.exe$\" tos accept"
     pop $0
     ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda update -y -n base -c defaults conda && conda deactivate"
     pop $0
