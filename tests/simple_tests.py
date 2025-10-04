@@ -66,19 +66,29 @@ def run_test(name, cmd):
         return False
 
 
-def download_file(url, filename):  # TODO: retry
-    """ Download a file from given url """
+from time import sleep
+
+def download_file(url, filename, retries=3):# add retry
+""" Download a file from given url """
     if os.path.isfile(filename):
         print_status(f"[?] '{url}' already cached as '{filename}'")
         return filename
-    try:
-        print_status(f"[?] Downloading '{url}' to '{filename}'")
-        video, _ = urlretrieve(url, filename)
-        return video
-    except urllib.error.URLError as err:
-        print_fail(f"[-] Failed downloading: {err}")
-        return None
 
+    for attempt in range(retries):
+        try:
+            print_status(f"[?] Downloading '{url}' (Attempt {attempt+1}/{retries})")
+            with requests.get(url, stream=True, timeout=10) as response:
+                response.raise_for_status()
+                with open(filename, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+            return filename
+        except requests.RequestException as err:
+            print_fail(f"[-] Download failed: {err}")
+            if attempt < retries - 1:
+                sleep(3)
+            else:
+                return None
 
 def extract_args(detector, aligner, in_path, out_path, args=None):
     """ Extraction command """
