@@ -13,7 +13,7 @@ import re
 import sys
 import typing as T
 from shutil import which
-from subprocess import list2cmdline, PIPE, Popen, run, STDOUT
+from subprocess import PIPE, Popen, run, STDOUT
 
 from lib.logger import log_setup
 
@@ -485,7 +485,7 @@ class Packages():
         list[:class:`packaging.Requirement`]
             List of Requirement objects that are valid for the current environment
         """
-        requirements = [Requirement(p) for p in packages]
+        requirements = [Requirement(p.split("#", maxsplit=1)[0]) for p in packages]
         retval = [r for r in requirements if r.marker is None or r.marker.evaluate()]
         if len(retval) != len(requirements):
             logger.debug("Filtered invalid packages %s",
@@ -1074,8 +1074,6 @@ class Install():  # pylint:disable=too-few-public-methods
             pkg_str = str(pkg)
             if self._env.is_conda:
                 cmd = ["conda", "install", "-y", "-c", "defaults", "--override-channels"]
-                if any(char in pkg_str for char in (" ", "<", ">", "*", "|")):
-                    pkg_str = f"\"{pkg_str}\""
             else:
                 cmd = [sys.executable, "-m", "pip", "install", "--no-cache-dir"]
                 if self._env.is_admin:
@@ -1555,7 +1553,7 @@ class WinPTYInstaller(Installer):
                  is_gui: bool) -> None:
         super().__init__(environment, package, command, is_gui)
         self._cmd = which(command[0], path=os.environ.get('PATH', os.defpath))
-        self._cmdline = list2cmdline(command)
+        self._cmdline = " ".join(command)
         logger.debug("cmd: '%s', cmdline: '%s'", self._cmd, self._cmdline)
 
         self._pbar = re.compile(r"(?:eta\s[\d\W]+)|(?:\s+\|\s+\d+%)\Z")

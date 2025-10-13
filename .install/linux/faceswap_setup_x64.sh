@@ -338,10 +338,11 @@ conda_install() {
         info "Installing Miniconda3..."
         yellow ; fname="$(basename -- $DL_CONDA)"
         bash "$TMP_DIR/$fname" -b -p "$DIR_CONDA"
+        "$CONDA_EXECUTABLE" tos accept
         if $CONDA_TO_PATH ; then
             info "Adding Miniconda3 to PATH..."
             yellow ; "$CONDA_EXECUTABLE" init
-            "$CONDA_EXECUTABLE" config --set auto_activate_base false
+            "$CONDA_EXECUTABLE" config --set auto_activate false
         fi
     fi
 }
