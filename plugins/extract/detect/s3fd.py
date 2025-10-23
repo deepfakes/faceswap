@@ -54,7 +54,7 @@ class Detect(Detector):
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detection image(s) for prediction """
         assert isinstance(self.model, S3fd)
-        batch.feed = self.model.prepare_batch(np.array(batch.image))
+        batch.feed = self.model.prepare_batch(np.asarray(batch.image))
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions """
@@ -243,7 +243,7 @@ class S3fd(KSession):
         self.define_model(self.model_definition)
         self.load_model_weights()
         self.confidence = confidence
-        self.average_img = np.array([104.0, 117.0, 123.0])
+        self.average_img = np.asarray([104.0, 117.0, 123.0])
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def model_definition(self) -> tuple[list[Tensor], list[Tensor]]:
@@ -411,7 +411,7 @@ class S3fd(KSession):
             boxes = self._post_process(bboxlist)
             finallist = self._nms(boxes, 0.5)
             ret.append(finallist)
-        return np.array(ret, dtype="object")
+        return np.asarray(ret, dtype="object")
 
     def _post_process(self, bboxlist: list[np.ndarray]) -> np.ndarray:
         """ Perform post processing on output
@@ -429,11 +429,11 @@ class S3fd(KSession):
                 score = ocls[0, hindex, windex, 1]
                 if score >= self.confidence:
                     loc = np.ascontiguousarray(oreg[0, hindex, windex, :]).reshape((1, 4))
-                    priors = np.array([[axc / 1.0, ayc / 1.0, stride * 4 / 1.0, stride * 4 / 1.0]])
+                    priors = np.asarray([[axc / 1.0, ayc / 1.0, stride * 4 / 1.0, stride * 4 / 1.0]])
                     box = self.decode(loc, priors)
                     x_1, y_1, x_2, y_2 = box[0] * 1.0
                     retval.append([x_1, y_1, x_2, y_2, score])
-        return_numpy = np.array(retval) if len(retval) != 0 else np.zeros((1, 5))
+        return_numpy = np.asarray(retval) if len(retval) != 0 else np.zeros((1, 5))
         return return_numpy
 
     @staticmethod

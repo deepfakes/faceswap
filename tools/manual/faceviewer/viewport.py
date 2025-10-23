@@ -366,12 +366,12 @@ class Viewport():
             -1
         """
         if not self._grid.is_valid or point_x > self._grid.dimensions[0]:
-            retval = np.array((-1, -1, -1, -1))
+            retval = np.asarray((-1, -1, -1, -1))
         else:
             x_idx = np.searchsorted(self._objects.visible_grid[2, 0, :], point_x, side="left") - 1
             y_idx = np.searchsorted(self._objects.visible_grid[3, :, 0], point_y, side="left") - 1
             if x_idx < 0 or y_idx < 0:
-                retval = np.array((-1, -1, -1, -1))
+                retval = np.asarray((-1, -1, -1, -1))
             else:
                 retval = self._objects.visible_grid[:, y_idx, x_idx]
         logger.trace(retval)  # type:ignore[attr-defined]
@@ -558,7 +558,7 @@ class VisibleObjects():
             retval = [0.0, 0.0]
         else:
             retval = self._canvas.coords(self._images[0][0])
-        return np.array(retval, dtype="int")
+        return np.asarray(retval, dtype="int")
 
     def update(self) -> None:
         """ Load and unload thumbnails in the visible area of the faces viewer. """
@@ -650,8 +650,8 @@ class VisibleObjects():
             meshes.append([{} if face is None else self._recycler.get_mesh(face)
                            for face in self._visible_faces[row]])
 
-        a_images = np.array(images)
-        a_meshes = np.array(meshes)
+        a_images = np.asarray(images)
+        a_meshes = np.asarray(meshes)
 
         if not np.any(self._images):
             logger.debug("Adding initial viewport objects: (image shapes: %s, mesh shapes: %s)",

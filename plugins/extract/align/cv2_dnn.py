@@ -90,7 +90,7 @@ class Align(Aligner):
         """
         assert isinstance(batch, AlignerBatch)
         lfaces, roi, offsets = self.align_image(batch)
-        batch.feed = np.array(lfaces)[..., :3]
+        batch.feed = np.asarray(lfaces)[..., :3]
         batch.data.append({"roi": roi, "offsets": offsets})
 
     def _get_box_and_offset(self, face: DetectedFace) -> tuple[list[int], int]:
@@ -312,5 +312,5 @@ class Align(Aligner):
                 points[:, 0] += (roi[0] - offset[0])
                 points[:, 1] += (roi[1] - offset[1])
                 landmarks.append(points)
-            batch.landmarks = np.array(landmarks)
+            batch.landmarks = np.asarray(landmarks)
         logger.trace("Predicted Landmarks: %s", batch.landmarks)  # type:ignore[attr-defined]
