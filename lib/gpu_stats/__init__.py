@@ -2,17 +2,13 @@
 """ Dynamically import the correct GPU Stats library based on the faceswap backend and the machine
 being used. """
 
-import platform
-
 from lib.utils import get_backend
 
 from ._base import GPUInfo
 
 backend = get_backend()
 
-if backend == "nvidia" and platform.system().lower() == "darwin":
-    from .nvidia_apple import NvidiaAppleStats as GPUStats  # type:ignore
-elif backend == "nvidia":
+if backend == "nvidia":
     from .nvidia import NvidiaStats as GPUStats  # type:ignore
 elif backend == "apple_silicon":
     from .apple_silicon import AppleSiliconStats as GPUStats  # type:ignore

@@ -15,7 +15,7 @@ import pytest
 import pytest_mock
 
 from lib.gpu_stats import GPUInfo
-from lib.sysinfo import _Configs, _State, _SysInfo, CudaCheck, get_sysinfo
+from lib.sysinfo import _Configs, _State, _SysInfo, Cuda, get_sysinfo
 
 # pylint:disable=protected-access
 
@@ -67,7 +67,7 @@ def test_init(sys_info_instance: _SysInfo) -> None:
     assert isinstance(sys_info_instance._gpu, GPUInfo)
 
     assert hasattr(sys_info_instance, "_cuda_check")
-    assert isinstance(sys_info_instance._cuda_check, CudaCheck)
+    assert isinstance(sys_info_instance._cuda_check, Cuda)
 
 
 def test_properties(sys_info_instance: _SysInfo) -> None:

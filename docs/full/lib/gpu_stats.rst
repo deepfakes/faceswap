@@ -38,14 +38,6 @@ gpu_stats.cpu module
    :undoc-members:
    :show-inheritance:
 
-gpu_stats.nvidia_apple module
------------------------------
-
-.. automodule:: lib.gpu_stats.nvidia_apple
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 gpu_stats.nvidia module
 -----------------------
 
