@@ -491,7 +491,7 @@ def crash_log() -> str:
     filename = os.path.join(path, datetime.now().strftime("crash_report.%Y.%m.%d.%H%M%S%f.log"))
     freeze_log = [line.encode("utf-8") for line in _DEBUG_BUFFER]
     try:
-        from lib.sysinfo import sysinfo  # pylint:disable=import-outside-toplevel
+        from lib.system.sysinfo import sysinfo  # pylint:disable=import-outside-toplevel
     except Exception:  # pylint:disable=broad-except
         sysinfo = ("\n\nThere was an error importing System Information from lib.sysinfo. This is "
                    f"probably a bug which should be fixed:\n{traceback.format_exc()}")

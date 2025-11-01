@@ -55,7 +55,6 @@ def _get_name(name: str) -> str:
     str
         The unique name for this layer
     """
-    global _NAMES  # pylint:disable=global-statement,global-variable-not-assigned
     _NAMES[name] = _NAMES.setdefault(name, -1) + 1
     name = f"{name}_{_NAMES[name]}"
     logger.debug("Generating block name: %s", name)

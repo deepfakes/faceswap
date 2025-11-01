@@ -2,7 +2,6 @@
 """ Obtain information about the running system, environment and GPU. """
 
 import json
-import locale
 import os
 import platform
 import sys
@@ -14,7 +13,9 @@ import psutil
 from lib.git import git
 from lib.gpu_stats import GPUStats, GPUInfo
 from lib.utils import get_backend
-from setup import CudaCheck
+
+from .ml_libs import Cuda, ROCm
+from .system import Packages, System
 
 
 class _SysInfo():
@@ -22,138 +23,104 @@ class _SysInfo():
     def __init__(self) -> None:
         self._state_file = _State().state_file
         self._configs = _Configs().configs
-        self._system = {"platform": platform.platform(),
-                        "system": platform.system().lower(),
-                        "machine": platform.machine(),
-                        "release": platform.release(),
-                        "processor": platform.processor(),
-                        "cpu_count": os.cpu_count()}
+        self._system = System()
         self._python = {"implementation": platform.python_implementation(),
                         "version": platform.python_version()}
+        self._packages = Packages()
         self._gpu = self._get_gpu_info()
-        self._cuda_check = CudaCheck()
-
-    @property
-    def _encoding(self) -> str:
-        """ str: The system preferred encoding """
-        return locale.getpreferredencoding()
-
-    @property
-    def _is_conda(self) -> bool:
-        """ bool: `True` if running in a Conda environment otherwise ``False``. """
-        return ("conda" in sys.version.lower() or
-                os.path.exists(os.path.join(sys.prefix, 'conda-meta')))
-
-    @property
-    def _is_linux(self) -> bool:
-        """ bool: `True` if running on a Linux system otherwise ``False``. """
-        return self._system["system"] == "linux"
-
-    @property
-    def _is_macos(self) -> bool:
-        """ bool: `True` if running on a macOS system otherwise ``False``. """
-        return self._system["system"] == "darwin"
-
-    @property
-    def _is_windows(self) -> bool:
-        """ bool: `True` if running on a Windows system otherwise ``False``. """
-        return self._system["system"] == "windows"
-
-    @property
-    def _is_virtual_env(self) -> bool:
-        """ bool: `True` if running inside a virtual environment otherwise ``False``. """
-        if not self._is_conda:
-            retval = (hasattr(sys, "real_prefix") or
-                      (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix))
-        else:
-            prefix = os.path.dirname(sys.prefix)
-            retval = os.path.basename(prefix) == "envs"
-        return retval
+        self._cuda = Cuda()
+        self._rocm = ROCm()
 
     @property
     def _ram_free(self) -> int:
-        """ int: The amount of free RAM in bytes. """
+        """ int : The amount of free RAM in bytes. """
         return psutil.virtual_memory().free
 
     @property
     def _ram_total(self) -> int:
-        """ int: The amount of total RAM in bytes. """
+        """ int : The amount of total RAM in bytes. """
         return psutil.virtual_memory().total
 
     @property
     def _ram_available(self) -> int:
-        """ int: The amount of available RAM in bytes. """
+        """ int : The amount of available RAM in bytes. """
         return psutil.virtual_memory().available
 
     @property
     def _ram_used(self) -> int:
-        """ int: The amount of used RAM in bytes. """
+        """ int : The amount of used RAM in bytes. """
         return psutil.virtual_memory().used
 
     @property
     def _fs_command(self) -> str:
-        """ str: The command line command used to execute faceswap. """
+        """ str : The command line command used to execute faceswap. """
         return " ".join(sys.argv)
 
     @property
-    def _installed_pip(self) -> str:
-        """ str: The list of installed pip packages within Faceswap's scope. """
-        with Popen(f"{sys.executable} -m pip freeze", shell=True, stdout=PIPE) as pip:
-            installed = pip.communicate()[0].decode(self._encoding, errors="replace").splitlines()
-        return "\n".join(installed)
-
-    @property
-    def _installed_conda(self) -> str:
-        """ str: The list of installed Conda packages within Faceswap's scope. """
-        if not self._is_conda:
-            return ""
-        with Popen("conda list", shell=True, stdout=PIPE, stderr=PIPE) as conda:
-            stdout, stderr = conda.communicate()
-        if stderr:
-            return "Could not get package list"
-        installed = stdout.decode(self._encoding, errors="replace").splitlines()
-        return "\n".join(installed)
-
-    @property
     def _conda_version(self) -> str:
-        """ str: The installed version of Conda, or `N/A` if Conda is not installed. """
-        if not self._is_conda:
+        """ str : The installed version of Conda, or `N/A` if Conda is not installed. """
+        if not self._system.is_conda:
             return "N/A"
         with Popen("conda --version", shell=True, stdout=PIPE, stderr=PIPE) as conda:
             stdout, stderr = conda.communicate()
         if stderr:
             return "Conda is used, but version not found"
-        version = stdout.decode(self._encoding, errors="replace").splitlines()
+        version = stdout.decode(self._system.encoding, errors="replace").splitlines()
         return "\n".join(version)
 
     @property
     def _git_commits(self) -> str:
-        """ str: The last 5 git commits for the currently running Faceswap. """
+        """ str : The last 5 git commits for the currently running Faceswap. """
         commits = git.get_commits(3)
         if not commits:
             return "Not Found"
         return " | ".join(commits)
 
     @property
-    def _cuda_version(self) -> str:
-        """ str: The installed CUDA version. """
-        # TODO Handle multiple CUDA installs
-        retval = self._cuda_check.cuda_version
-        if not retval:
-            retval = "No global version found"
-            if self._is_conda:
-                retval += ". Check Conda packages for Conda Cuda"
-        return retval
+    def _cuda_versions(self) -> str:
+        """ str : The globally installed Cuda versions"""
+        if not self._cuda.versions:
+            return "No global Cuda versions found"
+        return ", ".join(".".join(str(x) for x in v) for v in self._cuda.versions)
 
     @property
-    def _cudnn_version(self) -> str:
-        """ str: The installed cuDNN version. """
-        retval = self._cuda_check.cudnn_version
-        if not retval:
+    def _cuda_version(self) -> str:
+        """ str : The installed CUDA version. """
+        if self._cuda.version == (0, 0):
             retval = "No global version found"
-            if self._is_conda:
+            if self._system.is_conda:
+                retval += ". Check Conda packages for Conda Cuda"
+            return retval
+        return ".".join(str(x) for x in self._cuda.version)
+
+    @property
+    def _cudnn_versions(self) -> str:
+        """ str : The installed cuDNN versions. """
+        if not self._cuda.cudnn_versions:
+            retval = "No global version found"
+            if self._system.is_conda:
                 retval += ". Check Conda packages for Conda cuDNN"
-        return retval
+            return retval
+        retval = ""
+        for k, v in self._cuda.cudnn_versions.items():
+            retval += f"{'.'.join(str(x) for x in v)}"
+            retval += f"({'global' if k == (0, 0) else '.'.join(str(x) for x in k)}), "
+
+        return retval[:-2]
+
+    @property
+    def _rocm_version(self) -> str:
+        """ str : The default ROCm version """
+        if self._rocm.version == (0, 0, 0):
+            return "No default ROCm version found"
+        return ".".join(str(x) for x in self._rocm.version)
+
+    @property
+    def _rocm_versions(self) -> str:
+        """ str : The installed ROCm versions """
+        if not self._rocm.versions:
+            return "No ROCm versions found"
+        return ", ".join(".".join(str(x) for x in v) for v in self._rocm.versions)
 
     def _get_gpu_info(self) -> GPUInfo:
         """ Obtain GPU Stats. If an error is raised, swallow the error, and add to GPUInfo output
@@ -185,22 +152,25 @@ class _SysInfo():
         """
         retval = "\n============ System Information ============\n"
         sys_info = {"backend": get_backend(),
-                    "os_platform": self._system["platform"],
-                    "os_machine": self._system["machine"],
-                    "os_release": self._system["release"],
+                    "os_platform": self._system.platform,
+                    "os_machine": self._system.machine,
+                    "os_release": self._system.release,
                     "py_conda_version": self._conda_version,
-                    "py_implementation": self._python["implementation"],
-                    "py_version": self._python["version"],
+                    "py_implementation": self._system.python_implementation,
+                    "py_version": self._system.python_version,
                     "py_command": self._fs_command,
-                    "py_virtual_env": self._is_virtual_env,
-                    "sys_cores": self._system["cpu_count"],
-                    "sys_processor": self._system["processor"],
+                    "py_virtual_env": self._system.is_virtual_env,
+                    "sys_cores": self._system.cpu_count,
+                    "sys_processor": self._system.processor,
                     "sys_ram": self._format_ram(),
-                    "encoding": self._encoding,
+                    "encoding": self._system.encoding,
                     "git_branch": git.branch,
                     "git_commits": self._git_commits,
+                    "gpu_cuda_versions": self._cuda_versions,
                     "gpu_cuda": self._cuda_version,
-                    "gpu_cudnn": self._cudnn_version,
+                    "gpu_cudnn": self._cudnn_versions,
+                    "gpu_rocm_versions": self._rocm_versions,
+                    "gpu_rocm_version": self._rocm_version,
                     "gpu_driver": self._gpu.driver,
                     "gpu_devices": ", ".join([f"GPU_{idx}: {device}"
                                               for idx, device in enumerate(self._gpu.devices)]),
@@ -213,10 +183,10 @@ class _SysInfo():
         for key in sorted(sys_info.keys()):
             retval += (f"{key + ':':<20} {sys_info[key]}\n")
         retval += "\n=============== Pip Packages ===============\n"
-        retval += self._installed_pip
-        if self._is_conda:
+        retval += self._packages.installed_python_pretty
+        if self._system.is_conda:
             retval += "\n\n============== Conda Packages ==============\n"
-            retval += self._installed_conda
+            retval += self._packages.installed_conda_pretty
         retval += self._state_file
         retval += "\n\n================= Configs =================="
         retval += self._configs
@@ -287,7 +257,7 @@ class _Configs():  # pylint:disable=too-few-public-methods
 
         Parameters
         ----------
-        config_files: list
+        config_files : list[str]
             A list of paths to the faceswap config files
 
         Returns
@@ -311,7 +281,7 @@ class _Configs():  # pylint:disable=too-few-public-methods
 
         Parameters
         ----------
-        config_file: str
+        config_file : str
             The path to the config.ini file
 
         Returns
@@ -337,7 +307,7 @@ class _Configs():  # pylint:disable=too-few-public-methods
 
         Parameters
         ----------
-        config_file: str
+        config_file : str
             The path to the config.json file
 
         Returns
@@ -358,9 +328,9 @@ class _Configs():  # pylint:disable=too-few-public-methods
 
         Parameters
         ----------
-        key: str
+        key : str
             The label for this display item
-        value: str
+        value : str
             The value for this display item
 
         Returns
@@ -381,7 +351,7 @@ class _State():  # pylint:disable=too-few-public-methods
 
     @property
     def _is_training(self) -> bool:
-        """ bool: ``True`` if this function has been called during a training session
+        """ bool : ``True`` if this function has been called during a training session
         otherwise ``False``. """
         return len(sys.argv) > 1 and sys.argv[1].lower() == "train"
 
@@ -397,7 +367,9 @@ class _State():  # pylint:disable=too-few-public-methods
         cmd = sys.argv
         for opt in args:
             if opt in cmd:
-                return cmd[cmd.index(opt) + 1]
+                idx = cmd.index(opt) + 1
+                if len(cmd) < idx:
+                    return cmd[idx]
         return None
 
     def _get_state_file(self) -> str:
@@ -421,3 +393,7 @@ class _State():  # pylint:disable=too-few-public-methods
 
 
 sysinfo = get_sysinfo()  # pylint:disable=invalid-name
+
+
+if __name__ == "__main__":
+    print(sysinfo)

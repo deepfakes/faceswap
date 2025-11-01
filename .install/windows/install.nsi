@@ -1,3 +1,5 @@
+# TODO: Install visualstudio build tools for fastcluster
+# TODO: Check if we still get realtime output with Subprocess in setup.py
 !include MUI2.nsh
 !include nsDialogs.nsh
 !include winmessages.nsh

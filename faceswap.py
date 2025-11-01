@@ -15,13 +15,14 @@ from lib.cli import args as cli_args  # pylint:disable=wrong-import-position
 from lib.cli.args_train import TrainArgs  # pylint:disable=wrong-import-position
 from lib.cli.args_extract_convert import ConvertArgs, ExtractArgs  # noqa:E501 pylint:disable=wrong-import-position
 from lib.config import generate_configs  # pylint:disable=wrong-import-position
+from lib.system import System  # pylint:disable=wrong-import-position
 
 # LOCALES
 _LANG = gettext.translation("faceswap", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
-if sys.version_info < (3, 10):
-    raise ValueError("This program requires at least python 3.10")
+system = System()
+system.validate_python()
 
 _PARSER = cli_args.FullHelpArgumentParser()
 
