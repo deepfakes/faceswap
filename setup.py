@@ -96,7 +96,7 @@ class Environment():
         logger.debug("Setting backend to '%s'", backend)
         self.backend = backend
 
-    def _set_requirements(self, requirements: str) -> None:
+    def set_requirements(self, requirements: str) -> None:
         """ Validate that the requirements are compatible with the running Python version and
         set the requirements file version to install use
 
@@ -123,7 +123,7 @@ class Environment():
             return
         self.set_backend(next(b for b in self._backends if arg.startswith(b)))  # type:ignore[misc]
         if arg == "cpu":
-            self._set_requirements("cpu")
+            self.set_requirements("cpu")
             return
         # Get Cuda/ROCm requirements file
         assert self.backend is not None
@@ -134,14 +134,14 @@ class Environment():
                             and self.backend in f])
         if arg == self.backend:  # Default to latest
             logger.debug("No version specified. Defaulting to latest requirements")
-            self._set_requirements(req_files[-1])
+            self.set_requirements(req_files[-1])
             return
         lookup = [r.replace("_", "") for r in req_files]
         if arg not in lookup:
             logger.debug("Defaulting to latest requirements for unknown lookup '%s'", arg)
-            self._set_requirements(req_files[-1])
+            self.set_requirements(req_files[-1])
             return
-        self._set_requirements(req_files[lookup.index(arg)])
+        self.set_requirements(req_files[lookup.index(arg)])
 
     def _process_arguments(self) -> None:
         """ Process any cli arguments and dummy in cli arguments if calling from updater. """
@@ -153,7 +153,7 @@ class Environment():
         logger.debug(args)
         if self.system.is_macos and self.system.machine == "arm64":
             self.set_backend("apple_silicon")
-            self._set_requirements("apple-silicon")
+            self.set_requirements("apple-silicon")
         for arg in args:
             if arg == "--installer":
                 self.is_installer = True
@@ -396,14 +396,33 @@ class Checks():  # pylint:disable=too-few-public-methods
             return
         logger.info("ROCm support:\r\nIf you are using an AMD GPU, then select 'yes'."
                     "\r\nCPU/non-AMD GPU users should answer 'no'.\r\n")
-        i = input("Enable ROCm Support? [y/N] ")
-        if i in ("Y", "y"):
-            logger.info("ROCm Support Enabled")
-            self._env.set_backend("rocm")
+        i = input("Enable ROCm Support? [y/N] ").strip()
+        if i not in ("", "Y", "y", "n", "N"):
+            logger.warning("Invalid selection '%s'", i)
+            self._rocm_ask_enable()
+            return
+        if i not in ("Y", "y"):
+            return
+        logger.info("ROCm Support Enabled")
+        self._env.set_backend("rocm")
+        versions = ["6.0", "6.1", "6.2", "6.3", "6.4"]
+        i = input(f"Which ROCm version? [{', '.join(versions)}] ").strip()
+        i = versions[-1] if not i else i
+        print(i, i in versions, versions)
+        if i not in versions:
+            logger.warning("Invalid selection '%s'", i)
+            self._rocm_ask_enable()
+            return
+        logger.info("ROCm Version %s Selected", i)
+        self._env.set_requirements(f"rocm_{i.replace('.', '')}")
 
     def _docker_ask_enable(self) -> None:
         """ Enable or disable Docker """
-        i = input("Enable  Docker? [y/N] ")
+        i = input("Enable  Docker? [y/N] ").strip()
+        if i not in ("", "Y", "y", "n", "N"):
+            logger.warning("Invalid selection '%s'", i)
+            self._docker_ask_enable()
+            return
         if i in ("Y", "y"):
             logger.info("Docker Enabled")
             self._env.enable_docker = True
@@ -413,10 +432,25 @@ class Checks():  # pylint:disable=too-few-public-methods
 
     def _cuda_ask_enable(self) -> None:
         """ Enable or disable CUDA """
-        i = input("Enable  CUDA? [Y/n] ")
-        if i in ("", "Y", "y"):
-            logger.info("CUDA Enabled")
-            self._env.set_backend("nvidia")
+        i = input("Enable  CUDA? [Y/n] ").strip()
+        if i not in ("", "Y", "y", "n", "N"):
+            logger.warning("Invalid selection '%s'", i)
+            self._cuda_ask_enable()
+            return
+        if i not in ("", "Y", "y"):
+            return
+        logger.info("CUDA Enabled")
+        self._env.set_backend("nvidia")
+        versions = ["11", "12", "13"]
+        i = input("Which Cuda version: 11 (GTX7xx-8xx), 12 (GTX9xx-10xx) or 13 (RTX20xx-)? "
+                  f"[{', '.join(versions)}] ").strip()
+        i = "13" if not i else i
+        if i not in versions:
+            logger.warning("Invalid selection '%s'", i)
+            self._cuda_ask_enable()
+            return
+        logger.info("CUDA Version %s Selected", i)
+        self._env.set_requirements(f"nvidia_{i}")
 
     def _docker_confirm(self) -> None:
         """ Warn if nvidia-docker on non-Linux system """
@@ -523,7 +557,6 @@ class Status():
         self._max_width = 79  # Keep short because of NSIS Details window size
         self._prefix = "> "
         self._conda_tracked: dict[str, dict[T.Literal["size", "done"], float]] = {}
-
         self._re_pip_pkg = re.compile(r"^Downloading\s(?P<lib>\w+)\b.*?\s\((?P<size>.+)\)")
         self._re_pip_http = re.compile(r"https?://[^\s]*/([^/\s]+)")
         self._re_pip_progress = re.compile(r"^Progress\s+(?P<done>\d+).+?(?P<total>\d+)")
@@ -544,15 +577,11 @@ class Status():
         """
         full_line = f"{self._prefix}{line}"
         output = full_line
-
         if len(output) > self._max_width:
             output = f"{output[:self._max_width - 3]}..."
-
         if len(output) < len(self._last_line):
             self._clear_line()
-
         self._last_line = full_line
-
         print(output, end="\r")
 
     def _parse_size(self, size: str) -> float:
@@ -591,14 +620,12 @@ class Status():
         if progress is None:
             self._print(line)
             return
-
         info = progress.groupdict()
         if info["lib"] not in self._conda_tracked:
             self._conda_tracked[info["lib"]] = {"size": self._parse_size(info["tot"]),
                                                 "done": float(info["prg"])}
         else:
             self._conda_tracked[info["lib"]]["done"] = float(info["prg"])
-
         count = len(self._conda_tracked)
         total_size = sum(v["size"] for v in self._conda_tracked.values())
         prog = min(sum(v["done"] for v in self._conda_tracked.values()) / count, 100.)
@@ -616,12 +643,10 @@ class Status():
                 len(line) > self._max_width):
             count = len(line.split(":", maxsplit=1)[-1].split(","))
             line = f"Installing {count} collected packages..."
-
         progress = self._re_pip_progress.match(line)
         if progress is None:
             self._print(line)
             return
-
         info = progress.groupdict()
         done = (int(info["done"]) / int(info["total"])) * 100.0
         last_line = self._last_line.strip()[len(self._prefix):]
@@ -678,7 +703,6 @@ class Installer():
         self._command = command
         self._is_conda = is_conda
         self._is_gui = is_gui
-
         self._status = Status(is_conda)
         self._re_ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
         self._seen_lines: set[str] = set()
@@ -764,12 +788,10 @@ class Installer():
                 returncode = proc.poll()
                 if lines == b"" and returncode is not None:
                     break
-
                 for line in lines.split(b"\r"):
                     clean = self._seen_line_log(line.decode("utf-8", errors="replace"))
                     if not self._is_gui and clean:
                         self._status(clean)
-
             if returncode and proc.stderr is not None:
                 for line in proc.stderr.readlines():
                     clean = self._seen_line_log(line.decode("utf-8", errors="replace"),
@@ -797,15 +819,12 @@ class Install():  # pylint:disable=too-few-public-methods
     def __init__(self, environment: Environment, is_gui: bool = False) -> None:
         self._env = environment
         self._is_gui = is_gui
-
         if not self._env.is_installer and not self._env.updater:
             self._ask_continue()
-
         self._packages = RequiredPackages(environment)
         if self._env.updater and not self._packages.packages_need_install:
             logger.info("All Dependencies are up to date")
             return
-
         self._install_packages()
         self._finalize()
 
@@ -845,7 +864,6 @@ class Install():  # pylint:disable=too-few-public-methods
             pipexe.extend(extra_args)
         pipexe.extend([p["package"] for p in packages])
         names = [p["name"] for p in packages]
-
         installer = Installer(self._env, names, pipexe, False, self._is_gui)
         if installer() != 0:
             msg = f"Unable to install Python packages: {', '.join(names)}"
@@ -879,7 +897,6 @@ class Install():  # pylint:disable=too-few-public-methods
         condaexe += [p["package"] for p in packages]
         names = [p["name"] for p in packages]
         retcode = Installer(self._env, names, condaexe, True, self._is_gui)()
-
         if retcode != 0:
             logger.warning("Unable to install Conda packages: %s. "
                            "Please install these packages manually", ', '.join(names))
