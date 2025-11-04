@@ -1,0 +1,7 @@
+# Cuda compatibility 7.5-
+# RTX 20xx -
+-r _requirements_base.txt
+# Exclude badly numbered Python2 version of nvidia-ml-py
+nvidia-ml-py>=12.535,<300
+--extra-index-url https://download.pytorch.org/whl/cu130
+torch>=2.9.0,<2.10.0

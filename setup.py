@@ -16,7 +16,7 @@ from subprocess import PIPE, Popen
 
 from lib.logger import log_setup
 from lib.system import Cuda, Packages, ROCm, System
-from requirements.requirements import Requirements
+from requirements.requirements import Requirements, PYTHON_VERSIONS
 
 if T.TYPE_CHECKING:
     from packaging.requirements import Requirement
@@ -56,7 +56,6 @@ class Environment():
         ``True`` if the script is being called by Faceswap's internal updater. ``False`` if full
         setup is running. Default: ``False``
     """
-
     _backends = (("nvidia", "apple_silicon", "rocm", "cpu"))
 
     def __init__(self, updater: bool = False) -> None:
@@ -70,8 +69,8 @@ class Environment():
         self.backend: T.Literal["nvidia", "apple_silicon", "cpu", "rocm"] | None = None
         self.enable_docker: bool = False
         self.cuda_cudnn = ["", ""]
+        self.requirement_version = ""
         self.rocm_version: tuple[int, ...] = (0, 0, 0)
-
         self._process_arguments()
         self._output_runtime_info()
         self._check_pip()
@@ -86,6 +85,64 @@ class Environment():
         """ str : The detected globally installed cuDNN Version """
         return self.cuda_cudnn[1]
 
+    def set_backend(self, backend: T.Literal["nvidia", "apple_silicon", "cpu", "rocm"]) -> None:
+        """ Set the backend to install for
+
+        Parameters
+        ----------
+        backend : Literal["nvidia", "apple_silicon", "cpu", "rocm"]
+            The backend to setup faceswap for
+        """
+        logger.debug("Setting backend to '%s'", backend)
+        self.backend = backend
+
+    def _set_requirements(self, requirements: str) -> None:
+        """ Validate that the requirements are compatible with the running Python version and
+        set the requirements file version to install use
+
+        Parameters
+        ----------
+        backend : str
+            The requirements file version to use for install
+        """
+        if requirements in PYTHON_VERSIONS:
+            self.system.validate_python(max_version=PYTHON_VERSIONS[requirements])
+        logger.debug("Setting requirements to '%s'", requirements)
+        self.requirement_version = requirements
+
+    def _parse_backend_from_cli(self, arg: str) -> None:
+        """ Parse a command line argument and populate :attr:`backend` if valid
+
+        Parameters
+        ----------
+        arg : str
+            The command line argument to parse
+        """
+        arg = arg.lower()
+        if not any(arg.startswith(b) for b in self._backends):
+            return
+        self.set_backend(next(b for b in self._backends if arg.startswith(b)))  # type:ignore[misc]
+        if arg == "cpu":
+            self._set_requirements("cpu")
+            return
+        # Get Cuda/ROCm requirements file
+        assert self.backend is not None
+        req_files = sorted([os.path.splitext(f)[0].replace("requirements_", "")
+                            for f in os.listdir("requirements")
+                            if os.path.splitext(f)[-1] == ".txt"
+                            and f.startswith("requirements_")
+                            and self.backend in f])
+        if arg == self.backend:  # Default to latest
+            logger.debug("No version specified. Defaulting to latest requirements")
+            self._set_requirements(req_files[-1])
+            return
+        lookup = [r.replace("_", "") for r in req_files]
+        if arg not in lookup:
+            logger.debug("Defaulting to latest requirements for unknown lookup '%s'", arg)
+            self._set_requirements(req_files[-1])
+            return
+        self._set_requirements(req_files[lookup.index(arg)])
+
     def _process_arguments(self) -> None:
         """ Process any cli arguments and dummy in cli arguments if calling from updater. """
         args = sys.argv[:]
@@ -93,12 +150,10 @@ class Environment():
             get_backend = T.cast("lib_utils",  # type:ignore[attr-defined,valid-type]
                                  import_module("lib.utils")).get_backend
             args.append(f"--{get_backend()}")
-
         logger.debug(args)
-
         if self.system.is_macos and self.system.machine == "arm64":
             self.set_backend("apple_silicon")
-
+            self._set_requirements("apple-silicon")
         for arg in args:
             if arg == "--installer":
                 self.is_installer = True
@@ -106,10 +161,8 @@ class Environment():
             if arg == "--dev":
                 self.include_dev_tools = True
                 continue
-
-            if not self.backend and (arg.startswith("--") and
-                                     arg.replace("--", "") in self._backends):
-                self.backend = arg.replace("--", "").lower()  # type:ignore
+            if not self.backend and arg.startswith("--"):
+                self._parse_backend_from_cli(arg[2:])
 
     def _output_runtime_info(self) -> None:
         """ Output run time info """
@@ -139,10 +192,8 @@ class Environment():
             if not os.access(keras_base_dir, os.W_OK):
                 keras_base_dir = "/tmp"
             keras_dir = os.path.join(keras_base_dir, ".keras")
-
         keras_dir = os.path.expanduser(keras_dir)
         os.makedirs(keras_dir, exist_ok=True)
-
         conf_file = os.path.join(keras_dir, "keras.json")
         config = {}
         if os.path.exists(conf_file):
@@ -151,7 +202,6 @@ class Environment():
                     config = json.load(c_file)
             except ValueError:
                 pass
-
         config["backend"] = "torch"
         with open(conf_file, "w", encoding="utf-8") as c_file:
             c_file.write(json.dumps(config, indent=4))
@@ -166,17 +216,6 @@ class Environment():
             json.dump(config, cnf)
         logger.info("Faceswap config written to: %s", config_file)
         self._configure_keras()
-
-    def set_backend(self, backend: T.Literal["nvidia", "apple_silicon", "cpu", "rocm"]) -> None:
-        """ Set the backend to install for
-
-        Parameters
-        ----------
-        backend : Literal["nvidia", "apple_silicon", "cpu", "rocm"]
-            The backend to setup faceswap for
-        """
-        logger.debug("Setting backend to %s", backend)
-        self.backend = backend
 
 
 class RequiredPackages():
@@ -194,12 +233,12 @@ class RequiredPackages():
         self._requirements = Requirements(include_dev=self._env.include_dev_tools)
         self._check_packaging()
         self.conda = self._get_missing_conda()
-        assert self._env.backend is not None
         self.python = self._get_missing_python(
-            self._requirements.requirements[self._env.backend])
-        self.pip_arguments = [x.strip()
-                              for p in self._requirements.global_options[self._env.backend]
-                              for x in p.split()]
+            self._requirements.requirements[self._env.requirement_version])
+        self.pip_arguments = [
+            x.strip()
+            for p in self._requirements.global_options[self._env.requirement_version]
+            for x in p.split()]
         """ list[str] : Any additional pip arguments that are required for installing from pip for
         the given backend """
 
@@ -212,12 +251,10 @@ class RequiredPackages():
         """ Install packaging if it is not available  """
         if self._requirements.packaging_available:
             return
-
         cmd = [sys.executable, "-u", "-m", "pip", "install", "--no-cache-dir"]
         if self._env.system.is_admin and not self._env.system.is_virtual_env:
             cmd.append("--user")
         cmd.append("packaging")
-
         logger.info("Installing required package...")
         installer = Installer(self._env, ["Packaging"], cmd, False, False)
         if installer() != 0:
@@ -248,13 +285,11 @@ class RequiredPackages():
                 logger.debug("Adding new Python package '%s'", package["package"])
                 retval.append(package)
                 continue
-
             if not req.specifier.contains(installed_version):
                 logger.debug("Adding Python package '%s' for specifier change from '%s' to '%s'",
                              package["package"], installed_version, str(req.specifier))
                 retval.append(package)
                 continue
-
             logger.debug("Skipping installed Python package '%s'", package["package"])
         logger.debug("Selected missing Python packages: %s", retval)
         return retval
@@ -278,7 +313,6 @@ class RequiredPackages():
                          self._env.backend, self._env.system,
                          _CONDA_BACKEND_REQUIRED, _CONDA_OS_REQUIRED)
             return retval
-
         for pkg in to_add:
             channel = _CONDA_MAPPING.get(pkg, "defaults")
             if pkg == "tk" and self._env.system.is_linux:
@@ -299,13 +333,11 @@ class RequiredPackages():
         retval: dict[str, list[dict[T.Literal["name", "package"], str]]] = {}
         if not self._env.system.is_conda:
             return retval
-
         required = self._get_required_conda()
         requirements = self._requirements.parse_requirements(
             [p["package"] for p in required])
         channels = [p["channel"] for p in required]
         installed = {k: v for k, v in self._packages.installed_conda.items() if v[1] != "pypi"}
-
         for req, channel in zip(requirements, channels):
             spec_str = str(req.specifier).replace("==", "=") if req.specifier else ""
             package: dict[T.Literal["name", "package"], str] = {"name": req.name.title(),
@@ -315,26 +347,21 @@ class RequiredPackages():
                 # Ref: https://github.com/ContinuumIO/anaconda-issues/issues/6833
                 # This versioning will fail in parse_requirements, so we need to do it here
                 package["package"] = f"{req.name}=*=xft_*"  # Swap out for explicit XFT version
-
             exists = installed.get(req.name)
-
             if not exists:
                 logger.debug("Adding new Conda package '%s'", package["package"])
                 retval.setdefault(channel, []).append(package)
                 continue
-
             if exists[-1] != channel:
                 logger.debug("Adding Conda package '%s' for channel change from '%s' to '%s'",
                              package["package"], exists[-1], channel)
                 retval.setdefault(channel, []).append(package)
                 continue
-
             if not req.specifier.contains(exists[0]):
                 logger.debug("Adding Conda package '%s' for specifier change from '%s' to '%s'",
                              package["package"], exists[0], spec_str)
                 retval.setdefault(channel, []).append(package)
                 continue
-
             logger.debug("Skipping installed Conda package '%s'", package["package"])
         logger.debug("Selected missing Conda packages: %s", retval)
         return retval
@@ -427,7 +454,6 @@ class Checks():  # pylint:disable=too-few-public-methods
         if self._env.backend != "nvidia":
             logger.debug("Skipping Cuda checks as not enabled")
             return
-
         if not any((self._env.system.is_linux, self._env.system.is_windows)):
             return
         cuda = Cuda()
@@ -439,7 +465,6 @@ class Checks():  # pylint:disable=too-few-public-methods
             _InstallState.messages.append(msg)
             self._env.cuda_cudnn[0] = str_vers
             logger.debug("CUDA version: %s", self._env.cuda_version)
-
         if cuda.cudnn_versions:
             str_vers = ", ".join(".".join(str(x) for x in v)
                                  for v in cuda.cudnn_versions.values())
@@ -456,7 +481,6 @@ class Checks():  # pylint:disable=too-few-public-methods
         if self._env.backend != "rocm" or not self._env.system.is_linux:
             logger.debug("Skipping ROCm checks as not enabled")
             return
-
         rocm = ROCm()
 
         if rocm.is_valid or rocm.valid_installed:
@@ -476,9 +500,7 @@ class Checks():  # pylint:disable=too-few-public-methods
             msg = f"Incompatible ROCm version{'s' if len(rocm.versions) > 1 else ''}: {str_vers}\n"
         else:
             msg = "ROCm not found\n"
-            _InstallState.messages.append(
-                f"{msg}\n"
-            )
+            _InstallState.messages.append(f"{msg}\n")
         str_min = ".".join(str(v) for v in rocm.version_min)
         str_max = ".".join(str(v) for v in rocm.version_max)
         valid = f"{str_min} to {str_max}" if str_min != str_max else str_min

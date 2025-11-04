@@ -21,12 +21,9 @@ from subprocess import CalledProcessError, run
 logger = logging.getLogger(__name__)
 
 
-_VALID_PYTHON = ((3, 10), (3, 12))
+_VALID_PYTHON = ((3, 10), (3, 14))
 """ tuple[tuple[int, int], tuple[int, int]] : The minimum and maximum versions of Python that can
 run Faceswap """
-
-_TORCH_ROCM_REQUIREMENTS = {">=2.2.1,<2.4.0": ((6, 0), (6, 0))}
-"""dict[str, tuple[tuple[int, int], tuple[int, int]]]: Minumum and maximum ROCm versions """
 
 
 def _lines_from_command(command: list[str]) -> list[str]:
@@ -138,18 +135,37 @@ class System:  # pylint:disable=too-many-instance-attributes
             retval = os.path.basename(prefix) == "envs"
         return retval
 
-    def validate_python(self) -> bool:
+    def validate_python(self, max_version: tuple[int, int] | None = None) -> bool:
         """ Check that the running Python version is valid
+
+        Parameters
+        ----------
+        max_version: tuple[int, int] | None, Optional
+            The max version to validate Python against. ``None`` for the project Maximum.
+            Default: ``None`` (project maximum)
 
         Returns
         -------
         bool
-            ``True`` if the running Python version is valid
+            ``True`` if the running Python version is valid, otherwise logs an error and exits
         """
-        retval = (_VALID_PYTHON[0] <= sys.version_info[:2] <= _VALID_PYTHON[1]
+        max_python = _VALID_PYTHON[1] if max_version is None else max_version
+        retval = (_VALID_PYTHON[0] <= sys.version_info[:2] <= max_python
                   and self.python_architecture == "64bit")
-        logger.debug("Python version %s(%s) within %s(64bit): %s",
-                     self.python_version, self.python_architecture, _VALID_PYTHON, retval)
+        logger.debug("Python version %s(%s) within %s - %s(64bit): %s",
+                     self.python_version,
+                     self.python_architecture,
+                     _VALID_PYTHON[0],
+                     max_python,
+                     retval)
+        if not retval:
+            logger.error("Your Python version %s(%s) is unsupported. Please run with Python "
+                         "version %s to %s 64bit",
+                         self.python_version,
+                         self.python_architecture,
+                         ".".join(str(x) for x in _VALID_PYTHON[0]),
+                         ".".join(str(x) for x in max_python))
+            sys.exit(1)
         return retval
 
     def validate(self) -> None:
@@ -162,14 +178,7 @@ class System:  # pylint:disable=too-many-instance-attributes
             logger.error("Setting up Faceswap for Apple Silicon outside of a Conda "
                          "environment is unsupported")
             sys.exit(1)
-        if not self.validate_python():
-            logger.error("Your Python version %s(%s) is unsupported. Please run with Python "
-                         "version %s to %s 64bit",
-                         self.python_version,
-                         self.python_architecture,
-                         ".".join(str(x) for x in _VALID_PYTHON[0]),
-                         ".".join(str(x) for x in _VALID_PYTHON[1]))
-            sys.exit(1)
+        self.validate_python()
 
 
 class Packages():
@@ -240,7 +249,7 @@ class Packages():
             if "==" not in pkg:
                 continue
             item = pkg.split("==")
-            retval[item[0]] = item[1]
+            retval[item[0].lower()] = item[1]
         logger.debug("Installed Python packages: %s", retval)
         return retval
 
