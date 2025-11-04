@@ -49,6 +49,9 @@ class FocalFrequencyLoss(Loss):
     batch_matrix: bool, Optional
         ``True`` to calculate the spectrum weight matrix using batch-based statistics otherwise
         ``False``. Default: ``False``
+    epsilon : float, Optional
+        Small epsilon for safer weights scaling division. Default: `1e-6`
+
 
     References
     ----------
@@ -61,7 +64,8 @@ class FocalFrequencyLoss(Loss):
                  patch_factor: int = 1,
                  ave_spectrum: bool = False,
                  log_matrix: bool = False,
-                 batch_matrix: bool = False) -> None:
+                 batch_matrix: bool = False,
+                 epsilon: float = 1e-6) -> None:
         logger.debug(parse_class_init(locals()))
         super().__init__(name=self.__class__.__name__)
         self._alpha = alpha
@@ -70,6 +74,7 @@ class FocalFrequencyLoss(Loss):
         self._ave_spectrum = ave_spectrum
         self._log_matrix = log_matrix
         self._batch_matrix = batch_matrix
+        self._epsilon = epsilon
         self._dims: tuple[int, int] = (0, 0)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
@@ -154,11 +159,11 @@ class FocalFrequencyLoss(Loss):
             weights = ops.log(weights + 1.0)
 
         if self._batch_matrix:  # calculate the spectrum weight matrix using batch-based statistics
-            weights = weights / ops.max(weights)
+            scale = ops.max(weights)
         else:
-            weights = weights / ops.max(ops.max(weights, axis=-2), axis=-2)[..., None, None, :]
+            scale = ops.max(weights, axis=(-2, -3), keepdims=True)
+        weights = weights / ops.maximum(scale, self._epsilon)
 
-        weights = ops.nan_to_num(weights)
         weights = ops.clip(weights, x_min=0.0, x_max=1.0)
 
         return weights
