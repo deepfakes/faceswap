@@ -354,7 +354,7 @@ class ExtractArgs(ExtractConvertArgs):
             "dest": "debug_landmarks",
             "default": False,
             "group": _("output"),
-            "help": _("Draw landmarks on the ouput faces for debugging purposes.")})
+            "help": _("Draw landmarks on the output faces for debugging purposes.")})
         argument_list.append({
             "opts": ("-P", "--singleprocess"),
             "action": "store_true",
