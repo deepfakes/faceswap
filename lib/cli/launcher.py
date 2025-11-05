@@ -75,10 +75,10 @@ class ScriptExecutor():
         Raises
         ------
         FaceswapError
-            If PyTorch is not found, or is not between versions 2.3 and 2.3
+            If PyTorch is not found, or is not between versions 2.3 and 2.9
         """
-        min_ver = (2, 2)
-        max_ver = (2, 3)
+        min_ver = (2, 3)
+        max_ver = (2, 9)
         try:
             import torch  # noqa:F401 pylint:disable=unused-import,import-outside-toplevel
         except ImportError as err:
