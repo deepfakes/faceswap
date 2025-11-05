@@ -139,13 +139,12 @@ If you are using an Nvidia card make sure you have the correct versions of Cuda/
     - RTX20xx GPUS onwards: `pip install -r ./requirements/requirements_nvidia_13.txt`
     - GTX9xx - GTX10xx GPUs: `pip install -r ./requirements/requirements_nvidia_12.txt`
     - GTX7xx - GTX8xx GPUs: `pip install -r ./requirements/requirements_nvidia_11.txt`
-      - **Note:** Maximum supported Python version for GTX8xx - GTX9xx GPUs is `3.12`
+      - **Note:** Maximum supported Python version for GTX8xx - GTX9xx GPUs is `3.13`
 
   - For **AMD** GPU users (Linux only):
     - **Note** You must install a version of ROCm to your system that is compatible with your OS and GPU.
     - ROCm 6.4: `pip install -r ./requirements/requirements_rocm64.txt`
     - ROCm 6.3: `pip install -r ./requirements/requirements_rocm63.txt`
-      - **Note:** Maximum supported Python version for ROCm 6.3 is `3.13`
     - ROCm 6.2: `pip install -r ./requirements/requirements_rocm62.txt`
       - **Note:** Maximum supported Python version for ROCm 6.2 is `3.13`
     - ROCm 6.1: `pip install -r ./requirements/requirements_rocm61.txt`

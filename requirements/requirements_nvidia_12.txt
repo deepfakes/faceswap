@@ -5,4 +5,4 @@
 nvidia-ml-py>=12.535,<300
 --extra-index-url https://download.pytorch.org/whl/cu126
 --extra-index-url https://download.pytorch.org/whl/cu128
-torch>=2.6.0,<2.10.0
+torch>=2.7.0,<2.10.0
