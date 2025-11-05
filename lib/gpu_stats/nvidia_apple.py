@@ -44,7 +44,7 @@ class NvidiaAppleStats(_GPUStats):
         try:
             pynvx.cudaInit()  # pylint:disable=no-member
         except RuntimeError as err:
-            msg = ("An unhandled exception occured reading from the Nvidia Machine Learning "
+            msg = ("An unhandled exception occurred reading from the Nvidia Machine Learning "
                    f"Library. Original error: {str(err)}")
             raise FaceswapError(msg) from err
         super()._initialize()

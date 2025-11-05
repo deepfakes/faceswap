@@ -92,7 +92,7 @@ class AppleSiliconStats(_GPUStats):
             self._log("debug",
                       f"Tensorflow initialization test: (mem_info: {meminfo}, devices: {devices}")
         except RuntimeError as err:
-            msg = ("An unhandled exception occured initializing the device via Tensorflow "
+            msg = ("An unhandled exception occurred initializing the device via Tensorflow "
                    f"Library. Original error: {str(err)}")
             raise FaceswapError(msg) from err
 
@@ -130,7 +130,7 @@ class AppleSiliconStats(_GPUStats):
 
         Notes
         -----
-        As the SoC is not a discreet GPU it does not technically have a driver version, so just
+        As the SoC is not a discrete GPU it does not technically have a driver version, so just
         return `'Not Applicable'` as a string
 
         Returns

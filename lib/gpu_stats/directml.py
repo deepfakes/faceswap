@@ -128,7 +128,7 @@ class LUID(StructureRepr):  # pylint:disable=too-few-public-methods
 
 
 class DriverVersion(StructureRepr):  # pylint:disable=too-few-public-methods
-    """ Stucture (based off LARGE_INTEGER) to hold the driver version
+    """ Structure (based off LARGE_INTEGER) to hold the driver version
 
     Reference
     ---------
