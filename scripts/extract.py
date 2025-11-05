@@ -578,7 +578,7 @@ class PipelineLoader():
         logger.debug("Load Images: Start")
         load_queue = self._extractor.input_queue
         for filename, image in self._images.load():
-            if load_queue.shutdown.is_set():
+            if load_queue.shutdown_event.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
             is_aligned = filename in self._aligned_filenames
@@ -602,7 +602,7 @@ class PipelineLoader():
         logger.debug("Reload Images: Start. Detected Faces Count: %s", len(detected_faces))
         load_queue = self._extractor.input_queue
         for filename, image in self._images.load():
-            if load_queue.shutdown.is_set():
+            if load_queue.shutdown_event.is_set():
                 logger.debug("Reload Queue: Stop signal received. Terminating")
                 break
             logger.trace("Reloading image: '%s'", filename)  # type: ignore

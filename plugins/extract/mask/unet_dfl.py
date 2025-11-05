@@ -121,13 +121,13 @@ class UnetDFL:
                                padding="same",
                                activation="relu",
                                kernel_initializer="random_uniform",
-                               name=f"features.{idx}")(output)
+                               name=f"features_{idx}")(output)
             idx += 2
 
         return output
 
     @classmethod
-    def skip_block(cls,
+    def skip_block(cls,  # pylint:disable=too-many-positional-arguments
                    input_1: KerasTensor,
                    input_2: KerasTensor,
                    conv_filters: int,

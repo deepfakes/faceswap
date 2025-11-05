@@ -24,7 +24,7 @@ class Align(Aligner):
     """ Perform transformation to align and get landmarks """
     def __init__(self, **kwargs) -> None:
         git_model_id = 13
-        model_filename = "face-alignment-network_2d4_keras_v2.h5"
+        model_filename = "face-alignment-network_2d4_keras_v3.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.model: Model
         self.name = "FAN"

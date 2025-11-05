@@ -29,7 +29,7 @@ class EventQueue(Queue):
         self._shutdown = shutdown_event
 
     @property
-    def shutdown(self) -> threading.Event:
+    def shutdown_event(self) -> threading.Event:
         """ :class:`threading.Event`: The global shutdown event """
         return self._shutdown
 

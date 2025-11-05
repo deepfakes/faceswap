@@ -541,7 +541,7 @@ class DiskIO():
         idx = 0
         for filename, image in self._images.load():
             idx += 1
-            if self._queues["load"].shutdown.is_set():
+            if self._queues["load"].shutdown_event.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
             if image is None or (not image.any() and image.ndim not in (2, 3)):
@@ -703,7 +703,7 @@ class DiskIO():
         preview_image = os.path.join(self._writer.output_folder, ".gui_preview.jpg")
         logger.debug("Write preview for gui: %s", write_preview)
         for idx in tqdm(range(self._total_count), desc="Converting", file=sys.stdout):
-            if self._queues["save"].shutdown.is_set():
+            if self._queues["save"].shutdown_event.is_set():
                 logger.debug("Save Queue: Stop signal received. Terminating")
                 break
             item: tuple[str, np.ndarray | bytes] | T.Literal["EOF"] = self._queues["save"].get()
@@ -722,7 +722,7 @@ class DiskIO():
         logger.debug("Save Faces: Complete")
 
 
-class Predict():
+class Predict():  # pylint:disable=too-many-instance-attributes
     """ Obtains the output from the Faceswap model.
 
     Parameters
