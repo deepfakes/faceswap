@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 BatchType = tuple[np.ndarray, list[np.ndarray]]
 
 
-class DataGenerator():
+class DataGenerator():  # pylint:disable=too-many-instance-attributes
     """ Parent class for Training and Preview Data Generators.
 
     This class is called from :mod:`plugins.train.trainer._base` and launches a background
@@ -207,8 +207,7 @@ class DataGenerator():
             while True:
                 if do_shuffle:
                     shuffle(imgs)
-                for img in imgs:
-                    yield img
+                yield from imgs
 
         img_iter = _img_iter(self._images[:])
         while True:
@@ -834,18 +833,18 @@ class Feeder():
                                                 batch_size=batchsize).minibatch_ab()
         return retval
 
-    def get_batch(self) -> tuple[list[list[np.ndarray]], ...]:
+    def get_batch(self) -> tuple[tuple[np.ndarray, np.ndarray], list[list[np.ndarray]]]:
         """ Get the feed data and the targets for each training side for feeding into the model's
         train function.
 
         Returns
         -------
-        model_inputs: list
+        model_inputs : tuple[:class:`numpy.ndarray`, :class:`numpy.ndarray`]
             The inputs to the model for each side A and B
-        model_targets: list
+        model_targets : list[list[:class:`numpy.ndarray`]]
             The targets for the model for each side A and B
         """
-        model_inputs: list[list[np.ndarray]] = []
+        model_inputs: list[np.ndarray] = []
         model_targets: list[list[np.ndarray]] = []
         for side in ("a", "b"):
             side_feed, side_targets = next(self._feeds[side])
@@ -854,10 +853,12 @@ class Feeder():
             logger.trace(  # type:ignore[attr-defined]
                 "side: %s, input_shapes: %s, target_shapes: %s",
                 side, side_feed.shape, [i.shape for i in side_targets])
-            model_inputs.append([side_feed])
+            model_inputs.append(side_feed)
             model_targets.append(side_targets)
 
-        return model_inputs, model_targets
+        inputs = tuple(model_inputs)
+        assert len(inputs) == 2
+        return inputs, model_targets
 
     def generate_preview(self, is_timelapse: bool = False
                          ) -> dict[T.Literal["a", "b"], list[np.ndarray]]:
