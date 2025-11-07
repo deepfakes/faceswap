@@ -302,7 +302,7 @@ class FaceswapConfig():
         logger.debug("Add section: (title: '%s', info: '%s')", title, info)
         self.defaults[title] = ConfigSection(helptext=info, items=OrderedDict())
 
-    def add_item(self,
+    def add_item(self,  # pylint:disable=too-many-positional-arguments,too-many-arguments
                  section: str | None = None,
                  title: str | None = None,
                  datatype: type = str,
@@ -527,6 +527,7 @@ class FaceswapConfig():
     def save_config(self) -> None:
         """ Save a config file """
         logger.info("Updating config at: '%s'", self.configfile)
+        # TODO in python >= 3.14 this will error when there are delimiters in the comments
         with open(self.configfile, "w", encoding="utf-8", errors="replace") as f_cfgfile:
             self.config.write(f_cfgfile)
         logger.debug("Updated config at: '%s'", self.configfile)

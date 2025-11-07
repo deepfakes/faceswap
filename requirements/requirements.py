@@ -20,10 +20,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-PYTHON_VERSIONS: dict[str, tuple[int, int]] = {"nvidia_11": (3, 13),
-                                               "rocm_60": (3, 12),
-                                               "rocm_61": (3, 13),
-                                               "rocm_62": (3, 13)}
+PYTHON_VERSIONS: dict[str, tuple[int, int]] = {"rocm_60": (3, 12)}
 """ dict[str, tuple[int, int]] : Mapping of requirement file names to the maximum supported
 Python version, if below the project maximum """
 
