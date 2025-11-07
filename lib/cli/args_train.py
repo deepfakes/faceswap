@@ -174,7 +174,7 @@ class TrainArgs(FaceSwapArgs):
             "backend": ("nvidia", "directml", "rocm", "apple_silicon"),
             "group": _("training"),
             "help": _(
-                "R|Select the distribution stategy to use."
+                "R|Select the distribution strategy to use."
                 "\nL|default: Use Tensorflow's default distribution strategy."
                 "\nL|central-storage: Centralizes variables on the CPU whilst operations are "
                 "performed on 1 or more local GPUs. This can help save some VRAM at the cost of "

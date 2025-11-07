@@ -70,7 +70,7 @@ def set_exclude_devices(devices: list[int]) -> None:
     >>> set_exclude_devices([0, 1]) # Exclude the first two GPU devices
     """
     logger = logging.getLogger(__name__)
-    logger.debug("Excluding GPU indicies: %s", devices)
+    logger.debug("Excluding GPU indices: %s", devices)
     if not devices:
         return
     _EXCLUDE_DEVICES.extend(devices)
