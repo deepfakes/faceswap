@@ -34,8 +34,8 @@ _CONDA_BACKEND_REQUIRED: dict[BackendType, list[str]] = {
 _CONDA_OS_REQUIRED: dict[T.Literal["darwin", "linux", "windows"], list[str]] = {
     "linux": ["xorg-libxft"]}  # required to fix TK fonts on Linux
 
-# Mapping of Conda packages to channel if in non-default channel
-_CONDA_MAPPING: dict[str, str] = {"xorg-libxft": "conda-forge"}
+# Mapping of Conda packages to channel if in not conda-forge
+_CONDA_MAPPING: dict[str, str] = {}
 
 # Force output to utf-8
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type:ignore[union-attr]
@@ -314,9 +314,7 @@ class RequiredPackages():
                          _CONDA_BACKEND_REQUIRED, _CONDA_OS_REQUIRED)
             return retval
         for pkg in to_add:
-            channel = _CONDA_MAPPING.get(pkg, "defaults")
-            if pkg == "tk" and self._env.system.is_linux:
-                channel = "conda-forge"  # Bad fonts in TK for Linux in default channel
+            channel = _CONDA_MAPPING.get(pkg, "conda-forge")
             retval.append({"package": pkg, "channel": channel})
             logger.debug("Adding conda required package '%s' for system '%s'('%s'))",
                          pkg, self._env.backend, self._env.system.system)

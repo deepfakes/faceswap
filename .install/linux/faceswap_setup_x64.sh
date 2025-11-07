@@ -1,4 +1,5 @@
 #!/bin/bash
+# TODO force conda-forge
 
 TMP_DIR="/tmp/faceswap_install"
 DL_CONDA="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"
