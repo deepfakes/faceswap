@@ -1087,21 +1087,22 @@ class ImagesLoader(ImageIO):
         self._fps = self._get_fps()
 
         self._count = None
-        self._file_list = None
+        self._file_list: list[str] = []
         self._get_count_and_filelist(fast_count, count)
 
     @property
-    def count(self):
+    def count(self) -> int:
         """ int: The number of images or video frames in the source location. This count includes
         any files that will ultimately be skipped if a :attr:`skip_list` has been provided. See
         also: :attr:`process_count`"""
+        assert self._count is not None
         return self._count
 
     @property
-    def process_count(self):
+    def process_count(self) -> int:
         """ int: The number of images or video frames to be processed (IE the total count less
         items that are to be skipped from the :attr:`skip_list`)"""
-        return self._count - len(self._skip_list)
+        return self.count - len(self._skip_list)
 
     @property
     def is_video(self):
@@ -1115,10 +1116,10 @@ class ImagesLoader(ImageIO):
         return self._fps
 
     @property
-    def file_list(self):
-        """ list: A full list of files in the source location. This includes any files that will
-        ultimately be skipped if a :attr:`skip_list` has been provided. If the input is a video
-        then this is a list of dummy filenames as corresponding to an alignments file """
+    def file_list(self) -> list[str]:
+        """ list[str]: A full list of files in the source location. This includes any files that
+        will ultimately be skipped if a :attr:`skip_list` has been provided. If the input is a
+        video then this is a list of dummy filenames as corresponding to an alignments file """
         return self._file_list
 
     def add_skip_list(self, skip_list):
@@ -1436,7 +1437,7 @@ class SingleFrameLoader(ImagesLoader):
             self._video_meta_data = video_meta_data
         super()._get_count_and_filelist(fast_count, count)
 
-    def image_from_index(self, index):
+    def image_from_index(self, index: int) -> tuple[str, np.ndarray]:
         """ Return a single image from :attr:`file_list` for the given index.
 
         Parameters
@@ -1468,7 +1469,7 @@ class SingleFrameLoader(ImagesLoader):
         else:
             file_list = [f for idx, f in enumerate(self._file_list)
                          if idx not in self._skip_list] if self._skip_list else self._file_list
-                                                                     
+
             filename = file_list[index]
             image = read_image(filename, raise_error=True)
             filename = os.path.basename(filename)
