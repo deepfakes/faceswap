@@ -306,9 +306,9 @@ class Packages():
 
         # Default TK has bad fonts under Linux. There is a better build in Conda-Forge, so set
         # channel accordingly
-        tk_channel = "conda-forge" if self._env.os_version[0].lower() == "linux" else "default"
+        tk_channel = "conda-forge" if self._env.os_version[0].lower() == "linux" else "defaults"
         self._conda_required_packages: list[tuple[list[str] | str, str]] = [("tk", tk_channel),
-                                                                            ("git", "default")]
+                                                                            ("git", "defaults")]
         self._update_backend_specific_conda()
         self._installed_packages = self._get_installed_packages()
         self._conda_installed_packages = self._get_installed_conda_packages()
@@ -924,6 +924,7 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
             return False
 
         found = 0
+        major = minor = patchlevel = 0
         with open(cudnn_checkfile, "r", encoding="utf8") as ofile:
             for line in ofile:
                 if line.lower().startswith("#define cudnn_major"):
@@ -1089,7 +1090,7 @@ class Install():  # pylint:disable=too-few-public-methods
         for pkg in self._packages.prerequisites:
             pkg_str = self._format_package(*pkg)
             if self._env.is_conda:
-                cmd = ["conda", "install", "-y"]
+                cmd = ["conda", "install", "-y", "-c", "defaults"]
             else:
                 cmd = [sys.executable, "-m", "pip", "install", "--no-cache-dir"]
                 if self._env.is_admin:
@@ -1153,11 +1154,14 @@ class Install():  # pylint:disable=too-few-public-methods
         """
         #  Packages with special characters need to be enclosed in double quotes
         success = True
-        condaexe = ["conda", "install", "-y"]
-        if channel:
-            condaexe.extend(["-c", channel])
+        channel = "defaults" if not channel else channel
+        condaexe = ["conda", "install", "-y", "-c", channel]
 
         pkgs = package if isinstance(package, list) else [package]
+        if pkgs[0].startswith("tk"):
+            # TODO this is hacky and fragile, but for some reason tk from conda-forge has started
+            # pulling in the graapy version of Python which breaks opencv install
+            condaexe.append("--no-deps")
 
         for i, pkg in enumerate(pkgs):
             if any(char in pkg for char in (" ", "<", ">", "*", "|")):
