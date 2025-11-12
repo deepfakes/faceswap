@@ -325,7 +325,7 @@ class _Cache():
                     del loss[idx]
                     del times[idx]
 
-        n_times, n_loss = (np.array(times, dtype="float64"), np.array(loss, dtype="float32"))
+        n_times, n_loss = (np.asarray(times, dtype="float64"), np.asarray(loss, dtype="float32"))
         logger.debug("Converted to numpy: (data points: %s, timestamps shape: %s, loss shape: %s)",
                      len(data), n_times.shape, n_loss.shape)
 
@@ -756,7 +756,7 @@ class _EventParser():
         :class:`numpy.ndarray`
             The layer output names, their instance index and their output index
         """
-        outputs = np.array(model_config["output_layers"])
+        outputs = np.asarray(model_config["output_layers"])
         logger.debug("Obtained model outputs: %s, shape: %s", outputs, outputs.shape)
         if outputs.ndim == 2:  # Insert extra dimension for non learn mask models
             outputs = np.expand_dims(outputs, axis=1)

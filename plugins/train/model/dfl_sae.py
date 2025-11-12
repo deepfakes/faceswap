@@ -62,7 +62,7 @@ class Model(ModelBase):
 
         if self.architecture == "liae":
             inter_both = self.inter_liae("both", enc_output_shape)
-            int_output_shape = (np.array(inter_both.output_shape[1:]) * (1, 1, 2)).tolist()
+            int_output_shape = (np.asarray(inter_both.output_shape[1:]) * (1, 1, 2)).tolist()
 
             inter_a = Concatenate()([inter_both(encoder_a), inter_both(encoder_a)])
             inter_b = Concatenate()([self.inter_liae("b", enc_output_shape)(encoder_b),

@@ -118,7 +118,7 @@ class Align(Aligner):
         if len(landmarks) not in (4, 68):
             raise FaceswapError("Imported 'landmarks_2d' should be either 68 facial feature "
                                 "landmarks or 4 ROI corner locations")
-        retval = np.array(landmarks, dtype="float32")
+        retval = np.asarray(landmarks, dtype="float32")
         if retval.shape[-1] != 2:
             raise FaceswapError("Imported 'landmarks_2d' should be formatted as a list of (x, y) "
                                 "co-ordinates")
@@ -140,7 +140,7 @@ class Align(Aligner):
         self._check_for_video(list(data)[0])
         for key, faces in data.items():
             try:
-                lms = np.array([self._import_face(face) for face in faces], dtype="float32")
+                lms = np.asarray([self._import_face(face) for face in faces], dtype="float32")
                 if not np.any(lms):
                     logger.trace("Skipping frame '%s' with no faces")  # type:ignore[attr-defined]
                     continue
@@ -167,7 +167,7 @@ class Align(Aligner):
         batch: :class:`~plugins.extract.detect._base.AlignerBatch`
             The batch to be processed by the plugin
         """
-        batch.feed = np.array([(self._get_key(os.path.basename(f)), i.shape[:2])
+        batch.feed = np.asarray([(self._get_key(os.path.basename(f)), i.shape[:2])
                                for f, i in zip(batch.filename, batch.image)], dtype="object")
 
     def faces_to_feed(self, faces: np.ndarray) -> np.ndarray:
@@ -241,7 +241,7 @@ class Align(Aligner):
             else:
                 self._imported[key] = (remaining - 1, all_lms)
 
-        return np.array(preds, dtype="float32")
+        return np.asarray(preds, dtype="float32")
 
     def process_output(self, batch: BatchType) -> None:
         """ Process the imported data to the landmarks attribute

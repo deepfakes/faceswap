@@ -124,7 +124,7 @@ class Mask(Masker):
         mean = (0.384, 0.314, 0.279) if self._is_faceswap else (0.485, 0.456, 0.406)
         std = (0.324, 0.286, 0.275) if self._is_faceswap else (0.229, 0.224, 0.225)
 
-        batch.feed = ((np.array([T.cast(np.ndarray, feed.face)[..., :3]
+        batch.feed = ((np.asarray([T.cast(np.ndarray, feed.face)[..., :3]
                                  for feed in batch.feed_faces],
                                 dtype="float32") / 255.0) - mean) / std
         logger.trace("feed shape: %s", batch.feed.shape)  # type:ignore

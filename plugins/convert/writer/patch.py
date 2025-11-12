@@ -47,7 +47,7 @@ class Writer(Output):
 
         self._dummy_patch = np.zeros((1, patch_size, patch_size, 4), dtype=np.float32)
 
-        tl_box = np.array([[0, 0], [patch_size, 0], [patch_size, patch_size], [0, patch_size]],
+        tl_box = np.asarray([[0, 0], [patch_size, 0], [patch_size, patch_size], [0, patch_size]],
                           dtype=np.float32)
         self._patch_corner = {"top-left": tl_box[0],
                               "top-right": tl_box[1],
@@ -169,9 +169,9 @@ class Writer(Output):
             The inverse transformation matrices
         """
         if not np.any(matrices):
-            return np.array([[[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]], dtype=np.float32)
+            return np.asarray([[[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]], dtype=np.float32)
 
-        identity = np.array([[[0., 0., 1.]]], dtype=np.float32)
+        identity = np.asarray([[[0., 0., 1.]]], dtype=np.float32)
         mat = np.concatenate([matrices, np.repeat(identity, matrices.shape[0], axis=0)], axis=1)
         retval = np.linalg.inv(mat)
         logger.trace("matrix: %s, inverse: %s", mat, retval)  # type:ignore[attr-defined]
@@ -220,7 +220,7 @@ class Writer(Output):
         """
         retval = [cv2.transform(np.expand_dims(self._box, axis=1), mat[:2, ...]).squeeze()
                   for mat in matrices]
-        return np.array(retval, dtype=np.float32)
+        return np.asarray(retval, dtype=np.float32)
 
     def pre_encode(self, image: np.ndarray, **kwargs) -> list[list[bytes]]:
         """ Pre_encode the image in lib/convert.py threads as it is a LOT quicker.
@@ -245,7 +245,7 @@ class Writer(Output):
         logger.trace("Pre-encoding image")  # type:ignore[attr-defined]
         retval = []
         canvas_size: tuple[int, int] = kwargs.get("canvas_size", (1, 1))
-        matrices: np.ndarray = kwargs.get("matrices", np.array([]))
+        matrices: np.ndarray = kwargs.get("matrices", np.asarray([]))
 
         if not np.any(image) and self.config["empty_frames"] == "blank":
             image = self._dummy_patch

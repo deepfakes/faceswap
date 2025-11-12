@@ -307,7 +307,7 @@ class _DiskIO():
                        len(frames))
 
         for idx, faces in zip(frames,
-                              np.array(self._frame_faces, dtype="object")[np.array(frames)]):
+                              np.asarray(self._frame_faces, dtype="object")[np.asarray(frames)]):
             frame = self._sorted_frame_names[idx]
             self._alignments.data[frame]["faces"] = [face.to_alignment() for face in faces]
 
