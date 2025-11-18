@@ -51,7 +51,7 @@ class DetectedFace():
         :mod:`plugins.extract.detect`
     landmarks_xy: list
         The 68 point landmarks as discovered in :mod:`plugins.extract.align`. Should be a ``list``
-        of 68 `(x, y)` ``tuples`` with each of the landmark co-ordinates.
+        of 68 `(x, y)` ``tuples`` with each of the landmark coordinates.
     mask: dict
         The generated mask(s) for the face as generated in :mod:`plugins.extract.mask`. Must be a
         dict of {**name** (`str`): :class:`~lib.align.aligned_mask.Mask`}.
@@ -171,7 +171,7 @@ class DetectedFace():
         self.mask[name] = fsmask
 
     def add_landmarks_xy(self, landmarks: np.ndarray) -> None:
-        """ Add landmarks to the detected face object. If landmarks alread exist, they will be
+        """ Add landmarks to the detected face object. If landmarks already exist, they will be
         overwritten.
 
         Parameters
@@ -336,7 +336,7 @@ class DetectedFace():
             this key.
         image: numpy.ndarray, optional
             If an image is passed in, then the ``image`` attribute will
-            be set to the cropped face based on the passed in bounding box co-ordinates
+            be set to the cropped face based on the passed in bounding box coordinates
         with_thumb: bool, optional
             Whether to load the jpg thumbnail into the detected face object, if provided.
             Default: ``False``
