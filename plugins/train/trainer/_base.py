@@ -15,6 +15,7 @@ import typing as T
 import cv2
 import numpy as np
 
+import keras.backend as K
 import tensorflow as tf
 from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
     errors_impl as tf_errors)
@@ -162,9 +163,14 @@ class TrainerBase():
             success = lrf.find()
             return self._config["lr_finder_mode"] == "graph_and_exit" or not success
 
-        learning_rate = self._model.state.sessions[1]["config"]["learning_rate"]
+        learning_rate = self._model.state.lr_finder
+        if learning_rate < 0.:
+            logger.debug("No learning rate finder rate stored. Not setting")
+            return False
+
         logger.info("Setting learning rate from Learning Rate Finder to %s",
                     f"{learning_rate:.1e}")
+        K.set_value(self._model.model.optimizer.lr, learning_rate)
         return False
 
     def _set_tensorboard(self) -> tf.keras.callbacks.TensorBoard:
@@ -807,7 +813,7 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
     image_paths: dict
         The full paths to the training images for each side of the model
     """
-    def __init__(self,
+    def __init__(self,  # pylint:disable=too-many-positional-arguments
                  model: ModelBase,
                  coverage_ratio: float,
                  image_count: int,

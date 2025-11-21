@@ -48,7 +48,7 @@ class LearningRateFinder:
     beta: float
         Amount to smooth loss by, for graphing purposes
     """
-    def __init__(self,
+    def __init__(self,  # pylint:disable=too-many-positional-arguments
                  model: ModelBase,
                  config: dict[str, ConfigValueType],
                  feeder: Feeder,
@@ -149,7 +149,7 @@ class LearningRateFinder:
         new_lr: float
             The discovered optimal learning rate
         """
-        self._model.state.update_session_config("learning_rate", new_lr)
+        self._model.state.add_lr_finder(new_lr)
         self._model.state.save()
 
         logger.debug("Loading initial weights")

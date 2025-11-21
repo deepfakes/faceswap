@@ -302,7 +302,7 @@ class FaceswapConfig():
         logger.debug("Add section: (title: '%s', info: '%s')", title, info)
         self.defaults[title] = ConfigSection(helptext=info, items=OrderedDict())
 
-    def add_item(self,
+    def add_item(self,  # pylint:disable=too-many-arguments,too-many-positional-arguments
                  section: str | None = None,
                  title: str | None = None,
                  datatype: type = str,
@@ -374,7 +374,7 @@ class FaceswapConfig():
                                                          group=group)
 
     @classmethod
-    def _expand_helptext(cls,
+    def _expand_helptext(cls,  # pylint:disable=too-many-positional-arguments
                          helptext: str,
                          choices: str | list[str],
                          default: ConfigValueType,
@@ -453,7 +453,7 @@ class FaceswapConfig():
         config.set(section, helptext)
         logger.debug("Inserted section: '%s'", section)
 
-    def _insert_config_item(self,
+    def _insert_config_item(self,  # pylint:disable=too-many-positional-arguments
                             section: str,
                             item: str,
                             default: ConfigValueType,
@@ -526,7 +526,7 @@ class FaceswapConfig():
 
     def save_config(self) -> None:
         """ Save a config file """
-        logger.info("Updating config at: '%s'", self.configfile)
+        logger.debug("Updating config at: '%s'", self.configfile)
         with open(self.configfile, "w", encoding="utf-8", errors="replace") as f_cfgfile:
             self.config.write(f_cfgfile)
         logger.debug("Updated config at: '%s'", self.configfile)
