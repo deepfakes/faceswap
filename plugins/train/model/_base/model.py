@@ -179,6 +179,11 @@ class ModelBase():
         """ int: The total number of iterations that the model has trained. """
         return self._state.iterations
 
+    @property
+    def warmup_steps(self) -> int:
+        """ int : The number of steps to perform learning rate warmup """
+        return self._args.warmup
+
     # Private properties
     @property
     def _config_section(self) -> str:

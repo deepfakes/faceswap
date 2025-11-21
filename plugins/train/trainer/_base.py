@@ -21,7 +21,7 @@ from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
     errors_impl as tf_errors)
 
 from lib.image import hex_to_rgb
-from lib.training import Feeder, LearningRateFinder
+from lib.training import Feeder, LearningRateFinder, LearningRateWarmup
 from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.train._config import Config
 
@@ -89,6 +89,7 @@ class TrainerBase():
         if self._exit_early:
             return
 
+        self._warmup = self._get_warmup()
         self._model.state.add_session_batchsize(batch_size)
         self._images = images
         self._sides = sorted(key for key in self._images.keys())
@@ -173,6 +174,17 @@ class TrainerBase():
         K.set_value(self._model.model.optimizer.lr, learning_rate)
         return False
 
+    def _get_warmup(self) -> LearningRateWarmup:
+        """ Obtain the learning rate warmup instance
+
+        Returns
+        -------
+        :class:`plugins.train.lr_warmup.LRWarmup`
+            The Learning Rate Warmup object
+        """
+        target_lr = float(K.get_value(self._model.model.optimizer.lr))
+        return LearningRateWarmup(self._model.model, target_lr, self._model.warmup_steps)
+
     def _set_tensorboard(self) -> tf.keras.callbacks.TensorBoard:
         """ Set up Tensorboard callback for logging loss.
 
@@ -251,6 +263,7 @@ class TrainerBase():
                        (self._model.iterations - 1) % snapshot_interval == 0)
 
         model_inputs, model_targets = self._feeder.get_batch()
+        self._warmup()
 
         try:
             loss: list[float] = self._model.model.train_on_batch(model_inputs, y=model_targets)

@@ -366,7 +366,7 @@ class FaceswapControl():
             if output and self._process_progress_stdout(output):
                 continue
 
-            if output:
+            if output.strip():
                 self._process_training_stdout(output)
                 print(output.rstrip())
 

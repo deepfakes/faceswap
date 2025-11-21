@@ -165,6 +165,17 @@ class TrainArgs(FaceSwapArgs):
                 "model to stop automatically at a set number of iterations, you can set that "
                 "value here.")})
         argument_list.append({
+            "opts": ("-a", "--warmup"),
+            "action": Slider,
+            "min_max": (0, 5000),
+            "rounding": 100,
+            "type": int,
+            "default": 0,
+            "group": _("training"),
+            "help": _(
+                "Learning rate warmup. Linearly increase the learning rate from 0 to the chosen "
+                "target rate over the number of iterations given here. 0 to disable.")})
+        argument_list.append({
             "opts": ("-D", "--distribution-strategy"),
             "dest": "distribution_strategy",
             "action": Radio,
