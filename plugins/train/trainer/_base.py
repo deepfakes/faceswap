@@ -159,19 +159,20 @@ class TrainerBase():
         if not self._model.command_line_arguments.use_lr_finder:
             return False
 
+        if self._model.state.lr_finder > -1:
+            learning_rate = self._model.state.lr_finder
+            logger.info("Setting learning rate from Learning Rate Finder to %s",
+                        f"{learning_rate:.1e}")
+            K.set_value(self._model.model.optimizer.lr, learning_rate)
+            self._model.state.update_session_config("learning_rate", learning_rate)
+            return False
+
         if self._model.state.iterations == 0 and self._model.state.session_id == 1:
             lrf = LearningRateFinder(self._model, self._config, self._feeder)
             success = lrf.find()
             return self._config["lr_finder_mode"] == "graph_and_exit" or not success
 
-        learning_rate = self._model.state.lr_finder
-        if learning_rate < 0.:
-            logger.debug("No learning rate finder rate stored. Not setting")
-            return False
-
-        logger.info("Setting learning rate from Learning Rate Finder to %s",
-                    f"{learning_rate:.1e}")
-        K.set_value(self._model.model.optimizer.lr, learning_rate)
+        logger.debug("No learning rate finder rate. Not setting")
         return False
 
     def _get_warmup(self) -> LearningRateWarmup:
