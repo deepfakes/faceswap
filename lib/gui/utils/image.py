@@ -272,7 +272,7 @@ class PreviewExtract():
             image = new_img
         draw = ImageDraw.Draw(image)
         draw.rectangle(((0, 0), (size, size)), outline="#E5E5E5", width=1)
-        retval = np.array(image)
+        retval = np.asarray(image)
         logger.trace("image shape: %s", retval.shape)  # type: ignore
         return retval
 
@@ -296,7 +296,7 @@ class PreviewExtract():
         bool
             ``True`` if samples succesfully compiled otherwise ``False``
         """
-        asamples = np.array(samples)
+        asamples = np.asarray(samples)
         if not np.any(asamples):
             logger.debug("No preview images collected.")
             return False
@@ -397,7 +397,7 @@ class PreviewExtract():
         placeholder = Image.new("RGB", (thumbnail_size, thumbnail_size))
         draw = ImageDraw.Draw(placeholder)
         draw.rectangle(((0, 0), (thumbnail_size, thumbnail_size)), outline="#E5E5E5", width=1)
-        placeholder = np.array(placeholder)
+        placeholder = np.asarray(placeholder)
         self._placeholder = placeholder
         logger.debug("Created placeholder. shape: %s", placeholder.shape)
 

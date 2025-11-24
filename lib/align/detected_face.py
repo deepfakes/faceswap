@@ -350,8 +350,8 @@ class DetectedFace():
         self.height = alignment["h"]
         landmarks = alignment["landmarks_xy"]
         if not isinstance(landmarks, np.ndarray):
-            landmarks = np.array(landmarks, dtype="float32")
-        self._identity = {T.cast(T.Literal["vggface2"], k): np.array(v, dtype="float32")
+            landmarks = np.asarray(landmarks, dtype="float32")
+        self._identity = {T.cast(T.Literal["vggface2"], k): np.asarray(v, dtype="float32")
                           for k, v in alignment.get("identity", {}).items()}
         self._landmarks_xy = landmarks.copy()
 
@@ -404,7 +404,7 @@ class DetectedFace():
         self.width = alignment["w"]
         self.top = alignment["y"]
         self.height = alignment["h"]
-        self._landmarks_xy = np.array(alignment["landmarks_xy"], dtype="float32")
+        self._landmarks_xy = np.asarray(alignment["landmarks_xy"], dtype="float32")
         self.mask = {}
         for name, mask_dict in alignment["mask"].items():
             self.mask[name] = Mask()
@@ -412,7 +412,7 @@ class DetectedFace():
         self._identity = {}
         for key, val in alignment.get("identity", {}).items():
             assert key in ["vggface2"]
-            self._identity[T.cast(T.Literal["vggface2"], key)] = np.array(val, dtype="float32")
+            self._identity[T.cast(T.Literal["vggface2"], key)] = np.asarray(val, dtype="float32")
         logger.trace("Created from png exif header: (left: %s, "  # type:ignore[attr-defined]
                      "width: %s, top: %s  height: %s, landmarks: %s, mask: %s, identity: %s)",
                      self.left, self.width, self.top, self.height, self.landmarks_xy, self.mask,

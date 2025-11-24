@@ -302,7 +302,7 @@ class DataGenerator():
         if not self._use_mask:
             return
 
-        masks = np.array([face.get_training_masks() for face in detected_faces])
+        masks = np.asarray([face.get_training_masks() for face in detected_faces])
         batch[..., 3:] = masks
 
         logger.trace("side: %s, masks: %s, batch: %s",  # type:ignore[attr-defined]
@@ -457,7 +457,7 @@ class TrainingDataGenerator(DataGenerator):
             # Rolling buffer here makes next to no difference, so just create array on the fly
             retval = [self._to_float32(batch)]
         else:
-            retval = [self._to_float32(np.array([cv2.resize(image,
+            retval = [self._to_float32(np.asarray([cv2.resize(image,
                                                             (size, size),
                                                             interpolation=cv2.INTER_AREA)
                                                  for image in batch]))
@@ -523,7 +523,7 @@ class TrainingDataGenerator(DataGenerator):
         # TODO Look at potential for applying mask on input
         # Random Warp
         if self._warp_to_landmarks:
-            landmarks = np.array([face.aligned.landmarks for face in detected_faces])
+            landmarks = np.asarray([face.aligned.landmarks for face in detected_faces])
             batch_dst_pts = self._get_closest_match(filenames, landmarks)
             warp_kwargs = {"batch_src_points": landmarks, "batch_dst_points": batch_dst_pts}
         else:
@@ -535,7 +535,7 @@ class TrainingDataGenerator(DataGenerator):
             **warp_kwargs)
 
         if self._model_input_size != self._process_size:
-            feed = self._to_float32(np.array([cv2.resize(image,
+            feed = self._to_float32(np.asarray([cv2.resize(image,
                                                          (self._model_input_size,
                                                           self._model_input_size),
                                                          interpolation=cv2.INTER_AREA)
@@ -580,7 +580,7 @@ class TrainingDataGenerator(DataGenerator):
                 landmarks = {key: lms * scale for key, lms in landmarks.items()}
             closest_matches = self._cache_closest_matches(filenames, batch_src_points, landmarks)
 
-        batch_dst_points = np.array([landmarks[choice(fname)] for fname in closest_matches])
+        batch_dst_points = np.asarray([landmarks[choice(fname)] for fname in closest_matches])
         logger.trace("Returning: (batch_dst_points: %s)",  # type:ignore[attr-defined]
                      batch_dst_points.shape)
         return batch_dst_points
@@ -603,7 +603,7 @@ class TrainingDataGenerator(DataGenerator):
         """
         logger.trace("Caching closest matches")  # type:ignore
         dst_landmarks = list(landmarks.items())
-        dst_points = np.array([lm[1] for lm in dst_landmarks])
+        dst_points = np.asarray([lm[1] for lm in dst_landmarks])
         batch_closest_matches: list[tuple[str, ...]] = []
 
         for filename, src_points in zip(filenames, batch_src_points):
@@ -663,7 +663,7 @@ class PreviewDataGenerator(DataGenerator):
 
         assert self._config["centering"] in T.get_args(CenteringType)
         retval = np.empty((full_size, full_size, 3), dtype="float32")
-        retval = self._to_float32(np.array([
+        retval = self._to_float32(np.asarray([
             AlignedFace(face.landmarks_xy,
                         image=images[idx],
                         centering=T.cast(CenteringType,
@@ -726,7 +726,7 @@ class PreviewDataGenerator(DataGenerator):
         # resize in these rare instances
         out_size = max(self._output_sizes)
         if self._process_size > out_size:
-            feed = np.array([cv2.resize(img, (out_size, out_size), interpolation=cv2.INTER_AREA)
+            feed = np.asarray([cv2.resize(img, (out_size, out_size), interpolation=cv2.INTER_AREA)
                              for img in feed])
 
         samples = self._create_samples(images, detected_faces)

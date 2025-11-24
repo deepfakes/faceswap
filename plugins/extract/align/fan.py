@@ -76,7 +76,7 @@ class Align(Aligner):
         assert isinstance(batch, AlignerBatch)
         logger.trace("Aligning faces around center")  # type:ignore[attr-defined]
         center_scale = self.get_center_scale(batch.detected_faces)
-        batch.feed = np.array(self.crop(batch, center_scale))[..., :3]
+        batch.feed = np.asarray(self.crop(batch, center_scale))[..., :3]
         batch.data.append({"center_scale": center_scale})
         logger.trace("Aligned image around center")  # type:ignore[attr-defined]
 
@@ -254,7 +254,7 @@ class Align(Aligner):
         resolution = np.full((num_images, num_landmarks), 64, dtype='int32')
         subpixel_landmarks = np.ones((num_images, num_landmarks, 3), dtype='float32')
 
-        indices = np.array(np.unravel_index(batch.prediction.reshape(num_images,
+        indices = np.asarray(np.unravel_index(batch.prediction.reshape(num_images,
                                                                      num_landmarks,
                                                                      -1).argmax(-1),
                                             (batch.prediction.shape[2],  # height

@@ -66,7 +66,7 @@ class Detect(Detector):
         pad: int
             The amount of padding applied to the image (0, 0)
         """
-        return np.array(item.image_shape[:2], dtype="int64"), 1.0, (0, 0)
+        return np.asarray(item.image_shape[:2], dtype="int64"), 1.0, (0, 0)
 
     def _check_for_video(self, filename: str) -> None:
         """ Check a sample filename from the import file for a file extension to set
@@ -155,7 +155,7 @@ class Detect(Detector):
         if len(landmarks) not in (4, 68):
             raise FaceswapError("Imported 'landmarks_2d' should be either 68 facial feature "
                                 "landmarks or 4 ROI corner locations")
-        retval = np.array(landmarks, dtype="float32")
+        retval = np.asarray(landmarks, dtype="float32")
         if retval.shape[-1] != 2:
             raise FaceswapError("Imported 'landmarks_2d' should be formatted as a list of (x, y) "
                                 "co-ordinates")
@@ -245,7 +245,7 @@ class Detect(Detector):
         for key, faces in data.items():
             try:
                 store_key = self._get_key(key)
-                self._imported[store_key] = np.array([self._import_frame_face(face, align_origin)
+                self._imported[store_key] = np.asarray([self._import_frame_face(face, align_origin)
                                                       for face in faces], dtype="int32")
             except FaceswapError as err:
                 logger.error(str(err))
@@ -260,7 +260,7 @@ class Detect(Detector):
         batch: :class:`~plugins.extract.detect._base.DetectorBatch`
             The batch to be processed by the plugin
         """
-        batch.feed = np.array([(self._get_key(os.path.basename(f)), i)
+        batch.feed = np.asarray([(self._get_key(os.path.basename(f)), i)
                                for f, i in zip(batch.filename, batch.image)], dtype="object")
 
     def _adjust_for_origin(self, box: np.ndarray, frame_dims: tuple[int, int]) -> np.ndarray:
@@ -301,7 +301,7 @@ class Detect(Detector):
             The bounding boxes for the given filenames
         """
         self._missing.extend(f[0] for f in feed if f[0] not in self._imported)
-        return [self._adjust_for_origin(self._imported.pop(f[0], np.array([], dtype="int32")),
+        return [self._adjust_for_origin(self._imported.pop(f[0], np.asarray([], dtype="int32")),
                                         f[1])
                 for f in feed]
 
