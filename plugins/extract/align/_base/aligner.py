@@ -36,7 +36,7 @@ if T.TYPE_CHECKING:
     from lib.align.aligned_face import CenteringType
 
 logger = logging.getLogger(__name__)
-_BATCH_IDX: int = 0
+_batch_idx: int = 0
 
 
 def _get_new_batch_id() -> int:
@@ -47,9 +47,9 @@ def _get_new_batch_id() -> int:
     int
         The next available unique batch id
     """
-    global _BATCH_IDX  # pylint:disable=global-statement
-    _BATCH_IDX += 1
-    return _BATCH_IDX
+    global _batch_idx  # pylint:disable=global-statement
+    _batch_idx += 1
+    return _batch_idx
 
 
 @dataclass
@@ -131,7 +131,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
     plugins.extract.mask._base : Masker parent class for extraction plugins.
     """
 
-    def __init__(self,
+    def __init__(self,  # pylint:disable=too-many-positional-arguments
                  git_model_id: int | None = None,
                  model_filename: str | None = None,
                  configfile: str | None = None,
@@ -439,7 +439,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         # Put in random re-feed data to the bounding boxes
         for bounding_boxes in adjusted_boxes:
             for face, box in zip(batch.detected_faces, bounding_boxes):
-                face.left, face.top, face.width, face.height = box
+                face.left, face.top, face.width, face.height = box.tolist()
 
             self.process_input(batch)
             batch.feed = self.faces_to_feed(self._normalize_faces(batch.feed))
