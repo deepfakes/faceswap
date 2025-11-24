@@ -439,7 +439,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         # Put in random re-feed data to the bounding boxes
         for bounding_boxes in adjusted_boxes:
             for face, box in zip(batch.detected_faces, bounding_boxes):
-                face.left, face.top, face.width, face.height = box.tolist()
+                face.left, face.top, face.width, face.height = box
 
             self.process_input(batch)
             batch.feed = self.faces_to_feed(self._normalize_faces(batch.feed))
@@ -449,7 +449,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
         # Place the original bounding box back to detected face objects
         for face, box in zip(batch.detected_faces, original_boxes):
-            face.left, face.top, face.width, face.height = box
+            face.left, face.top, face.width, face.height = box.tolist()
 
     def _get_realign_masks(self, batch: AlignerBatch) -> np.ndarray:
         """ Obtain the masks required for processing re-aligns
