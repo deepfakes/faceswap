@@ -18,7 +18,7 @@ from .ml_libs import Cuda, ROCm
 from .system import Packages, System
 
 
-class _SysInfo():  # pylint:disable=too-few-public-methods
+class _SysInfo():
     """ Obtain information about the System, Python and GPU """
     def __init__(self) -> None:
         self._state_file = _State().state_file

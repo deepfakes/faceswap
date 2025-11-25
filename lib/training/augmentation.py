@@ -18,7 +18,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AugConstants:  # pylint:disable=too-many-instance-attributes,too-few-public-methods
+class AugConstants:  # pylint:disable=too-few-public-methods
     """ Dataclass for holding constants for Image Augmentation.
 
     Parameters

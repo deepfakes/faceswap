@@ -328,7 +328,7 @@ class _Cuda(ABC):
         return retval
 
 
-class _CudaLinux(_Cuda):  # pylint:disable=too-few-public-methods
+class _CudaLinux(_Cuda):
     """ Find the location of system installed Cuda and cuDNN on Linux. """
     def __init__(self) -> None:
         self._folder_prefix = "cuda-"
@@ -540,7 +540,7 @@ class _CudaLinux(_Cuda):  # pylint:disable=too-few-public-methods
         return retval
 
 
-class _CudaWindows(_Cuda):  # pylint:disable=too-few-public-methods
+class _CudaWindows(_Cuda):
     """ Find the location of system installed Cuda and cuDNN on Windows. """
 
     @classmethod

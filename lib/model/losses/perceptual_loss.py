@@ -518,7 +518,7 @@ class LDRFLIPLoss(keras.losses.Loss):  # pylint:disable=too-many-instance-attrib
         return T.cast("KerasTensor", delta_e_c)
 
 
-class _SpatialFilters():  # pylint:disable=too-few-public-methods
+class _SpatialFilters():
     """ Filters an image with channel specific spatial contrast sensitivity functions and clips
     result to the unit cube in linear RGB.
 
@@ -614,7 +614,7 @@ class _SpatialFilters():  # pylint:disable=too-few-public-methods
         return T.cast("KerasTensor", rgb)
 
 
-class _FeatureDetection():  # pylint:disable=too-few-public-methods
+class _FeatureDetection():
     """ Detect features (i.e. edges and points) in an achromatic YCxCz image.
 
     For use with LDRFlipLoss.
