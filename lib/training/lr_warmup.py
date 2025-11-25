@@ -34,8 +34,12 @@ class LearningRateWarmup():
 
     def __repr__(self) -> str:
         """ Pretty string representation for logging """
-        params = ", ".join(f"{k}={v}" for k, v in self.__dict__.items())
-        return f"{self.__class__.__name__}({params})"
+        call_args = ", ".join(f"{k}={v}" for k, v in {"model": self._model,
+                                                      "target_learning_rate": self._target_lr,
+                                                      "steps": self._steps}.items())
+        current_params = ", ".join(f"{k[1:]}: {v}" for k, v in self.__dict__.items()
+                                   if k not in ("_model", "_target_lr", "_steps"))
+        return f"{self.__class__.__name__}({call_args}) [{current_params}]"
 
     @classmethod
     def _format_notation(cls, value: float) -> str:

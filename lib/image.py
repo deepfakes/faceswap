@@ -115,7 +115,7 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):  # type:ignore
                 break
             if "iskey" not in output:
                 continue
-            logger.trace("Keyframe line: %s", output)
+            logger.trace("Keyframe line: %s", output)  # type:ignore[attr-defined]
             line = re.split(r"\s+|:\s*", output)
             pts_time = float(line[line.index("pts_time") + 1])
             frame_no = int(line[line.index("n") + 1])
@@ -123,7 +123,8 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):  # type:ignore
             if "iskey:1" in output:
                 key_frames.append(frame_no)
 
-            logger.trace("pts_time: %s, frame_no: %s", pts_time, frame_no)
+            logger.trace("pts_time: %s, frame_no: %s",  # type:ignore[attr-defined]
+                         pts_time, frame_no)
             if int(pts_time) == last_update:
                 # Floating points make TQDM display poorly, so only update on full
                 # second increments
@@ -145,7 +146,8 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):  # type:ignore
         prev_keyframe_idx = bisect(self._keyframes, index) - 1
         prev_keyframe = self._keyframes[prev_keyframe_idx]
         prev_pts_time = self._frame_pts[prev_keyframe]
-        logger.trace("keyframe pts_time: %s, keyframe: %s", prev_pts_time, prev_keyframe)
+        logger.trace("keyframe pts_time: %s, keyframe: %s",  # type:ignore[attr-defined]
+                     prev_pts_time, prev_keyframe)
         return prev_pts_time, prev_keyframe
 
     def _initialize(self, index=0):  # noqa:C901
@@ -292,7 +294,7 @@ def read_image(filename, raise_error=False, with_metadata=False):
     >>> except:
     >>>     raise ValueError("There was an error")
     """
-    logger.trace("Requested image: '%s'", filename)
+    logger.trace("Requested image: '%s'", filename)  # type:ignore[attr-defined]
     success = True
     image = None
     try:
@@ -327,7 +329,7 @@ def read_image(filename, raise_error=False, with_metadata=False):
         logger.error(msg)
         if raise_error:
             raise Exception(msg)
-    logger.trace("Loaded image: '%s'. Success: %s", filename, success)
+    logger.trace("Loaded image: '%s'. Success: %s", filename, success)  # type:ignore[attr-defined]
     return retval
 
 
@@ -360,7 +362,7 @@ def read_image_batch(filenames, with_metadata=False):
     >>> image_filenames = ["/path/to/image_1.png", "/path/to/image_2.png", "/path/to/image_3.png"]
     >>> images = read_image_batch(image_filenames)
     """
-    logger.trace("Requested batch: '%s'", filenames)
+    logger.trace("Requested batch: '%s'", filenames)  # type:ignore[attr-defined]
     batch = [None for _ in range(len(filenames))]
     if with_metadata:
         meta = [None for _ in range(len(filenames))]
@@ -378,8 +380,9 @@ def read_image_batch(filenames, with_metadata=False):
 
     batch = np.array(batch)
     retval = (batch, meta) if with_metadata else batch
-    logger.trace("Returning images: (filenames: %s, batch shape: %s, with_metadata: %s)",
-                 filenames, batch.shape, with_metadata)
+    logger.trace(  # type:ignore[attr-defined]
+        "Returning images: (filenames: %s, batch shape: %s, with_metadata: %s)",
+        filenames, batch.shape, with_metadata)
     return retval
 
 
@@ -407,7 +410,9 @@ def read_image_meta(filename):
     retval = dict()
     if os.path.splitext(filename)[-1].lower() != ".png":
         # Get the dimensions directly from the image for non-pngs
-        logger.trace("Non png found. Loading file for dimensions: '%s'", filename)
+        logger.trace(  # type:ignore[attr-defined]
+            "Non png found. Loading file for dimensions: '%s'",
+            filename)
         img = cv2.imread(filename)
         retval["height"], retval["width"] = img.shape[:2]
         return retval
@@ -423,7 +428,9 @@ def read_image_meta(filename):
         while True:
             chunk = infile.read(8)
             length, field = struct.unpack(">I4s", chunk)
-            logger.trace("Read chunk: (chunk: %s, length: %s, field: %s", chunk, length, field)
+            logger.trace(  # type:ignore[attr-defined]
+                "Read chunk: (chunk: %s, length: %s, field: %s",
+                chunk, length, field)
             if not chunk or field == b"IDAT":
                 break
             if field == b"IHDR":
@@ -437,11 +444,11 @@ def read_image_meta(filename):
                     retval["itxt"] = literal_eval(value[4:].decode("utf-8", errors="replace"))
                     break
                 else:
-                    logger.trace("Skipping iTXt chunk: '%s'", keyword.decode("latin-1",
-                                                                             errors="ignore"))
+                    logger.trace("Skipping iTXt chunk: '%s'",  # type:ignore[attr-defined]
+                                 keyword.decode("latin-1", errors="ignore"))
                     length = 0  # Reset marker for next chunk
             infile.seek(length + 4, 1)
-    logger.trace("filename: %s, metadata: %s", filename, retval)
+    logger.trace("filename: %s, metadata: %s", filename, retval)  # type:ignore[attr-defined]
     return retval
 
 
@@ -473,7 +480,7 @@ def read_image_meta_batch(filenames):
     >>> for filename, meta in read_image_meta_batch(image_filenames):
     >>>         <do something>
     """
-    logger.trace("Requested batch: '%s'", filenames)
+    logger.trace("Requested batch: '%s'", filenames)  # type:ignore[attr-defined]
     executor = futures.ThreadPoolExecutor()
     with executor:
         logger.debug("Submitting %s items to executor", len(filenames))
@@ -482,7 +489,7 @@ def read_image_meta_batch(filenames):
         logger.debug("Succesfully submitted %s items to executor", len(filenames))
         for future in futures.as_completed(read_meta):
             retval = (read_meta[future], future.result())
-            logger.trace("Yielding: %s", retval)
+            logger.trace("Yielding: %s", retval)  # type:ignore[attr-defined]
             yield retval
 
 
@@ -531,26 +538,29 @@ def update_existing_metadata(filename, metadata):
         while True:
             chunk = png.read(8)
             length, field = struct.unpack(">I4s", chunk)
-            logger.trace("Read chunk: (chunk: %s, length: %s, field: %s)", chunk, length, field)
+            logger.trace(  # type:ignore[attr-defined]
+                "Read chunk: (chunk: %s, length: %s, field: %s)",
+                chunk, length, field)
 
             if field == b"IDAT":  # Write out all remaining data
-                logger.trace("Writing image data and closing png")
+                logger.trace("Writing image data and closing png")  # type:ignore[attr-defined]
                 tmp.write(chunk + png.read())
                 break
 
             if field != b"iTXt":  # Write non iTXt chunk straight out
-                logger.trace("Copying existing chunk")
+                logger.trace("Copying existing chunk")  # type:ignore[attr-defined]
                 tmp.write(chunk + png.read(length + 4))  # Header + CRC
                 continue
 
             keyword, value = png.read(length).split(b"\0", 1)
             if keyword != b"faceswap":
                 # Write existing non fs-iTXt data + CRC
-                logger.trace("Copying non-faceswap iTXt chunk: %s", keyword)
+                logger.trace("Copying non-faceswap iTXt chunk: %s",  # type:ignore[attr-defined]
+                             keyword)
                 tmp.write(keyword + b"\0" + value + png.read(4))
                 continue
 
-            logger.trace("Updating faceswap iTXt chunk")
+            logger.trace("Updating faceswap iTXt chunk")  # type:ignore[attr-defined]
             tmp.write(pack_to_itxt(metadata))
             png.seek(4, 1)  # Skip old CRC
 
@@ -746,7 +756,7 @@ def png_read_meta(image):
     while True:
         pointer = image.find(b"iTXt", pointer) - 4
         if pointer < 0:
-            logger.trace("No metadata in png")
+            logger.trace("No metadata in png")  # type:ignore[attr-defined]
             break
         length = struct.unpack(">I", image[pointer:pointer + 4])[0]
         pointer += 8
@@ -754,7 +764,8 @@ def png_read_meta(image):
         if keyword == b"faceswap":
             retval = literal_eval(value[4:].decode("utf-8", errors="ignore"))
             break
-        logger.trace("Skipping iTXt chunk: '%s'", keyword.decode("latin-1", errors="ignore"))
+        logger.trace("Skipping iTXt chunk: '%s'",  # type:ignore[attr-defined]
+                     keyword.decode("latin-1", errors="ignore"))
         pointer += length + 4
     return retval
 
@@ -776,13 +787,14 @@ def generate_thumbnail(image, size=96, quality=60):
     :class:`numpy.ndarray`
         The given image encoded to a jpg at the given size and quality settings
     """
-    logger.trace("Input shape: %s, size: %s, quality: %s", image.shape, size, quality)
+    logger.trace("Input shape: %s, size: %s, quality: %s",  # type:ignore[attr-defined]
+                 image.shape, size, quality)
     orig_size = image.shape[0]
     if orig_size != size:
         interp = cv2.INTER_AREA if orig_size > size else cv2.INTER_CUBIC
         image = cv2.resize(image, (size, size), interpolation=interp)
     retval = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])[1]
-    logger.trace("Output shape: %s", retval.shape)
+    logger.trace("Output shape: %s", retval.shape)  # type:ignore[attr-defined]
     return retval
 
 
@@ -822,7 +834,9 @@ def batch_convert_color(batch, colorspace):
     to use 32-bit images in cases that need the full range of colors or that convert an image
     before an operation and then convert back.
     """
-    logger.trace("Batch converting: (batch shape: %s, colorspace: %s)", batch.shape, colorspace)
+    logger.trace(  # type:ignore[attr-defined]
+        "Batch converting: (batch shape: %s, colorspace: %s)",
+        batch.shape, colorspace)
     original_shape = batch.shape
     batch = batch.reshape((original_shape[0] * original_shape[1], *original_shape[2:]))
     batch = cv2.cvtColor(batch, getattr(cv2, "COLOR_{}".format(colorspace)))
@@ -1072,11 +1086,11 @@ class ImagesLoader(ImageIO):
     """
 
     def __init__(self,
-                 path,
-                 queue_size=8,
-                 fast_count=True,
-                 skip_list=None,
-                 count=None):
+                 path: str | list[str],
+                 queue_size: int = 8,
+                 fast_count: bool = True,
+                 skip_list: list[int] | None = None,
+                 count: int | None = None) -> None:
         logger.debug("Initializing %s: (path: %s, queue_size: %s, fast_count: %s, skip_list: %s, "
                      "count: %s)", self.__class__.__name__, path, queue_size, fast_count,
                      skip_list, count)
@@ -1204,7 +1218,7 @@ class ImagesLoader(ImageIO):
             self._count = len(self.file_list) if count is None else count
 
         logger.debug("count: %s", self.count)
-        logger.trace("filelist: %s", self.file_list)
+        logger.trace("filelist: %s", self.file_list)  # type:ignore[attr-defined]
 
     def _process(self, queue):
         """ The load thread.
@@ -1224,10 +1238,10 @@ class ImagesLoader(ImageIO):
                 # All black frames will return not numpy.any() so check dims too
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
-            logger.trace("Putting to queue: %s", [v.shape if isinstance(v, np.ndarray) else v
-                                                  for v in retval])
+            logger.trace("Putting to queue: %s",  # type:ignore[attr-defined]
+                         [v.shape if isinstance(v, np.ndarray) else v for v in retval])
             queue.put(retval)
-        logger.trace("Putting EOF")
+        logger.trace("Putting EOF")  # type:ignore[attr-defined]
         queue.put("EOF")
 
     def _from_video(self):
@@ -1244,12 +1258,13 @@ class ImagesLoader(ImageIO):
         reader = imageio.get_reader(self.location, "ffmpeg")
         for idx, frame in enumerate(reader):
             if idx in self._skip_list:
-                logger.trace("Skipping frame %s due to skip list", idx)
+                logger.trace("Skipping frame %s due to skip list",  # type:ignore[attr-defined]
+                             idx)
                 continue
             # Convert to BGR for cv2 compatibility
             frame = frame[:, :, ::-1]
             filename = self._dummy_video_framename(idx)
-            logger.trace("Loading video frame: '%s'", filename)
+            logger.trace("Loading video frame: '%s'", filename)  # type:ignore[attr-defined]
             yield filename, frame
         reader.close()
 
@@ -1286,7 +1301,7 @@ class ImagesLoader(ImageIO):
         logger.debug("Loading frames from folder: '%s'", self.location)
         for idx, filename in enumerate(self.file_list):
             if idx in self._skip_list:
-                logger.trace("Skipping frame %s due to skip list")
+                logger.trace("Skipping frame %s due to skip list")  # type:ignore[attr-defined]
                 continue
             image_read = read_image(filename, raise_error=False)
             retval = filename, image_read
@@ -1319,10 +1334,10 @@ class ImagesLoader(ImageIO):
             except QueueEmpty:
                 continue
             if retval == "EOF":
-                logger.trace("Got EOF")
+                logger.trace("Got EOF")  # type:ignore[attr-defined]
                 break
-            logger.trace("Yielding: %s", [v.shape if isinstance(v, np.ndarray) else v
-                                          for v in retval])
+            logger.trace("Yielding: %s",  # type:ignore[attr-defined]
+                         [v.shape if isinstance(v, np.ndarray) else v for v in retval])
             yield retval
         logger.debug("Closing Load Generator")
         self.close()
@@ -1365,7 +1380,7 @@ class FacesLoader(ImagesLoader):
         self._count = len(self.file_list) if count is None else count
 
         logger.debug("count: %s", self.count)
-        logger.trace("filelist: %s", self.file_list)
+        logger.trace("filelist: %s", self.file_list)  # type:ignore[attr-defined]
 
     def _from_folder(self):
         """ Generator for loading images from a folder
@@ -1384,7 +1399,7 @@ class FacesLoader(ImagesLoader):
         logger.debug("Loading images from folder: '%s'", self.location)
         for idx, filename in enumerate(self.file_list):
             if idx in self._skip_list:
-                logger.trace("Skipping face %s due to skip list")
+                logger.trace("Skipping face %s due to skip list")  # type:ignore[attr-defined]
                 continue
             image_read = read_image(filename, raise_error=False, with_metadata=True)
             retval = filename, *image_read
@@ -1473,7 +1488,8 @@ class SingleFrameLoader(ImagesLoader):
             filename = file_list[index]
             image = read_image(filename, raise_error=True)
             filename = os.path.basename(filename)
-        logger.trace("index: %s, filename: %s image shape: %s", index, filename, image.shape)
+        logger.trace("index: %s, filename: %s image shape: %s",  # type:ignore[attr-defined]
+                     index, filename, image.shape)
         return filename, image
 
 
@@ -1538,7 +1554,7 @@ class ImagesSaver(ImageIO):
             if item == "EOF":
                 logger.debug("EOF received")
                 break
-            logger.trace("Submitting: '%s'", item[0])
+            logger.trace("Submitting: '%s'", item[0])  # type:ignore[attr-defined]
             executor.submit(self._save, *item)
         executor.shutdown()
 
@@ -1572,7 +1588,7 @@ class ImagesSaver(ImageIO):
             else:
                 assert isinstance(image, np.ndarray)
                 cv2.imwrite(filename, image)
-            logger.trace("Saved image: '%s'", filename)  # type:ignore
+            logger.trace("Saved image: '%s'", filename)  # type:ignore[attr-defined]
         except Exception as err:  # pylint:disable=broad-except
             logger.error("Failed to save image '%s'. Original Error: %s", filename, str(err))
         del image
@@ -1598,7 +1614,7 @@ class ImagesSaver(ImageIO):
             be provided here. ``None`` for no subfolder. Default: ``None``
         """
         self._set_thread()
-        logger.trace("Putting to save queue: '%s'", filename)  # type:ignore
+        logger.trace("Putting to save queue: '%s'", filename)  # type:ignore[attr-defined]
         self._queue.put((filename, image, sub_folder))
 
     def close(self):

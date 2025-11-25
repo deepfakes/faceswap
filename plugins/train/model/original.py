@@ -83,8 +83,8 @@ class Model(ModelBase):
         input_b = inputs[1]
 
         encoder = self.encoder()
-        encoder_a = [encoder(input_a)]
-        encoder_b = [encoder(input_b)]
+        encoder_a = encoder(input_a)
+        encoder_b = encoder(input_b)
 
         outputs = self.decoder("a")(encoder_a) + self.decoder("b")(encoder_b)
 
