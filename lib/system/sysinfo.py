@@ -12,13 +12,13 @@ import psutil
 
 from lib.git import git
 from lib.gpu_stats import GPUStats, GPUInfo
-from lib.utils import get_backend
+from lib.utils import get_backend, PROJECT_ROOT
 
 from .ml_libs import Cuda, ROCm
 from .system import Packages, System
 
 
-class _SysInfo():
+class _SysInfo():  # pylint:disable=too-few-public-methods
     """ Obtain information about the System, Python and GPU """
     def __init__(self) -> None:
         self._state_file = _State().state_file
@@ -141,6 +141,21 @@ class _SysInfo():
                              devices_active=[])
         return retval
 
+    def _format_ram(self) -> str:
+        """ Format the RAM stats into Megabytes to make it more readable.
+
+        Returns
+        -------
+        str
+            The total, available, used and free RAM displayed in Megabytes
+        """
+        retval = []
+        for name in ("total", "available", "used", "free"):
+            value = getattr(self, f"_ram_{name}")
+            value = int(value / (1024 * 1024))
+            retval.append(f"{name.capitalize()}: {value}MB")
+        return ", ".join(retval)
+
     def full_info(self) -> str:
         """ Obtain extensive system information stats, formatted into a human readable format.
 
@@ -192,21 +207,6 @@ class _SysInfo():
         retval += self._configs
         return retval
 
-    def _format_ram(self) -> str:
-        """ Format the RAM stats into Megabytes to make it more readable.
-
-        Returns
-        -------
-        str
-            The total, available, used and free RAM displayed in Megabytes
-        """
-        retval = []
-        for name in ("total", "available", "used", "free"):
-            value = getattr(self, f"_ram_{name}")
-            value = int(value / (1024 * 1024))
-            retval.append(f"{name.capitalize()}: {value}MB")
-        return ", ".join(retval)
-
 
 def get_sysinfo() -> str:
     """ Obtain extensive system information stats, formatted into a human readable format.
@@ -232,7 +232,7 @@ class _Configs():  # pylint:disable=too-few-public-methods
     in a human readable format. """
 
     def __init__(self) -> None:
-        self.config_dir = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), "config")
+        self.config_dir = os.path.join(PROJECT_ROOT, "config")
         self.configs = self._get_configs()
 
     def _get_configs(self) -> str:
@@ -368,7 +368,7 @@ class _State():  # pylint:disable=too-few-public-methods
         for opt in args:
             if opt in cmd:
                 idx = cmd.index(opt) + 1
-                if len(cmd) < idx:
+                if len(cmd) > idx:
                     return cmd[idx]
         return None
 

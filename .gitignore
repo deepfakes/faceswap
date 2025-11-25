@@ -12,6 +12,7 @@
 # Root files
 !Dockerfile*
 !setup.cfg
+!.gitignore
 !.travis.yml
 !/faceswap.py
 !/setup.py
@@ -31,9 +32,13 @@
 !docs/_static**
 !locales/
 !locales/**
+
+# Test files
 !tests/
 !tests/**/
 !tests/**/*.py
+!tests/**/*.mp4
+!tests/**/*.jpg
 
 # Core files
 !.fs_cache

@@ -867,8 +867,7 @@ class Install():  # pylint:disable=too-few-public-methods
             msg = f"Unable to install Python packages: {', '.join(names)}"
             logger.warning("%s. Please install these packages manually", msg)
             for line in installer.error_lines:
-                if "microsoft visual c++" in line.lower() and "http" in line.lower():
-                    _InstallState.messages.append(line.lstrip("error: "))
+                _InstallState.messages.append(line)
             _InstallState.failed = True
 
     def _from_conda(self,
@@ -930,7 +929,7 @@ class Install():  # pylint:disable=too-few-public-methods
                         "these packages manually.")
             else:
                 msg += ("Further information can be found in 'faceswap_setup.log'. The following "
-                        "output shows the specific error(s):\r\n")
+                        "output shows specific error(s) that were collected:\r\n")
                 msg += "\r\n".join(_InstallState.messages)
             logger.error(msg)
             sys.exit(1)

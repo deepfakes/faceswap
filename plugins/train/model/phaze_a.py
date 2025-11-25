@@ -12,7 +12,7 @@ import keras
 from keras import applications as kapp, layers as kl
 
 from lib.model.nn_blocks import (
-    Conv2D, Conv2DBlock, Conv2DOutput, ResidualBlock, UpscaleBlock, Upscale2xBlock,
+    FSConv2D, Conv2DBlock, Conv2DOutput, ResidualBlock, UpscaleBlock, Upscale2xBlock,
     UpscaleResizeImagesBlock, UpscaleDNYBlock)
 from lib.model.normalization import (
     AdaInstanceNormalization, GroupNormalization, InstanceNormalization, RMSNormalization)
@@ -389,6 +389,7 @@ class Model(ModelBase):
         """
         input_shapes = inputs["a"].shape[1:]
 
+        fc_a = fc_both = None
         if self.config["split_fc"]:
             fc_a = FullyConnected("a", input_shapes, self.config)()
             inter_a = [fc_a(inputs["a"])]
@@ -402,8 +403,10 @@ class Model(ModelBase):
             if self.config["shared_fc"] == "full":
                 fc_shared = FullyConnected("shared", input_shapes, self.config)()
             elif self.config["split_fc"]:
+                assert fc_a is not None
                 fc_shared = fc_a
             else:
+                assert fc_both is not None
                 fc_shared = fc_both
             inter_a = [kl.Concatenate(name="inter_a")([inter_a[0], fc_shared(inputs["a"])])]
             inter_b = [kl.Concatenate(name="inter_b")([inter_b[0], fc_shared(inputs["b"])])]
@@ -662,7 +665,7 @@ def _scale_dim(target_resolution: int, original_dim: int) -> int:
     return new_dim
 
 
-class Encoder():
+class Encoder():  # pylint:disable=too-few-public-methods
     """ Encoder. Uses one of pre-existing Keras/Faceswap models or custom encoder.
 
     Parameters
@@ -707,7 +710,7 @@ class Encoder():
         :class:`keras.models.Model`
             The selected Encoder Model
         """
-        input_ = kl.Input(shape=self._input_shape)
+        input_ = T.cast("KerasTensor", kl.Input(shape=self._input_shape))
         var_x = input_
 
         scaling = self._selected_model[0].scaling
@@ -759,7 +762,7 @@ class Encoder():
         return retval
 
 
-class _EncoderFaceswap():
+class _EncoderFaceswap():  # pylint:disable=too-few-public-methods
     """ A configurable standard Faceswap encoder based off Original model.
 
     Parameters
@@ -825,7 +828,7 @@ class _EncoderFaceswap():
         return var_x
 
 
-class FullyConnected():
+class FullyConnected():  # pylint:disable=too-few-public-methods
     """ Intermediate Fully Connected layers for Phaze-A Model.
 
     Parameters
@@ -944,7 +947,7 @@ class FullyConnected():
             The Fully connected model
         """
         input_ = kl.Input(shape=self._input_shape)
-        var_x = input_
+        var_x = T.cast("KerasTensor", input_)
 
         node_curve = _get_curve(self._min_nodes,
                                 self._max_nodes,
@@ -976,7 +979,7 @@ class FullyConnected():
         return keras.models.Model(input_, var_x, name=f"fc_{self._side}")
 
 
-class UpscaleBlocks():
+class UpscaleBlocks():  # pylint:disable=too-few-public-methods
     """ Obtain a block of upscalers.
 
     This class exists outside of the :class:`Decoder` model, as it is possible to place some of
@@ -1196,7 +1199,7 @@ class UpscaleBlocks():
         return retval
 
 
-class GBlock():
+class GBlock():  # pylint:disable=too-few-public-methods
     """ G-Block model, borrowing from Adain StyleGAN.
 
     Parameters
@@ -1277,13 +1280,13 @@ class GBlock():
 
         # Scale g_block filters to side dense
         g_filts = var_x.shape[-1]
-        var_x = Conv2D(g_filts, 3, strides=1, padding="same")(var_x)
+        var_x = FSConv2D(g_filts, 3, strides=1, padding="same")(var_x)
         var_x = kl.GaussianNoise(1.0)(var_x)
         var_x = self._g_block(var_x, style, g_filts)
         return keras.models.Model(self._inputs, var_x, name=f"g_block_{self._side}")
 
 
-class Decoder():
+class Decoder():  # pylint:disable=too-few-public-methods
     """ Decoder Network.
 
     Parameters
@@ -1314,7 +1317,7 @@ class Decoder():
         :class:`keras.models.Model`
             The Decoder model
         """
-        inputs = kl.Input(shape=self._input_shape)
+        inputs = T.cast("KerasTensor", kl.Input(shape=self._input_shape))
 
         num_ups_in_fc = self._config["dec_upscales_in_fc"]
 

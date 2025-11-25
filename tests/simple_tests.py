@@ -9,13 +9,11 @@ Due to my lazy coding, DON'T USE PATHES WITH BLANKS !
 
 import sys
 from subprocess import check_call, CalledProcessError
-import urllib
-from urllib.request import urlretrieve
 import os
-from os.path import join as pathjoin, expanduser
+from os.path import join as pathjoin, abspath, dirname
 
-FAIL_COUNT = 0
-TEST_COUNT = 0
+_fail_count = 0
+_test_count = 0
 _COLORS = {
     "FAIL": "\033[1;31m",
     "OK": "\033[1;32m",
@@ -52,32 +50,18 @@ def print_status(text):
 
 def run_test(name, cmd):
     """ run a test """
-    global FAIL_COUNT, TEST_COUNT  # pylint:disable=global-statement
+    global _fail_count, _test_count  # pylint:disable=global-statement
     print_status(f"[?] running {name}")
     print(f"Cmd: {' '.join(cmd)}")
-    TEST_COUNT += 1
+    _test_count += 1
     try:
         check_call(cmd)
         print_ok("[+] Test success")
         return True
     except CalledProcessError as err:
         print_fail(f"[-] Test failed with {err}")
-        FAIL_COUNT += 1
+        _fail_count += 1
         return False
-
-
-def download_file(url, filename):  # TODO: retry
-    """ Download a file from given url """
-    if os.path.isfile(filename):
-        print_status(f"[?] '{url}' already cached as '{filename}'")
-        return filename
-    try:
-        print_status(f"[?] Downloading '{url}' to '{filename}'")
-        video, _ = urlretrieve(url, filename)
-        return video
-    except urllib.error.URLError as err:
-        print_fail(f"[-] Failed downloading: {err}")
-        return None
 
 
 def extract_args(detector, aligner, in_path, out_path, args=None):
@@ -111,7 +95,7 @@ def convert_args(in_path, out_path, model_path, writer, args=None):
 def sort_args(in_path, out_path, sortby="face", groupby="hist"):
     """ Sort command """
     py_exe = sys.executable
-    _sort_args = (f"{py_exe} tools.py sort -i {in_path} -o {out_path} -s {sortby} -g {groupby} -k")
+    _sort_args = f"{py_exe} tools.py sort -i {in_path} -o {out_path} -s {sortby} -g {groupby} -k"
     return _sort_args.split()
 
 
@@ -137,35 +121,22 @@ def set_train_config(value):
         print_ok(f"Set autoclip and mixed_precision to `{new_val}`")
     except CalledProcessError as err:
         print_fail(f"[-] Test failed with {err}")
-        return False
 
 
 def main():
     """ Main testing script """
-    vid_src = "https://faceswap.dev/data/test.mp4"
-    img_src = "https://archive.org/download/GPN-2003-00070/GPN-2003-00070.jpg"
-    base_dir = pathjoin(expanduser("~"), "cache", "tests")
-
+    base_dir = pathjoin(dirname(abspath(__file__)), "data")
     vid_base = pathjoin(base_dir, "vid")
     img_base = pathjoin(base_dir, "imgs")
-    os.makedirs(vid_base, exist_ok=True)
-    os.makedirs(img_base, exist_ok=True)
     py_exe = sys.executable
     was_trained = False
 
-    vid_path = download_file(vid_src, pathjoin(vid_base, "test.mp4"))
-    if not vid_path:
-        print_fail("[-] Aborting")
-        sys.exit(1)
+    vid_path = pathjoin(vid_base, "test.mp4")
     vid_extract = run_test(
         "Extraction video with cv2-dnn detector and cv2-dnn aligner.",
         extract_args("Cv2-Dnn", "Cv2-Dnn", vid_path, pathjoin(vid_base, "faces"))
     )
 
-    img_path = download_file(img_src, pathjoin(img_base, "test_img.jpg"))
-    if not img_path:
-        print_fail("[-] Aborting")
-        sys.exit(1)
     run_test(
         "Extraction images with cv2-dnn detector and cv2-dnn aligner.",
         extract_args("Cv2-Dnn", "Cv2-Dnn", img_base, pathjoin(img_base, "faces"))
@@ -230,11 +201,11 @@ def main():
             )
         )
 
-    if FAIL_COUNT == 0:
-        print_ok(f"[+] Failed {FAIL_COUNT}/{TEST_COUNT} tests.")
+    if _fail_count == 0:
+        print_ok(f"[+] Failed {_fail_count}/{_test_count} tests.")
         sys.exit(0)
     else:
-        print_fail(f"[-] Failed {FAIL_COUNT}/{TEST_COUNT} tests.")
+        print_fail(f"[-] Failed {_fail_count}/{_test_count} tests.")
         sys.exit(1)
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import typing as T
 
+import keras
 from keras import initializers, layers
 
 from lib.logger import parse_class_init
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 _CONFIG: dict = {}
-_NAMES: dict[str, int] = {}
+_names: dict[str, int] = {}
 
 
 def set_config(configuration: dict) -> None:
@@ -55,8 +56,8 @@ def _get_name(name: str) -> str:
     str
         The unique name for this layer
     """
-    _NAMES[name] = _NAMES.setdefault(name, -1) + 1
-    name = f"{name}_{_NAMES[name]}"
+    _names[name] = _names.setdefault(name, -1) + 1
+    name = f"{name}_{_names[name]}"
     logger.debug("Generating block name: %s", name)
     return name
 
@@ -67,8 +68,8 @@ def reset_naming() -> None:
     Used when a model needs to be rebuilt and the names for each build should be identical
     """
     logger.debug("Resetting nn_block layer naming")
-    global _NAMES  # pylint:disable=global-statement
-    _NAMES = {}
+    global _names  # pylint:disable=global-statement
+    _names = {}
 
 
 #  << CONVOLUTIONS >>
@@ -107,7 +108,8 @@ def _get_default_initializer(
     return retval
 
 
-class Conv2D(layers.Conv2D):  # pylint:disable=too-many-ancestors,abstract-method
+@keras.saving.register_keras_serializable()
+class FSConv2D(layers.Conv2D):  # pylint:disable=too-many-ancestors,abstract-method
     """ A standard Keras Convolution 2D layer with parameters updated to be more appropriate for
     Faceswap architecture.
 
@@ -136,7 +138,10 @@ class Conv2D(layers.Conv2D):  # pylint:disable=too-many-ancestors,abstract-metho
         if is_upscale and _CONFIG["icnr_init"]:
             initializer = ICNR(initializer=initializer)
             logger.debug("Using ICNR Initializer: %s", initializer)
-        super().__init__(*args, padding=padding, kernel_initializer=initializer, **kwargs)
+        super().__init__(*args,
+                         padding=padding,
+                         kernel_initializer=initializer,
+                         **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
 
@@ -172,7 +177,7 @@ class DepthwiseConv2D(layers.DepthwiseConv2D):  # noqa,pylint:disable=too-many-a
         logger.debug("Initialized %s", self.__class__.__name__)
 
 
-class Conv2DOutput():
+class Conv2DOutput():  # pylint:disable=too-few-public-methods
     """ A Convolution 2D layer that separates out the activation layer to explicitly set the data
     type on the activation to float 32 to fully support mixed precision training.
 
@@ -208,7 +213,11 @@ class Conv2DOutput():
         logger.debug(parse_class_init(locals()))
         name = _get_name(kwargs.pop("name")) if "name" in kwargs else _get_name(
                          f"conv_output_{filters}")
-        self._conv = Conv2D(filters, kernel_size, padding=padding, name=f"{name}_conv2d", **kwargs)
+        self._conv = FSConv2D(filters,
+                              kernel_size,
+                              padding=padding,
+                              name=f"{name}_conv2d",
+                              **kwargs)
         self._activation = layers.Activation(activation, dtype="float32", name=name)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -229,7 +238,7 @@ class Conv2DOutput():
         return self._activation(var_x)
 
 
-class Conv2DBlock():
+class Conv2DBlock():  # pylint:disable=too-few-public-methods,too-many-instance-attributes
     """ A standard Convolution 2D layer which applies user specified configuration to the
     layer.
 
@@ -320,7 +329,7 @@ class Conv2DBlock():
                                               kernel_size=self._args[-1][0],  # type:ignore[index]
                                               name=f"{self._name}_reflectionpadding2d"))
 
-        conv: layers.Layer = DepthwiseConv2D if self._use_depthwise else Conv2D
+        conv: layers.Layer = DepthwiseConv2D if self._use_depthwise else FSConv2D
 
         retval.append(conv(*self._args,
                            strides=self._strides,
@@ -365,7 +374,7 @@ class Conv2DBlock():
         return var_x
 
 
-class SeparableConv2DBlock():
+class SeparableConv2DBlock():  # pylint:disable=too-few-public-methods
     """ Seperable Convolution Block.
 
     Parameters
@@ -424,7 +433,7 @@ class SeparableConv2DBlock():
 
 #  << UPSCALING >>
 
-class UpscaleBlock():
+class UpscaleBlock():  # pylint:disable=too-few-public-methods
     """ An upscale layer for sub-pixel up-scaling.
 
     Adds reflection padding if it has been selected by the user, and other post-processing
@@ -494,7 +503,7 @@ class UpscaleBlock():
         return self._shuffle(var_x)
 
 
-class Upscale2xBlock():
+class Upscale2xBlock():  # pylint:disable=too-few-public-methods
     """ Custom hybrid upscale layer for sub-pixel up-scaling.
 
     Most of up-scaling is approximating lighting gradients which can be accurately achieved
@@ -557,12 +566,12 @@ class Upscale2xBlock():
                                      **kwargs)
 
         if self._fast or (not self._fast and self._filters > 0):
-            self._conv = Conv2D(self._filters,
-                                3,
-                                padding=padding,
-                                is_upscale=True,
-                                name=f"{name}_conv2d",
-                                **kwargs)
+            self._conv = FSConv2D(self._filters,
+                                  3,
+                                  padding=padding,
+                                  is_upscale=True,
+                                  name=f"{name}_conv2d",
+                                  **kwargs)
             self._upsample = layers.UpSampling2D(size=(scale_factor, scale_factor),
                                                  interpolation=interpolation,
                                                  name=f"{name}_upsampling2D")
@@ -586,6 +595,7 @@ class Upscale2xBlock():
             The output tensor from the Upscale Layer
         """
         var_x = inputs
+        var_x_sr = None
         if not self._fast:
             var_x_sr = self._upscale(var_x)
         if self._fast or (not self._fast and self._filters > 0):
@@ -600,12 +610,13 @@ class Upscale2xBlock():
                 var_x = self._joiner([var_x_sr, var_x2])
 
         else:
+            assert var_x_sr is not None
             var_x = var_x_sr
 
         return var_x
 
 
-class UpscaleResizeImagesBlock():
+class UpscaleResizeImagesBlock():  # pylint:disable=too-few-public-methods
     """ Upscale block that uses the Keras Backend function resize_images to perform the up scaling
     Similar in methodology to the :class:`Upscale2xBlock`
 
@@ -647,12 +658,12 @@ class UpscaleResizeImagesBlock():
         self._resize = KResizeImages(size=scale_factor,
                                      interpolation=interpolation,
                                      name=f"{name}_resize")
-        self._conv = Conv2D(filters,
-                            kernel_size,
-                            strides=1,
-                            padding=padding,
-                            is_upscale=True,
-                            name=f"{name}_conv")
+        self._conv = FSConv2D(filters,
+                              kernel_size,
+                              strides=1,
+                              padding=padding,
+                              is_upscale=True,
+                              name=f"{name}_conv")
         self._conv_trans = layers.Conv2DTranspose(filters,
                                                   3,
                                                   strides=2,
@@ -693,7 +704,7 @@ class UpscaleResizeImagesBlock():
         return self._acivation(var_x)
 
 
-class UpscaleDNYBlock():
+class UpscaleDNYBlock():  # pylint:disable=too-few-public-methods
     """ Upscale block that implements methodology similar to the Disney Research Paper using an
     upsampling2D block and 2 x convolutions
 
@@ -770,7 +781,7 @@ class UpscaleDNYBlock():
 
 
 # << OTHER BLOCKS >>
-class ResidualBlock():
+class ResidualBlock():  # pylint:disable=too-few-public-methods
     """ Residual block from dfaker.
 
     Parameters
@@ -827,11 +838,11 @@ class ResidualBlock():
                                               kernel_size=self._kernel_size[0],
                                               name=f"{self._name}_reflectionpadding2d_0"))
 
-        retval.append(Conv2D(self._filters,
-                             kernel_size=self._kernel_size,
-                             padding=self._padding,
-                             name=f"{self._name}_conv2d_0",
-                             **self._kwargs))
+        retval.append(FSConv2D(self._filters,
+                               kernel_size=self._kernel_size,
+                               padding=self._padding,
+                               name=f"{self._name}_conv2d_0",
+                               **self._kwargs))
         retval.append(layers.LeakyReLU(negative_slope=0.2, name=f"{self._name}_leakyrelu_1"))
 
         if self._use_reflect_padding:
@@ -844,11 +855,11 @@ class ResidualBlock():
             kwargs["kernel_initializer"] = initializers.VarianceScaling(scale=0.2,
                                                                         mode="fan_in",
                                                                         distribution="uniform")
-        retval.append(Conv2D(self._filters,
-                             kernel_size=self._kernel_size,
-                             padding=self._padding,
-                             name=f"{self._name}_conv2d_1",
-                             **kwargs))
+        retval.append(FSConv2D(self._filters,
+                               kernel_size=self._kernel_size,
+                               padding=self._padding,
+                               name=f"{self._name}_conv2d_1",
+                               **kwargs))
 
         logger.debug("%s layers: %s", self.__class__.__name__, retval)
         return retval

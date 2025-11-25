@@ -141,7 +141,11 @@ class TestFacesDisplay():
         f_display._faces_source = np.zeros((face_size, face_size, 3), dtype=np.uint8)
         f_display._faces_dest = np.zeros((face_size, face_size, 3), dtype=np.uint8)
 
-        tk.Tk()  # tkinter instance needed for image creation
+        try:
+            tk.Tk()  # tkinter instance needed for image creation
+        except tk.TclError:
+            # Some Windows runners arbitrarily don't install Tk correctly
+            pytest.skip("Tk not available on this system")
         f_display.update_tk_image()
 
         f_display._build_faces_image.assert_called_once()

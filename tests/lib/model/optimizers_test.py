@@ -31,7 +31,8 @@ def _test_optimizer(optimizer, target=0.75):
     x_train, y_train = get_test_data()
 
     model = Sequential()
-    model.add(kl.Dense(10, input_shape=(x_train.shape[1],)))
+    model.add(kl.Input((x_train.shape[1], )))
+    model.add(kl.Dense(10))
     model.add(kl.Activation("relu"))
     model.add(kl.Dense(y_train.shape[1]))
     model.add(kl.Activation("softmax"))
@@ -39,16 +40,18 @@ def _test_optimizer(optimizer, target=0.75):
                   optimizer=optimizer,
                   metrics=["accuracy"])
 
-    history = model.fit(x_train, y_train, epochs=2, batch_size=16, verbose=0)
+    history = model.fit(x_train, y_train, epochs=2, batch_size=16, verbose=0)  # type:ignore
     assert history.history["accuracy"][-1] >= target
     config = k_optimizers.serialize(optimizer)
     optim = k_optimizers.deserialize(config)
     new_config = k_optimizers.serialize(optim)
-    config["class_name"] = config["class_name"].lower()
-    new_config["class_name"] = new_config["class_name"].lower()
+    config["class_name"] = config["class_name"].lower()  # type:ignore
+    new_config["class_name"] = new_config["class_name"].lower()  # type:ignore
     assert config == new_config
 
 
+# TODO remove the next line that supresses a weird pytest bug when it tears down the tempdir
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 @pytest.mark.parametrize("dummy", [None], ids=[get_backend().upper()])
 def test_adabelief(dummy):  # pylint:disable=unused-argument
     """ Test for custom Adam optimizer """

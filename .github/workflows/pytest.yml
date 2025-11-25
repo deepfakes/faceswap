@@ -17,17 +17,32 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
-        python-version: ["3.10", "3.11", "3.12"]
-        backend: ["nvidia", "cpu"]
-        include:
-          - os: "ubuntu-latest"
-            backend: "rocm"
+        os: ["ubuntu-latest", "windows-latest", "macos-latest-arm64"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        backend: ["nvidia", "cpu", "rocm", "apple-silicon"]
         exclude:
-          - os: "macos-latest"
-            python-version: "3.12"
+          # CPU + Nvidia only on Windows
+          - os: "windows-latest"
+            backend: "rocm"
+          - os: windows-latest
+            backend: apple-silicon
+          # No apple-silicon on Linux
+          - os: ubuntu-latest
+            backend: apple-silicon
+          # Only Apple-Silicon on MacOS
+          - os: "macos-latest-arm64"
+            backend: "rocm"
+          - os: "macos-latest-arm64"
+            backend: "cpu"
+          - os: "macos-latest-arm64"
+            backend: "nvidia"
     steps:
       - uses: actions/checkout@v3
+      - name: Cleanup space
+        # We run out of space on rocm. Ref: https://github.com/actions/runner-images/issues/709
+        if: matrix.backend == 'rocm'
+        run: |
+          sudo rm -rf "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY"
       - name: Set cache date
         run: echo "DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
       - name: Cache conda
@@ -38,7 +53,7 @@ jobs:
           REQ_FILE: ./requirements/requirements_${{ matrix.backend }}.txt
         with:
           path: ~/conda_pkgs_dir
-          key: ${{ runner.os }}-${{ matrix.backend }}-conda-${{ env.CACHE_NUMBER }}-${{ env.DATE }}-${{ hashFiles('./requirements/requirements.txt', env.REQ_FILE) }}
+          key: ${{ runner.os }}-${{ matrix.backend }}-conda-${{ matrix.python-version }}-${{ env.CACHE_NUMBER }}-${{ env.DATE }}-${{ hashFiles('./requirements/requirements.txt', env.REQ_FILE) }}
       - name: Set up Conda
         uses: conda-incubator/setup-miniconda@v2
         with:
@@ -50,9 +65,8 @@ jobs:
         run: conda info && conda list
       - name: Install
         run: |
-          python setup.py --installer --${{ matrix.backend }}
-          pip install flake8 pylint mypy pytest pytest-mock wheel pytest-xvfb
-          pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
+          python setup.py --installer --dev --${{ matrix.backend }}
+          pip install wheel pytest-xvfb types-attrs types-cryptography types-pyOpenSSL
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
@@ -63,16 +77,15 @@ jobs:
         run: |
           mypy .
       - name: SysInfo
-        run: python -c "from lib.sysinfo import sysinfo ;  print(sysinfo)"
+        run: python -m lib.system.sysinfo
       - name: Simple Tests
         # These backends will fail as GPU drivers not available
-        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia'
+        if: matrix.backend == 'cpu'
         run: |
          KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
       - name: End to End Tests
         # These backends will fail as GPU drivers not available
-        # macOS fails on first extract test with 'died with <Signals.SIGSEGV: 11>'
-        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia' && matrix.os != 'macos-latest'
+        if: matrix.backend == 'cpu'
         run: |
           KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
 
@@ -82,14 +95,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
         backend: ["cpu"]
         include:
           - backend: "cpu"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -97,11 +110,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 pylint mypy pytest pytest-mock pytest-xvfb wheel
-          pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
           pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
-      - name: List installed packages
-        run: pip freeze
+          pip install -r ./requirements/_requirements_dev.txt
+          pip install wheel pytest-xvfb types-attrs types-cryptography types-pyOpenSSL
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
@@ -112,6 +123,8 @@ jobs:
         continue-on-error: true
         run: |
           mypy .
+      - name: SysInfo
+        run: FACESWAP_BACKEND="${{ matrix.backend }}" python -m lib.system.sysinfo
       - name: Simple Tests
         run: |
           KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
@@ -125,14 +138,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
         backend: ["cpu"]
         include:
           - backend: "cpu"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -143,8 +156,6 @@ jobs:
           pip install flake8 pylint mypy pytest pytest-mock wheel
           pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
           pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
-      - name: List installed packages
-        run: pip freeze
       - name: Set Faceswap Backend EnvVar
         run: echo "FACESWAP_BACKEND=${{ matrix.backend }}" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Set Keras Backend EnvVar
@@ -159,6 +170,8 @@ jobs:
         continue-on-error: true
         run: |
           mypy .
+      - name: SysInfo
+        run: python -m lib.system.sysinfo
       - name: Simple Tests
         run: py.test -v tests
       - name: End to End Tests

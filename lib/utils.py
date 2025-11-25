@@ -11,6 +11,7 @@ import tkinter as tk
 import typing as T
 import zipfile
 
+from importlib import import_module
 from multiprocessing import current_process
 from re import finditer
 from socket import timeout as socket_timeout, error as socket_error
@@ -26,11 +27,11 @@ if T.TYPE_CHECKING:
     from http.client import HTTPResponse
 
 # Global variables
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+""" str : Full path to the root faceswap folder """
 IMAGE_EXTENSIONS = [".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
 VIDEO_EXTENSIONS = [".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
                     ".ts", ".vob"]
-_TORCH_VERS: tuple[int, int] | None = None
-_KERAS_VERS: tuple[int, int] | None = None
 ValidBackends = T.Literal["nvidia", "cpu", "apple_silicon", "rocm"]
 
 
@@ -46,7 +47,7 @@ class _Backend():  # pylint:disable=too-few-public-methods
                                                     "4": "rocm"}
         self._valid_backends = list(self._backends.values())
         self._config_file = self._get_config_file()
-        self.backend = self._get_backend()
+        self.backend: ValidBackends = self._get_backend()
 
     @classmethod
     def _get_config_file(cls) -> str:
@@ -57,8 +58,7 @@ class _Backend():  # pylint:disable=too-few-public-methods
         str
             The path to the Faceswap configuration file
         """
-        pypath = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-        config_file = os.path.join(pypath, "config", ".faceswap")
+        config_file = os.path.join(PROJECT_ROOT, "config", ".faceswap")
         return config_file
 
     def _get_backend(self) -> ValidBackends:
@@ -162,6 +162,9 @@ def set_backend(backend: str) -> None:
     _FS_BACKEND = backend
 
 
+_versions: dict[T.Literal["torch", "keras"], tuple[int, int]] = {}
+
+
 def get_torch_version() -> tuple[int, int]:
     """ Obtain the major. minor version of currently installed PyTorch.
 
@@ -176,12 +179,11 @@ def get_torch_version() -> tuple[int, int]:
     >>> get_torch_version()
     (2, 2)
     """
-    global _TORCH_VERS  # pylint:disable=global-statement
-    if _TORCH_VERS is None:
-        import torch  # pylint:disable=import-outside-toplevel
+    if "torch" not in _versions:
+        torch = import_module("torch")
         split = torch.__version__.split(".")[:2]
-        _TORCH_VERS = (int(split[0]), int(split[1]))
-    return _TORCH_VERS
+        _versions["torch"] = (int(split[0]), int(split[1]))
+    return _versions["torch"]
 
 
 def get_keras_version() -> tuple[int, int]:
@@ -198,12 +200,11 @@ def get_keras_version() -> tuple[int, int]:
     >>> get_torch_version()
     (2, 2)
     """
-    global _KERAS_VERS  # pylint:disable=global-statement
-    if _KERAS_VERS is None:
-        import keras  # pylint:disable=import-outside-toplevel
+    if "keras" not in _versions:
+        keras = import_module("keras")
         split = keras.__version__.split(".")[:2]
-        _KERAS_VERS = (int(split[0]), int(split[1]))
-    return _KERAS_VERS
+        _versions["keras"] = (int(split[0]), int(split[1]))
+    return _versions["keras"]
 
 
 def get_folder(path: str, make_folder: bool = True) -> str:
@@ -532,7 +533,7 @@ class FaceswapError(Exception):
     pass  # pylint:disable=unnecessary-pass
 
 
-class GetModel():
+class GetModel():  # pylint:disable=too-few-public-methods
     """ Check for models in the cache path.
 
     If available, return the path, if not available, get, unzip and install model
@@ -567,7 +568,7 @@ class GetModel():
         if not isinstance(model_filename, list):
             model_filename = [model_filename]
         self._model_filename = model_filename
-        self._cache_dir = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), ".fs_cache")
+        self._cache_dir = os.path.join(PROJECT_ROOT, ".fs_cache")
         self._git_model_id = git_model_id
         self._url_base = "https://github.com/deepfakes-models/faceswap-models/releases/download"
         self._chunk_size = 1024  # Chunk size for downloading and unzipping

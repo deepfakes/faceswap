@@ -3,7 +3,6 @@
 Holds information about the running system. Used in setup.py and lib.sysinfo
 NOTE: Only packages from Python's Standard Library should be imported in this module
 """
-# TODO migrate sysinfo tests to here
 from __future__ import annotations
 
 import ctypes
@@ -21,8 +20,14 @@ from subprocess import CalledProcessError, run
 logger = logging.getLogger(__name__)
 
 
-_VALID_PYTHON = ((3, 10), (3, 13))
+VALID_PYTHON = ((3, 10), (3, 13))
 """ tuple[tuple[int, int], tuple[int, int]] : The minimum and maximum versions of Python that can
+run Faceswap """
+VALID_TORCH = ((2, 3), (2, 9))
+""" tuple[tuple[int, int], tuple[int, int]] : The minimum and maximum versions of Torch that can
+run Faceswap """
+VALID_KERAS = ((3, 12), (3, 12))
+""" tuple[tuple[int, int], tuple[int, int]] : The minimum and maximum versions of Keras that can
 run Faceswap """
 
 
@@ -149,13 +154,13 @@ class System:  # pylint:disable=too-many-instance-attributes
         bool
             ``True`` if the running Python version is valid, otherwise logs an error and exits
         """
-        max_python = _VALID_PYTHON[1] if max_version is None else max_version
-        retval = (_VALID_PYTHON[0] <= sys.version_info[:2] <= max_python
+        max_python = VALID_PYTHON[1] if max_version is None else max_version
+        retval = (VALID_PYTHON[0] <= sys.version_info[:2] <= max_python
                   and self.python_architecture == "64bit")
         logger.debug("Python version %s(%s) within %s - %s(64bit): %s",
                      self.python_version,
                      self.python_architecture,
-                     _VALID_PYTHON[0],
+                     VALID_PYTHON[0],
                      max_python,
                      retval)
         if not retval:
@@ -163,7 +168,7 @@ class System:  # pylint:disable=too-many-instance-attributes
                          "version %s to %s 64bit",
                          self.python_version,
                          self.python_architecture,
-                         ".".join(str(x) for x in _VALID_PYTHON[0]),
+                         ".".join(str(x) for x in VALID_PYTHON[0]),
                          ".".join(str(x) for x in max_python))
             sys.exit(1)
         return retval

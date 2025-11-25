@@ -1,0 +1,2 @@
+# Meta requirements file for latest Nvidia version
+-r _requirements_nvidia_13.txt

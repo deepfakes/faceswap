@@ -9,7 +9,6 @@ import pytest
 import pytest_mock
 
 # pylint:disable=protected-access
-from lib.gpu_stats import _base
 from lib.gpu_stats._base import BiggestGPUInfo, GPUInfo, _GPUStats
 from lib.utils import get_backend
 

@@ -1,0 +1,2 @@
+# Meta requirements file for latest ROCm version
+-r _requirements_rocm_64.txt

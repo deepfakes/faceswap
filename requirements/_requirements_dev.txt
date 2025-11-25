@@ -7,3 +7,4 @@ pytest-mock
 types-setuptools
 types-PyYAML
 types-psutil
+types-tensorflow

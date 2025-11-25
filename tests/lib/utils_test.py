@@ -147,19 +147,19 @@ def test_get_image_paths(tmp_path: str) -> None:
     assert sorted(get_image_paths(test_folder, extension=".png")) == sorted(exists)
 
 
-_PARAMS = [("/path/to/file.txt", ["/", "path", "to", "file.txt"]),  # Absolute
-           ("/path/to/directory/", ["/", "path", "to", "directory"]),
-           ("/path/to/directory", ["/", "path", "to", "directory"]),
-           ("path/to/file.txt", ["path", "to", "file.txt"]),  # Relative
-           ("path/to/directory/", ["path", "to", "directory"]),
-           ("path/to/directory", ["path", "to", "directory"]),
-           ("", []),  # Edge cases
-           ("/", ["/"]),
-           (".", ["."]),
-           ("..", [".."])]
+_PATHS = (("/path/to/file.txt", ["/", "path", "to", "file.txt"]),  # Absolute
+          ("/path/to/directory/", ["/", "path", "to", "directory"]),
+          ("/path/to/directory", ["/", "path", "to", "directory"]),
+          ("path/to/file.txt", ["path", "to", "file.txt"]),  # Relative
+          ("path/to/directory/", ["path", "to", "directory"]),
+          ("path/to/directory", ["path", "to", "directory"]),
+          ("", []),  # Edge cases
+          ("/", ["/"]),
+          (".", ["."]),
+          ("..", [".."]))
 
 
-@pytest.mark.parametrize("path,result", _PARAMS, ids=[f'"{p[0]}"' for p in _PARAMS])
+@pytest.mark.parametrize("path,result", _PATHS, ids=[f'"{p[0]}"' for p in _PATHS])
 def test_full_path_split(path: str, result: list[str]) -> None:
     """ Test the :func:`~lib.utils.full_path_split` function works correctly
 
@@ -175,19 +175,19 @@ def test_full_path_split(path: str, result: list[str]) -> None:
     assert split == result
 
 
-_PARAMS = [("camelCase", ["camel", "Case"]),
-           ("camelCaseTest", ["camel", "Case", "Test"]),
-           ("camelCaseTestCase", ["camel", "Case", "Test", "Case"]),
-           ("CamelCase", ["Camel", "Case"]),
-           ("CamelCaseTest", ["Camel", "Case", "Test"]),
-           ("CamelCaseTestCase", ["Camel", "Case", "Test", "Case"]),
-           ("CAmelCASETestCase", ["C", "Amel", "CASE", "Test", "Case"]),
-           ("camelcasetestcase", ["camelcasetestcase"]),
-           ("CAMELCASETESTCASE", ["CAMELCASETESTCASE"]),
-           ("", [])]
+_CASES = (("camelCase", ["camel", "Case"]),
+          ("camelCaseTest", ["camel", "Case", "Test"]),
+          ("camelCaseTestCase", ["camel", "Case", "Test", "Case"]),
+          ("CamelCase", ["Camel", "Case"]),
+          ("CamelCaseTest", ["Camel", "Case", "Test"]),
+          ("CamelCaseTestCase", ["Camel", "Case", "Test", "Case"]),
+          ("CAmelCASETestCase", ["C", "Amel", "CASE", "Test", "Case"]),
+          ("camelcasetestcase", ["camelcasetestcase"]),
+          ("CAMELCASETESTCASE", ["CAMELCASETESTCASE"]),
+          ("", []))
 
 
-@pytest.mark.parametrize("text, result", _PARAMS, ids=[f'"{p[0]}"' for p in _PARAMS])
+@pytest.mark.parametrize("text, result", _CASES, ids=[f'"{p[0]}"' for p in _CASES])
 def test_camel_case_split(text: str, result: list[str]) -> None:
     """ Test the :func:`~lib.utils.camel_case_spli` function works correctly
 
@@ -203,12 +203,18 @@ def test_camel_case_split(text: str, result: list[str]) -> None:
     assert split == result
 
 
+_TORCH_PARAMS = (("2.4.9", (2, 4)), ("2.6", (2, 6)), ("2.8.rc3", (2, 8)))
+_TORCH_IDS = [x[0] for x in _TORCH_PARAMS]
+
+
 # General utils
-def test_get_torch_version() -> None:
-    """ Test the :func:`~lib.utils.get_torch_version` function version returns correctly in
-    range """
+@pytest.mark.parametrize("str_vers, tuple_vers", _TORCH_PARAMS, ids=_TORCH_IDS)
+def test_get_torch_version(str_vers, tuple_vers, monkeypatch: pytest.MonkeyPatch) -> None:
+    """ Test the :func:`~lib.utils.get_torch_version` function version returns correctly """
+    monkeypatch.setattr("lib.utils._versions", {})
+    monkeypatch.setattr("torch.__version__", str_vers)
     torch_version = get_torch_version()
-    assert (2, 2) <= torch_version < (2, 4)
+    assert torch_version == tuple_vers
 
 
 def test_get_dpi() -> None:
@@ -463,21 +469,13 @@ def test_get_model__download_model(mocker: pytest_mock.MockerFixture,
     mock_urlopen.reset_mock()
 
 
+# TODO remove the next line that supresses a weird pytest bug when it tears down the tempdir
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 @pytest.mark.parametrize("dl_type", ["complete", "new", "continue"])
 def test_get_model__write_zipfile(mocker: pytest_mock.MockerFixture,
                                   get_model_instance: GetModel,
                                   dl_type: str) -> None:
-    """ Test :func:`~lib.utils.GetModel._write_zipfile` executes its logic correctly
-
-    Parameters
-    ---------
-    mocker: :class:`pytest_mock.MockerFixture`
-        Mocker for dummying in function calls
-    get_model_instance: `~lib.utils.GetModel`
-        The patched instance of the class
-    dl_type: str
-        The type of read to attemp
-    """
+    """ Test :func:`~lib.utils.GetModel._write_zipfile` executes its logic correctly """
     response = mocker.MagicMock()
     assert not os.path.isfile(get_model_instance._model_zip_path)
 
@@ -492,7 +490,7 @@ def test_get_model__write_zipfile(mocker: pytest_mock.MockerFixture,
 
     if dl_type == "continue":  # Write a partial download of the correct size
         with open(get_model_instance._model_zip_path, "wb") as partial:
-            partial.write(b"\x00" * sum(chunks))
+            partial.write(b"\x00" * sum(chunks))  # type:ignore
         downloaded = os.path.getsize(get_model_instance._model_zip_path)
 
     get_model_instance._write_zipfile(response, downloaded)
@@ -501,13 +499,15 @@ def test_get_model__write_zipfile(mocker: pytest_mock.MockerFixture,
         assert not response.read.called
         return
 
-    assert response.read.call_count == len(data)  # all data read
+    assert response.read.call_count == len(data)  # all data read  # type:ignore
     assert os.path.isfile(get_model_instance._model_zip_path)
     downloaded_size = os.path.getsize(get_model_instance._model_zip_path)
     downloaded_size = downloaded_size if dl_type == "new" else downloaded_size // 2
-    assert downloaded_size == sum(chunks)
+    assert downloaded_size == sum(chunks)  # type:ignore
 
 
+# TODO remove the next line that supresses a weird pytest bug when it tears down the tempdir
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 def test_get_model__unzip_model(mocker: pytest_mock.MockerFixture,
                                 get_model_instance: GetModel) -> None:
     """ Test :func:`~lib.utils.GetModel._unzip_model` executes its logic correctly
