@@ -272,7 +272,7 @@ class Loss():
         return mask_channels
 
 
-class Optimizer():  # pylint:disable=too-few-public-methods
+class Optimizer():
     """ Obtain the selected optimizer with the appropriate keyword arguments.
 
     Parameters

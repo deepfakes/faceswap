@@ -665,7 +665,7 @@ def _scale_dim(target_resolution: int, original_dim: int) -> int:
     return new_dim
 
 
-class Encoder():  # pylint:disable=too-few-public-methods
+class Encoder():
     """ Encoder. Uses one of pre-existing Keras/Faceswap models or custom encoder.
 
     Parameters
@@ -762,7 +762,7 @@ class Encoder():  # pylint:disable=too-few-public-methods
         return retval
 
 
-class _EncoderFaceswap():  # pylint:disable=too-few-public-methods
+class _EncoderFaceswap():
     """ A configurable standard Faceswap encoder based off Original model.
 
     Parameters
@@ -828,7 +828,7 @@ class _EncoderFaceswap():  # pylint:disable=too-few-public-methods
         return var_x
 
 
-class FullyConnected():  # pylint:disable=too-few-public-methods
+class FullyConnected():
     """ Intermediate Fully Connected layers for Phaze-A Model.
 
     Parameters
@@ -979,7 +979,7 @@ class FullyConnected():  # pylint:disable=too-few-public-methods
         return keras.models.Model(input_, var_x, name=f"fc_{self._side}")
 
 
-class UpscaleBlocks():  # pylint:disable=too-few-public-methods
+class UpscaleBlocks():
     """ Obtain a block of upscalers.
 
     This class exists outside of the :class:`Decoder` model, as it is possible to place some of
@@ -1199,7 +1199,7 @@ class UpscaleBlocks():  # pylint:disable=too-few-public-methods
         return retval
 
 
-class GBlock():  # pylint:disable=too-few-public-methods
+class GBlock():
     """ G-Block model, borrowing from Adain StyleGAN.
 
     Parameters
@@ -1286,7 +1286,7 @@ class GBlock():  # pylint:disable=too-few-public-methods
         return keras.models.Model(self._inputs, var_x, name=f"g_block_{self._side}")
 
 
-class Decoder():  # pylint:disable=too-few-public-methods
+class Decoder():
     """ Decoder Network.
 
     Parameters

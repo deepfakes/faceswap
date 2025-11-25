@@ -487,7 +487,7 @@ class _Image():
         """
         if self._interpolation == interpolation:
             return False
-        logger.debug("Setting interpolation: %s")
+        logger.debug("Setting interpolation: %s", interpolation)
         self._interpolation = interpolation
         return True
 
