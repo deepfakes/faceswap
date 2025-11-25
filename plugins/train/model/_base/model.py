@@ -172,6 +172,11 @@ class ModelBase():
         """ int: The total number of iterations that the model has trained. """
         return self._state.iterations
 
+    @property
+    def warmup_steps(self) -> int:
+        """ int : The number of steps to perform learning rate warmup """
+        return self._args.warmup
+
     # Private properties
     @property
     def _config_section(self) -> str:
@@ -395,6 +400,7 @@ class State():
         self._name = model_name
         self._iterations = 0
         self._mixed_precision_layers: list[str] = []
+        self._lr_finder = -1.0
         self._rebuild_model = False
         self._sessions: dict[int, dict] = {}
         self.lowest_avg_loss: float = 0.0
@@ -441,6 +447,11 @@ class State():
     def mixed_precision_layers(self) -> list[str]:
         """list: Layers that can be switched between mixed-float16 and float32. """
         return self._mixed_precision_layers
+
+    @property
+    def lr_finder(self) -> float:
+        """ The value discovered from the learning rate finder. -1 if no value stored """
+        return self._lr_finder
 
     @property
     def model_needs_rebuild(self) -> bool:
@@ -534,6 +545,17 @@ class State():
         logger.debug("Storing mixed precision layers: %s", layers)
         self._mixed_precision_layers = layers
 
+    def add_lr_finder(self, learning_rate: float) -> None:
+        """ Add the optimal discovered learning rate from the learning rate finder
+
+        Parameters
+        ----------
+        learning_rate : float
+            The discovered learning rate
+        """
+        logger.debug("Storing learning rate from LR Finder: %s", learning_rate)
+        self._lr_finder = learning_rate
+
     def _load(self, config_changeable_items: dict) -> None:
         """ Load a state file and set the serialized values to the class instance.
 
@@ -562,6 +584,7 @@ class State():
 
         self._iterations = state.get("iterations", 0)
         self._mixed_precision_layers = state.get("mixed_precision_layers", [])
+        self._lr_finder = state.get("lr_finder", -1.0)
         self._config = state.get("config", {})
         logger.debug("Loaded state: %s", state)
         self._replace_config(config_changeable_items)
@@ -570,10 +593,12 @@ class State():
         """ Save the state values to the serialized state file. """
         logger.debug("Saving State")
         state = {"name": self._name,
-                 "sessions": self._sessions,
+                 "sessions": {k: v for k, v in self._sessions.items()
+                              if v.get("iterations", 0) > 0},
                  "lowest_avg_loss": self.lowest_avg_loss,
                  "iterations": self._iterations,
                  "mixed_precision_layers": self._mixed_precision_layers,
+                 "lr_finder": self._lr_finder,
                  "config": _CONFIG}
         self._serializer.save(self._filename, state)
         logger.debug("Saved State")
