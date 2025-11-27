@@ -24,7 +24,7 @@ InstallDir $PROFILE\faceswap
 # Install cli flags
 !define flagsConda "/S /RegisterPython=0 /AddToPath=0 /D=$PROFILE\MiniConda3"
 !define flagsRepo "--depth 1 --no-single-branch ${wwwRepo}"
-!define flagsEnv "-y python=3.10"
+!define flagsEnv "-y python=3.13"
 
 # Folders
 Var ProgramData

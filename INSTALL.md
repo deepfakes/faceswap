@@ -110,7 +110,7 @@ Reboot your PC, so that everything you have just installed gets registered.
 - Select "Create" at the bottom
 - In the pop up:
     - Give it the name: faceswap
-    - **IMPORTANT**: Select python version 3.10
+    - **IMPORTANT**: Select python version 3.13
     - Hit "Create" (NB: This may take a while as it will need to download Python)
 ![Anaconda virtual env setup](https://i.imgur.com/CLIDDfa.png)
 
@@ -210,7 +210,7 @@ $ source ~/miniforge3/bin/activate
 ## Setup
 ### Create and Activate the Environment
 ```sh
-$ conda create --name faceswap python=3.10
+$ conda create --name faceswap python=3.13
 $ conda activate faceswap
 ```
 

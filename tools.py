@@ -14,8 +14,8 @@ _LANG = gettext.translation("tools", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
 # Python version check
-if sys.version_info < (3, 10):
-    raise ValueError("This program requires at least python 3.10")
+if sys.version_info < (3, 11):
+    raise ValueError("This program requires at least python 3.11")
 
 
 def bad_args(*args):  # pylint:disable=unused-argument

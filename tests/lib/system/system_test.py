@@ -124,7 +124,7 @@ def test_system_validate_python(system_instance: System,
                                 monkeypatch: pytest.MonkeyPatch,
                                 mocker: pytest_mock.MockerFixture) -> None:
     """ Test :class:`lib.system.System` _validate_python method """
-    monkeypatch.setattr(system_mod, "VALID_PYTHON", (((3, 10), (3, 13))))
+    monkeypatch.setattr(system_mod, "VALID_PYTHON", (((3, 11), (3, 13))))
     monkeypatch.setattr(system_mod.sys, "version_info", (3, 12, 0))
     system_instance.python_architecture = "64bit"
 
@@ -140,7 +140,7 @@ def test_system_validate_python(system_instance: System,
     system_instance.validate_python(max_version=(3, 11))
     assert sys_exit.called
 
-    for vers in ((3, 9, 0), (3, 14, 0)):
+    for vers in ((3, 10, 0), (3, 14, 0)):
         monkeypatch.setattr(system_mod.sys, "version_info", vers)
         system_instance.validate_python()
         assert sys_exit.called

@@ -20,7 +20,7 @@ from subprocess import CalledProcessError, run
 logger = logging.getLogger(__name__)
 
 
-VALID_PYTHON = ((3, 10), (3, 13))
+VALID_PYTHON = ((3, 11), (3, 13))
 """ tuple[tuple[int, int], tuple[int, int]] : The minimum and maximum versions of Python that can
 run Faceswap """
 VALID_TORCH = ((2, 3), (2, 9))
