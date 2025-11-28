@@ -12,7 +12,7 @@ import keras
 from keras import applications as kapp, layers as kl
 
 from lib.model.nn_blocks import (
-    FSConv2D, Conv2DBlock, Conv2DOutput, ResidualBlock, UpscaleBlock, Upscale2xBlock,
+    Conv2D, Conv2DBlock, Conv2DOutput, ResidualBlock, UpscaleBlock, Upscale2xBlock,
     UpscaleResizeImagesBlock, UpscaleDNYBlock)
 from lib.model.normalization import (
     AdaInstanceNormalization, GroupNormalization, InstanceNormalization, RMSNormalization)
@@ -1280,7 +1280,7 @@ class GBlock():
 
         # Scale g_block filters to side dense
         g_filts = var_x.shape[-1]
-        var_x = FSConv2D(g_filts, 3, strides=1, padding="same")(var_x)
+        var_x = Conv2D(g_filts, 3, strides=1, padding="same")(var_x)
         var_x = kl.GaussianNoise(1.0)(var_x)
         var_x = self._g_block(var_x, style, g_filts)
         return keras.models.Model(self._inputs, var_x, name=f"g_block_{self._side}")
