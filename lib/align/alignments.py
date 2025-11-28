@@ -51,7 +51,7 @@ class PNGHeaderAlignmentsDict(T.TypedDict):
     y: int
     w: int
     h: int
-    landmarks_xy: list[float] | np.ndarray
+    landmarks_xy: list[list[float]] | np.ndarray
     mask: dict[str, MaskAlignmentsFileDict]
     identity: dict[str, list[float]]
 

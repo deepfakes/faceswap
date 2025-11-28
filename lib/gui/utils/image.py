@@ -17,8 +17,8 @@ if T.TYPE_CHECKING:
     from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
-_IMAGES: "Images" | None = None
-_PREVIEW_TRIGGER: "PreviewTrigger" | None = None
+_IMAGES: Images | None = None
+_PREVIEW_TRIGGER: PreviewTrigger | None = None
 TRAININGPREVIEW = ".gui_training_preview.png"
 
 
@@ -99,6 +99,7 @@ class PreviewTrain():
         image_files = _get_previews(self._cache_path)
         filename = next((fname for fname in image_files
                          if os.path.basename(fname) == TRAININGPREVIEW), "")
+        img: np.ndarray | None = None
         if not filename:
             logger.trace("No preview to display")  # type:ignore
             return False
@@ -351,7 +352,7 @@ class PreviewExtract():
         dropped_files = []
         for fname in show_files:
             try:
-                img = Image.open(fname)
+                img_file = Image.open(fname)
             except PermissionError as err:
                 logger.debug("Permission error opening preview file: '%s'. Original error: %s",
                              fname, str(err))
@@ -365,12 +366,12 @@ class PreviewExtract():
                 dropped_files.append(fname)
                 continue
 
-            width, height = img.size
+            width, height = img_file.size
             scaling = thumbnail_size / max(width, height)
             logger.debug("image width: %s, height: %s, scaling: %s", width, height, scaling)
 
             try:
-                img = img.resize((int(width * scaling), int(height * scaling)))
+                img = img_file.resize((int(width * scaling), int(height * scaling)))
             except OSError as err:
                 # Image only gets loaded when we call a method, so may error on partial loads
                 logger.debug("OS Error resizing preview image: '%s'. Original error: %s",

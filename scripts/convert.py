@@ -1062,7 +1062,9 @@ class Predict():  # pylint:disable=too-many-instance-attributes
         feed = [feed_faces]
         logger.trace("Input shape(s): %s", [item.shape for item in feed])  # type:ignore
 
-        inbound = self._model.model.predict(feed, verbose=0, batch_size=batch_size)
+        inbound = self._model.model.predict(feed,
+                                            verbose=0,  # pyright:ignore[reportArgumentType]
+                                            batch_size=batch_size)
         predicted: list[np.ndarray] = inbound if isinstance(inbound, list) else [inbound]
 
         if self._model.color_order.lower() == "rgb":
@@ -1116,17 +1118,17 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
 
     Parameters
     ----------
-    arguments: :class:`argparse.Namespace`
+    arguments : :class:`argparse.Namespace`
         The arguments that were passed to the convert process as generated from Faceswap's command
         line arguments
-    input_images: list
+    input_images : list[str]
         List of input image files
-    alignments: :class:`lib.align.Alignments`
+    alignments : :class:`lib.align.Alignments`
         The alignments file for this conversion
     """
     def __init__(self,
                  arguments: Namespace,
-                 input_images: list[np.ndarray],
+                 input_images: list[str],
                  alignments: Alignments) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._args = arguments

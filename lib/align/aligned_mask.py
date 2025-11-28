@@ -50,7 +50,7 @@ class Mask():
                  storage_centering: CenteringType = "face") -> None:
         logger.trace(parse_class_init(locals()))  # type:ignore[attr-defined]
         self.stored_size = storage_size
-        self.stored_centering = storage_centering
+        self.stored_centering: CenteringType = storage_centering
 
         self._mask: bytes | None = None
         self._affine_matrix: np.ndarray | None = None

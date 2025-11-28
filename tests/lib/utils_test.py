@@ -147,16 +147,17 @@ def test_get_image_paths(tmp_path: str) -> None:
     assert sorted(get_image_paths(test_folder, extension=".png")) == sorted(exists)
 
 
-_PATHS = (("/path/to/file.txt", ["/", "path", "to", "file.txt"]),  # Absolute
-          ("/path/to/directory/", ["/", "path", "to", "directory"]),
-          ("/path/to/directory", ["/", "path", "to", "directory"]),
-          ("path/to/file.txt", ["path", "to", "file.txt"]),  # Relative
-          ("path/to/directory/", ["path", "to", "directory"]),
-          ("path/to/directory", ["path", "to", "directory"]),
-          ("", []),  # Edge cases
-          ("/", ["/"]),
-          (".", ["."]),
-          ("..", [".."]))
+_PATHS = (  # type:ignore[var-annotated]
+    ("/path/to/file.txt", ["/", "path", "to", "file.txt"]),  # Absolute
+    ("/path/to/directory/", ["/", "path", "to", "directory"]),
+    ("/path/to/directory", ["/", "path", "to", "directory"]),
+    ("path/to/file.txt", ["path", "to", "file.txt"]),  # Relative
+    ("path/to/directory/", ["path", "to", "directory"]),
+    ("path/to/directory", ["path", "to", "directory"]),
+    ("", []),  # Edge cases
+    ("/", ["/"]),
+    (".", ["."]),
+    ("..", [".."]))
 
 
 @pytest.mark.parametrize("path,result", _PATHS, ids=[f'"{p[0]}"' for p in _PATHS])
@@ -175,7 +176,7 @@ def test_full_path_split(path: str, result: list[str]) -> None:
     assert split == result
 
 
-_CASES = (("camelCase", ["camel", "Case"]),
+_CASES = (("camelCase", ["camel", "Case"]),  # type:ignore[var-annotated]
           ("camelCaseTest", ["camel", "Case", "Test"]),
           ("camelCaseTestCase", ["camel", "Case", "Test", "Case"]),
           ("CamelCase", ["Camel", "Case"]),

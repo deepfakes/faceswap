@@ -555,7 +555,7 @@ class Calculations():
                  smooth_amount: float = 0.90,
                  flatten_outliers: bool = False) -> None:
         logger.debug(parse_class_init(locals()))
-        warnings.simplefilter("ignore", np.RankWarning)
+        warnings.simplefilter("ignore", np.exceptions.RankWarning)
 
         self._session_id = session_id
 

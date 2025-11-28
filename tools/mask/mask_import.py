@@ -62,7 +62,7 @@ class Import:
 
         self._validate_mask_type(mask_type)
 
-        self._centering = centering
+        self._centering: CenteringType = centering
         self._size = storage_size
         self._is_faces = input_is_faces
         self._alignments = alignments
@@ -393,7 +393,7 @@ class Import:
             logger.warning("No mask file found for: '%s'", os.path.basename(media.filename))
             return
 
-        mask = cv2.imread(mask_file, cv2.IMREAD_GRAYSCALE)
+        mask = T.cast(np.ndarray, cv2.imread(mask_file, cv2.IMREAD_GRAYSCALE))
 
         logger.trace("Loaded mask for frame '%s': %s",  # type:ignore[attr-defined]
                      os.path.basename(mask_file), mask.shape)

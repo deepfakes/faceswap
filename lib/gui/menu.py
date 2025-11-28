@@ -174,6 +174,7 @@ class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         logger.debug("Building Recent Files menu")
         serializer = get_serializer("json")
         menu_file = os.path.join(self._config.pathcache, ".recent.json")
+        recent_files = []
         if not os.path.isfile(menu_file) or os.path.getsize(menu_file) == 0:
             self._clear_recent_files(serializer, menu_file)
         try:
@@ -184,7 +185,6 @@ class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors
                 logger.warning("There was an error opening the recent files list so it has been "
                                "reset.")
                 self._clear_recent_files(serializer, menu_file)
-                recent_files = []
 
         logger.debug("Loaded recent files: %s", recent_files)
         removed_files = []
@@ -259,7 +259,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         self.root.config(cursor="watch")
         self._clear_console()
         try:
-            from lib.sysinfo import sysinfo  # pylint:disable=import-outside-toplevel
+            from lib.system.sysinfo import sysinfo  # pylint:disable=import-outside-toplevel
             info = sysinfo
         except Exception as err:  # pylint:disable=broad-except
             info = f"Error obtaining system info: {str(err)}"
