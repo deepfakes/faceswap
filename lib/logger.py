@@ -515,19 +515,18 @@ def _process_value(value: T.Any) -> T.Any:
     Any
         The original or ammended value
     """
-    if isinstance(value, str):
-        return f'"{value}"'
     if isinstance(value, (list, tuple, set)) and len(value) > 10:
         return f'[type: "{type(value).__name__}" len: {len(value)}'
 
     try:
         import numpy as np  # pylint:disable=import-outside-toplevel
     except ImportError:
-        return value
+        return repr(value)
 
     if isinstance(value, np.ndarray) and np.prod(value.shape) > 10:
         return f'[type: "{type(value).__name__}" shape: {value.shape}, dtype: "{value.dtype}"]'
-    return value
+
+    return repr(value)
 
 
 def parse_class_init(locals_dict: dict[str, T.Any]) -> str:
@@ -536,6 +535,7 @@ def parse_class_init(locals_dict: dict[str, T.Any]) -> str:
     ----------
     locals_dict: dict[str, T.Any]
         A locals() dictionary from a newly initialized class
+
     Returns
     -------
     str
@@ -543,8 +543,8 @@ def parse_class_init(locals_dict: dict[str, T.Any]) -> str:
     """
     delimit = {k: _process_value(v)
                for k, v in locals_dict.items() if k != "self"}
-    dsp = ", ".join(f"{k}: {v}" for k, v in delimit.items())
-    dsp = f" ({dsp})" if dsp else ""
+    dsp = ", ".join(f"{k}={v}" for k, v in delimit.items())
+    dsp = f"({dsp})" if dsp else ""
     return f"Initializing {locals_dict['self'].__class__.__name__}{dsp}"
 
 

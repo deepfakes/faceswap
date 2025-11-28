@@ -15,6 +15,7 @@ import logging
 import os
 import sys
 import typing as T
+import zipfile
 from shutil import copyfile, copytree
 
 import h5py
@@ -191,9 +192,15 @@ class IO():
                        f"Original error: {str(err)}")
                 raise FaceswapError(msg) from err
             raise err
+        except TypeError as err:
+            if any(x in str(err) for x in ("Could not locate class 'Conv2D'",
+                                           "Could not locate class 'DepthwiseConv2D'")):
+                PatchKerasConfig(self.filename)()
+                return self.load()
+            raise err
 
         logger.info("Loaded model from disk: '%s'", self.filename)
-        return model
+        return model  # pyright:ignore[reportReturnType]
 
     def _remove_optimizer(self) -> Optimizer:
         """ Keras 3 `.keras` format ignores the `save_optimizer` kwarg. To hack around this we
@@ -226,6 +233,7 @@ class IO():
                              self._save_optimizer == "always" or
                              (self._save_optimizer == "exit" and is_exit))
 
+        optimizer = None
         if not include_optimizer:
             optimizer = self._remove_optimizer()
 
@@ -233,6 +241,7 @@ class IO():
         self._plugin.state.save()
 
         if not include_optimizer:
+            assert optimizer is not None
             logger.debug("Re-attaching optimizer: %s", optimizer)
             setattr(self._plugin.model, "optimizer", optimizer)
 
@@ -444,6 +453,8 @@ class Weights():
 
         weights_models = self._get_weights_model()
         all_models = get_all_sub_models(self._model)
+        loaded_ops = 0
+        skipped_ops = 0
 
         for model_name in self._load_layers:
             sub_model = next((lyr for lyr in all_models if lyr.name == model_name), None)
@@ -490,7 +501,9 @@ class Weights():
             In the event of a failure to load the weights, or the weights belonging to a different
             model
         """
-        retval = get_all_sub_models(kmodels.load_model(self._weights_file, compile=False))
+        retval = get_all_sub_models(kmodels.load_model(    # pyright:ignore[reportArgumentType]
+            self._weights_file,
+            compile=False))
         if not retval:
             raise FaceswapError(f"Error loading weights file {self._weights_file}.")
 
@@ -861,3 +874,99 @@ class Legacy:  # pylint:disable=too-few-public-methods
 
         self._restore_files(archive_dir)
         logger.info("Model upgraded: '%s'", dirname)
+
+
+class PatchKerasConfig:
+    """ This class exists to patch breaking changes when moving from older keras 3.x models to
+    newer versions
+
+    Parameters
+    ----------
+    model_path : str
+        Full path to the keras model to be patched for the current version
+    """
+    def __init__(self, model_path: str) -> None:
+        logger.debug(parse_class_init(locals()))
+        self._model_path = model_path
+        self._items, self._config = self._load_model()
+        metadata = json.loads(self._items["metadata.json"])
+        self._version = tuple(int(x) for x in metadata['keras_version'].split(".")[:2])
+        logger.debug("Initialized: %s", self.__class__.__name__)
+
+    def _load_model(self) -> tuple[dict[str, bytes], dict[str, T.Any]]:
+        """ Load the objects from the compressed keras model
+
+        Returns
+        -------
+        items : dict[str, bytes]
+            The filename and file objects within the keras 3 model file that are not the model
+            config
+        config : dict[str, Any]
+            The model configuration dictionary from the keras 3 model file
+        """
+        with zipfile.ZipFile(self._model_path, "r") as zf:
+            items = {f.filename: zf.read(f) for f in zf.filelist if f.filename != "config.json"}
+            config = json.loads(zf.read("config.json"))
+
+        logger.debug("Loaded legacy existing items %s and 'config.json' from model '%s'",
+                     list(items), self._model_path)
+        return items, config
+
+    def _update_nn_blocks(self, layer: dict[str, T.Any]):
+        """ In older versions of keras our :class:`lib.model.nn_blocks.Conv2D` and
+        :class:`lib.model.nn_blocks.DepthwiseConv2D` inherited from their respective Keras layers.
+        Sometime between 3.3.3 and 3.12 (during beta testing) this stopped working, raising a
+        TypeError. Subsequently we have refactored those classes to no longer inherit, and call the
+        underlying keras layer directly instead. The keras config needs to be rewritten to reflect
+        this.
+
+        Parameters
+        ----------
+        layer dict[str, Any]
+            A layer config dictionary from a keras 3 model
+        """
+        if (layer.get("module") == "lib.model.nn_blocks" and
+                layer.get("class_name") in ("Conv2D", "DepthwiseConv2D")):
+            new_module = "keras.layers"
+            logger.debug("Updating Keras %s layer '%s' to '%s': %s",
+                         ".".join(str(x) for x in self._version),
+                         f"{layer['module']}.{layer['class_name']}",
+                         f"{new_module}.{layer['class_name']}",
+                         layer["name"])
+            layer["module"] = new_module
+
+    def _update_config(self, config: dict[str, T.Any]) -> dict[str, T.Any]:
+        """ Recursively update the `config` dictionary from a full keras config in place
+
+        Parameters
+        ----------
+        config : dict[str, Any]
+            A 'config' section of keras config
+
+        Returns
+        -------
+        dict[str, Any]
+            The updated `config` section of a keras config
+        """
+        layer: dict[str, T.Any]
+        for layer in config["layers"]:
+            if layer.get("class_name") == "Functional":
+                self._update_config(layer["config"])
+            if self._version <= (3, 3):
+                self._update_nn_blocks(layer)
+        return config
+
+    def _save_model(self) -> None:
+        """ Save the updated keras model """
+        logger.info("Updating Keras model '%s'...", self._model_path)
+        with zipfile.ZipFile(self._model_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for filename, data in self._items.items():
+                zf.writestr(filename, data)
+            zf.writestr("config.json", json.dumps(self._config).encode("utf-8"))
+
+    def __call__(self) -> None:
+        """ Update the keras configuration saved in a keras model file and save over the original
+        model """
+        logger.debug("Updating saved config for keras version %s", self._version)
+        self._config["config"] = self._update_config(self._config["config"])
+        self._save_model()
