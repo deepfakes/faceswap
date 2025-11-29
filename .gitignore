@@ -11,7 +11,7 @@
 
 # Root files
 !Dockerfile*
-!setup.cfg
+!pyproject.toml
 !.gitignore
 !.travis.yml
 !/faceswap.py
