@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+from lib.utils import get_module_objects
 from plugins.plugin_loader import PluginLoader
 
 if T.TYPE_CHECKING:
@@ -47,7 +48,7 @@ class Adjustments:
     sharpening: ScalingAdjust | None = None
 
 
-class Converter():
+class Converter():  # pylint:disable=too-many-instance-attributes
     """ The converter is responsible for swapping the original face(s) in a frame with the output
     of a trained Faceswap model.
 
@@ -528,3 +529,6 @@ class Converter():
         logger.trace("resized frame: %s", frame.shape)  # type: ignore[attr-defined]
         np.clip(frame, 0.0, 1.0, out=frame)
         return frame
+
+
+__all__ = get_module_objects(__name__)

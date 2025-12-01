@@ -17,7 +17,8 @@ from lib.align.alignments import PNGHeaderDict
 
 from lib.image import encode_image, generate_thumbnail, ImagesLoader, ImagesSaver, read_image_meta
 from lib.multithreading import MultiThread
-from lib.utils import get_folder, handle_deprecated_cliopts, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
+from lib.utils import (get_folder, get_module_objects, handle_deprecated_cliopts,
+                       IMAGE_EXTENSIONS, VIDEO_EXTENSIONS)
 from plugins.extract import ExtractMedia, Extractor
 from scripts.fsmedia import Alignments, PostProcess, finalize
 
@@ -825,3 +826,6 @@ class _Extract():
         self._alignments.data[os.path.basename(extract_media.filename)] = {"faces": final_faces,
                                                                            "video_meta": {}}
         del extract_media
+
+
+__all__ = get_module_objects(__name__)

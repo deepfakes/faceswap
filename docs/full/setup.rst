@@ -1,8 +1,3 @@
-************
-setup module
-************
-
-.. automodule:: setup
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: setup
+   :include-all-objects:
+   :no-inheritance-diagram:

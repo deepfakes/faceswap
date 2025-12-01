@@ -7,6 +7,7 @@ import typing as T
 
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import DirOrFileFullPaths, DirFullPaths, FileFullPaths, Radio, Slider
+from lib.utils import get_module_objects
 
 # LOCALES
 _LANG = gettext.translation("tools.alignments.cli", localedir="locales", fallback=True)
@@ -226,3 +227,6 @@ class AlignmentsArgs(FaceSwapArgs):
             "dest": "depr_size_sz_z",
             "help": argparse.SUPPRESS})
         return argument_list
+
+
+__all__ = get_module_objects(__name__)

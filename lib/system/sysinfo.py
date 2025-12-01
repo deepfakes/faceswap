@@ -12,7 +12,7 @@ import psutil
 
 from lib.git import git
 from lib.gpu_stats import GPUStats, GPUInfo
-from lib.utils import get_backend, PROJECT_ROOT
+from lib.utils import get_backend, get_module_objects, PROJECT_ROOT
 
 from .ml_libs import Cuda, ROCm
 from .system import Packages, System
@@ -393,6 +393,9 @@ class _State():  # pylint:disable=too-few-public-methods
 
 
 sysinfo = get_sysinfo()  # pylint:disable=invalid-name
+
+
+__all__ = get_module_objects(__name__)
 
 
 if __name__ == "__main__":

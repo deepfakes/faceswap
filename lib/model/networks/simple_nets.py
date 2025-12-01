@@ -8,6 +8,7 @@ from keras import layers
 from keras.models import Model
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -211,3 +212,6 @@ class SqueezeNet(_net):
             squeeze += 16
             expand += 64
         return Model(inputs=inputs, outputs=[var_x])
+
+
+__all__ = get_module_objects(__name__)

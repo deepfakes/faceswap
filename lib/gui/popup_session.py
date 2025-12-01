@@ -9,6 +9,8 @@ import tkinter as tk
 from dataclasses import dataclass, field
 from tkinter import ttk
 
+from lib.utils import get_module_objects
+
 from .control_helper import ControlBuilder, ControlPanelOption
 from .custom_widgets import Tooltip
 from .display_graph import SessionGraph
@@ -23,7 +25,7 @@ _ = _LANG.gettext
 
 
 @dataclass
-class SessionTKVars:
+class SessionTKVars:  # pylint:disable=too-many-instance-attributes
     """ Dataclass for holding the tk variables required for the session popup
 
     Parameters
@@ -270,13 +272,18 @@ class SessionPopUp(tk.Toplevel):
 
         self._add_section(frame, "Parameters")
         logger.debug("Building Slider Controls")
+        text = ""
+        dtype: type[int] | type[float] = int
+        default: int | float = 0
+        rounding = 0
+        min_max: tuple[int, int | float] = (0, 0)
         for item in ("avgiterations", "smoothamount"):
             if item == "avgiterations":
-                dtype: type[int] | type[float] = int
+                dtype = int
                 text = "Iterations to Average:"
-                default: int | float = 500
+                default = 500
                 rounding = 25
-                min_max: tuple[int, int | float] = (25, 2500)
+                min_max = (25, 2500)
             elif item == "smoothamount":
                 dtype = float
                 text = "Smoothing Amount:"
@@ -577,3 +584,6 @@ class SessionPopUp(tk.Toplevel):
         self._vars.status.set("")
         self._vars.buildgraph.set(False)
         logger.debug("Built Graph")
+
+
+__all__ = get_module_objects(__name__)

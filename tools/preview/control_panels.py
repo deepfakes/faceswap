@@ -13,6 +13,7 @@ from configparser import ConfigParser
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.control_helper import ControlPanel, ControlPanelOption
 from lib.gui.utils import get_images
+from lib.utils import get_module_objects
 from plugins.plugin_loader import PluginLoader
 from plugins.convert._config import Config
 
@@ -502,7 +503,8 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.debug("Adding util buttons")
         frame = ttk.Frame(parent)
         frame.pack(padx=5, pady=(5, 10), side=tk.RIGHT, fill=tk.X, anchor=tk.E)
-
+        text = ""
+        action: T.Callable[[], T.Any] | None = None
         for utl in ("save", "clear", "reload"):
             logger.debug("Adding button: '%s'", utl)
             img = get_images().icons[utl]
@@ -516,6 +518,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                 text = _("Reset full config to saved values")
                 action = self._app.config_tools.reset_config_to_saved
 
+            assert action is not None
             btnutl = ttk.Button(frame,
                                 image=img,  # type:ignore[arg-type]
                                 command=action)
@@ -660,6 +663,8 @@ class ConfigFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         title = config_key.split(".")[1].replace("_", " ").title()
         btn_frame = ttk.Frame(self._action_frame)
         btn_frame.pack(padx=5, side=tk.BOTTOM, fill=tk.X)
+        text = ""
+        action = None
         for utl in ("save", "clear", "reload"):
             logger.debug("Adding button: '%s'", utl)
             img = get_images().icons[utl]
@@ -679,3 +684,6 @@ class ConfigFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             btnutl.pack(padx=2, side=tk.RIGHT)
             Tooltip(btnutl, text=text, wrap_length=200)
         logger.debug("Added util buttons")
+
+
+__all__ = get_module_objects(__name__)

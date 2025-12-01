@@ -3,6 +3,7 @@
 
 import cv2
 import numpy as np
+from lib.utils import get_module_objects
 from ._base import Adjustment
 
 
@@ -47,3 +48,6 @@ class Color(Adjustment):
         image = cv2.cvtColor(new_face.astype("uint8"),  # pylint:disable=no-member
                              getattr(cv2, f"COLOR_{conversion}")).astype("float32") / 255.0
         return image
+
+
+__all__ = get_module_objects(__name__)

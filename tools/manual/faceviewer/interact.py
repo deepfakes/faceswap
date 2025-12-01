@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from lib.align import DetectedFace
@@ -421,3 +422,6 @@ class ActiveFrame():
                 self._canvas.coords(mesh_id, *landmarks[key][idx].flatten())
                 self._canvas.itemconfig(mesh_id, state=state, **kwarg)
                 self._canvas.addtag_withtag(f"active_mesh_{key}", mesh_id)
+
+
+__all__ = get_module_objects(__name__)

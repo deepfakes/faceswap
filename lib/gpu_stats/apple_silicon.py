@@ -6,12 +6,13 @@ import os
 import psutil
 import torch
 
-from lib.utils import FaceswapError
+from lib.utils import FaceswapError, get_module_objects
+
 
 from ._base import _GPUStats
 
 
-_METAL_INITIALIZED: bool = False
+_metal_initialized: bool = False
 
 
 class AppleSiliconStats(_GPUStats):
@@ -57,12 +58,12 @@ class AppleSiliconStats(_GPUStats):
 
     def _initialize_metal(self) -> None:
         """ Initialize Metal on first call to this class and set global
-        :attr:``_METAL_INITIALIZED`` to ``True``. If Metal has already been initialized then return
+        :attr:``_metal_initialized`` to ``True``. If Metal has already been initialized then return
         performing no action.
         """
-        global _METAL_INITIALIZED  # pylint:disable=global-statement
+        global _metal_initialized  # pylint:disable=global-statement
 
-        if _METAL_INITIALIZED:
+        if _metal_initialized:
             return
 
         self._log("debug", "Performing first time Apple SoC setup.")
@@ -76,7 +77,7 @@ class AppleSiliconStats(_GPUStats):
 
         self._test_torch()
 
-        _METAL_INITIALIZED = True
+        _metal_initialized = True
 
     def _test_torch(self) -> None:
         """ Test that torch can execute correctly.
@@ -193,3 +194,6 @@ class AppleSiliconStats(_GPUStats):
         """
         self._log("warning", "Apple Silicon does not support excluding GPUs. This option has been "
                              "ignored")
+
+
+__all__ = get_module_objects(__name__)

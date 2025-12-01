@@ -10,6 +10,7 @@ import keras
 from torch.utils.tensorboard import SummaryWriter
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 logger = logging.getLogger(__name__)
 
@@ -138,3 +139,6 @@ class TorchTensorBoard(keras.callbacks.Callback):
         for writer in self._writers.values():
             writer.flush()
             writer.close()
+
+
+__all__ = get_module_objects(__name__)

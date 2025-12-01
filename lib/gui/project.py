@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import messagebox
 
 from lib.serializer import get_serializer
+from lib.utils import get_module_objects
 
 logger = logging.getLogger(__name__)
 
@@ -1030,3 +1031,6 @@ class LastSession(_GuiSession):
         if opts is not None:
             self._serializer.save(self._filename, opts)
             logger.debug("Saved last session. (filename: '%s', opts: %s", self._filename, opts)
+
+
+__all__ = get_module_objects(__name__)

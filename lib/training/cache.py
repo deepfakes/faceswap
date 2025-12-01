@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from lib.align import CenteringType, DetectedFace, LandmarkType
 from lib.image import read_image_batch, read_image_meta_batch
-from lib.utils import FaceswapError
+from lib.utils import FaceswapError, get_module_objects
 
 if T.TYPE_CHECKING:
     from lib.align.alignments import PNGHeaderAlignmentsDict, PNGHeaderDict
@@ -86,7 +86,7 @@ def _check_reset(face_cache: "_Cache") -> bool:
     return retval
 
 
-class _Cache():
+class _Cache():  # pylint:disable=too-many-instance-attributes
     """ A thread safe mechanism for collecting and holding face meta information (masks, "
     "alignments data etc.) for multiple :class:`TrainingDataGenerator`s.
 
@@ -537,3 +537,6 @@ class RingBuffer():
         retval = self._buffer[self._index]
         self._index += 1 if self._index < self._max_index else -self._max_index
         return retval
+
+
+__all__ = get_module_objects(__name__)

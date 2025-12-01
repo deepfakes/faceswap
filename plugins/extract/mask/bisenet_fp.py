@@ -17,6 +17,7 @@ from keras.layers import (
 from keras.models import Model
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 from plugins.extract._base import _get_config
 from ._base import BatchType, Masker, MaskerBatch
 
@@ -26,7 +27,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Mask(Masker):
+class Mask(Masker):  # pylint:disable=too-many-instance-attributes
     """ Neural network to process face image into a segmentation mask of the face """
     def __init__(self, **kwargs) -> None:
         self._is_faceswap, version = self._check_weights_selection(kwargs.get("configfile"))
@@ -603,3 +604,6 @@ class BiSeNet():
             The output from BiSeNet-FP
         """
         return self._model.predict(inputs, verbose=0, batch_size=self._batch_size)
+
+
+__all__ = get_module_objects(__name__)

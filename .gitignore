@@ -28,8 +28,11 @@
 !config/
 !.readthedocs.yml
 !docs/
-!docs/full**
-!docs/_static**
+!docs/_static/
+!docs/_static/*.png
+!docs/full/
+!docs/full/**/
+!docs/full/**/*.rst
 !locales/
 !locales/**
 

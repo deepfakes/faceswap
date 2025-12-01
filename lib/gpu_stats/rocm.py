@@ -11,6 +11,7 @@ import os
 import re
 from subprocess import run
 
+from lib.utils import get_module_objects
 from ._base import _GPUStats, _EXCLUDE_DEVICES
 
 _DEVICE_LOOKUP = {  # ref: https://gist.github.com/roalercon/51f13a387f3754615cce
@@ -471,3 +472,6 @@ class ROCm(_GPUStats):
 
         env_vars = [f"{k}: {v}" for k, v in os.environ.items() if k.lower().startswith("hip")]
         self._log("debug", f"HIP environmet variables: {env_vars}")
+
+
+__all__ = get_module_objects(__name__)

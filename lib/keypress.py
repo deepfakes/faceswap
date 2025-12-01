@@ -19,6 +19,8 @@ GNU General Public License for more details.
 import os
 import sys
 
+from lib.utils import get_module_objects
+
 # Windows
 if os.name == "nt":
     import msvcrt  # pylint:disable=import-error
@@ -28,6 +30,8 @@ else:
     import termios
     import atexit
     from select import select
+
+# pylint:disable=possibly-used-before-assignment
 
 
 class KBHit:
@@ -93,3 +97,6 @@ class KBHit:
             return msvcrt.kbhit()
         d_r, _, _ = select([sys.stdin], [], [], 0)
         return d_r != []
+
+
+__all__ = get_module_objects(__name__)

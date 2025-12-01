@@ -3,6 +3,7 @@
     for faceswap.py converter """
 
 import numpy as np
+from lib.utils import get_module_objects
 from ._base import Adjustment
 
 
@@ -39,3 +40,6 @@ class Color(Adjustment):
         interp_s_values = np.interp(s_quants, t_quants, t_values)
         new_channel[mask_indices] = interp_s_values[bin_idx]
         return new_channel
+
+
+__all__ = get_module_objects(__name__)

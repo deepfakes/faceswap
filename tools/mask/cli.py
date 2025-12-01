@@ -5,9 +5,11 @@ import gettext
 
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import (DirOrFileFullPaths, DirFullPaths, FileFullPaths, Radio, Slider)
+from lib.utils import get_module_objects
 from plugins.plugin_loader import PluginLoader
 
 
+# pylint:disable=duplicate-code
 # LOCALES
 _LANG = gettext.translation("tools.mask.cli", localedir="locales", fallback=True)
 _ = _LANG.gettext
@@ -243,3 +245,6 @@ class MaskArgs(FaceSwapArgs):
             "dest": "depr_input-type_it_I",
             "help": argparse.SUPPRESS})
         return argument_list
+
+
+__all__ = get_module_objects(__name__)

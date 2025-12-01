@@ -11,6 +11,8 @@ import cv2
 import numpy as np
 
 from keras.saving import load_model
+
+from lib.utils import get_module_objects
 from ._base import Aligner, AlignerBatch, BatchType
 
 if T.TYPE_CHECKING:
@@ -277,3 +279,6 @@ class Align(Aligner):
                                              resolution)
         logger.trace("Obtained points from prediction: %s",  # type:ignore[attr-defined]
                      batch.landmarks)
+
+
+__all__ = get_module_objects(__name__)

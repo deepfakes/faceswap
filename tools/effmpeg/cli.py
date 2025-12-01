@@ -5,7 +5,7 @@ import gettext
 
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import ContextFullPaths, FileFullPaths, Radio
-from lib.utils import IMAGE_EXTENSIONS
+from lib.utils import get_module_objects, IMAGE_EXTENSIONS
 
 
 # LOCALES
@@ -233,3 +233,6 @@ class EffmpegArgs(FaceSwapArgs):
             "dest": "depr_scale_sc_S",
             "help": argparse.SUPPRESS})
         return argument_list
+
+
+__all__ = get_module_objects(__name__)

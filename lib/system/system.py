@@ -17,6 +17,8 @@ import typing as T
 from shutil import which
 from subprocess import CalledProcessError, run
 
+from lib.utils import get_module_objects
+
 logger = logging.getLogger(__name__)
 
 
@@ -277,6 +279,9 @@ class Packages():
             return
         self._installed_conda = lines
         logger.debug("Installed Conda packages: %s", self.installed_conda)
+
+
+__all__ = get_module_objects(__name__)
 
 
 if __name__ == "__main__":

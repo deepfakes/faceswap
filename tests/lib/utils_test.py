@@ -2,8 +2,10 @@
 """ Pytest unit tests for :mod:`lib.utils` """
 import os
 import platform
+import sys
 import time
 import typing as T
+import types
 import zipfile
 
 from io import StringIO
@@ -18,8 +20,8 @@ import pytest_mock
 from lib import utils
 from lib.utils import (
     _Backend, camel_case_split, convert_to_secs, DebugTimes, deprecation_warning, FaceswapError,
-    full_path_split, get_backend, get_dpi, get_folder, get_image_paths, get_torch_version,
-    GetModel, safe_shutdown, set_backend)
+    full_path_split, get_backend, get_dpi, get_folder, get_image_paths, get_module_objects,
+    get_torch_version, GetModel, safe_shutdown, set_backend)
 
 from lib.logger import log_setup
 # Need to setup logging to avoid trace/verbose errors
@@ -145,6 +147,47 @@ def test_get_image_paths(tmp_path: str) -> None:
     exists = [os.path.join(test_folder, img)
               for img in os.listdir(test_folder) if os.path.splitext(img)[-1] == ".png"]
     assert sorted(get_image_paths(test_folder, extension=".png")) == sorted(exists)
+
+
+def test_get_module_objects(mocker: pytest_mock.MockerFixture):
+    """ Test :func:`lib.utils.get_module_objects` returns as expected """
+    # pylint:disable=too-few-public-methods,missing-class-docstring
+    test_module = types.ModuleType("our_mod")
+
+    class InternalPublic:
+        pass
+    InternalPublic.__module__ = "our_mod"
+    setattr(test_module, "InternalPublic", InternalPublic)
+
+    class _InternalPrivate:
+        pass
+    _InternalPrivate.__module__ = "our_mod"
+    setattr(test_module, "_InternalPrivate", _InternalPrivate)
+
+    class External:
+        pass
+    External.__module__ = "other_mod"
+    setattr(test_module, "External", External)
+
+    def func_public():
+        pass
+    func_public.__module__ = "our_mod"
+    setattr(test_module, "func_public", func_public)
+
+    def _func_private():
+        pass
+    _func_private.__module__ = "our_mod"
+    setattr(test_module, "_func_private", _func_private)
+
+    def func_external():
+        pass
+    func_external.__module__ = "other_mod"
+    setattr(test_module, "func_external", func_external)
+
+    mocker.patch.dict(sys.modules, {"our_mod": test_module})
+
+    result = get_module_objects("our_mod")
+    assert sorted(result, key=str.casefold) == ["func_public", "InternalPublic"]
 
 
 _PATHS = (  # type:ignore[var-annotated]

@@ -4,7 +4,7 @@ max-complexity=10
 statistics = true
 count = true
 exclude = [".git", "__pycache__"]
-per-file-ignores = {"__init__.py" = ["F401"]}
+per-file-ignores = ["__init__.py:F401"]
 
 [tool.pylint.DESIGN]
 min-public-methods = 1

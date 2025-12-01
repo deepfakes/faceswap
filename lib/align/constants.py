@@ -7,6 +7,8 @@ from enum import Enum
 
 import numpy as np
 
+from lib.utils import get_module_objects
+
 CenteringType = T.Literal["face", "head", "legacy"]
 
 EXTRACT_RATIOS: dict[CenteringType, float] = {"legacy": 0.375, "face": 0.5, "head": 0.625}
@@ -109,3 +111,6 @@ LANDMARK_PARTS: dict[LandmarkType, dict[str, tuple[int, int, bool]]] = {
             LandmarkType.LM_2D_4: {"face": (0, 4, True)}}
 """dict[:class:`LandmarkType`, dict[str, tuple[int, int, bool]]: For each landmark type, stores
 the (start index, end index, is polygon) information about each part of the face. """
+
+
+__all__ = get_module_objects(__name__)

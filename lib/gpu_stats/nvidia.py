@@ -2,9 +2,9 @@
 """ Collects and returns Information on available Nvidia GPUs. """
 import os
 
-import pynvml
+import pynvml  # pylint:disable=import-error
 
-from lib.utils import FaceswapError
+from lib.utils import FaceswapError, get_module_objects
 
 from ._base import _GPUStats, _EXCLUDE_DEVICES
 
@@ -94,6 +94,7 @@ class NvidiaStats(_GPUStats):
         list
             The list of device indices that are available for Faceswap to use
         """
+        # pylint:disable=duplicate-code
         devices = super()._get_active_devices()
         env_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
         if env_devices:
@@ -190,6 +191,7 @@ class NvidiaStats(_GPUStats):
         devices: list[int]
             The GPU device IDS to be excluded
         """
+        # pylint:disable=duplicate-code
         if not devices:
             return
         self._log("debug", f"Excluding GPU indicies: {devices}")
@@ -203,3 +205,6 @@ class NvidiaStats(_GPUStats):
 
         env_vars = [f"{k}: {v}" for k, v in os.environ.items() if k.lower().startswith("cuda")]
         self._log("debug", f"Cuda environmet variables: {env_vars}")
+
+
+__all__ = get_module_objects(__name__)

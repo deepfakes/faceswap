@@ -5,10 +5,12 @@ from __future__ import annotations
 import logging
 import typing as T
 
-logger = logging.getLogger(__name__)
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
-    from keras.models import Model
+    from keras import models
+
+logger = logging.getLogger(__name__)
 
 
 class LearningRateWarmup():
@@ -23,7 +25,7 @@ class LearningRateWarmup():
     steps : int
         The number of iterations to warmup the learning rate for
     """
-    def __init__(self, model: Model, target_learning_rate: float, steps: int) -> None:
+    def __init__(self, model: models.Model, target_learning_rate: float, steps: int) -> None:
         self._model = model
         self._target_lr = target_learning_rate
         self._steps = steps
@@ -98,3 +100,6 @@ class LearningRateWarmup():
         self._current_step += 1
         self._set_learning_rate()
         self._output_status()
+
+
+__all__ = get_module_objects(__name__)

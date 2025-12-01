@@ -9,6 +9,7 @@ from tkinter import messagebox, ttk
 from lib.gui import (TaskBar, CliOptions, CommandNotebook, ConsoleOut, DisplayNotebook,
                      get_images, initialize_images, initialize_config, LastSession,
                      MainMenuBar, preview_trigger, ProcessWrapper, StatusBar)
+from lib.utils import get_module_objects
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +21,13 @@ class FaceswapGui(tk.Tk):
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__()
 
-        self._init_args = dict(debug=debug)
+        self._init_args = {"debug": debug}
         self._config = self.initialize_globals()
         self.set_fonts()
         self._config.set_geometry(1200, 640, self._config.user_config_dict["fullscreen"])
 
         self.wrapper = ProcessWrapper()
-        self.objects = dict()
+        self.objects = {}
 
         get_images().delete_preview()
         preview_trigger().clear(trigger_type=None)
@@ -126,7 +127,7 @@ class FaceswapGui(tk.Tk):
         logger.debug("Redrawing GUI")
         session_state = self._last_session.to_dict()
         self._config.refresh_config()
-        get_images().__init__()
+        get_images().__init__()  # pylint:disable=unnecessary-dunder-call
         self.set_fonts()
         self.build_gui(rebuild=True)
         if session_state is not None:
@@ -181,3 +182,6 @@ class Gui():
     def process(self):
         """ Builds the GUI """
         self.root.mainloop()
+
+
+__all__ = get_module_objects(__name__)

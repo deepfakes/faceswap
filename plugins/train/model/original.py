@@ -9,6 +9,7 @@ from.
 from keras import Input, layers, Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
+from lib.utils import get_module_objects
 from ._base import ModelBase
 
 
@@ -149,3 +150,6 @@ class Model(ModelBase):
             var_y = Conv2DOutput(1, 5, name=f"mask_out_{side}")(var_y)
             outputs.append(var_y)
         return KModel(input_, outputs=outputs, name=f"decoder_{side}")
+
+
+__all__ = get_module_objects(__name__)

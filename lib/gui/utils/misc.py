@@ -8,6 +8,8 @@ import typing as T
 from threading import Event, Thread
 from queue import Queue
 
+from lib.utils import get_module_objects
+
 from .config import get_config
 
 if T.TYPE_CHECKING:
@@ -107,3 +109,6 @@ class LongRunningTask(Thread):
         logger.debug("Got result from thread")
         self._config.set_cursor_default(widget=self._widget)
         return retval
+
+
+__all__ = get_module_objects(__name__)

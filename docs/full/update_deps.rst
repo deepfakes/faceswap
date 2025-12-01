@@ -1,8 +1,3 @@
-******************
-update_deps module
-******************
-
-.. automodule:: update_deps
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: update_deps
+   :include-all-objects:
+   :no-inheritance-diagram:

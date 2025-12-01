@@ -63,13 +63,13 @@ def test_group_normalization(dummy):  # pylint:disable=unused-argument
                input_shape=(3, 64))
 
 
-_PARAMS = ["center", "scale"]
-_VALUES = list(product([True, False], repeat=len(_PARAMS)))
-_IDS = [f"{'|'.join([_PARAMS[idx] for idx, b in enumerate(v) if b])}[{get_backend().upper()}]"
-        for v in _VALUES]
+_PARAMS_NORM = ["center", "scale"]
+_VALUES_NORM = list(product([True, False], repeat=len(_PARAMS_NORM)))
+_IDS = [f"{'|'.join([_PARAMS_NORM[idx] for idx, b in enumerate(v) if b])}[{get_backend().upper()}]"
+        for v in _VALUES_NORM]
 
 
-@pytest.mark.parametrize(_PARAMS, _VALUES, ids=_IDS)
+@pytest.mark.parametrize(_PARAMS_NORM, _VALUES_NORM, ids=_IDS)
 def test_adain_normalization(center, scale):
     """ Basic test for Ada Instance Normalization. """
     with device("cpu"):

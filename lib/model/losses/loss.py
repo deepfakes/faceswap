@@ -10,6 +10,7 @@ from keras import Loss, backend as K
 from keras import ops, Variable
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if K.backend() == "torch":
     import torch  # pylint:disable=import-error
@@ -702,3 +703,6 @@ class LossWrapper(Loss):
         m_pred = y_pred[..., :3] * mask
 
         return m_true, m_pred
+
+
+__all__ = get_module_objects(__name__)

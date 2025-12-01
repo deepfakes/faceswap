@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from lib.logger import parse_class_init
 from lib.serializer import get_serializer
-from lib.utils import FaceswapError
+from lib.utils import get_module_objects, FaceswapError
 
 from .media import Faces, Frames
 from .jobs_faces import FaceToFile
@@ -34,9 +34,9 @@ class Check:
 
     Parameters
     ---------
-    alignments: :class:`tools.alignments.media.AlignmentsData`
+    alignments : :class:`tools.alignments.media.AlignmentsData`
         The loaded alignments corresponding to the frames to be annotated
-    arguments: :class:`argparse.Namespace`
+    arguments : :class:`argparse.Namespace`
         The command line arguments that have called this job
     """
     def __init__(self, alignments: AlignmentData, arguments: Namespace) -> None:
@@ -58,7 +58,7 @@ class Check:
 
         Parameters
         ----------
-        arguments: :class:`argparse.Namespace`
+        arguments : :class:`argparse.Namespace`
             The command line arguments for the Alignments tool
 
         Returns
@@ -87,7 +87,7 @@ class Check:
 
         Returns
         -------
-        list
+        list[dict[str, str]] | list[tuple[str, :class:`~lib.align.alignments.PNGHeaderDict`]]
             Sorted list of dictionaries for either faces or frames. If faces the dictionaries
             have the current filename as key, with the header source data as value. If frames
             the dictionaries will contain the keys 'frame_fullname', 'frame_name', 'extension'.
@@ -128,7 +128,7 @@ class Check:
 
         Returns
         -------
-        list
+        list[str] | list[tuple[str, int]]
             List of filenames or filenames and face indices for the selected criteria
         """
         action = self._job.replace("-", "_")
@@ -160,12 +160,11 @@ class Check:
 
         Yields
         ------
-        str or tuple
+        str | tuple
             The frame name of any frames which have multiple faces and potentially the face id
         """
         process_type = getattr(self, f"_get_multi_faces_{self._type}")
-        for item in process_type():
-            yield item
+        yield from process_type()
 
     def _get_multi_faces_frames(self) -> Generator[str, None, None]:
         """ Return Frames that contain multiple faces
@@ -190,7 +189,7 @@ class Check:
 
         Yields
         ------
-        tuple
+        tuple[str, int]
             The frame name and the face id of any frames which have multiple faces
         """
         self.output_message = "Multiple faces in frame"
@@ -243,7 +242,7 @@ class Check:
 
         Parameters
         ----------
-        items_output
+        items_output : list[str]
             The list of frame names, and potentially face ids, of any items which met the
             selection criteria
         """
@@ -303,9 +302,9 @@ class Check:
 
         Parameters
         ----------
-        output_message: str
+        output_message : str
             The message to write out to file
-        items_discovered: int
+        items_discovered : int
             The number of items which matched the criteria
         """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -322,7 +321,7 @@ class Check:
 
         Parameters
         ----------
-        items_output: list
+        items_output : list[str] | list[tuple[str, int]]
             List of items to move
         """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -341,9 +340,9 @@ class Check:
 
         Parameters
         ----------
-        output_folder: str
+        output_folder : str
             The folder to move the output to
-        items_output: list
+        items_output : list
             List of items to move
         """
         logger.info("Moving %s frame(s) to '%s'", len(items_output), output_folder)
@@ -358,9 +357,9 @@ class Check:
 
         Parameters
         ----------
-        output_folder: str
+        output_folder : str
             The folder to move the output to
-        items_output: list
+        items_output : list
             List of items and face indices to move
         """
         logger.info("Moving %s faces(s) to '%s'", len(items_output), output_folder)
@@ -378,11 +377,11 @@ class Check:
 class Export:
     """ Export alignments from a Faceswap .fsa file to a json formatted file.
 
-        Parameters
+    Parameters
     ----------
-    alignments: :class:`tools.lib_alignments.media.AlignmentData`
+    alignments : :class:`tools.lib_alignments.media.AlignmentData`
         The alignments data loaded from an alignments file for this rename job
-    arguments: :class:`argparse.Namespace`
+    arguments : :class:`argparse.Namespace`
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`. Unused
     """
     def __init__(self,
@@ -423,7 +422,7 @@ class Export:
 
         Parameters
         ----------
-        face: :class:`~lib.align.alignments.AlignmentFileDict`
+        face : :class:`~lib.align.alignments.AlignmentFileDict`
             The alignment dictionary for a face to process
 
         Returns
@@ -454,9 +453,9 @@ class Sort:
 
     Parameters
     ----------
-    alignments: :class:`tools.lib_alignments.media.AlignmentData`
+    alignments : :class:`tools.lib_alignments.media.AlignmentData`
         The alignments data loaded from an alignments file for this rename job
-    arguments: :class:`argparse.Namespace`
+    arguments : :class:`argparse.Namespace`
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`. Unused
     """
     def __init__(self,
@@ -476,7 +475,13 @@ class Sort:
                            "processed then you should run the 'Extract' job to regenerate it.")
 
     def reindex_faces(self) -> int:
-        """ Re-Index the faces """
+        """ Re-Index the faces
+
+        Returns
+        -------
+        int
+            The count of re-indexed faces
+        """
         reindexed = 0
         for alignment in tqdm(self._alignments.yield_faces(),
                               desc="Sort alignment indexes",
@@ -503,9 +508,9 @@ class Spatial:
 
     Parameters
     ----------
-    alignments: :class:`tools.lib_alignments.media.AlignmentData`
+    alignments : :class:`tools.lib_alignments.media.AlignmentData`
         The alignments data loaded from an alignments file for this rename job
-    arguments: :class:`argparse.Namespace`
+    arguments : :class:`argparse.Namespace`
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`
 
     Reference
@@ -546,16 +551,16 @@ class Spatial:
 
         Parameters
         ----------
-        shaped_im_coords: :class:`numpy.ndarray`
+        shaped_im_coords : :class:`numpy.ndarray`
             The facial landmarks
 
         Returns
         -------
-        shapes_normalized: :class:`numpy.ndarray`
+        shapes_normalized : :class:`numpy.ndarray`
             The normalized shapes
-        scale_factors: :class:`numpy.ndarray`
+        scale_factors : :class:`numpy.ndarray`
             The scale factors
-        mean_coords: :class:`numpy.ndarray`
+        mean_coords : :class:`numpy.ndarray`
             The mean coordinates
         """
         logger.debug("Normalize shapes")
@@ -583,11 +588,11 @@ class Spatial:
 
         Parameters
         ----------
-        shapes_normalized: :class:`numpy.ndarray`
+        shapes_normalized : :class:`numpy.ndarray`
             The normalized shapes
-        scale_factors: :class:`numpy.ndarray`
+        scale_factors : :class:`numpy.ndarray`
             The scale factors
-        mean_coords: :class:`numpy.ndarray`
+        mean_coords : :class:`numpy.ndarray`
             The mean coordinates
 
         Returns
@@ -689,7 +694,7 @@ class Spatial:
 
         Parameters
         ----------
-        landmarks: :class:`numpy.ndarray`
+        landmarks : :class:`numpy.ndarray`
             68 point landmarks to be temporally smoothed
 
         Returns
@@ -715,7 +720,7 @@ class Spatial:
 
         Parameters
         ----------
-        landmarks: :class:`numpy.ndarray`
+        landmarks : :class:`numpy.ndarray`
             The smoothed landmarks
         """
         logger.debug("Update alignments")
@@ -727,3 +732,6 @@ class Spatial:
             logger.trace("Updated: (frame: '%s', landmarks: %s)",  # type:ignore
                          frame, landmarks_xy)
         logger.debug("Updated alignments")
+
+
+__all__ = get_module_objects(__name__)

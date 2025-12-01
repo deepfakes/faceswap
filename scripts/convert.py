@@ -14,7 +14,8 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from scripts.fsmedia import Alignments, PostProcess, finalize
+from scripts import fsmedia
+from scripts.fsmedia import PostProcess, finalize
 from lib.serializer import get_serializer
 from lib.convert import Converter
 from lib.align import AlignedFace, DetectedFace, update_legacy_png_header
@@ -22,7 +23,8 @@ from lib.gpu_stats import GPUStats
 from lib.image import read_image_meta_batch, ImagesLoader
 from lib.multithreading import MultiThread, total_cpus
 from lib.queue_manager import queue_manager
-from lib.utils import FaceswapError, get_folder, get_image_paths, handle_deprecated_cliopts
+from lib.utils import (get_module_objects, FaceswapError, get_folder,
+                       get_image_paths, handle_deprecated_cliopts)
 from plugins.extract import ExtractMedia, Extractor
 from plugins.plugin_loader import PluginLoader
 
@@ -127,15 +129,15 @@ class Convert():
         logger.debug(retval)
         return retval
 
-    def _get_alignments(self) -> Alignments:
+    def _get_alignments(self) -> fsmedia.Alignments:
         """ Perform validation checks and legacy updates and return alignemnts object
 
         Returns
         -------
-        :class:`~lib.align.alignments.Alignments`
+        :class:`~scripts.fsmedia.Alignments`
             The alignments file for the extract job
         """
-        retval = Alignments(self._args, False, self._images.is_video)
+        retval = fsmedia.Alignments(self._args, False, self._images.is_video)
         if retval.version == 1.0:
             logger.error("The alignments file format has been updated since the given alignments "
                          "file was generated. You need to update the file to proceed.")
@@ -280,7 +282,7 @@ class Convert():
             thread.check_and_raise_error()
 
 
-class DiskIO():
+class DiskIO():  # pylint:disable=too-many-instance-attributes
     """ Disk Input/Output for the converter process.
 
     Background threads to:
@@ -289,7 +291,7 @@ class DiskIO():
 
     Parameters
     ----------
-    alignments: :class:`lib.alignmnents.Alignments`
+    alignments: :class:`scripts.fsmedia.Alignments`
         The alignments for the input video
     images: :class:`lib.image.ImagesLoader`
         The input images
@@ -301,7 +303,7 @@ class DiskIO():
     """
 
     def __init__(self,
-                 alignments: Alignments,
+                 alignments: fsmedia.Alignments,
                  images: ImagesLoader,
                  predictor: Predict,
                  arguments: Namespace) -> None:
@@ -1123,13 +1125,13 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
         line arguments
     input_images : list[str]
         List of input image files
-    alignments : :class:`lib.align.Alignments`
+    alignments : :class:`scripts.fsmedia.Alignments`
         The alignments file for this conversion
     """
     def __init__(self,
                  arguments: Namespace,
                  input_images: list[str],
-                 alignments: Alignments) -> None:
+                 alignments: fsmedia.Alignments) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._args = arguments
         self._input_images = input_images
@@ -1201,3 +1203,6 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
             logger.warning("Aligned directory contains far fewer images than the input "
                            "directory, are you sure this is the right folder?")
         return retval
+
+
+__all__ = get_module_objects(__name__)

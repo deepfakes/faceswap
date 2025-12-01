@@ -16,7 +16,7 @@ from keras import layers, ops, Variable, models, saving
 import numpy as np
 
 from lib.model.layers import QuickGELU
-from lib.utils import GetModel
+from lib.utils import get_module_objects, GetModel
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -61,7 +61,7 @@ class ViTConfig:
             isinstance(self.layer_conf, int) and self.patch > 0)
 
 
-ModelConfig: dict[TypeModels, ViTConfig] = {  # Each model has a different set of parameters
+MODEL_CONFIG: dict[TypeModels, ViTConfig] = {  # Each model has a different set of parameters
     "RN50": ViTConfig(
         embed_dim=1024, resolution=224, layer_conf=(3, 4, 6, 3), width=64, patch=0, git_id=21),
     "RN101": ViTConfig(
@@ -763,12 +763,12 @@ class ViT():
                  load_weights: bool = False) -> None:
         logger.debug("Initializing: %s (name: %s, input_size: %s, load_weights: %s)",
                      self.__class__.__name__, name, input_size, load_weights)
-        assert name in ModelConfig, ("Name must be one of %s", list(ModelConfig))
+        assert name in MODEL_CONFIG, ("Name must be one of %s", list(MODEL_CONFIG))
 
         self._name = name
         self._load_weights = load_weights
 
-        config = ModelConfig[name]
+        config = MODEL_CONFIG[name]
         self._git_id = config.git_id
 
         res = input_size if input_size is not None else config.resolution
@@ -853,3 +853,6 @@ for name_, obj in inspect.getmembers(sys.modules[__name__]):
     if (inspect.isclass(obj) and issubclass(obj, layers.Layer)
             and obj.__module__ == __name__):
         saving.get_custom_objects().update({name_: obj})
+
+
+__all__ = get_module_objects(__name__)

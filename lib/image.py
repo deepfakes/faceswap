@@ -23,7 +23,9 @@ from tqdm import tqdm
 
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager, QueueEmpty
-from lib.utils import convert_to_secs, FaceswapError, VIDEO_EXTENSIONS, get_image_paths
+from lib.utils import (convert_to_secs, FaceswapError, get_image_paths,
+                       get_module_objects, VIDEO_EXTENSIONS)
+
 
 if T.TYPE_CHECKING:
     from lib.align.alignments import PNGHeaderDict
@@ -1623,3 +1625,6 @@ class ImagesSaver(ImageIO):
         logger.debug("Putting EOF to save queue")
         self._queue.put("EOF")
         super().close()
+
+
+__all__ = get_module_objects(__name__)

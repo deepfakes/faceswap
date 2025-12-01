@@ -22,7 +22,7 @@ from lib.system import Cuda, Packages, ROCm, System
 # _SysInfo
 @pytest.fixture(name="sys_info_instance")
 def sys_info_fixture() -> _SysInfo:
-    """ Single :class:~`lib.system.sysinfo._SysInfo` object for tests """
+    """ Single :class:`~lib.system.sysinfo._SysInfo` object for tests """
     return _SysInfo()
 
 

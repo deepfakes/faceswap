@@ -1,7 +1,3 @@
-convert module
-==============
-
-.. automodule:: lib.convert
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: lib.convert
+   :include-all-objects:
+   :no-inheritance-diagram:

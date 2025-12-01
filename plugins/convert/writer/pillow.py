@@ -5,6 +5,7 @@ from PIL import Image
 
 import numpy as np
 
+from lib.utils import get_module_objects
 from ._base import Output, logger
 
 
@@ -29,6 +30,7 @@ class Writer(Output):
 
     def _check_transparency_format(self) -> None:
         """ Make sure that the output format is correct if draw_transparent is selected """
+        # pylint:disable=duplicate-code
         transparent = self.config["draw_transparent"]
         if not transparent or (transparent and self.config["format"] in ("png", "tif")):
             return
@@ -132,3 +134,6 @@ class Writer(Output):
     def close(self) -> None:
         """ Does nothing as Pillow writer does not need a close method """
         return
+
+
+__all__ = get_module_objects(__name__)

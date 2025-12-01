@@ -16,6 +16,7 @@ from subprocess import PIPE, Popen
 
 from lib.logger import log_setup
 from lib.system import Cuda, Packages, ROCm, System
+from lib.utils import get_module_objects
 from requirements.requirements import Requirements, PYTHON_VERSIONS
 
 if T.TYPE_CHECKING:
@@ -1007,3 +1008,6 @@ if __name__ == "__main__":
     if _InstallState.failed:
         sys.exit(1)
     Install(ENV)
+
+
+__all__ = get_module_objects(__name__)

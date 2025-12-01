@@ -7,6 +7,8 @@ import numpy as np
 import cv2
 from PIL import Image, ImageTk
 
+from lib.utils import get_module_objects
+
 from ._base import ControlPanelOption, Editor, logger
 
 # LOCALES
@@ -605,3 +607,6 @@ class Mask(Editor):
                            for idx, coord in enumerate(current_coords))
         logger.trace("Adjusting brush coordinates from %s to %s", current_coords, new_coords)
         self._canvas.coords(self._mouse_location[0], new_coords)
+
+
+__all__ = get_module_objects(__name__)

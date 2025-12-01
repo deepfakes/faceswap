@@ -8,6 +8,7 @@ import numpy as np
 from lib.align import AlignedFace
 from lib.gui.custom_widgets import RightClickMenu
 from lib.gui.utils import get_config
+from lib.utils import get_module_objects
 from ._base import Editor, logger
 
 
@@ -132,6 +133,7 @@ class ExtractBox(Editor):
         bool
             ``True`` if cursor is over an anchor point otherwise ``False``
         """
+        # pylint:disable=duplicate-code
         anchors = set(self._canvas.find_withtag("eb_anc_grb"))
         item_ids = set(self._canvas.find_withtag("current")).intersection(anchors)
         if not item_ids:
@@ -192,6 +194,7 @@ class ExtractBox(Editor):
         bool
             ``True`` if cursor is over a rotate point otherwise ``False``
         """
+        # pylint:disable=duplicate-code
         distance = 30
         boxes = np.array([np.array(self._canvas.coords(item_id)).reshape(4, 2)
                           for item_id in self._canvas.find_withtag("eb_box")
@@ -208,6 +211,7 @@ class ExtractBox(Editor):
     # Mouse click actions
     def set_mouse_click_actions(self):
         """ Add context menu to OS specific right click action. """
+        # pylint:disable=duplicate-code
         super().set_mouse_click_actions()
         self._canvas.bind("<Button-2>" if platform.system() == "Darwin" else "<Button-3>",
                           self._context_menu)
@@ -406,3 +410,6 @@ class ExtractBox(Editor):
         if self._mouse_location is None or self._mouse_location[0] != "box":
             return
         self._det_faces.update.delete(self._globals.frame_index, self._mouse_location[1])
+
+
+__all__ = get_module_objects(__name__)

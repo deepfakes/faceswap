@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from lib.gui._config import Config as UserConfig
 from lib.gui.project import Project, Tasks
 from lib.gui.theme import Style
+from lib.utils import get_module_objects
+
 from .file_handler import FileHandler
 
 if T.TYPE_CHECKING:
@@ -23,7 +25,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 PATHCACHE = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])), "lib", "gui", ".cache")
-_CONFIG: Config | None = None
+_config: Config | None = None
 
 
 def initialize_config(root: tk.Tk,
@@ -49,13 +51,13 @@ def initialize_config(root: tk.Tk,
         ``None`` if the config has already been initialized otherwise the global configuration
         options
     """
-    global _CONFIG  # pylint:disable=global-statement
-    if _CONFIG is not None:
+    global _config  # pylint:disable=global-statement
+    if _config is not None:
         return None
     logger.debug("Initializing config: (root: %s, cli_opts: %s, "
                  "statusbar: %s)", root, cli_opts, statusbar)
-    _CONFIG = Config(root, cli_opts, statusbar)
-    return _CONFIG
+    _config = Config(root, cli_opts, statusbar)
+    return _config
 
 
 def get_config() -> "Config":
@@ -66,8 +68,8 @@ def get_config() -> "Config":
     :class:`Config`
         The Master GUI Config
     """
-    assert _CONFIG is not None
-    return _CONFIG
+    assert _config is not None
+    return _config
 
 
 class GlobalVariables():
@@ -155,7 +157,7 @@ class _GuiObjects:
     command_notebook: CommandNotebook | None = None
 
 
-class Config():
+class Config():  # pylint:disable=too-many-public-methods
     """ The centralized configuration class for holding items that should be made available to all
     parts of the GUI.
 
@@ -455,3 +457,6 @@ class Config():
         else:
             self.root.geometry(f"{str(initial_dimensions[0])}x{str(initial_dimensions[1])}+80+80")
         logger.debug("Geometry: %sx%s", *initial_dimensions)
+
+
+__all__ = get_module_objects(__name__)

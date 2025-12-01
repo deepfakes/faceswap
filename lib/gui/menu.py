@@ -12,7 +12,7 @@ import webbrowser
 from lib.git import git
 from lib.multithreading import MultiThread
 from lib.serializer import get_serializer, Serializer
-from lib.utils import FaceswapError
+from lib.utils import FaceswapError, get_module_objects
 import update_deps
 
 from .popup_configure import open_popup
@@ -623,3 +623,6 @@ class TaskBar(ttk.Frame):  # pylint:disable=too-many-ancestors
         frame.pack(side=tk.BOTTOM, fill=tk.X)
         separator = ttk.Separator(frame, orient="horizontal")
         separator.pack(fill=tk.X, side=tk.LEFT, expand=True)
+
+
+__all__ = get_module_objects(__name__)

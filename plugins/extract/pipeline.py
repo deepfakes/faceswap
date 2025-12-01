@@ -15,7 +15,7 @@ from lib.gpu_stats import GPUStats
 from lib.logger import parse_class_init
 from lib.queue_manager import EventQueue, queue_manager, QueueEmpty
 from lib.serializer import get_serializer
-from lib.utils import get_backend, FaceswapError
+from lib.utils import get_backend, get_module_objects, FaceswapError
 from plugins.plugin_loader import PluginLoader
 
 if T.TYPE_CHECKING:
@@ -30,17 +30,17 @@ if T.TYPE_CHECKING:
     from . import ExtractMedia
 
 logger = logging.getLogger(__name__)
-_INSTANCES = -1  # Tracking for multiple instances of pipeline
+_instances = -1  # Tracking for multiple instances of pipeline
 
 
 def _get_instance():
-    """ Increment the global :attr:`_INSTANCES` and obtain the current instance value """
-    global _INSTANCES  # pylint:disable=global-statement
-    _INSTANCES += 1
-    return _INSTANCES
+    """ Increment the global :attr:`_instances` and obtain the current instance value """
+    global _instances  # pylint:disable=global-statement
+    _instances += 1
+    return _instances
 
 
-class Extractor():
+class Extractor():  # pylint:disable=too-many-instance-attributes
     """ Creates a :mod:`~plugins.extract.detect`/:mod:`~plugins.extract.align``/\
     :mod:`~plugins.extract.mask` pipeline and yields results frame by frame from the
     :attr:`detected_faces` generator
@@ -92,7 +92,7 @@ class Extractor():
         The current phase that the pipeline is running. Used in conjunction with :attr:`passes` and
         :attr:`final_pass` to indicate to the caller which phase is being processed
     """
-    def __init__(self,
+    def __init__(self,  # pylint:disable=too-many-arguments,too-many-positional-arguments
                  detector: str | None,
                  aligner: str | None,
                  masker: str | list[str] | None,
@@ -347,6 +347,7 @@ class Extractor():
 
         last_fname = ""
         is_68_point = True
+        data = {}
         for plugin in import_plugins:
             plugin_type = plugin.__class__.__name__
             path = os.path.join(folder, plugin.config["file_name"])
@@ -869,3 +870,6 @@ class Extractor():
         """ Check all threads for errors and raise if one occurs """
         for plugin in self._active_plugins:
             plugin.check_and_raise_error()
+
+
+__all__ = get_module_objects(__name__)

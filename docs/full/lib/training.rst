@@ -1,57 +1,33 @@
-****************
-training package
-****************
+*********************
+lib.training package
+*********************
 
-The training Package handles the processing of faces for feeding into a Faceswap model.
+The training Package handles libraries to assist with training a model
 
 .. contents:: Contents
    :local:
+   :depth: 2
 
-training.augmentation module
-============================
+.. automodapi:: lib.training.augmentation
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-.. automodule:: lib.training.augmentation
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: lib.training.cache
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-training.cache module
-=====================
+.. automodapi:: lib.training.generator
+   :include-all-objects:
 
-.. automodule:: lib.training.cache
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: lib.training.lr_finder
+   :include-all-objects:
 
+.. automodapi:: lib.training.lr_warmup
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-training.generator module
-=========================
+.. automodapi:: lib.training.preview_cv
+   :include-all-objects:
 
-.. automodule:: lib.training.generator
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-training.lr_finder module
-=========================
-
-.. automodule:: lib.training.lr_finder
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-training.preview_cv module
-==========================
-
-.. automodule:: lib.training.preview_cv
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-training.preview_tk module
-==========================
-
-.. automodule:: lib.training.preview_tk
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: lib.training.preview_tk
+   :include-all-objects:

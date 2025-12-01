@@ -11,7 +11,8 @@ from importlib import import_module
 
 from lib.gpu_stats import GPUStats
 from lib.logger import crash_log, log_setup
-from lib.utils import FaceswapError, get_backend, get_torch_version, safe_shutdown, set_backend
+from lib.utils import (FaceswapError, get_backend, get_torch_version,
+                       get_module_objects, safe_shutdown, set_backend)
 
 if T.TYPE_CHECKING:
     import argparse
@@ -240,3 +241,6 @@ class ScriptExecutor():
             logger.info(msg)
 
         logger.debug("Executing: %s. PID: %s", self._command, os.getpid())
+
+
+__all__ = get_module_objects(__name__)

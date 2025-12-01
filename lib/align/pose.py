@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .constants import _MEAN_FACE, LandmarkType
 
@@ -185,3 +186,6 @@ class PoseEstimate():
                 offset[key] = center - np.array([0.5, 0.5])
         logger.trace("offset: %s", offset)  # type:ignore[attr-defined]
         return offset
+
+
+__all__ = get_module_objects(__name__)

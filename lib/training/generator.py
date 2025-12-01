@@ -15,7 +15,7 @@ from lib.align import AlignedFace, DetectedFace
 from lib.align.aligned_face import CenteringType
 from lib.image import read_image_batch
 from lib.multithreading import BackgroundGenerator
-from lib.utils import FaceswapError
+from lib.utils import FaceswapError, get_module_objects
 
 from . import ImageAugmentation
 from .cache import get_cache, RingBuffer
@@ -970,3 +970,6 @@ class Feeder():
                                                   batch_size=batch_size,
                                                   images=imgs).minibatch_ab(do_shuffle=False)
         logger.debug("Set time-lapse feed: %s", self._display_feeds["timelapse"])
+
+
+__all__ = get_module_objects(__name__)

@@ -6,6 +6,8 @@ import logging
 import tkinter as tk
 from tkinter import ttk
 
+from lib.utils import get_module_objects
+
 from .custom_widgets import Tooltip
 from .utils import get_images
 
@@ -141,8 +143,7 @@ class DisplayPage(ttk.Frame):  # pylint:disable=too-many-ancestors
             subnotebook frame """
         logger.debug("Getting subnotebook widgets")
         for child in self.subnotebook.winfo_children():
-            for widget in child.winfo_children():
-                yield widget
+            yield from child.winfo_children()
 
     def subnotebook_get_titles_ids(self):
         """ Return tabs ids and titles """
@@ -285,3 +286,6 @@ class DisplayOptionalPage(DisplayPage):  # pylint:disable=too-many-ancestors
         for child in self.winfo_children():
             logger.debug("Destroying child: %s", child)
             child.destroy()
+
+
+__all__ = get_module_objects(__name__)

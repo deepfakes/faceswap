@@ -17,6 +17,7 @@ from keras.models import Model
 from keras import initializers, ops
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 from ._base import BatchType, Detector
 
 if T.TYPE_CHECKING:
@@ -548,3 +549,6 @@ class S3fd():
             The output from S3FD
         """
         return self._model.predict(inputs, verbose=0, batch_size=self._batch_size)
+
+
+__all__ = get_module_objects(__name__)

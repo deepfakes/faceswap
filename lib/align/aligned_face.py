@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .constants import CenteringType, EXTRACT_RATIOS, LandmarkType, _MEAN_FACE
 from .pose import PoseEstimate
@@ -769,3 +770,6 @@ def _umeyama(source: np.ndarray, destination: np.ndarray, estimate_scale: bool) 
     retval[:dim, :dim] *= scale
 
     return retval
+
+
+__all__ = get_module_objects(__name__)

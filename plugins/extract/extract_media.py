@@ -7,6 +7,7 @@ import typing as T
 import cv2
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     import numpy as np
@@ -208,3 +209,6 @@ class ExtractMedia:
         :class:`numpy.ndarray`:
             A copy of :attr:`image` in gray-scale color format """
         return cv2.cvtColor(self.image.copy(), cv2.COLOR_BGR2GRAY)
+
+
+__all__ = get_module_objects(__name__)

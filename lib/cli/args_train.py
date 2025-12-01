@@ -4,6 +4,7 @@ import argparse
 import gettext
 import typing as T
 
+from lib.utils import get_module_objects
 from plugins.plugin_loader import PluginLoader
 
 from .actions import DirFullPaths, FileFullPaths, Radio, Slider
@@ -391,3 +392,6 @@ class TrainArgs(FaceSwapArgs):
             "dest": "depr_no-warp_nw_W",
             "help": argparse.SUPPRESS})
         return argument_list
+
+
+__all__ = get_module_objects(__name__)

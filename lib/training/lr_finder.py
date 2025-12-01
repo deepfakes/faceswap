@@ -14,6 +14,7 @@ import numpy as np
 from tqdm import tqdm
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from keras import optimizers
@@ -31,7 +32,7 @@ class LRStrength(Enum):
     EXTREME = 2.5
 
 
-class LearningRateFinder:
+class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
     """ Learning Rate Finder
 
     Parameters
@@ -248,3 +249,6 @@ class LearningRateFinder:
         output = os.path.join(self._model.io.model_dir, f"learning_rate_finder_{now}.png")
         logger.info("Saving Learning Rate Finder graph to: '%s'", output)
         plt.savefig(output)
+
+
+__all__ = get_module_objects(__name__)

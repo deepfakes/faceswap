@@ -10,7 +10,7 @@ import typing as T
 import numpy as np
 
 from lib.align import AlignedFace
-from lib.utils import FaceswapError, IMAGE_EXTENSIONS
+from lib.utils import get_module_objects, FaceswapError, IMAGE_EXTENSIONS
 
 from ._base import Detector
 
@@ -351,3 +351,6 @@ class Detect(Detector):
                            len(self._imported), self.config["file_name"])
             logger.verbose(  # type:ignore[attr-defined]
                 "[DETECT] import file items not in input frames: %s", list(self._imported))
+
+
+__all__ = get_module_objects(__name__)

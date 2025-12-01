@@ -8,7 +8,7 @@ from tkinter import ttk
 import numpy as np
 
 from lib.serializer import get_serializer
-from lib.utils import FaceswapError
+from lib.utils import FaceswapError, get_module_objects
 
 
 logger = logging.getLogger(__name__)
@@ -313,7 +313,12 @@ class _Widgets():
         self._style.configure(f"{key}.TNotebook.Tab", padding=(6, 2, 6, 2), expand=(0, 0, 2))
         self._style.configure(f"{key}.TNotebook.Tab", expand=("selected", (1, 2, 4, 2)))
 
-    def scrollbar(self, key, trough_color, border_color, control_backgrounds, control_foregrounds,
+    def scrollbar(self,  # pylint:disable=too-many-locals
+                  key,
+                  trough_color,
+                  border_color,
+                  control_backgrounds,
+                  control_foregrounds,
                   control_borders):
         """ Create a custom scroll bar widget so we can control the colors.
 
@@ -578,3 +583,6 @@ class _TkImage():
                             for row in pattern)
         image.put("{" + pixels + "}")
         return image
+
+
+__all__ = get_module_objects(__name__)

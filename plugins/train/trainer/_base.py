@@ -20,7 +20,7 @@ from keras.src.tree import flatten
 from torch.cuda import OutOfMemoryError
 
 from lib.training import Feeder, LearningRateFinder, LearningRateWarmup
-from lib.utils import FaceswapError
+from lib.utils import get_module_objects, FaceswapError
 from plugins.train._config import Config
 
 from ._display import Samples, Timelapse
@@ -439,3 +439,6 @@ class TrainerBase():
         self._tensorboard.on_save()
         if is_exit:
             self._clear_tensorboard()
+
+
+__all__ = get_module_objects(__name__)

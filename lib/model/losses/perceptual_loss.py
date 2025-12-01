@@ -13,6 +13,7 @@ from keras import ops, Variable
 
 from lib.keras_utils import ColorSpaceConvert, frobenius_norm, replicate_pad
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -972,3 +973,6 @@ class MSSIMLoss(keras.losses.Loss):
         if idx > 0:
             size = self._get_smallest_size(size // 2, idx - 1)
         return size
+
+
+__all__ = get_module_objects(__name__)

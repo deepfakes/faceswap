@@ -8,7 +8,7 @@ from datetime import datetime
 from shutil import copyfile, copytree, rmtree
 
 from lib.serializer import get_serializer
-from lib.utils import get_folder
+from lib.utils import get_folder, get_module_objects
 
 logger = logging.getLogger(__name__)
 
@@ -227,3 +227,6 @@ class Backup():
                  if folder in session_names]
         logger.debug("log folders to restore: %s", paths)
         return paths
+
+
+__all__ = get_module_objects(__name__)

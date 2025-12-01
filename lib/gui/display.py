@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .display_analysis import Analysis
 from .display_command import GraphDisplay, PreviewExtract, PreviewTrain
@@ -189,3 +190,6 @@ class DisplayNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         else:
             logger.debug("Object does not have on_tab_select method. Returning: '%s'",
                          selected_object)
+
+
+__all__ = get_module_objects(__name__)

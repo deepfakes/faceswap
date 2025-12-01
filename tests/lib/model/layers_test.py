@@ -31,6 +31,7 @@ def layer_test(layer_cls,  # noqa:C901
     """
     with device("cpu"):
         # generate input data
+        # pylint:disable=duplicate-code
         if input_data is None:
             assert input_shape
             if not input_dtype:

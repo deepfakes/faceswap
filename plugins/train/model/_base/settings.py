@@ -25,6 +25,7 @@ from lib.model.optimizers import AdaBelief
 from lib.model.autoclip import AutoClipper
 from lib.model.nn_blocks import reset_naming
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
@@ -818,3 +819,6 @@ class Settings():
         retval = nullcontext() if self._strategy is None else self._strategy.scope()
         logger.debug("Using strategy scope: %s", retval)
         return retval
+
+
+__all__ = get_module_objects(__name__)

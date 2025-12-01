@@ -16,6 +16,7 @@ from lib.model.backup_restore import Backup
 from lib.logger import parse_class_init
 # Import the following libs for custom objects
 from lib.model import initializers, layers, normalization  # noqa # pylint:disable=unused-import
+from lib.utils import get_module_objects
 from plugins.train.model._base.model import Inference as FSInference
 
 
@@ -278,3 +279,6 @@ class Restore():
         ext = ".keras.bk"
         model_name = next(fname for fname in bkfiles if fname.endswith(ext))
         return model_name[:-len(ext)]
+
+
+__all__ = get_module_objects(__name__)

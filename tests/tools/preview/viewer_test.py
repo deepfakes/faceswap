@@ -30,13 +30,13 @@ if T.TYPE_CHECKING:
 def test__faces():
     """ Test the :class:`~tools.preview.viewer._Faces dataclass initializes correctly """
     faces = _Faces()
-    assert faces.filenames == []
-    assert faces.matrix == []
-    assert faces.src == []
-    assert faces.dst == []
+    assert isinstance(faces.filenames, list) and not faces.filenames
+    assert isinstance(faces.matrix, list) and not faces.matrix
+    assert isinstance(faces.src, list) and not faces.src
+    assert isinstance(faces.dst, list) and not faces.dst
 
 
-_PARAMS = [(3, 448), (4, 333), (5, 254), (6, 128)]  # columns/face_size
+_PARAMS = ((3, 448), (4, 333), (5, 254), (6, 128))  # columns/face_size
 _IDS = [f"cols:{c},size:{s}[{get_backend().upper()}]" for c, s in _PARAMS]
 
 

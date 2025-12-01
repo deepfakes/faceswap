@@ -8,11 +8,12 @@ import typing as T
 
 from lib.image import encode_image, ImagesSaver
 from lib.multithreading import MultiThread
+from lib.utils import get_module_objects
 from plugins.extract import Extractor
 
 if T.TYPE_CHECKING:
-    from lib.align import Alignments, DetectedFace
-    from lib.align.alignments import PNGHeaderDict
+    from lib import align
+    from lib.align import DetectedFace
     from lib.queue_manager import EventQueue
     from plugins.extract import ExtractMedia
     from .loader import Loader
@@ -41,7 +42,7 @@ class MaskGenerator:
                  update_all: bool,
                  input_is_faces: bool,
                  loader: Loader,
-                 alignments: Alignments | None,
+                 alignments: align.alignments.Alignments | None,
                  input_location: str) -> None:
         logger.debug("Initializing %s (mask_type: %s, update_all: %s, input_is_faces: %s, "
                      "loader: %s, alignments: %s, input_location: %s)",
@@ -202,7 +203,8 @@ class MaskGenerator:
             self._alignments.update_face(fname, idx, face.to_alignment())
 
         logger.trace("Updating extracted face: '%s'", media.filename)  # type:ignore[attr-defined]
-        meta: PNGHeaderDict = {"alignments": face.to_png_meta(), "source": media.frame_metadata}
+        meta: align.alignments.PNGHeaderDict = {"alignments": face.to_png_meta(),
+                                                "source": media.frame_metadata}
         self._saver.save(media.filename, encode_image(media.image, ".png", metadata=meta))
 
     def _update_from_frame(self, media: ExtractMedia) -> None:
@@ -261,3 +263,6 @@ class MaskGenerator:
 
         self._finalize()
         logger.debug("Completed MaskGenerator process")
+
+
+__all__ = get_module_objects(__name__)

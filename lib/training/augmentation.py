@@ -12,6 +12,7 @@ from scipy.interpolate import griddata
 
 from lib.image import batch_convert_color
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from lib.config import ConfigValueType
@@ -630,3 +631,6 @@ class ImageAugmentation():
             assert batch_dst_points is not None
             return self._random_warp_landmarks(batch, batch_src_points, batch_dst_points)
         return self._random_warp(batch)
+
+
+__all__ = get_module_objects(__name__)

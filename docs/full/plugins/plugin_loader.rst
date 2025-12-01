@@ -1,8 +1,2 @@
-*********************
-plugin\_loader module
-*********************
-
-.. automodule:: plugins.plugin_loader
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: plugins.plugin_loader
+   :include-all-objects:

@@ -8,6 +8,7 @@ import numpy as np
 import torch
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -58,3 +59,6 @@ class AutoClipper():
         clip_value = np.percentile(self._grad_history, self._clip_percentile)
         torch.nn.utils.clip_grad_norm_(gradients, T.cast(float, clip_value))
         return gradients
+
+
+__all__ = get_module_objects(__name__)

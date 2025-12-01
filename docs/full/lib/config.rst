@@ -1,7 +1,3 @@
-config module
-=============
-
-.. automodule:: lib.config
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: lib.config
+   :include-all-objects:
+   :no-inheritance-diagram:

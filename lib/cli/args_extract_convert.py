@@ -4,6 +4,7 @@ import argparse
 import gettext
 import typing as T
 
+from lib.utils import get_module_objects
 from lib.utils import get_backend
 from plugins.plugin_loader import PluginLoader
 
@@ -484,7 +485,7 @@ class ConvertArgs(ExtractConvertArgs):
             "help": _(
                 "Only required if converting from images to video. Provide The original video "
                 "that the source frames were extracted from (for extracting the fps and audio).")})
-        argument_list.append({
+        argument_list.append({  # pylint:disable=duplicate-code
             "opts": ("-m", "--model-dir"),
             "action": DirFullPaths,
             "dest": "model_dir",
@@ -745,3 +746,6 @@ class ConvertArgs(ExtractConvertArgs):
             "dest": "depr_on-the-fly_otf_T",
             "help": argparse.SUPPRESS})
         return argument_list
+
+
+__all__ = get_module_objects(__name__)

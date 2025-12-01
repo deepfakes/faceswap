@@ -10,13 +10,12 @@ import typing as T
 import numpy as np
 from tqdm import tqdm
 
-from lib.align import DetectedFace, update_legacy_png_header
-from lib.align.alignments import AlignmentFileDict
+from lib.align import alignments, DetectedFace, update_legacy_png_header
 from lib.image import FacesLoader, ImagesLoader
+from lib.utils import get_module_objects
 from plugins.extract import ExtractMedia
 
 if T.TYPE_CHECKING:
-    from lib.align import Alignments
     from lib.align.alignments import PNGHeaderDict
 logger = logging.getLogger(__name__)
 
@@ -38,7 +37,7 @@ class Loader:
 
         self._is_faces = is_faces
         self._loader = FacesLoader(location) if is_faces else ImagesLoader(location)
-        self._alignments: Alignments | None = None
+        self._alignments: alignments.Alignments | None = None
         self._skip_count = 0
 
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -64,19 +63,19 @@ class Loader:
         file """
         return self._skip_count
 
-    def add_alignments(self, alignments: Alignments | None) -> None:
+    def add_alignments(self, alignments_object: alignments.Alignments | None) -> None:
         """ Add the loaded alignments to :attr:`_alignments` for content matching
 
         Parameters
         ----------
-        alignments: :class:`~lib.align.Alignments` | None
+        alignments_object: :class:`~lib.align.Alignments` | None
             The alignments file object or ``None`` if not provided
         """
-        logger.debug("Adding alignments to loader: %s", alignments)
-        self._alignments = alignments
+        logger.debug("Adding alignments to loader: %s", alignments_object)
+        self._alignments = alignments_object
 
     @classmethod
-    def _get_detected_face(cls, alignment: AlignmentFileDict) -> DetectedFace:
+    def _get_detected_face(cls, alignment: alignments.AlignmentFileDict) -> DetectedFace:
         """ Convert an alignment dict item to a detected_face object
 
         Parameters
@@ -119,16 +118,16 @@ class Loader:
 
         if self._alignments is None:  # mask from PNG header
             lookup_index = 0
-            alignments = [T.cast(AlignmentFileDict, metadata["alignments"])]
+            aligns = [T.cast(alignments.AlignmentFileDict, metadata["alignments"])]
         else:  # mask from Alignments file
             lookup_index = face_index
-            alignments = self._alignments.get_faces_in_frame(frame_name)
-            if not alignments or face_index > len(alignments) - 1:
+            aligns = self._alignments.get_faces_in_frame(frame_name)
+            if not aligns or face_index > len(aligns) - 1:
                 self._skip_count += 1
                 logger.warning("Skipping Face not found in alignments file: '%s'", filename)
                 return None
 
-        alignment = alignments[lookup_index]
+        alignment = aligns[lookup_index]
         detected_face = self._get_detected_face(alignment)
 
         retval = ExtractMedia(filename, image, detected_faces=[detected_face], is_aligned=True)
@@ -214,9 +213,11 @@ class Loader:
         else:
             iterator = self._from_frames
 
-        for media in iterator():
-            yield media
+        yield from iterator()
 
         if self._skip_count > 0:
             logger.warning("%s face(s) skipped due to not existing in the alignments file",
                            self._skip_count)
+
+
+__all__ = get_module_objects(__name__)

@@ -19,6 +19,7 @@ import numpy as np
 
 from lib.logger import parse_class_init
 from lib.serializer import get_serializer
+from lib.utils import get_module_objects
 
 from .event_reader import TensorBoardLogs
 
@@ -1029,3 +1030,6 @@ class _ExponentialMovingAverage():
                     dtype=self._dtype, out=out)
         np.cumsum(out, axis=1, dtype=self._dtype, out=out)
         out /= scaling_factors[np.newaxis, -2::-1]
+
+
+__all__ = get_module_objects(__name__)

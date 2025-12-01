@@ -16,7 +16,7 @@ import keras
 from lib.logger import parse_class_init
 from lib.serializer import get_serializer
 from lib.model.nn_blocks import set_config as set_nnblock_config
-from lib.utils import FaceswapError
+from lib.utils import get_module_objects, FaceswapError
 from plugins.train._config import Config
 
 from .io import IO, get_all_sub_models, Weights
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 _CONFIG: dict[str, ConfigValueType] = {}
 
 
-class ModelBase():
+class ModelBase():  # pylint:disable=too-many-instance-attributes
     """ Base class that all model plugins should inherit from.
 
     Parameters
@@ -374,7 +374,7 @@ class ModelBase():
         self._io.history.append(sum(loss))
 
 
-class State():
+class State():  # pylint:disable=too-many-instance-attributes
     """ Holds state information relating to the plugin's saved model.
 
     Parameters
@@ -1007,3 +1007,6 @@ class Inference():
         logger.debug("Compiled inference model '%s': %s", retval.name, retval)
 
         return retval
+
+
+__all__ = get_module_objects(__name__)

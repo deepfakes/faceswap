@@ -11,6 +11,7 @@ import typing as T
 from keras import InputSpec, Layer, ops, saving
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -746,3 +747,6 @@ class ScalarOp(Layer):  # pylint:disable=too-many-ancestors,abstract-method
 for name_, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
         saving.get_custom_objects().update({name_: obj})
+
+
+__all__ = get_module_objects(__name__)

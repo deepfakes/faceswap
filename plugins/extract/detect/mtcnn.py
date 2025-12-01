@@ -11,6 +11,7 @@ from keras.models import Model
 from keras.layers import Conv2D, Dense, Flatten, Input, MaxPooling2D, Permute, PReLU
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 from ._base import BatchType, Detector
 
 
@@ -758,3 +759,6 @@ def rect2square(rectangles: np.ndarray) -> np.ndarray:
     rectangles[:, 1] = rectangles[:, 1] + height * 0.5 - length * 0.5
     rectangles[:, 2:4] = rectangles[:, 0:2] + np.repeat([length], 2, axis=0).T
     return rectangles
+
+
+__all__ = get_module_objects(__name__)

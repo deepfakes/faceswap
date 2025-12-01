@@ -1,8 +1,3 @@
-************
-utils module
-************
-
-.. automodule:: lib.utils
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: lib.utils
+   :include-all-objects:
+   :no-inheritance-diagram:

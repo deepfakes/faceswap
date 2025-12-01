@@ -14,6 +14,7 @@ from keras.src.initializers.random_initializers import compute_fans
 import numpy as np
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -344,11 +345,16 @@ class ConvolutionAware(initializers.Initializer):
         config = {"eps_std": self._eps_std,
                   "seed": self._seed,
                   "initialized": self._initialized}
+        # pylint:disable=duplicate-code
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
+# pylint:disable=duplicate-code
 # Update initializers into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
         saving.get_custom_objects().update({name: obj})
+
+
+__all__ = get_module_objects(__name__)

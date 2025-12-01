@@ -5,6 +5,7 @@ import typing as T
 
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import DirFullPaths, Radio
+from lib.utils import get_module_objects
 
 # LOCALES
 _LANG = gettext.translation("tools.restore.cli", localedir="locales", fallback=True)
@@ -58,3 +59,6 @@ class ModelArgs(FaceSwapArgs):
                 "Only used for 'inference' job. Generate the inference model for B -> A  instead "
                 "of A -> B.")})
         return argument_list
+
+
+__all__ = get_module_objects(__name__)

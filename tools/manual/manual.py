@@ -18,7 +18,7 @@ from lib.gui.utils import get_images, get_config, initialize_config, initialize_
 from lib.image import SingleFrameLoader, read_image_meta
 from lib.logger import parse_class_init
 from lib.multithreading import MultiThread
-from lib.utils import handle_deprecated_cliopts
+from lib.utils import get_module_objects, handle_deprecated_cliopts
 from plugins.extract import ExtractMedia, Extractor
 
 from .detected_faces import DetectedFaces
@@ -29,7 +29,8 @@ from .thumbnails import ThumbsCreator
 
 if T.TYPE_CHECKING:
     from argparse import Namespace
-    from lib.align import DetectedFace, Mask
+    from lib import align
+    from lib.align import DetectedFace
     from lib.queue_manager import EventQueue
 
 logger = logging.getLogger(__name__)
@@ -590,7 +591,7 @@ class Aligner():
         for mask in del_masks:
             del detected_face.mask[mask]
 
-    def get_masks(self, frame_index: int, face_index: int) -> dict[str, Mask]:
+    def get_masks(self, frame_index: int, face_index: int) -> dict[str, align.aligned_mask.Mask]:
         """ Feed the aligned face into the mask pipeline and retrieve the updated masks.
 
         The face to feed into the aligner is generated from the given frame and face indices.
@@ -770,3 +771,6 @@ class FrameLoader():
         self._current_idx = position
         self._globals.var_full_update.set(True)
         self._globals.var_update_active_viewport.set(True)
+
+
+__all__ = get_module_objects(__name__)

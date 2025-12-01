@@ -11,6 +11,7 @@ from tkinter import ttk
 
 from lib.logger import parse_class_init
 from lib.training.preview_tk import PreviewTk
+from lib.utils import get_module_objects
 
 from .display_graph import TrainingGraph
 from .display_page import DisplayOptionalPage
@@ -468,3 +469,6 @@ class GraphDisplay(DisplayOptionalPage):  # pylint:disable=too-many-ancestors
             logger.debug("Clearing: %s", name)
             graph.clear()
         super().close()
+
+
+__all__ = get_module_objects(__name__)

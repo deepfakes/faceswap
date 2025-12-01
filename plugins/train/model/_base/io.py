@@ -26,7 +26,7 @@ from lib.logger import parse_class_init
 from lib.model.backup_restore import Backup
 from lib.model.layers import ScalarOp
 from lib.model.networks import TypeModelsViT, ViT
-from lib.utils import FaceswapError
+from lib.utils import get_module_objects, FaceswapError
 
 if T.TYPE_CHECKING:
     from .model import ModelBase
@@ -970,3 +970,6 @@ class PatchKerasConfig:
         logger.debug("Updating saved config for keras version %s", self._version)
         self._config["config"] = self._update_config(self._config["config"])
         self._save_model()
+
+
+__all__ = get_module_objects(__name__)

@@ -9,6 +9,8 @@ import argparse
 import os
 import typing as T
 
+from lib.utils import get_module_objects
+
 
 # << FILE HANDLING >>
 
@@ -414,3 +416,6 @@ class Slider(argparse.Action):
 
     def __call__(self, parser, namespace, values, option_string=None) -> None:
         setattr(namespace, self.dest, values)
+
+
+__all__ = get_module_objects(__name__)

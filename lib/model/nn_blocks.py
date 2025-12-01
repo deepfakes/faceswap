@@ -7,6 +7,7 @@ import typing as T
 from keras import initializers, layers
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .initializers import ICNR, ConvolutionAware
 from .layers import PixelShuffler, ReflectionPadding2D, Swish, KResizeImages
@@ -922,3 +923,6 @@ class ResidualBlock():
 
         var_x = self._add([var_x, inputs])
         return self._activation(var_x)
+
+
+__all__ = get_module_objects(__name__)

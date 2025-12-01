@@ -17,6 +17,7 @@ from lib.gui.custom_widgets import RightClickMenu, Tooltip
 from lib.gui.utils import get_config, get_images
 from lib.image import hex_to_rgb, rgb_to_hex
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .viewport import Viewport
 
@@ -799,3 +800,6 @@ class ContextMenu():  # pylint:disable=too-few-public-methods
                      "face_id: %s", self._frame_index, self._face_index)
         self._detected_faces.update.delete(self._frame_index, self._face_index)
         self._frame_index = self._face_index = None
+
+
+__all__ = get_module_objects(__name__)

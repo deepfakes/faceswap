@@ -13,6 +13,8 @@ import sys
 import typing as T
 
 from lib.cli import actions
+from lib.utils import get_module_objects
+
 from .utils import get_images
 from .control_helper import ControlPanelOption
 
@@ -647,3 +649,6 @@ class CliOptions():
         if command in ("extract", "convert") and output_dir is not None:
             get_images().preview_extract.set_faceswap_output_path(output_dir,
                                                                   batch_mode=batch_mode)
+
+
+__all__ = get_module_objects(__name__)

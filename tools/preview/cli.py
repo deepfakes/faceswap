@@ -6,7 +6,9 @@ import typing as T
 
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import DirOrFileFullPaths, DirFullPaths, FileFullPaths
+from lib.utils import get_module_objects
 
+# pylint:disable=duplicate-code
 # LOCALES
 _LANG = gettext.translation("tools.preview", localedir="locales", fallback=True)
 _ = _LANG.gettext
@@ -79,3 +81,6 @@ class PreviewArgs(FaceSwapArgs):
             "dest": "depr_alignments_al_a",
             "help": argparse.SUPPRESS})
         return argument_list
+
+
+__all__ = get_module_objects(__name__)

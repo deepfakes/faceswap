@@ -8,6 +8,7 @@ import numpy as np
 
 from lib.align import BlurMask, DetectedFace
 from lib.config import FaceswapConfig
+from lib.utils import get_module_objects
 from plugins.convert._config import Config
 
 logger = logging.getLogger(__name__)
@@ -324,3 +325,6 @@ class Mask():
             kernels.append(cv2.getStructuringElement(shape, kernel) if size else np.array(0))
         logger.trace("Erosion kernels: %s", [k.shape for k in kernels])  # type: ignore
         return kernels
+
+
+__all__ = get_module_objects(__name__)

@@ -11,6 +11,7 @@ from PIL import Image, ImageTk
 
 from lib.align import AlignedFace, LANDMARK_PARTS, LandmarkType
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .interact import ActiveFrame, HoverBox
 
@@ -786,3 +787,6 @@ class TKFace():
             mask = cv2.resize(mask, self._face.shape[:2], interpolation=cv2.INTER_AREA)
         img = np.concatenate((self._face, mask[..., None]), axis=-1)
         return Image.fromarray(img)
+
+
+__all__ = get_module_objects(__name__)

@@ -1,65 +1,25 @@
-***********
-cli package
-***********
+***************
+lib.cli package
+***************
 
 The CLI Package handles the Command Line Arguments that act as the entry point into Faceswap.
 
 .. contents:: Contents
    :local:
+   :depth: 2
 
-args module
-===========
+.. automodapi:: lib.cli.actions
+   :include-all-objects:
 
-.. rubric:: Module Summary
+.. automodapi:: lib.cli.args_extract_convert
+   :include-all-objects:
 
-.. autosummary::
-   :nosignatures:
-   
-   ~lib.cli.args.ConvertArgs
-   ~lib.cli.args.ExtractArgs
-   ~lib.cli.args.ExtractConvertArgs
-   ~lib.cli.args.FaceSwapArgs
-   ~lib.cli.args.FullHelpArgumentParser
-   ~lib.cli.args.GuiArgs
-   ~lib.cli.args.SmartFormatter
-   ~lib.cli.args.TrainArgs
+.. automodapi:: lib.cli.args_train
+   :include-all-objects:
 
-.. rubric:: Module
+.. automodapi:: lib.cli.args
+   :include-all-objects:
 
-.. automodule:: lib.cli.args
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-actions module
-==============
-
-.. rubric:: Module Summary
-
-.. autosummary::
-   :nosignatures:
-   
-   ~lib.cli.actions.ContextFullPaths
-   ~lib.cli.actions.DirFullPaths
-   ~lib.cli.actions.DirOrFileFullPaths
-   ~lib.cli.actions.FileFullPaths
-   ~lib.cli.actions.FilesFullPaths
-   ~lib.cli.actions.MultiOption
-   ~lib.cli.actions.Radio
-   ~lib.cli.actions.SaveFileFullPaths
-   ~lib.cli.actions.Slider
-
-.. rubric:: Module
-
-.. automodule:: lib.cli.actions
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-launcher module
-===============
-
-.. automodule:: lib.cli.launcher
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: lib.cli.launcher
+   :include-all-objects:
+   :no-inheritance-diagram:

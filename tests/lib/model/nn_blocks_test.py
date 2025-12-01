@@ -22,6 +22,7 @@ def block_test(layer_func,  # pylint:disable=dangerous-default-value,too-many-lo
                input_shape=None):
     """Test routine for faceswap neural network blocks. """
     # generate input data
+    # pylint:disable=duplicate-code
     assert input_shape
     input_dtype = K.floatx()
     input_data_shape = list(input_shape)

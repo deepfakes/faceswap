@@ -6,6 +6,8 @@ import tkinter as tk
 from tkinter import filedialog
 import typing as T
 
+from lib.utils import get_module_objects
+
 logger = logging.getLogger(__name__)
 _FILETYPE = T.Literal["default", "alignments", "config_project", "config_task",
                       "config_all", "csv", "image", "ini", "state", "log", "video"]
@@ -343,3 +345,6 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         """ Method that does nothing, used for disabling open/save pop up.  """
         logger.debug("Popping Nothing browser")
         return
+
+
+__all__ = get_module_objects(__name__)

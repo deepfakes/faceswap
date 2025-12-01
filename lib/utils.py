@@ -3,6 +3,7 @@
 # NOTE: Do not import keras/pytorch in this script, as it is accessed before they should be loaded
 
 from __future__ import annotations
+import inspect
 import json
 import logging
 import os
@@ -19,8 +20,13 @@ from threading import get_ident
 from time import time
 from urllib import request, error as urlliberror
 
-import numpy as np
-from tqdm import tqdm
+try:
+    import numpy as np
+    from tqdm import tqdm
+except:  # noqa[E722]  # pylint:disable=bare-except
+    # Importing outside of faceswap environment, these packages should not be required
+    np = None  # type:ignore[assignment]  # pylint:disable=invalid-name
+    tqdm = None  # pylint:disable=invalid-name
 
 if T.TYPE_CHECKING:
     from argparse import Namespace
@@ -33,6 +39,7 @@ IMAGE_EXTENSIONS = [".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
 VIDEO_EXTENSIONS = [".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
                     ".ts", ".vob"]
 ValidBackends = T.Literal["nvidia", "cpu", "apple_silicon", "rocm"]
+_FS_BACKEND: ValidBackends | None = None
 
 
 class _Backend():  # pylint:disable=too-few-public-methods
@@ -123,9 +130,6 @@ class _Backend():  # pylint:disable=too-few-public-methods
         return fs_backend
 
 
-_FS_BACKEND: ValidBackends = _Backend().backend
-
-
 def get_backend() -> ValidBackends:
     """ Get the backend that Faceswap is currently configured to use.
 
@@ -141,6 +145,9 @@ def get_backend() -> ValidBackends:
     >>> get_backend()
     'nvidia'
     """
+    global _FS_BACKEND  # pylint:disable=global-statement
+    if _FS_BACKEND is None:
+        _FS_BACKEND = _Backend().backend
     return _FS_BACKEND
 
 
@@ -316,6 +323,29 @@ def get_dpi() -> float | None:
         return None
 
     return float(dpi)
+
+
+def get_module_objects(module: str) -> list[str]:
+    """ Return a list of all public objects within the given module
+
+    Parameters
+    ----------
+    module : str
+        The module to parse for public objects
+
+    Returns
+    -------
+    list[str]
+        A list of object names that exist within the given module
+
+    Example
+    -------
+    >>> __all__ = get_module_objects(__name__)
+    ["foo", "bar", "baz"]
+    """
+    return [name_ for name_, obj in inspect.getmembers(sys.modules[module])
+            if getattr(obj, "__module__", None) == module
+            and not name_.startswith("_")]
 
 
 def convert_to_secs(*args: int) -> int:
@@ -701,6 +731,7 @@ class GetModel():
             self.logger.info("Zip already exists. Skipping download")
             return
         write_type = "wb" if downloaded_size == 0 else "ab"
+        assert tqdm is not None
         with open(self._model_zip_path, write_type) as out_file:
             pbar = tqdm(desc="Downloading",
                         unit="B",
@@ -738,6 +769,7 @@ class GetModel():
         length = sum(f.file_size for f in zip_file.infolist())
         fnames = zip_file.namelist()
         self.logger.debug("Zipfile: Filenames: %s, Total Size: %s", fnames, length)
+        assert tqdm is not None
         pbar = tqdm(desc="Decompressing",
                     unit="B",
                     total=length,
@@ -898,6 +930,7 @@ class DebugTimes():
         header += f"{self._format_column('Max', time_col)}" if self._display["max"] else ""
         print(header)
         print(separator)
+        assert np is not None
         for key, val in self._times.items():
             num = str(len(val))
             contents = f"{self._format_column(key, name_col)}{self._format_column(num, items_col)}"
@@ -912,3 +945,6 @@ class DebugTimes():
                 contents += f"{self._format_column(_max, time_col)}"
             print(contents)
         self._interval = 1
+
+
+__all__ = get_module_objects(__name__)

@@ -9,6 +9,7 @@ import typing as T
 from keras import ops, Optimizer, saving
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor, Variable
@@ -16,7 +17,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AdaBelief(Optimizer):
+class AdaBelief(Optimizer):  # pylint:disable=too-many-instance-attributes,too-many-ancestors
     """ Implementation of the AdaBelief Optimizer
 
     Inherits from: keras.optimizers.Optimizer.
@@ -126,7 +127,7 @@ class AdaBelief(Optimizer):
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     """
 
-    def __init__(self,  # pylint:disable=too-many-arguments
+    def __init__(self,  # pylint:disable=too-many-arguments,too-many-positional-arguments
                  learning_rate: float = 0.001,
                  beta_1: float = 0.9,
                  beta_2: float = 0.999,
@@ -325,3 +326,6 @@ class AdaBelief(Optimizer):
 for _name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
         saving.get_custom_objects().update({_name: obj})
+
+
+__all__ = get_module_objects(__name__)

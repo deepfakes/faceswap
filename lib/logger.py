@@ -14,6 +14,8 @@ import traceback
 
 from datetime import datetime
 
+from lib.utils import get_module_objects
+
 
 class FaceswapLogger(logging.Logger):
     """ A standard :class:`logging.logger` with additional "verbose" and "trace" levels added. """
@@ -566,3 +568,6 @@ logging.setLoggerClass(FaceswapLogger)
 
 # Stores the last 100 debug messages
 _DEBUG_BUFFER = RollingBuffer(maxlen=100)
+
+
+__all__ = get_module_objects(__name__)

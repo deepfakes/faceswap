@@ -12,7 +12,7 @@ import numpy as np
 
 from lib.logger import parse_class_init
 from lib.model.networks import AlexNet, SqueezeNet
-from lib.utils import GetModel
+from lib.utils import get_module_objects, GetModel
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
@@ -396,3 +396,6 @@ class LPIPSLoss(keras.losses.Loss):
         retval = (val, res) if self._ret_per_layer else val
         assert not isinstance(retval, tuple)
         return retval / 10.0   # Reduce by factor of 10 'cos this loss is STRONG
+
+
+__all__ = get_module_objects(__name__)

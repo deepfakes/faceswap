@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 
 from lib.image import encode_image, png_read_meta, tiff_read_meta
+from lib.utils import get_module_objects
 from ._base import Output
 
 logger = logging.getLogger(__name__)
@@ -285,3 +286,6 @@ class Writer(Output):
         with open(fname, "w", encoding="utf-8") as ofile:
             json.dump(self._matrices, ofile, indent=2, sort_keys=True)
         logger.info("Patch matrices written to: '%s'", fname)
+
+
+__all__ = get_module_objects(__name__)

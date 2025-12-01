@@ -87,6 +87,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                  configfile: str | None = None,
                  instance: int = 0,
                  **kwargs) -> None:
+        # pylint:disable=duplicate-code
         logger.debug("Initializing %s: (configfile: %s)", self.__class__.__name__, configfile)
         super().__init__(git_model_id,
                          model_filename,

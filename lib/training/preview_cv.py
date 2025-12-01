@@ -13,6 +13,8 @@ from time import sleep
 
 import cv2
 
+from lib.utils import get_module_objects
+
 if T.TYPE_CHECKING:
     from collections.abc import Generator
     import numpy as np
@@ -187,3 +189,6 @@ class PreviewCV(PreviewBase):  # pylint:disable=too-few-public-methods
                 logger.debug("Shutdown received")
                 break
         logger.debug("%s shutdown", self.__class__.__name__)
+
+
+__all__ = get_module_objects(__name__)
