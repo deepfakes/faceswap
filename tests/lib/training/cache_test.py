@@ -411,7 +411,7 @@ def test_check_reset(face_cache_reset_scenario, expected):  # pylint:disable=red
          (_DUMMY_IMAGE_LIST[2:], _get_config() | {"centering": "head"}, 384, .66)])
 def test_Cache_init(filenames, config, size, coverage_ratio):
     """ Test that cache.Cache correctly initializes """
-    attrs = {"_lock": Lock,
+    attrs = {"_lock": type(Lock()),
              "_cache_info": dict,
              "_partially_loaded": list,
              "_image_count": int,

@@ -430,7 +430,7 @@ def read_image_batch(filenames: list[str], with_metadata: bool = False
                   for idx, filename in enumerate(filenames)}
 
         for future in futures.as_completed(images):
-            result = T.cast(np.ndarray | tuple[np.ndarray, PNGHeaderDict], future.result())
+            result = T.cast(np.ndarray | tuple[np.ndarray, "PNGHeaderDict"], future.result())
             ret_idx = images[future]
             if with_metadata:
                 assert isinstance(result, tuple)
@@ -442,7 +442,7 @@ def read_image_batch(filenames: list[str], with_metadata: bool = False
     arr_batch = np.array(batch)
     retval: np.ndarray | tuple[np.ndarray, list[PNGHeaderDict]]
     if with_metadata:
-        retval = (arr_batch, T.cast(list[PNGHeaderDict], meta))
+        retval = (arr_batch, T.cast(list["PNGHeaderDict"], meta))
     else:
         retval = arr_batch
 
