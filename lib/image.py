@@ -262,7 +262,33 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):  # type:ignore
 imageio.plugins.ffmpeg.FfmpegFormat.Reader = FfmpegReader  # type: ignore
 
 
-def read_image(filename, raise_error=False, with_metadata=False):
+@T.overload
+def read_image(filename: str,
+               raise_error: T.Literal[False] = False,
+               with_metadata: T.Literal[False] = False) -> np.ndarray | None: ...
+
+
+@T.overload
+def read_image(filename: str,
+               raise_error: T.Literal[True],
+               with_metadata: T.Literal[False] = False) -> np.ndarray: ...
+
+
+@T.overload
+def read_image(filename: str,
+               raise_error: T.Literal[False] = False,
+               *,
+               with_metadata: T.Literal[True]) -> tuple[np.ndarray, PNGHeaderDict]: ...
+
+
+@T.overload
+def read_image(filename: str,
+               raise_error: T.Literal[True],
+               with_metadata: T.Literal[True]) -> np.ndarray: ...
+
+
+def read_image(filename: str, raise_error: bool = False, with_metadata: bool = False
+               ) -> np.ndarray | None | tuple[np.ndarray, PNGHeaderDict]:
     """ Read an image file from a file location.
 
     Extends the functionality of :func:`cv2.imread()` by ensuring that an image was actually
@@ -271,23 +297,27 @@ def read_image(filename, raise_error=False, with_metadata=False):
 
     Parameters
     ----------
-    filename: str
+    filename : str
         Full path to the image to be loaded.
     raise_error: bool, optional
         If ``True`` then any failures (including the returned image being ``None``) will be
         raised. If ``False`` then an error message will be logged, but the error will not be
         raised. Default: ``False``
-    with_metadata: bool, optional
+    with_metadata : bool, optional
         Only returns a value if the images loaded are extracted Faceswap faces. If ``True`` then
         returns the Faceswap metadata stored with in a Face images .png exif header.
         Default: ``False``
 
     Returns
     -------
-    numpy.ndarray or tuple
-        If :attr:`with_metadata` is ``False`` then returns a `numpy.ndarray` of the image in `BGR`
-        channel order. If :attr:`with_metadata` is ``True`` then returns a `tuple` of
-        (`numpy.ndarray`" of the image in `BGR`, `dict` of face's Faceswap metadata)
+    Returns
+    -------
+    batch : :class:`numpy.ndarray`
+        The image in `BGR` channel order for the corresponding :attr:`filename`
+    metadata : :class:`~lib.align.alignments.PNGHeaderDict`, optional
+        The faceswap metadata corresponding to the image. Only returned if
+        `with_metadata` is ``True``
+
     Example
     -------
     >>> image_file = "/path/to/image.png"
@@ -299,6 +329,7 @@ def read_image(filename, raise_error=False, with_metadata=False):
     logger.trace("Requested image: '%s'", filename)  # type:ignore[attr-defined]
     success = True
     image = None
+    retval: np.ndarray | tuple[np.ndarray, PNGHeaderDict] | None = None
     try:
         with open(filename, "rb") as infile:
             raw_file = infile.read()
@@ -335,7 +366,18 @@ def read_image(filename, raise_error=False, with_metadata=False):
     return retval
 
 
-def read_image_batch(filenames, with_metadata=False):
+@T.overload
+def read_image_batch(filenames: list[str], with_metadata: T.Literal[False] = False
+                     ) -> np.ndarray: ...
+
+
+@T.overload
+def read_image_batch(filenames: list[str], with_metadata: T.Literal[True]
+                     ) -> tuple[np.ndarray, list[PNGHeaderDict]]: ...
+
+
+def read_image_batch(filenames: list[str], with_metadata: bool = False
+                     ) -> np.ndarray | tuple[np.ndarray, list[PNGHeaderDict]]:
     """ Load a batch of images from the given file locations.
 
     Leverages multi-threading to load multiple images from disk at the same time leading to vastly
@@ -343,48 +385,70 @@ def read_image_batch(filenames, with_metadata=False):
 
     Parameters
     ----------
-    filenames: list
-        A list of ``str`` full paths to the images to be loaded.
-    with_metadata: bool, optional
+    filenames : list[str]
+        A of full paths to the images to be loaded.
+    with_metadata : bool, optional
         Only returns a value if the images loaded are extracted Faceswap faces. If ``True`` then
-        returns the Faceswap metadata stored with in a Face images .png exif header.
+        returns the Faceswap metadata stored within each Face's .png exif header.
         Default: ``False``
 
     Returns
     -------
-    numpy.ndarray
+    batch : :class:`numpy.ndarray`
         The batch of images in `BGR` channel order returned in the order of :attr:`filenames`
+    metadata : list[:class:`~lib.align.alignments.PNGHeaderDict`], optional
+        The faceswap metadata corresponding to each image in the batch. Only returned if
+        `with_metadata` is ``True``
 
     Notes
     -----
-    As the images are compiled into a batch, they must be all of the same dimensions.
+    As the images are compiled into a batch, they should be all of the same dimensions, otherwise a
+    homongenous array will be returned
 
     Example
     -------
     >>> image_filenames = ["/path/to/image_1.png", "/path/to/image_2.png", "/path/to/image_3.png"]
     >>> images = read_image_batch(image_filenames)
+    >>> print(images.shape)
+    ... (3, 64, 64, 3)
+    >>> images, metatdata = read_image_batch(image_filenames, with_metadata=True)
+    >>> print(images.shape)
+    ... (3, 64, 64, 3)
+    >>> print(len(metadata))
+    ... 3
     """
     logger.trace("Requested batch: '%s'", filenames)  # type:ignore[attr-defined]
-    batch = [None for _ in range(len(filenames))]
-    if with_metadata:
-        meta = [None for _ in range(len(filenames))]
+    batch: list[np.ndarray | None] = [None for _ in range(len(filenames))]
+    meta: list[PNGHeaderDict | None] = [None for _ in range(len(filenames))]
 
     with futures.ThreadPoolExecutor() as executor:
-        images = {executor.submit(read_image, filename,
-                                  raise_error=True, with_metadata=with_metadata): idx
+        images = {executor.submit(  # NOTE submit strips positionals, breaking type-checking
+                    read_image,  # type:ignore[arg-type]
+                    filename,
+                    raise_error=True,  # pyright:ignore[reportArgumentType]
+                    with_metadata=with_metadata): idx  # pyright:ignore[reportArgumentType]
                   for idx, filename in enumerate(filenames)}
+
         for future in futures.as_completed(images):
+            result = T.cast(np.ndarray | tuple[np.ndarray, PNGHeaderDict], future.result())
             ret_idx = images[future]
             if with_metadata:
-                batch[ret_idx], meta[ret_idx] = future.result()
+                assert isinstance(result, tuple)
+                batch[ret_idx], meta[ret_idx] = result
             else:
-                batch[ret_idx] = future.result()
+                assert isinstance(result, np.ndarray)
+                batch[ret_idx] = result
 
-    batch = np.array(batch)
-    retval = (batch, meta) if with_metadata else batch
+    arr_batch = np.array(batch)
+    retval: np.ndarray | tuple[np.ndarray, list[PNGHeaderDict]]
+    if with_metadata:
+        retval = (arr_batch, T.cast(list[PNGHeaderDict], meta))
+    else:
+        retval = arr_batch
+
     logger.trace(  # type:ignore[attr-defined]
         "Returning images: (filenames: %s, batch shape: %s, with_metadata: %s)",
-        filenames, batch.shape, with_metadata)
+        filenames, arr_batch.shape, with_metadata)
     return retval
 
 
@@ -734,7 +798,7 @@ def tiff_read_meta(image: bytes) -> dict[str, T.Any]:
     return retval
 
 
-def png_read_meta(image):
+def png_read_meta(image: bytes) -> PNGHeaderDict:
     """ Read the Faceswap information stored in a png's iTXt field.
 
     Parameters
@@ -744,8 +808,8 @@ def png_read_meta(image):
 
     Returns
     -------
-    dict
-        The Faceswap information stored in the PNG header
+    :class:`~lib.align.alignments.PNGHeaderDict` | ``None``
+        The Faceswap information stored in the PNG header or ``None`` if it was not found
 
     Notes
     -----
@@ -753,7 +817,7 @@ def png_read_meta(image):
     task. OpenCV will not write any iTXt headers to the PNG file, so we make the assumption that
     the only iTXt header that exists is the one that Faceswap created for storing alignments.
     """
-    retval = None
+    retval: PNGHeaderDict | None = None
     pointer = 0
     while True:
         pointer = image.find(b"iTXt", pointer) - 4
@@ -769,6 +833,7 @@ def png_read_meta(image):
         logger.trace("Skipping iTXt chunk: '%s'",  # type:ignore[attr-defined]
                      keyword.decode("latin-1", errors="ignore"))
         pointer += length + 4
+    assert retval is not None
     return retval
 
 

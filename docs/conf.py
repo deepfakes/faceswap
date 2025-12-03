@@ -9,7 +9,12 @@
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#
+
+# NOTE: To generate docs:
+# $ cd docs
+# $ rm -rf _build api
+# $ python -m sphinx -T -b html -d _build/doctrees -D language=en . _build/output/html
+
 # pylint:skip-file
 import logging
 import os

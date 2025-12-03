@@ -24,7 +24,7 @@ if T.TYPE_CHECKING:
     from collections.abc import Generator
     from lib.config import ConfigValueType
     from plugins.train.model._base import ModelBase
-    from .cache import _Cache
+    from .cache import Cache
 
 logger = logging.getLogger(__name__)
 BatchType = tuple[np.ndarray, list[np.ndarray]]
@@ -78,11 +78,11 @@ class DataGenerator():  # pylint:disable=too-many-instance-attributes
         self._buffer = RingBuffer(batch_size,
                                   (self._process_size, self._process_size, self._total_channels),
                                   dtype="uint8")
-        self._face_cache: _Cache = get_cache(side,
-                                             filenames=images,
-                                             config=self._config,
-                                             size=self._process_size,
-                                             coverage_ratio=self._coverage_ratio)
+        self._face_cache: Cache = get_cache(side,
+                                            filenames=images,
+                                            config=self._config,
+                                            size=self._process_size,
+                                            coverage_ratio=self._coverage_ratio)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
