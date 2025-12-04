@@ -6,6 +6,7 @@
 import json
 import logging
 import re
+import typing as T
 
 import os
 import cv2
@@ -151,7 +152,7 @@ class Writer(Output):
                     logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
                 if not self.config["json_output"]:
                     continue
-                mat = read_func(img)
+                mat = T.cast(dict[str, list[list[float]]], read_func(img))
                 self._matrices[os.path.splitext(os.path.basename(fname))[0]] = mat
 
     @classmethod

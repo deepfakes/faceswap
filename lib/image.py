@@ -337,7 +337,7 @@ def read_image(filename: str, raise_error: bool = False, with_metadata: bool = F
             if image is None:
                 raise ValueError("Image is None")
             if with_metadata:
-                metadata = png_read_meta(raw_file)
+                metadata = T.cast(PNGHeaderDict, png_read_meta(raw_file))
                 retval = (image, metadata)
             else:
                 retval = image
@@ -766,7 +766,14 @@ def tiff_write_meta(image: bytes, data: PNGHeaderDict | dict[str, T.Any] | bytes
 
 
 def tiff_read_meta(image: bytes) -> dict[str, T.Any]:
-    """ Read information stored in a Tiff's Image Description field """
+    """ Read information stored in a Tiff's Image Description field
+
+    Returns
+    -------
+    dict[str, Any]
+        Any arbitrary information stored in the TIFF header (for example matrix information for
+        the patch writer)
+    """
     assert image[:2] == b"II", "Not a supported TIFF file"
     assert struct.unpack("<H", image[2:4])[0] == 42, "Only version 42 Tiff files are supported"
     ptr = struct.unpack("<I", image[4:8])[0]
@@ -798,7 +805,7 @@ def tiff_read_meta(image: bytes) -> dict[str, T.Any]:
     return retval
 
 
-def png_read_meta(image: bytes) -> PNGHeaderDict:
+def png_read_meta(image: bytes) -> PNGHeaderDict | dict[str, T.Any]:
     """ Read the Faceswap information stored in a png's iTXt field.
 
     Parameters
@@ -808,8 +815,9 @@ def png_read_meta(image: bytes) -> PNGHeaderDict:
 
     Returns
     -------
-    :class:`~lib.align.alignments.PNGHeaderDict` | ``None``
-        The Faceswap information stored in the PNG header or ``None`` if it was not found
+    :class:`~lib.align.alignments.PNGHeaderDict` | dict[str, Any]
+        The Faceswap information stored in the PNG header. This will either be a PNGHeaderDict
+        if an extracted face, or other arbitrary information (for example for the Patch Writer)
 
     Notes
     -----
