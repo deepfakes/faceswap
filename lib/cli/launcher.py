@@ -227,6 +227,7 @@ class ScriptExecutor():
             setattr(arguments, "exclude_gpus", None)
             return
 
+        assert GPUStats is not None
         if arguments.exclude_gpus:
             if not all(idx.isdigit() for idx in arguments.exclude_gpus):
                 logger.error("GPUs passed to the ['-X', '--exclude-gpus'] argument must all be "

@@ -30,14 +30,14 @@ if T.TYPE_CHECKING:
     from . import ExtractMedia
 
 logger = logging.getLogger(__name__)
-_instances = -1  # Tracking for multiple instances of pipeline
+_INSTANCES = -1  # Tracking for multiple instances of pipeline
 
 
 def _get_instance():
-    """ Increment the global :attr:`_instances` and obtain the current instance value """
-    global _instances  # pylint:disable=global-statement
-    _instances += 1
-    return _instances
+    """ Increment the global :attr:`_INSTANCES` and obtain the current instance value """
+    global _INSTANCES  # pylint:disable=global-statement
+    _INSTANCES += 1
+    return _INSTANCES
 
 
 class Extractor():  # pylint:disable=too-many-instance-attributes
@@ -552,6 +552,7 @@ class Extractor():  # pylint:disable=too-many-instance-attributes
             Statistics on available VRAM
         """
         vram_buffer = 256  # Leave a buffer for VRAM allocation
+        assert GPUStats is not None
         gpu_stats = GPUStats()
         stats = gpu_stats.get_card_most_free()
         retval: dict[str, int | str] = {"count": gpu_stats.device_count,

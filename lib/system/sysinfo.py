@@ -8,14 +8,17 @@ import sys
 
 from subprocess import PIPE, Popen
 
-import psutil
-
 from lib.git import git
-from lib.gpu_stats import GPUStats, GPUInfo
+from lib.gpu_stats import GPUInfo, GPUStats
 from lib.utils import get_backend, get_module_objects, PROJECT_ROOT
 
 from .ml_libs import Cuda, ROCm
 from .system import Packages, System
+
+try:
+    import psutil
+except ImportError:
+    psutil = None  # type:ignore[assignment]
 
 
 class _SysInfo():
@@ -34,21 +37,29 @@ class _SysInfo():
     @property
     def _ram_free(self) -> int:
         """ int : The amount of free RAM in bytes. """
+        if psutil is None:
+            return -1
         return psutil.virtual_memory().free
 
     @property
     def _ram_total(self) -> int:
         """ int : The amount of total RAM in bytes. """
+        if psutil is None:
+            return -1
         return psutil.virtual_memory().total
 
     @property
     def _ram_available(self) -> int:
         """ int : The amount of available RAM in bytes. """
+        if psutil is None:
+            return -1
         return psutil.virtual_memory().available
 
     @property
     def _ram_used(self) -> int:
         """ int : The amount of used RAM in bytes. """
+        if psutil is None:
+            return -1
         return psutil.virtual_memory().used
 
     @property
@@ -130,6 +141,12 @@ class _SysInfo():
         :class:`~lib.gpu_stats.GPUInfo`
             The information on connected GPUs
         """
+        if GPUStats is None:
+            return GPUInfo(vram=[],
+                           vram_free=[],
+                           driver="N/A",
+                           devices=["Error obtaining GPU Stats: 'GPUStats import error'"],
+                           devices_active=[])
         try:
             retval = GPUStats(log=False).sys_info
         except Exception as err:  # pylint:disable=broad-except

@@ -212,7 +212,7 @@ class Packages():
         return "\n".join(f"{k.ljust(align)} {v}" for k, v in pkgs.items())
 
     @property
-    def installed_conda(self) -> dict[str, tuple[str, str]]:
+    def installed_conda(self) -> dict[str, tuple[str, str, str]]:
         """ dict[str, tuple[str, str]] : Installed Conda package names to the version and
         channel """
         if not self._installed_conda:
@@ -224,7 +224,7 @@ class Packages():
         for pkg in installed:
             item = pkg.split(" ")
             assert len(item) == 4
-            retval[item[0]] = (item[1], item[3])
+            retval[item[0]] = T.cast(tuple[str, str, str], tuple(item[1:]))
         return retval
 
     @property

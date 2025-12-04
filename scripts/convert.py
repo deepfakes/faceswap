@@ -854,7 +854,7 @@ class Predict():  # pylint:disable=too-many-instance-attributes
             The batch size that the model is to be fed at.
         """
         logger.debug("Getting batchsize")
-        is_cpu = GPUStats().device_count == 0
+        is_cpu = GPUStats is None or GPUStats().device_count == 0
         batchsize = 1 if is_cpu else self._model.config["convert_batchsize"]
         batchsize = min(queue_size, batchsize)
         logger.debug("Got batchsize: %s", batchsize)

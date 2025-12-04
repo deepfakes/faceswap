@@ -16,7 +16,12 @@ from .actions import FileFullPaths, MultiOption, SaveFileFullPaths
 from .launcher import ScriptExecutor
 
 logger = logging.getLogger(__name__)
-_GPUS = GPUStats().cli_devices
+
+
+if GPUStats is None:
+    _GPUS = []
+else:
+    _GPUS = GPUStats().cli_devices
 
 # LOCALES
 _LANG = gettext.translation("lib.cli.args", localedir="locales", fallback=True)

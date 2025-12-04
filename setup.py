@@ -341,12 +341,14 @@ class RequiredPackages():
             spec_str = str(req.specifier).replace("==", "=") if req.specifier else ""
             package: dict[T.Literal["name", "package"], str] = {"name": req.name.title(),
                                                                 "package": f"{req.name}{spec_str}"}
+            exists = installed.get(req.name)
             if req.name == "tk" and self._env.system.is_linux:
                 # Default TK has bad fonts under Linux.
                 # Ref: https://github.com/ContinuumIO/anaconda-issues/issues/6833
                 # This versioning will fail in parse_requirements, so we need to do it here
                 package["package"] = f"{req.name}=*=xft_*"  # Swap out for explicit XFT version
-            exists = installed.get(req.name)
+                if exists is not None and not exists[1].startswith("xft"):  # Replace noxft version
+                    exists = None
             if not exists:
                 logger.debug("Adding new Conda package '%s'", package["package"])
                 retval.setdefault(channel, []).append(package)
