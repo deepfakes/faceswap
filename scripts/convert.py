@@ -1061,7 +1061,7 @@ class Predict():  # pylint:disable=too-many-instance-attributes
         if self._model.color_order.lower() == "rgb":
             feed_faces = feed_faces[..., ::-1]
 
-        feed = [feed_faces]
+        feed = feed_faces
         logger.trace("Input shape(s): %s", [item.shape for item in feed])  # type:ignore
 
         inbound = self._model.model.predict(feed,

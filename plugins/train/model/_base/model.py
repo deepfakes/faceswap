@@ -966,11 +966,17 @@ class Inference():
                              given_order,
                              [i._keras_history.operation.name  # pylint:disable=protected-access
                               for i in layer_input])
-            built = layer(layer_input)
-            built = built if isinstance(built, list) else [built]
 
-            logger.debug(
-                "Compiled layer '%s' from inputs %s",
+            if isinstance(layer_input, list) and len(layer_input) == 1:
+                # Flatten single inputs to stop Keras warnings
+                actual_input = layer_input[0]
+            else:
+                actual_input = layer_input
+
+            built = layer(actual_input)
+            built = built if isinstance(built, list) else [built]
+            logger.info(
+                "Compiled layer '%s' from input(s) %s",
                 layer.name,
                 [i._keras_history.operation.name  # pylint:disable=protected-access
                  for i in layer_input])
@@ -1003,7 +1009,9 @@ class Inference():
 
             built = self._build_layers(layers, history, built)
 
-        retval = keras.Model(inputs=self._input, outputs=built, name=self._name)
+        assert len(self._input) == 1
+        assert len(built) == 1
+        retval = keras.Model(inputs=self._input[0], outputs=built[0], name=self._name)
         logger.debug("Compiled inference model '%s': %s", retval.name, retval)
 
         return retval
