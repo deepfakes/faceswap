@@ -975,7 +975,7 @@ class Inference():
 
             built = layer(actual_input)
             built = built if isinstance(built, list) else [built]
-            logger.info(
+            logger.debug(
                 "Compiled layer '%s' from input(s) %s",
                 layer.name,
                 [i._keras_history.operation.name  # pylint:disable=protected-access

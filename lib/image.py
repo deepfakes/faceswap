@@ -337,7 +337,7 @@ def read_image(filename: str, raise_error: bool = False, with_metadata: bool = F
             if image is None:
                 raise ValueError("Image is None")
             if with_metadata:
-                metadata = T.cast(PNGHeaderDict, png_read_meta(raw_file))
+                metadata = T.cast("PNGHeaderDict", png_read_meta(raw_file))
                 retval = (image, metadata)
             else:
                 retval = image
