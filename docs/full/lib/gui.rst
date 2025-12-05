@@ -20,6 +20,10 @@ analysis package
    :include-all-objects:
    :no-inheritance-diagram:
 
+.. automodapi:: lib.gui.analysis.moving_average
+   :include-all-objects:
+   :no-inheritance-diagram:
+
 utils package
 =============
 
