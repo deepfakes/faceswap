@@ -27,6 +27,10 @@ This package contains various helper functions that plugins can inherit from
 .. automodapi:: plugins.train.model.original
    :include-all-objects:
 
+.. automodapi:: plugins.train.model._base.update
+   :include-all-objects:
+   :no-inheritance-diagram:
+
 trainer package
 ===============
 
