@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageTk
 
 from lib.training.preview_cv import PreviewBuffer
+from lib.utils import get_module_objects
 
 from .config import get_config, PATHCACHE
 
@@ -17,8 +18,8 @@ if T.TYPE_CHECKING:
     from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
-_IMAGES: "Images" | None = None
-_PREVIEW_TRIGGER: "PreviewTrigger" | None = None
+_images: Images | None = None
+_preview_trigger: PreviewTrigger | None = None
 TRAININGPREVIEW = ".gui_training_preview.png"
 
 
@@ -28,11 +29,11 @@ def initialize_images() -> None:
     This should only be called once on first GUI startup. Future access to :class:`Images`
     handler should only be executed through :func:`get_images`.
     """
-    global _IMAGES  # pylint:disable=global-statement
-    if _IMAGES is not None:
+    global _images  # pylint:disable=global-statement
+    if _images is not None:
         return
     logger.debug("Initializing images")
-    _IMAGES = Images()
+    _images = Images()
 
 
 def get_images() -> "Images":
@@ -43,8 +44,8 @@ def get_images() -> "Images":
     :class:`Images`
         The Master GUI Images handler
     """
-    assert _IMAGES is not None
-    return _IMAGES
+    assert _images is not None
+    return _images
 
 
 def _get_previews(image_path: str) -> list[str]:
@@ -99,6 +100,7 @@ class PreviewTrain():
         image_files = _get_previews(self._cache_path)
         filename = next((fname for fname in image_files
                          if os.path.basename(fname) == TRAININGPREVIEW), "")
+        img: np.ndarray | None = None
         if not filename:
             logger.trace("No preview to display")  # type:ignore
             return False
@@ -316,7 +318,7 @@ class PreviewExtract():
         logger.debug("Cache shape: %s", self._images.shape)
         return True
 
-    def _load_images_to_cache(self,
+    def _load_images_to_cache(self,  # pylint:disable=too-many-locals
                               image_files: list[str],
                               frame_dims: tuple[int, int],
                               thumbnail_size: int) -> bool:
@@ -351,7 +353,7 @@ class PreviewExtract():
         dropped_files = []
         for fname in show_files:
             try:
-                img = Image.open(fname)
+                img_file = Image.open(fname)
             except PermissionError as err:
                 logger.debug("Permission error opening preview file: '%s'. Original error: %s",
                              fname, str(err))
@@ -365,12 +367,12 @@ class PreviewExtract():
                 dropped_files.append(fname)
                 continue
 
-            width, height = img.size
+            width, height = img_file.size
             scaling = thumbnail_size / max(width, height)
             logger.debug("image width: %s, height: %s, scaling: %s", width, height, scaling)
 
             try:
-                img = img.resize((int(width * scaling), int(height * scaling)))
+                img = img_file.resize((int(width * scaling), int(height * scaling)))
             except OSError as err:
                 # Image only gets loaded when we call a method, so may error on partial loads
                 logger.debug("OS Error resizing preview image: '%s'. Original error: %s",
@@ -653,7 +655,10 @@ def preview_trigger() -> PreviewTrigger:
         The trigger to indicate to the main faceswap process that it should perform a training
         preview update
     """
-    global _PREVIEW_TRIGGER  # pylint:disable=global-statement
-    if _PREVIEW_TRIGGER is None:
-        _PREVIEW_TRIGGER = PreviewTrigger()
-    return _PREVIEW_TRIGGER
+    global _preview_trigger  # pylint:disable=global-statement
+    if _preview_trigger is None:
+        _preview_trigger = PreviewTrigger()
+    return _preview_trigger
+
+
+__all__ = get_module_objects(__name__)

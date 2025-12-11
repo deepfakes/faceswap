@@ -3,6 +3,7 @@
 # NOTE: Do not import keras/pytorch in this script, as it is accessed before they should be loaded
 
 from __future__ import annotations
+import inspect
 import json
 import logging
 import os
@@ -11,6 +12,7 @@ import tkinter as tk
 import typing as T
 import zipfile
 
+from importlib import import_module
 from multiprocessing import current_process
 from re import finditer
 from socket import timeout as socket_timeout, error as socket_error
@@ -18,20 +20,26 @@ from threading import get_ident
 from time import time
 from urllib import request, error as urlliberror
 
-import numpy as np
-from tqdm import tqdm
+try:
+    import numpy as np
+    from tqdm import tqdm
+except:  # noqa[E722]  # pylint:disable=bare-except
+    # Importing outside of faceswap environment, these packages should not be required
+    np = None  # type:ignore[assignment]  # pylint:disable=invalid-name
+    tqdm = None  # pylint:disable=invalid-name
 
 if T.TYPE_CHECKING:
     from argparse import Namespace
     from http.client import HTTPResponse
 
 # Global variables
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+""" str : Full path to the root faceswap folder """
 IMAGE_EXTENSIONS = [".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
 VIDEO_EXTENSIONS = [".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
                     ".ts", ".vob"]
-_TORCH_VERS: tuple[int, int] | None = None
-_KERAS_VERS: tuple[int, int] | None = None
 ValidBackends = T.Literal["nvidia", "cpu", "apple_silicon", "rocm"]
+_FS_BACKEND: ValidBackends | None = None
 
 
 class _Backend():  # pylint:disable=too-few-public-methods
@@ -46,7 +54,7 @@ class _Backend():  # pylint:disable=too-few-public-methods
                                                     "4": "rocm"}
         self._valid_backends = list(self._backends.values())
         self._config_file = self._get_config_file()
-        self.backend = self._get_backend()
+        self.backend: ValidBackends = self._get_backend()
 
     @classmethod
     def _get_config_file(cls) -> str:
@@ -57,8 +65,7 @@ class _Backend():  # pylint:disable=too-few-public-methods
         str
             The path to the Faceswap configuration file
         """
-        pypath = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-        config_file = os.path.join(pypath, "config", ".faceswap")
+        config_file = os.path.join(PROJECT_ROOT, "config", ".faceswap")
         return config_file
 
     def _get_backend(self) -> ValidBackends:
@@ -123,9 +130,6 @@ class _Backend():  # pylint:disable=too-few-public-methods
         return fs_backend
 
 
-_FS_BACKEND: ValidBackends = _Backend().backend
-
-
 def get_backend() -> ValidBackends:
     """ Get the backend that Faceswap is currently configured to use.
 
@@ -141,6 +145,9 @@ def get_backend() -> ValidBackends:
     >>> get_backend()
     'nvidia'
     """
+    global _FS_BACKEND  # pylint:disable=global-statement
+    if _FS_BACKEND is None:
+        _FS_BACKEND = _Backend().backend
     return _FS_BACKEND
 
 
@@ -162,6 +169,9 @@ def set_backend(backend: str) -> None:
     _FS_BACKEND = backend
 
 
+_versions: dict[T.Literal["torch", "keras"], tuple[int, int]] = {}
+
+
 def get_torch_version() -> tuple[int, int]:
     """ Obtain the major. minor version of currently installed PyTorch.
 
@@ -176,12 +186,11 @@ def get_torch_version() -> tuple[int, int]:
     >>> get_torch_version()
     (2, 2)
     """
-    global _TORCH_VERS  # pylint:disable=global-statement
-    if _TORCH_VERS is None:
-        import torch  # pylint:disable=import-outside-toplevel
+    if "torch" not in _versions:
+        torch = import_module("torch")
         split = torch.__version__.split(".")[:2]
-        _TORCH_VERS = (int(split[0]), int(split[1]))
-    return _TORCH_VERS
+        _versions["torch"] = (int(split[0]), int(split[1]))
+    return _versions["torch"]
 
 
 def get_keras_version() -> tuple[int, int]:
@@ -198,12 +207,11 @@ def get_keras_version() -> tuple[int, int]:
     >>> get_torch_version()
     (2, 2)
     """
-    global _KERAS_VERS  # pylint:disable=global-statement
-    if _KERAS_VERS is None:
-        import keras  # pylint:disable=import-outside-toplevel
+    if "keras" not in _versions:
+        keras = import_module("keras")
         split = keras.__version__.split(".")[:2]
-        _KERAS_VERS = (int(split[0]), int(split[1]))
-    return _KERAS_VERS
+        _versions["keras"] = (int(split[0]), int(split[1]))
+    return _versions["keras"]
 
 
 def get_folder(path: str, make_folder: bool = True) -> str:
@@ -315,6 +323,29 @@ def get_dpi() -> float | None:
         return None
 
     return float(dpi)
+
+
+def get_module_objects(module: str) -> list[str]:
+    """ Return a list of all public objects within the given module
+
+    Parameters
+    ----------
+    module : str
+        The module to parse for public objects
+
+    Returns
+    -------
+    list[str]
+        A list of object names that exist within the given module
+
+    Example
+    -------
+    >>> __all__ = get_module_objects(__name__)
+    ["foo", "bar", "baz"]
+    """
+    return [name_ for name_, obj in inspect.getmembers(sys.modules[module])
+            if getattr(obj, "__module__", None) == module
+            and not name_.startswith("_")]
 
 
 def convert_to_secs(*args: int) -> int:
@@ -567,7 +598,7 @@ class GetModel():
         if not isinstance(model_filename, list):
             model_filename = [model_filename]
         self._model_filename = model_filename
-        self._cache_dir = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), ".fs_cache")
+        self._cache_dir = os.path.join(PROJECT_ROOT, ".fs_cache")
         self._git_model_id = git_model_id
         self._url_base = "https://github.com/deepfakes-models/faceswap-models/releases/download"
         self._chunk_size = 1024  # Chunk size for downloading and unzipping
@@ -700,6 +731,7 @@ class GetModel():
             self.logger.info("Zip already exists. Skipping download")
             return
         write_type = "wb" if downloaded_size == 0 else "ab"
+        assert tqdm is not None
         with open(self._model_zip_path, write_type) as out_file:
             pbar = tqdm(desc="Downloading",
                         unit="B",
@@ -737,6 +769,7 @@ class GetModel():
         length = sum(f.file_size for f in zip_file.infolist())
         fnames = zip_file.namelist()
         self.logger.debug("Zipfile: Filenames: %s, Total Size: %s", fnames, length)
+        assert tqdm is not None
         pbar = tqdm(desc="Decompressing",
                     unit="B",
                     total=length,
@@ -897,6 +930,7 @@ class DebugTimes():
         header += f"{self._format_column('Max', time_col)}" if self._display["max"] else ""
         print(header)
         print(separator)
+        assert np is not None
         for key, val in self._times.items():
             num = str(len(val))
             contents = f"{self._format_column(key, name_col)}{self._format_column(num, items_col)}"
@@ -911,3 +945,6 @@ class DebugTimes():
                 contents += f"{self._format_column(_max, time_col)}"
             print(contents)
         self._interval = 1
+
+
+__all__ = get_module_objects(__name__)

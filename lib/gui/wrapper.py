@@ -14,6 +14,8 @@ from time import time
 
 import psutil
 
+from lib.utils import get_module_objects
+
 from .analysis import Session
 from .utils import get_config, get_images, LongRunningTask, preview_trigger
 
@@ -370,7 +372,7 @@ class FaceswapControl():
             if output and self._process_progress_stdout(output):
                 continue
 
-            if output:
+            if output.strip():
                 self._process_training_stdout(output)
                 print(output.rstrip())
 
@@ -697,3 +699,6 @@ class FaceswapControl():
             status = f"Failed - {self._command}.py. Return Code: {returncode}"
         logger.debug("Set final status: %s", status)
         return status
+
+
+__all__ = get_module_objects(__name__)

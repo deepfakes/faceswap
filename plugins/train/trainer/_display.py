@@ -12,7 +12,7 @@ import numpy as np
 import torch
 
 from lib.image import hex_to_rgb
-from lib.utils import get_folder, get_image_paths
+from lib.utils import get_folder, get_image_paths, get_module_objects
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -620,3 +620,6 @@ def _stack_images(images: np.ndarray) -> np.ndarray:
     new_shape = [np.prod(images_shape[x]) for x in new_axes]
     logger.debug("Stacked images")
     return np.transpose(images, axes=np.concatenate(new_axes)).reshape(new_shape)
+
+
+__all__ = get_module_objects(__name__)

@@ -9,6 +9,7 @@ import numpy as np
 from keras import layers as kl,  Model
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 from ._base import BatchType, Masker, MaskerBatch
 
 if T.TYPE_CHECKING:
@@ -239,3 +240,6 @@ class _ScorePool():
         var_x = kl.Conv2D(2, 1, activation="linear", name="score" + self._name + "_r")(var_x)
         var_x = kl.Cropping2D(cropping=self._cropping, name="score" + self._name + "c")(var_x)
         return var_x
+
+
+__all__ = get_module_objects(__name__)

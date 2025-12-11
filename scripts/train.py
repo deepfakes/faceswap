@@ -17,7 +17,7 @@ from lib.image import read_image_meta
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread, FSThread
 from lib.training import Preview, PreviewBuffer, TriggerType
-from lib.utils import (get_folder, get_image_paths, handle_deprecated_cliopts,
+from lib.utils import (get_folder, get_image_paths, get_module_objects, handle_deprecated_cliopts,
                        FaceswapError, IMAGE_EXTENSIONS)
 from plugins.plugin_loader import PluginLoader
 
@@ -430,7 +430,7 @@ class Train():
 
         Parameters
         ----------
-        thread: :class:~`lib.multithreading.MultiThread`
+        thread: :class:`~lib.multithreading.MultiThread`
             The thread containing the training loop
 
         Returns
@@ -610,3 +610,6 @@ class PreviewInterface():
             return
         logger.debug("Sending shutdown to preview viewer")
         self._triggers["shutdown"].set()
+
+
+__all__ = get_module_objects(__name__)

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+from lib.utils import get_module_objects
 from plugins.plugin_loader import PluginLoader
 
 if T.TYPE_CHECKING:
@@ -47,7 +48,7 @@ class Adjustments:
     sharpening: ScalingAdjust | None = None
 
 
-class Converter():
+class Converter():  # pylint:disable=too-many-instance-attributes
     """ The converter is responsible for swapping the original face(s) in a frame with the output
     of a trained Faceswap model.
 
@@ -87,7 +88,7 @@ class Converter():
                      draw_transparent, pre_encode, arguments, configfile)
         self._output_size = output_size
         self._coverage_ratio = coverage_ratio
-        self._centering = centering
+        self._centering: CenteringType = centering
         self._draw_transparent = draw_transparent
         self._writer_pre_encode = pre_encode
         self._args = arguments
@@ -347,7 +348,8 @@ class Converter():
         logger.trace("Getting: (filename: '%s', faces: %s)",  # type: ignore[attr-defined]
                      predicted.inbound.filename, len(predicted.swapped_faces))
 
-        placeholder = np.zeros((frame_size[1], frame_size[0], 4), dtype="float32")
+        placeholder: np.ndarray = np.zeros((frame_size[1], frame_size[0], 4), dtype="float32")
+        faces: list[np.ndarray] | None = None
         if self._full_frame_output:
             background = predicted.inbound.image / np.array(255.0, dtype="float32")
             placeholder[:, :, :3] = background
@@ -370,6 +372,7 @@ class Converter():
                                     new_face, placeholder,
                                     len(predicted.swapped_faces) > 1)
             else:
+                assert faces is not None
                 faces.append(new_face)
 
         if not self._full_frame_output:
@@ -452,6 +455,7 @@ class Converter():
             The raw mask with no erosion or blurring applied
         """
         logger.trace("Getting mask. Image shape: %s", new_face.shape)  # type: ignore[attr-defined]
+        mask_centering: CenteringType
         if self._args.mask_type not in ("none", "predicted"):
             mask_centering = detected_face.mask[self._args.mask_type].stored_centering
         else:
@@ -525,3 +529,6 @@ class Converter():
         logger.trace("resized frame: %s", frame.shape)  # type: ignore[attr-defined]
         np.clip(frame, 0.0, 1.0, out=frame)
         return frame
+
+
+__all__ = get_module_objects(__name__)

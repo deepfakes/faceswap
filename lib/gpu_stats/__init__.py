@@ -4,15 +4,19 @@ being used. """
 
 from lib.utils import get_backend
 
-from ._base import GPUInfo
+from ._base import GPUInfo, _GPUStats
 
 backend = get_backend()
 
-if backend == "nvidia":
-    from .nvidia import NvidiaStats as GPUStats  # type:ignore
-elif backend == "apple_silicon":
-    from .apple_silicon import AppleSiliconStats as GPUStats  # type:ignore
-elif backend == "rocm":
-    from .rocm import ROCm as GPUStats  # type:ignore
-else:
-    from .cpu import CPUStats as GPUStats  # type:ignore
+GPUStats: type[_GPUStats] | None
+try:
+    if backend == "nvidia":
+        from .nvidia import NvidiaStats as GPUStats
+    elif backend == "apple_silicon":
+        from .apple_silicon import AppleSiliconStats as GPUStats
+    elif backend == "rocm":
+        from .rocm import ROCm as GPUStats
+    else:
+        from .cpu import CPUStats as GPUStats
+except (ImportError, ModuleNotFoundError):
+    GPUStats = None

@@ -2,4 +2,4 @@
 # These next 2 should have been installed, but some users complain of errors
 decorator
 cloudpickle
-torch>=2.2.2,<2.4.0
+torch>=2.3.0,<2.10.0

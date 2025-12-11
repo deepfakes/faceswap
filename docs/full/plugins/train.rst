@@ -4,7 +4,6 @@ train package
 
 The Train Package handles the Model and Trainer plugins for training models in Faceswap.
 
-
 .. contents:: Contents
    :local:
 
@@ -13,81 +12,40 @@ model package
 
 This package contains various helper functions that plugins can inherit from
 
-.. rubric:: Module Summary
+.. automodapi:: plugins.train.model._base.io
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-.. autosummary::
-   :nosignatures:
+.. automodapi:: plugins.train.model._base.model
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-   ~plugins.train.model._base.model
-   ~plugins.train.model._base.settings
-   ~plugins.train.model._base.io
+.. automodapi:: plugins.train.model._base.settings
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-model._base.model module
-------------------------
+.. automodapi:: plugins.train.model.original
+   :include-all-objects:
 
-.. automodule:: plugins.train.model._base.model
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-model._base.settings module
----------------------------
-
-.. automodule:: plugins.train.model._base.settings
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-model._base.io module
----------------------
-
-.. automodule:: plugins.train.model._base.io
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-model.original module
-----------------------
-
-.. automodule:: plugins.train.model.original
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: plugins.train.model._base.update
+   :include-all-objects:
+   :no-inheritance-diagram:
 
 trainer package
 ===============
 
 This package contains the training loop for Faceswap
 
-.. rubric:: Module Summary
+.. automodapi:: plugins.train.trainer._base
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-.. autosummary::
-   :nosignatures:
+.. automodapi:: plugins.train.trainer._display
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-   ~plugins.train.trainer._base
-   ~plugins.train.model._display
-   ~plugins.train.model._tensorboard
+.. automodapi:: plugins.train.trainer._tensorboard
+   :include-all-objects:
 
-trainer._base module
-----------------------
-
-.. automodule:: plugins.train.trainer._base
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-trainer._display module
------------------------
-
-.. automodule:: plugins.train.trainer._display
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-trainer._tensorboard module
----------------------------
-
-.. automodule:: plugins.train.trainer._tensorboard
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: plugins.train.trainer.original
+   :include-all-objects:

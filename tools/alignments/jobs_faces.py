@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from lib.align import DetectedFace
 from lib.image import update_existing_metadata  # TODO remove
+from lib.utils import get_module_objects
 from scripts.fsmedia import Alignments
 
 from .media import Faces
@@ -482,3 +483,6 @@ class FaceToFile():
             retval = True
             logger.info("Updated alignments file from PNG Data: %s", self._counts)
         return retval
+
+
+__all__ = get_module_objects(__name__)

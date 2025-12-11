@@ -21,6 +21,7 @@ import numpy as np
 from keras import backend as K, layers as kl, Model
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 from ._base import BatchType, Masker, MaskerBatch
 
 if T.TYPE_CHECKING:
@@ -121,13 +122,13 @@ class UnetDFL:
                                padding="same",
                                activation="relu",
                                kernel_initializer="random_uniform",
-                               name=f"features.{idx}")(output)
+                               name=f"features_{idx}")(output)
             idx += 2
 
         return output
 
     @classmethod
-    def skip_block(cls,
+    def skip_block(cls,  # pylint:disable=too-many-positional-arguments
                    input_1: KerasTensor,
                    input_2: KerasTensor,
                    conv_filters: int,
@@ -247,3 +248,6 @@ class UnetDFL:
             The output from UNet-DFL
         """
         return self._model.predict(inputs, verbose=0, batch_size=self._batch_size)
+
+
+__all__ = get_module_objects(__name__)

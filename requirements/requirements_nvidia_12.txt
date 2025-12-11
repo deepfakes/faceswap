@@ -1,0 +1,7 @@
+# Cuda compatibility 5.0-12.0
+# GTX9xx - RTX50xx
+-r _requirements_base.txt
+# Exclude badly numbered Python2 version of nvidia-ml-py
+nvidia-ml-py>=12.535,<300
+--extra-index-url https://download.pytorch.org/whl/cu126
+torch>=2.7.0,<2.10.0

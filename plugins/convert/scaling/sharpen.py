@@ -3,6 +3,8 @@
 import cv2
 import numpy as np
 
+from lib.utils import get_module_objects
+
 from ._base import Adjustment, logger
 
 
@@ -58,3 +60,6 @@ class Scaling(Adjustment):
         sharpened = (new_face * (1.0 + amount)) + (blur * -amount)
         new_face = (new_face * (1.0 - low_contrast_mask)) + (sharpened * low_contrast_mask)
         return new_face
+
+
+__all__ = get_module_objects(__name__)

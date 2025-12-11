@@ -9,14 +9,19 @@ import sys
 import textwrap
 import typing as T
 
-from lib.utils import get_backend
+from lib.utils import get_backend, get_module_objects
 from lib.gpu_stats import GPUStats
 
 from .actions import FileFullPaths, MultiOption, SaveFileFullPaths
 from .launcher import ScriptExecutor
 
 logger = logging.getLogger(__name__)
-_GPUS = GPUStats().cli_devices
+
+
+if GPUStats is None:
+    _GPUS = []
+else:
+    _GPUS = GPUStats().cli_devices
 
 # LOCALES
 _LANG = gettext.translation("lib.cli.args", localedir="locales", fallback=True)
@@ -313,3 +318,6 @@ class GuiArgs(FaceSwapArgs):
             "default": False,
             "help": _("Output to Shell console instead of GUI console")})
         return argument_list
+
+
+__all__ = get_module_objects(__name__)

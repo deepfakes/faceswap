@@ -17,6 +17,7 @@ from keras.layers import (
 from keras.models import Model
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 from plugins.extract._base import _get_config
 from ._base import BatchType, Masker, MaskerBatch
 
@@ -26,7 +27,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Mask(Masker):
+class Mask(Masker):  # pylint:disable=too-many-instance-attributes
     """ Neural network to process face image into a segmentation mask of the face """
     def __init__(self, **kwargs) -> None:
         self._is_faceswap, version = self._check_weights_selection(kwargs.get("configfile"))
@@ -216,7 +217,7 @@ class ConvBn():
         The starting index for naming the layers within the block. See :func:`_get_name` for
         more information. Default: `1`
     """
-    def __init__(self, filters: int,
+    def __init__(self, filters: int,  # pylint:disable=too-many-positional-arguments
                  kernel_size: int = 3,
                  strides: int = 1,
                  padding: int = 1,
@@ -228,7 +229,7 @@ class ConvBn():
         self._strides = strides
         self._padding = padding
         self._activation = activation
-        self._prefix = f"{prefix}." if prefix else prefix
+        self._prefix = f"{prefix}-" if prefix else prefix
         self._start_idx = start_idx
 
     def __call__(self, inputs: KerasTensor) -> KerasTensor:
@@ -301,7 +302,7 @@ class ResNet18():
         shortcut = inputs
         filts = (shortcut.shape[self._feature_index], res.shape[self._feature_index])
         if strides != 1 or filts[0] != filts[1]:  # Downsample
-            name = f"{prefix}.downsample."
+            name = f"{prefix}-downsample-"
             shortcut = Conv2D(filters, 1,
                               strides=strides,
                               use_bias=False,
@@ -309,11 +310,11 @@ class ResNet18():
             shortcut = BatchNormalization(epsilon=1e-5,
                                           name=_get_name(f"{name}", start_idx=0))(shortcut)
 
-        var_x = Add(name=f"{prefix}.add")([res, shortcut])
-        var_x = Activation("relu", name=f"{prefix}.relu")(var_x)
+        var_x = Add(name=f"{prefix}-add")([res, shortcut])
+        var_x = Activation("relu", name=f"{prefix}-relu")(var_x)
         return var_x
 
-    def _basic_layer(self,
+    def _basic_layer(self,  # pylint:disable=too-many-positional-arguments
                      inputs: KerasTensor,
                      prefix: str,
                      filters: int,
@@ -340,9 +341,9 @@ class ResNet18():
         :class:`keras.KerasTensor`
             The output from the block
         """
-        var_x = self._basic_block(inputs, f"{prefix}.0", filters, strides=strides)
+        var_x = self._basic_block(inputs, f"{prefix}-0", filters, strides=strides)
         for i in range(num_blocks - 1):
-            var_x = self._basic_block(var_x, f"{prefix}.{i + 1}", filters, strides=1)
+            var_x = self._basic_block(var_x, f"{prefix}-{i + 1}", filters, strides=1)
         return var_x
 
     def __call__(self, inputs: KerasTensor) -> KerasTensor:
@@ -358,14 +359,14 @@ class ResNet18():
         :class:`keras.KerasTensor`
             The output from the block
         """
-        var_x = ConvBn(64, kernel_size=7, strides=2, padding=3, prefix="cp.resnet")(inputs)
-        var_x = ZeroPadding2D(1, name="cp.resnet.zeropad")(var_x)
-        var_x = MaxPooling2D(pool_size=3, strides=2, name="cp.resnet.maxpool")(var_x)
+        var_x = ConvBn(64, kernel_size=7, strides=2, padding=3, prefix="cp-resnet")(inputs)
+        var_x = ZeroPadding2D(1, name="cp-resnet-zeropad")(var_x)
+        var_x = MaxPooling2D(pool_size=3, strides=2, name="cp-resnet-maxpool")(var_x)
 
-        var_x = self._basic_layer(var_x, "cp.resnet.layer1", 64, 2)
-        feat8 = self._basic_layer(var_x, "cp.resnet.layer2", 128, 2, strides=2)
-        feat16 = self._basic_layer(feat8, "cp.resnet.layer3", 256, 2, strides=2)
-        feat32 = self._basic_layer(feat16, "cp.resnet.layer4", 512, 2, strides=2)
+        var_x = self._basic_layer(var_x, "cp-resnet-layer1", 64, 2)
+        feat8 = self._basic_layer(var_x, "cp-resnet-layer2", 128, 2, strides=2)
+        feat16 = self._basic_layer(feat8, "cp-resnet-layer3", 256, 2, strides=2)
+        feat32 = self._basic_layer(feat16, "cp-resnet-layer4", 512, 2, strides=2)
 
         return feat8, feat16, feat32
 
@@ -397,13 +398,13 @@ class AttentionRefinementModule():
         :class:`keras.KerasTensor`
             The output from the block
         """
-        prefix = f"cp.arm{feats}"
-        feat = ConvBn(self._filters, prefix=f"{prefix}.conv", start_idx=-1, padding=-1)(inputs)
-        atten = GlobalAveragePooling2D(name=f"{prefix}.avgpool")(feat)
+        prefix = f"cp-arm{feats}"
+        feat = ConvBn(self._filters, prefix=f"{prefix}-conv", start_idx=-1, padding=-1)(inputs)
+        atten = GlobalAveragePooling2D(name=f"{prefix}-avgpool")(feat)
         atten = Reshape((1, 1, atten.shape[-1]))(atten)
-        atten = Conv2D(self._filters, 1, use_bias=False, name=f"{prefix}.conv_atten")(atten)
-        atten = BatchNormalization(epsilon=1e-5, name=f"{prefix}.bn_atten")(atten)
-        atten = Activation("sigmoid", name=f"{prefix}.sigmoid")(atten)
+        atten = Conv2D(self._filters, 1, use_bias=False, name=f"{prefix}-conv_atten")(atten)
+        atten = BatchNormalization(epsilon=1e-5, name=f"{prefix}-bn_atten")(atten)
+        atten = Activation("sigmoid", name=f"{prefix}-sigmoid")(atten)
         var_x = Multiply(name=f"{prefix}.mul")([feat, atten])
         return var_x
 
@@ -428,21 +429,21 @@ class ContextPath():
         """
         feat8, feat16, feat32 = self._resnet(inputs)
 
-        avg = GlobalAveragePooling2D(name="cp.avgpool")(feat32)
+        avg = GlobalAveragePooling2D(name="cp-avgpool")(feat32)
         avg = Reshape((1, 1, avg.shape[-1]))(avg)
-        avg = ConvBn(128, kernel_size=1, padding=0, prefix="cp.conv_avg", start_idx=-1)(avg)
+        avg = ConvBn(128, kernel_size=1, padding=0, prefix="cp-conv_avg", start_idx=-1)(avg)
 
-        avg_up = UpSampling2D(size=feat32.shape[1:3], name="cp.upsample")(avg)
+        avg_up = UpSampling2D(size=feat32.shape[1:3], name="cp-upsample")(avg)
 
         feat32 = AttentionRefinementModule(128)(feat32, 32)
-        feat32 = Add(name="cp.add")([feat32, avg_up])
-        feat32 = UpSampling2D(name="cp.upsample1")(feat32)
-        feat32 = ConvBn(128, kernel_size=3, prefix="cp.conv_head32", start_idx=-1)(feat32)
+        feat32 = Add(name="cp-add")([feat32, avg_up])
+        feat32 = UpSampling2D(name="cp-upsample1")(feat32)
+        feat32 = ConvBn(128, kernel_size=3, prefix="cp-conv_head32", start_idx=-1)(feat32)
 
         feat16 = AttentionRefinementModule(128)(feat16, 16)
-        feat16 = Add(name="cp.add2")([feat16, feat32])
-        feat16 = UpSampling2D(name="cp.upsample2")(feat16)
-        feat16 = ConvBn(128, kernel_size=3, prefix="cp.conv_head16", start_idx=-1)(feat16)
+        feat16 = Add(name="cp-add2")([feat16, feat32])
+        feat16 = UpSampling2D(name="cp-upsample2")(feat16)
+        feat16 = ConvBn(128, kernel_size=3, prefix="cp-conv_head16", start_idx=-1)(feat16)
 
         return feat8, feat16, feat32
 
@@ -472,22 +473,22 @@ class FeatureFusionModule():
         :class:`keras.KerasTensor`
             The output from the block
         """
-        feat = Concatenate(name="ffm.concat")(inputs)
+        feat = Concatenate(name="ffm-concat")(inputs)
         feat = ConvBn(self._filters,
                       kernel_size=1,
                       padding=0,
-                      prefix="ffm.convblk",
+                      prefix="ffm-convblk",
                       start_idx=-1)(feat)
 
-        atten = GlobalAveragePooling2D(name="ffm.avgpool")(feat)
+        atten = GlobalAveragePooling2D(name="ffm-avgpool")(feat)
         atten = Reshape((1, 1, atten.shape[-1]))(atten)
-        atten = Conv2D(self._filters // 4, 1, use_bias=False, name="ffm.conv1")(atten)
-        atten = Activation("relu", name="ffm.relu")(atten)
-        atten = Conv2D(self._filters, 1, use_bias=False, name="ffm.conv2")(atten)
-        atten = Activation("sigmoid", name="ffm.sigmoid")(atten)
+        atten = Conv2D(self._filters // 4, 1, use_bias=False, name="ffm-conv1")(atten)
+        atten = Activation("relu", name="ffm-relu")(atten)
+        atten = Conv2D(self._filters, 1, use_bias=False, name="ffm-conv2")(atten)
+        atten = Activation("sigmoid", name="ffm-sigmoid")(atten)
 
-        var_x = Multiply(name="ffm.mul")([feat, atten])
-        var_x = Add(name="ffm.add")([var_x, feat])
+        var_x = Multiply(name="ffm-mul")([feat, atten])
+        var_x = Add(name="ffm-add")([var_x, feat])
         return var_x
 
 
@@ -522,9 +523,9 @@ class BiSeNetOutput():
         :class:`keras.KerasTensor`
             The output from the block
         """
-        var_x = ConvBn(self._filters, prefix=f"conv_out{self._label}.conv", start_idx=-1)(inputs)
+        var_x = ConvBn(self._filters, prefix=f"conv_out{self._label}-conv", start_idx=-1)(inputs)
         var_x = Conv2D(self._num_classes, 1,
-                       use_bias=False, name=f"conv_out{self._label}.conv_out")(var_x)
+                       use_bias=False, name=f"conv_out{self._label}-conv_out")(var_x)
         return var_x
 
 
@@ -603,3 +604,6 @@ class BiSeNet():
             The output from BiSeNet-FP
         """
         return self._model.predict(inputs, verbose=0, batch_size=self._batch_size)
+
+
+__all__ = get_module_objects(__name__)

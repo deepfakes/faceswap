@@ -14,6 +14,7 @@ import typing as T
 from importlib import import_module
 
 from lib.serializer import get_serializer
+from lib.utils import get_module_objects
 
 from .control_helper import ControlPanel, ControlPanelOption
 from .custom_widgets import Tooltip
@@ -403,7 +404,8 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
     """
     def __init__(self, top_level, parent, configurations, tree, theme):
         super().__init__(parent)
-        self._configs: dict[str, FaceswapConfig] = configurations  # type:ignore[annotation-unchecked]  # noqa:E501
+        self._configs: dict[str,  # type:ignore[annotation-unchecked]  # noqa:E501
+                            FaceswapConfig] = configurations
         self._theme = theme
         self._tree = tree
         self._vars = {}
@@ -857,3 +859,6 @@ class _Presets():
         self._popup.update()
         self._popup.deiconify()
         self._popup.lift()
+
+
+__all__ = get_module_objects(__name__)

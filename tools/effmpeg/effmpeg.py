@@ -17,7 +17,8 @@ import imageio_ffmpeg as im_ffm
 from ffmpy import FFmpeg, FFRuntimeError
 
 # faceswap imports
-from lib.utils import handle_deprecated_cliopts, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
+from lib.utils import (get_module_objects, handle_deprecated_cliopts, IMAGE_EXTENSIONS,
+                       VIDEO_EXTENSIONS)
 
 logger = logging.getLogger(__name__)
 
@@ -76,8 +77,6 @@ class DataItem():
             self.type = item_type
             self.ext = item_ext
             logger.debug("path: '%s', type: '%s', ext: '%s'", self.path, self.type, self.ext)
-        else:
-            return
 
     def set_dirname(self, path=None):
         """ Set the folder name """
@@ -452,6 +451,7 @@ class Effmpeg():
     def __get_default_output(self):
         """ Set output to the same directory as input
             if the user didn't specify it. """
+        retval = ""
         if self.args.output == "":
             if self.args.action in self._actions_have_dir_output:
                 retval = os.path.join(self.input.dirname, "out")
@@ -570,3 +570,6 @@ class Effmpeg():
         retval = hours + ":" + minutes + ":" + seconds
         logger.debug("txt: '%s', retval: %s", txt, retval)
         return retval
+
+
+__all__ = get_module_objects(__name__)

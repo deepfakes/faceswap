@@ -11,6 +11,8 @@ import cv2
 import numpy as np
 
 from keras.saving import load_model
+
+from lib.utils import get_module_objects
 from ._base import Aligner, AlignerBatch, BatchType
 
 if T.TYPE_CHECKING:
@@ -24,7 +26,7 @@ class Align(Aligner):
     """ Perform transformation to align and get landmarks """
     def __init__(self, **kwargs) -> None:
         git_model_id = 13
-        model_filename = "face-alignment-network_2d4_keras_v2.h5"
+        model_filename = "face-alignment-network_2d4_keras_v3.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.model: Model
         self.name = "FAN"
@@ -277,3 +279,6 @@ class Align(Aligner):
                                              resolution)
         logger.trace("Obtained points from prediction: %s",  # type:ignore[attr-defined]
                      batch.landmarks)
+
+
+__all__ = get_module_objects(__name__)

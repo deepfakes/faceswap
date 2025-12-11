@@ -1,3 +1,2 @@
--r _requirements_base.txt
---extra-index-url https://download.pytorch.org/whl/rocm6.0
-torch>=2.3.1,<2.4.0
+# Meta requirements file for latest ROCm version
+-r _requirements_rocm_64.txt

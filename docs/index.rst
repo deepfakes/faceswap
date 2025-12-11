@@ -7,7 +7,7 @@ faceswap.dev Developer Documentation
 ====================================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 4
    :caption: Contents:
 
    full/modules

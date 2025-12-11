@@ -12,7 +12,7 @@ import numpy as np
 
 from lib.logger import parse_class_init
 from lib.model.networks import AlexNet, SqueezeNet
-from lib.utils import GetModel
+from lib.utils import get_module_objects, GetModel
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
@@ -43,7 +43,7 @@ class NetInfo:
     net: Callable | None = None
     init_kwargs: dict[str, T.Any] = field(default_factory=dict)
     needs_init: bool = True
-    outputs: list[layers.Layer] = field(default_factory=list)
+    outputs: list[str] = field(default_factory=list)
 
 
 class _LPIPSTrunkNet():
@@ -76,11 +76,11 @@ class _LPIPSTrunkNet():
             "alex": NetInfo(model_id=15,
                             model_name="alexnet_imagenet_no_top_v1.h5",
                             net=AlexNet,
-                            outputs=[f"features.{idx}" for idx in (0, 3, 6, 8, 10)]),
+                            outputs=[f"features_{idx}" for idx in (0, 3, 6, 8, 10)]),
             "squeeze": NetInfo(model_id=16,
                                model_name="squeezenet_imagenet_no_top_v1.h5",
                                net=SqueezeNet,
-                               outputs=[f"features.{idx}" for idx in (0, 4, 7, 9, 10, 11, 12)]),
+                               outputs=[f"features_{idx}" for idx in (0, 4, 7, 9, 10, 11, 12)]),
             "vgg16": NetInfo(model_id=17,
                              model_name="vgg16_imagenet_no_top_v1.h5",
                              net=kapp.vgg16.VGG16,
@@ -203,7 +203,7 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):
             The output from the linear block
         """
         in_shape = net_output_layer.shape[1:]
-        input_ = layers.Input(in_shape)
+        input_ = T.cast("KerasTensor", layers.Input(in_shape))
         var_x = layers.Dropout(rate=0.5)(input_) if self._use_dropout else input_
         var_x = layers.Conv2D(1, 1, strides=1, padding="valid", use_bias=False)(var_x)
         return input_, var_x
@@ -276,7 +276,7 @@ class LPIPSLoss(keras.losses.Loss):
         ``True`` to return the loss value per feature output layer otherwise ``False``.
         Default: ``False``
     """
-    def __init__(self,  # pylint:disable=too-many-arguments
+    def __init__(self,  # pylint:disable=too-many-arguments,too-many-positional-arguments
                  trunk_network: T.Literal["alex", "squeeze", "vgg16"],
                  trunk_pretrained: bool = True,
                  trunk_eval_mode: bool = True,
@@ -334,7 +334,7 @@ class LPIPSLoss(keras.losses.Loss):
         """
         if self._use_lpips:
             return self._linear_net(inputs)
-        return [ops.sum(x, axis=-1) for x in inputs]
+        return [T.cast("KerasTensor", ops.sum(x, axis=-1)) for x in inputs]
 
     def _process_output(self, inputs: KerasTensor, output_dims: tuple) -> KerasTensor:
         """ Process an individual output based on whether :attr:`is_spatial` has been selected.
@@ -357,7 +357,7 @@ class LPIPSLoss(keras.losses.Loss):
         """
         if self._spatial:
             return layers.Resizing(*output_dims, interpolation="bilinear")(inputs)
-        return ops.mean(inputs, axis=(1, 2), keepdims=True)
+        return T.cast("KerasTensor", ops.mean(inputs, axis=(1, 2), keepdims=True))
 
     def call(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
         """ Perform the LPIPS Loss Function.
@@ -391,7 +391,11 @@ class LPIPSLoss(keras.losses.Loss):
         res = [self._process_output(diff, dims) for diff in self._process_diffs(diffs)]
 
         axis = 0 if self._spatial else None
-        val = ops.sum(res, axis=axis)
+        val = T.cast("KerasTensor", ops.sum(res, axis=axis))
 
         retval = (val, res) if self._ret_per_layer else val
+        assert not isinstance(retval, tuple)
         return retval / 10.0   # Reduce by factor of 10 'cos this loss is STRONG
+
+
+__all__ = get_module_objects(__name__)

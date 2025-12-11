@@ -14,7 +14,7 @@ from configparser import ConfigParser
 from dataclasses import dataclass
 from importlib import import_module
 
-from lib.utils import full_path_split
+from lib.utils import full_path_split, get_module_objects
 
 # LOCALES
 _LANG = gettext.translation("lib.config", localedir="locales", fallback=True)
@@ -33,21 +33,23 @@ class ConfigItem:
 
     Parameters
     ----------
-    default: any
+    default : bool | int | float | list[str] | str
         The default value for the configuration item
-    helptext: str
+    helptext : str
         The helptext to be displayed for the configuration item
-    datatype: type
+    datatype : type
         The type of the configuration item
-    rounding: int
+    rounding : int
         The decimal places for floats or the step interval for ints for slider updates
-    min_max: tuple
+    min_max : tuple[int, int] | tuple[float, float]
         The minumum and maximum value for the GUI slider for the configuration item
-    gui_radio: bool
+    choices: str | list[str]
+        Choices for multi-select items
+    gui_radio : bool
         ``True`` to display the configuration item in a Radio Box
-    fixed: bool
+    fixed : bool
         ``True`` if the item cannot be changed for existing models (training only)
-    group: str
+    group : str
         The group that this configuration item belongs to in the GUI
     """
     default: ConfigValueType
@@ -67,9 +69,9 @@ class ConfigSection:
 
     Parameters
     ----------
-    helptext: str
+    helptext : str
         The helptext to be displayed for the configuration section
-    items: :class:`collections.OrderedDict`
+    items : :class:`collections.OrderedDict`
         Dictionary of configuration items for the section
     """
     helptext: str
@@ -83,9 +85,9 @@ class FaceswapConfig():
 
         Parameters
         ----------
-        section: str or ``None``
+        section : str | None
             The configuration section. ``None`` for all sections
-        configfile: str, optional
+        configfile : str, optional
             Optional path to a config file. ``None`` for default location. Default: ``None``
         """
         logger.debug("Initializing: %s", self.__class__.__name__)
@@ -101,9 +103,15 @@ class FaceswapConfig():
 
     @property
     def changeable_items(self) -> dict[str, ConfigValueType]:
-        """ Training only.
-            Return a dict of config items with their set values for items
-            that can be altered after the model has been created """
+        """ Training only. Return a dict of config items with their set values for items
+        that can be altered after the model has been created
+
+        Returns
+        -------
+        dict[str, bool | int | float | list[str] | str]
+            Config items with their cuurent values for items that can be altered after the model
+            has been created
+        """
         retval: dict[str, ConfigValueType] = {}
         sections = [sect for sect in self.config.sections() if sect.startswith("global")]
         all_sections = sections if self.section is None else sections + [self.section]
@@ -120,19 +128,18 @@ class FaceswapConfig():
     def set_defaults(self) -> None:
         """ Override for plugin specific config defaults
 
-            Should be a series of self.add_section() and self.add_item() calls
+        Should be a series of self.add_section() and self.add_item() calls
 
-            e.g:
-
-            section = "sect_1"
-            self.add_section(section,
-                             "Section 1 Information")
-
-            self.add_item(section=section,
-                          title="option_1",
-                          datatype=bool,
-                          default=False,
-                          info="sect_1 option_1 information")
+        Example
+        -------
+        >>> section = "sect_1"
+        >>> self.add_section(section,
+        ...                  "Section 1 Information")
+        >>> self.add_item(section=section,
+        ...               title="option_1",
+        ...               datatype=bool,
+        ...               default=False,
+        ...               info="sect_1 option_1 information")
         """
         raise NotImplementedError
 
@@ -142,7 +149,7 @@ class FaceswapConfig():
 
         Parameters
         ----------
-        plugin_folder: str
+        plugin_folder : str
             The folder to scan for plugins
         """
         for dirpath, _, filenames in os.walk(plugin_folder):
@@ -164,11 +171,11 @@ class FaceswapConfig():
 
         Parameters
         ----------
-        filename: str
+        filename : str
             The filename to load the defaults from
-        module_path: str
+        module_path : str
             The path to load the module from
-        plugin_type: str
+        plugin_type : str
             The type of plugin that the defaults are being loaded for
         """
         logger.debug("Adding defaults: (filename: %s, module_path: %s, plugin_type: %s",
@@ -184,8 +191,8 @@ class FaceswapConfig():
 
     @property
     def config_dict(self) -> dict[str, ConfigValueType]:
-        """ dict: Collate global options and requested section into a dictionary with the correct
-        data types """
+        """ dict[str, bool | int | float | list[str] | str]: Collate global options and requested
+        section into a dictionary with the correct data types """
         conf: dict[str, ConfigValueType] = {}
         sections = [sect for sect in self.config.sections() if sect.startswith("global")]
         if self.section is not None:
@@ -204,14 +211,14 @@ class FaceswapConfig():
 
         Parameters
         ----------
-        section: str
+        section : str
             The configuration section currently being processed
-        option: str
+        option : str
             The configuration option currently being processed
 
         Returns
         -------
-        varies
+        bool | int | float | list[str] | str
             The selected configuration option in the correct data format
         """
         logger.debug("Getting config item: (section: '%s', option: '%s')", section, option)
@@ -242,15 +249,15 @@ class FaceswapConfig():
 
         Parameters
         ----------
-        section: str
+        section : str
             The configuration section currently being processed
-        option: str
+        option : str
             The configuration option currently being processed
 
         Returns
         -------
-        list
-            List of `str` selected items for the config choice.
+        list[str]
+            List of selected items for the config choice.
         """
         raw_option = self.config.get(section, option)
         if not raw_option:
@@ -267,7 +274,7 @@ class FaceswapConfig():
 
         Parameters
         ----------
-        configfile: str or ``None``
+        configfile: str | None
             Path to a config file. ``None`` for default location.
 
         Returns
@@ -294,15 +301,15 @@ class FaceswapConfig():
 
         Parameters
         ----------
-        title: str
+        title : str
             The title for the section
-        info: str
+        info : str
             The helptext for the section
         """
         logger.debug("Add section: (title: '%s', info: '%s')", title, info)
         self.defaults[title] = ConfigSection(helptext=info, items=OrderedDict())
 
-    def add_item(self,
+    def add_item(self,  # pylint:disable=too-many-arguments,too-many-positional-arguments
                  section: str | None = None,
                  title: str | None = None,
                  datatype: type = str,
@@ -316,28 +323,42 @@ class FaceswapConfig():
                  group: str | None = None) -> None:
         """ Add a default item to a config section
 
-            For int or float values, rounding and min_max must be set
-            This is for the slider in the GUI. The min/max values are not enforced:
-            rounding:   sets the decimal places for floats or the step interval for ints.
-            min_max:    tuple of min and max accepted values
-
-            For str values choices can be set to validate input and create a combo box
-            in the GUI
-
-            For list values, choices must be provided, and a multi-option select box will
-            be created
-
-            is_radio is to indicate to the GUI that it should display Radio Buttons rather than
-            combo boxes for multiple choice options.
-
-            The 'fixed' parameter is only for training configurations. Training configurations
+        Parameters
+        ----------
+        section : str
+            The section of the config to add the item to
+        title : str
+            The title/name of the config item
+        datatype : str
+            The datatype of the config item
+        default : bool | int | float | list[str] | str
+            The default value for the config item
+        info : str
+            Information help text for the config item
+        rounding : int | None, optional
+            For `int` or `float` values this must be set. For other types it is ignored. Sets
+            the decimal places for floats or the step interval for ints. This is for the slider
+            in the GUI. Default: ``None``
+        min_max : tuple[int, int] | tuple[float, float] | None, optional.
+            For `int` or `float` values this must be set. For other types it is ignored. Tuple of
+            minimum and maximum accepted values This is for the slider in the GUI. The values are
+            not enforced. Default: ``None``
+        choices: str | list[str] | None, optional
+            Choices for multi-select items. For `str` values choices can be set to validate input
+            and create a combo box in the GUI. For `list` values, `choices` must be provided, and
+            a multi-option select box will be created. Default : ``None``
+        gui_radio : bool, optional
+            ``True`` to display the configuration item in a Radio Box rather than
+            combo boxes for multiple choice options. Default: ``False``
+        fixed : bool, optional
+            This parameter is only for training configurations. Training configurations
             are set when the model is created, and then reloaded from the state file.
             Marking an item as fixed=False indicates that this value can be changed for
             existing models, and will override the value saved in the state file with the
-            updated value in config.
-
-            The 'Group' parameter allows you to assign the config item to a group in the GUI
-
+            updated value in config. Default: ``False``
+        group : str | None, optional
+            This parameter allows you to assign the config item to a group in the GUI.
+            Default: ``None``
         """
         logger.debug("Add item: (section: '%s', title: '%s', datatype: '%s', default: '%s', "
                      "info: '%s', rounding: '%s', min_max: %s, choices: %s, gui_radio: %s, "
@@ -374,14 +395,34 @@ class FaceswapConfig():
                                                          group=group)
 
     @classmethod
-    def _expand_helptext(cls,
+    def _expand_helptext(cls,  # pylint:disable=too-many-positional-arguments
                          helptext: str,
                          choices: str | list[str],
                          default: ConfigValueType,
                          datatype: type,
                          min_max: tuple[int, int] | tuple[float, float] | None,
                          fixed: bool) -> str:
-        """ Add extra helptext info from parameters """
+        """ Add extra helptext info from parameters
+        Parameters
+        ----------
+        helptext : str
+            The initial help text
+        choices: str | list[str]
+            User Choices to display in the help text
+        default : bool | int | float | list[str] | str
+            The default value to display
+        datatype : str
+            The datatype of the config item to display
+        min_max : tuple[int, int] | tuple[float, float] | None
+            The minimum and maximum values to display in the help text
+        fixed : bool
+            Training only. Display whether the item can be updated
+
+        Returns
+        -------
+        str : The generated helptext from the given parameters
+
+        """
         helptext += "\n"
         if not fixed:
             helptext += _("\nThis option can be updated for existing models.\n")
@@ -436,11 +477,11 @@ class FaceswapConfig():
 
         Parameters
         ----------
-        section: str
+        section : str
             The section title to insert
-        helptext: str
+        helptext : str
             The help text for the config section
-        config: :class:`configparser.ConfigParser`, optional
+        config : :class:`configparser.ConfigParser`, optional
             The config parser object to insert the section into. ``None`` to insert it into the
             default config. Default: ``None``
         """
@@ -453,7 +494,7 @@ class FaceswapConfig():
         config.set(section, helptext)
         logger.debug("Inserted section: '%s'", section)
 
-    def _insert_config_item(self,
+    def _insert_config_item(self,  # pylint:disable=too-many-positional-arguments
                             section: str,
                             item: str,
                             default: ConfigValueType,
@@ -463,15 +504,15 @@ class FaceswapConfig():
 
         Parameters
         ----------
-        section: str
+        section : str
             The section to insert the item into
-        item: str
+        item : str
             The name of the item to insert
-        default: ConfigValueType
+        default : bool | int | float | list[str] | str
             The default value for the item
-        option: :class:`ConfigItem`
+        option : :class:`ConfigItem`
             The configuration option to insert
-        config: :class:`configparser.ConfigParser`, optional
+        config : :class:`configparser.ConfigParser`, optional
             The config parser object to insert the section into. ``None`` to insert it into the
             default config. Default: ``None``
         """
@@ -491,9 +532,9 @@ class FaceswapConfig():
 
         Parameters
         ----------
-        helptext: str
+        helptext : str
             The help text to be formatted
-        is_section: bool, optional
+        is_section : bool, optional
             ``True`` if the help text pertains to a section. ``False`` if it pertains to an item.
             Default: ``True``
 
@@ -526,14 +567,15 @@ class FaceswapConfig():
 
     def save_config(self) -> None:
         """ Save a config file """
-        logger.info("Updating config at: '%s'", self.configfile)
+        logger.debug("Updating config at: '%s'", self.configfile)
+        # TODO in python >= 3.14 this will error when there are delimiters in the comments
         with open(self.configfile, "w", encoding="utf-8", errors="replace") as f_cfgfile:
             self.config.write(f_cfgfile)
         logger.debug("Updated config at: '%s'", self.configfile)
 
     def _validate_config(self) -> None:
-        """ Check for options in default config against saved config
-            and add/remove as appropriate """
+        """ Check for options in default config against saved config and add/remove as
+        appropriate """
         logger.debug("Validating config")
         if self._check_config_change():
             self._add_new_config_items()
@@ -649,3 +691,6 @@ def generate_configs() -> None:
             if not os.path.exists(config_file):
                 mod = import_module(f"plugins.{section}._config")
                 mod.Config(None)  # type:ignore[attr-defined]
+
+
+__all__ = get_module_objects(__name__)

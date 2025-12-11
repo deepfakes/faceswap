@@ -6,6 +6,8 @@ import sys
 
 from subprocess import PIPE, Popen
 
+from lib.utils import get_module_objects
+
 logger = logging.getLogger(__name__)
 
 
@@ -155,3 +157,6 @@ class Git():
 
 git = Git()
 """ :class:`Git`: Handles calls to github """
+
+
+__all__ = get_module_objects(__name__)

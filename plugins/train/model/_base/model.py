@@ -16,7 +16,7 @@ import keras
 from lib.logger import parse_class_init
 from lib.serializer import get_serializer
 from lib.model.nn_blocks import set_config as set_nnblock_config
-from lib.utils import FaceswapError
+from lib.utils import get_module_objects, FaceswapError
 from plugins.train._config import Config
 
 from .io import IO, get_all_sub_models, Weights
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 _CONFIG: dict[str, ConfigValueType] = {}
 
 
-class ModelBase():
+class ModelBase():  # pylint:disable=too-many-instance-attributes
     """ Base class that all model plugins should inherit from.
 
     Parameters
@@ -171,6 +171,11 @@ class ModelBase():
     def iterations(self) -> int:
         """ int: The total number of iterations that the model has trained. """
         return self._state.iterations
+
+    @property
+    def warmup_steps(self) -> int:
+        """ int : The number of steps to perform learning rate warmup """
+        return self._args.warmup
 
     # Private properties
     @property
@@ -369,7 +374,7 @@ class ModelBase():
         self._io.history.append(sum(loss))
 
 
-class State():
+class State():  # pylint:disable=too-many-instance-attributes
     """ Holds state information relating to the plugin's saved model.
 
     Parameters
@@ -395,6 +400,7 @@ class State():
         self._name = model_name
         self._iterations = 0
         self._mixed_precision_layers: list[str] = []
+        self._lr_finder = -1.0
         self._rebuild_model = False
         self._sessions: dict[int, dict] = {}
         self.lowest_avg_loss: float = 0.0
@@ -441,6 +447,11 @@ class State():
     def mixed_precision_layers(self) -> list[str]:
         """list: Layers that can be switched between mixed-float16 and float32. """
         return self._mixed_precision_layers
+
+    @property
+    def lr_finder(self) -> float:
+        """ The value discovered from the learning rate finder. -1 if no value stored """
+        return self._lr_finder
 
     @property
     def model_needs_rebuild(self) -> bool:
@@ -534,6 +545,17 @@ class State():
         logger.debug("Storing mixed precision layers: %s", layers)
         self._mixed_precision_layers = layers
 
+    def add_lr_finder(self, learning_rate: float) -> None:
+        """ Add the optimal discovered learning rate from the learning rate finder
+
+        Parameters
+        ----------
+        learning_rate : float
+            The discovered learning rate
+        """
+        logger.debug("Storing learning rate from LR Finder: %s", learning_rate)
+        self._lr_finder = learning_rate
+
     def _load(self, config_changeable_items: dict) -> None:
         """ Load a state file and set the serialized values to the class instance.
 
@@ -562,6 +584,7 @@ class State():
 
         self._iterations = state.get("iterations", 0)
         self._mixed_precision_layers = state.get("mixed_precision_layers", [])
+        self._lr_finder = state.get("lr_finder", -1.0)
         self._config = state.get("config", {})
         logger.debug("Loaded state: %s", state)
         self._replace_config(config_changeable_items)
@@ -570,10 +593,12 @@ class State():
         """ Save the state values to the serialized state file. """
         logger.debug("Saving State")
         state = {"name": self._name,
-                 "sessions": self._sessions,
+                 "sessions": {k: v for k, v in self._sessions.items()
+                              if v.get("iterations", 0) > 0},
                  "lowest_avg_loss": self.lowest_avg_loss,
                  "iterations": self._iterations,
                  "mixed_precision_layers": self._mixed_precision_layers,
+                 "lr_finder": self._lr_finder,
                  "config": _CONFIG}
         self._serializer.save(self._filename, state)
         logger.debug("Saved State")
@@ -941,11 +966,17 @@ class Inference():
                              given_order,
                              [i._keras_history.operation.name  # pylint:disable=protected-access
                               for i in layer_input])
-            built = layer(layer_input)
-            built = built if isinstance(built, list) else [built]
 
+            if isinstance(layer_input, list) and len(layer_input) == 1:
+                # Flatten single inputs to stop Keras warnings
+                actual_input = layer_input[0]
+            else:
+                actual_input = layer_input
+
+            built = layer(actual_input)
+            built = built if isinstance(built, list) else [built]
             logger.debug(
-                "Compiled layer '%s' from inputs %s",
+                "Compiled layer '%s' from input(s) %s",
                 layer.name,
                 [i._keras_history.operation.name  # pylint:disable=protected-access
                  for i in layer_input])
@@ -978,7 +1009,12 @@ class Inference():
 
             built = self._build_layers(layers, history, built)
 
-        retval = keras.Model(inputs=self._input, outputs=built, name=self._name)
+        assert len(self._input) == 1
+        assert len(built) == 1
+        retval = keras.Model(inputs=self._input[0], outputs=built[0], name=self._name)
         logger.debug("Compiled inference model '%s': %s", retval.name, retval)
 
         return retval
+
+
+__all__ = get_module_objects(__name__)

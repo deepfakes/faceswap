@@ -17,6 +17,7 @@ from lib.gui.custom_widgets import RightClickMenu, Tooltip
 from lib.gui.utils import get_config, get_images
 from lib.image import hex_to_rgb, rgb_to_hex
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .viewport import Viewport
 
@@ -196,16 +197,20 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         frame = ttk.Frame(self)
         frame.pack(side=tk.TOP, fill=tk.Y)
         buttons = {}
+        display: T.Literal["mask", "mesh"]
         for display in self.key_bindings.values():
             var = tk.BooleanVar()
             var.set(False)
             self._tk_vars[display] = var
 
             lookup = "landmarks" if display == "mesh" else display
-            button = ttk.Button(frame,
-                                image=get_images().icons[lookup],  # type:ignore[arg-type]
-                                command=T.cast(T.Callable, lambda t=display: self.on_click(t)),
-                                style="display_deselected.TButton")
+            button = ttk.Button(
+                frame,
+                image=get_images().icons[lookup],
+                command=T.cast(
+                    T.Callable,
+                    lambda t=display: self.on_click(t)),  # pyright:ignore[reportArgumentType]
+                style="display_deselected.TButton")
             button.state(["!pressed", "!focus"])
             button.pack()
             Tooltip(button, text=self._helptext[display])
@@ -329,7 +334,9 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         Toggles the face viewer annotations on an optional annotation button press.
         """
         for strvar in (self._globals.var_faces_size, self._globals.var_filter_mode):
-            strvar.trace_add("write", lambda *e, v=strvar: self.refresh_grid(v))
+            strvar.trace_add(
+                "write",
+                lambda *e, v=strvar: self.refresh_grid(v))  # pyright:ignore[reportArgumentType]
         boolvar = detected_faces.tk_face_count_changed
         boolvar.trace_add("write",
                           lambda *e, v=boolvar: self.refresh_grid(v, retain_position=True))
@@ -342,7 +349,9 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             "write", lambda *e: self._update_mask_type())
 
         for opt, var in self._tk_optional_annotations.items():
-            var.trace_add("write", lambda *e, o=opt: self._toggle_annotations(o))
+            var.trace_add("write",
+                          lambda *e, o=opt: self._toggle_annotations(
+                              o))  # pyright:ignore[reportArgumentType]
 
         self.bind("<Configure>", lambda *e: self._view.update())
 
@@ -586,7 +595,7 @@ class Grid():
         Any locations that are not populated by a face will have a frame and face index of -1
         """
         if not self._is_valid:
-            retval = np.zeros((4, 0, 0)), np.zeros((0, 0))
+            retval: tuple[np.ndarray, np.ndarray] = np.zeros((4, 0, 0)), np.zeros((0, 0))
         else:
             assert self._grid is not None
             assert self._display_faces is not None
@@ -714,11 +723,11 @@ class Grid():
         columns, rows = self.columns_rows
         face_count = len(self._raw_indices["frame"])
         padding = [None for _ in range(face_count, columns * rows)]
-        self._display_faces = np.array([None if idx is None else current_faces[idx][face_idx]
-                                        for idx, face_idx
-                                        in zip(self._raw_indices["frame"] + padding,
-                                               self._raw_indices["face"] + padding)],
-                                       dtype="object").reshape(rows, columns)
+        self._display_faces = np.array(
+            [None if idx is None or face_idx is None else current_faces[idx][face_idx]
+             for idx, face_idx
+             in zip(self._raw_indices["frame"] + padding, self._raw_indices["face"] + padding)],
+            dtype="object").reshape(rows, columns)
         logger.debug("faces: (shape: %s, dtype: %s)",
                      self._display_faces.shape, self._display_faces.dtype)
 
@@ -791,3 +800,6 @@ class ContextMenu():  # pylint:disable=too-few-public-methods
                      "face_id: %s", self._frame_index, self._face_index)
         self._detected_faces.update.delete(self._frame_index, self._face_index)
         self._frame_index = self._face_index = None
+
+
+__all__ = get_module_objects(__name__)

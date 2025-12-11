@@ -16,7 +16,7 @@ from keras import layers, ops, Variable, models, saving
 import numpy as np
 
 from lib.model.layers import QuickGELU
-from lib.utils import GetModel
+from lib.utils import get_module_objects, GetModel
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -61,7 +61,7 @@ class ViTConfig:
             isinstance(self.layer_conf, int) and self.patch > 0)
 
 
-ModelConfig: dict[TypeModels, ViTConfig] = {  # Each model has a different set of parameters
+MODEL_CONFIG: dict[TypeModels, ViTConfig] = {  # Each model has a different set of parameters
     "RN50": ViTConfig(
         embed_dim=1024, resolution=224, layer_conf=(3, 4, 6, 3), width=64, patch=0, git_id=21),
     "RN101": ViTConfig(
@@ -148,13 +148,13 @@ class Transformer():
             The unique name for this layer
         """
         cls._layer_names[name] = cls._layer_names.setdefault(name, -1) + 1
-        name = f"{name}.{cls._layer_names[name]}"
+        name = f"{name}_{cls._layer_names[name]}"
         logger.debug("Generating block name: %s", name)
         return name
 
     @classmethod
     def _mlp(cls, inputs: KerasTensor, key_dim: int, name: str) -> KerasTensor:
-        """" Multilayer Perecptron for Block Ateention
+        """" Multilayer Perceptron for Block Attention
 
         Parameters
         ----------
@@ -170,10 +170,10 @@ class Transformer():
         :class:`keras.KerasTensor`
             The output from the MLP
         """
-        name = f"{name}.mlp"
-        var_x = layers.Dense(key_dim * 4, name=f"{name}.c_fc")(inputs)
-        var_x = QuickGELU(name=f"{name}.gelu")(var_x)
-        var_x = layers.Dense(key_dim, name=f"{name}.c_proj")(var_x)
+        name = f"{name}_mlp"
+        var_x = layers.Dense(key_dim * 4, name=f"{name}_c_fc")(inputs)
+        var_x = QuickGELU(name=f"{name}_gelu")(var_x)
+        var_x = layers.Dense(key_dim, name=f"{name}_c_proj")(var_x)
         return var_x
 
     def residual_attention_block(self,
@@ -204,14 +204,14 @@ class Transformer():
         """
         name = self._get_name(name)
 
-        var_x = layers.LayerNormalization(epsilon=1e-05, name=f"{name}.ln_1")(inputs)
+        var_x = layers.LayerNormalization(epsilon=1e-05, name=f"{name}_ln_1")(inputs)
         var_x = layers.MultiHeadAttention(
             num_heads=num_heads,
             key_dim=key_dim // num_heads,
-            name=f"{name}.attn")(var_x, var_x, var_x, attention_mask=attn_mask)
+            name=f"{name}_attn")(var_x, var_x, var_x, attention_mask=attn_mask)
         var_x = layers.Add()([inputs, var_x])
         var_y = var_x
-        var_x = layers.LayerNormalization(epsilon=1e-05, name=f"{name}.ln_2")(var_x)
+        var_x = layers.LayerNormalization(epsilon=1e-05, name=f"{name}_ln_2")(var_x)
         var_x = layers.Add()([var_y, self._mlp(var_x, key_dim, name)])
         return var_x
 
@@ -235,7 +235,7 @@ class Transformer():
                                                   self._width,
                                                   self._heads,
                                                   self._attn_mask,
-                                                  name=f"{self._name}.resblocks")
+                                                  name=f"{self._name}_resblocks")
         return var_x
 
 
@@ -408,30 +408,30 @@ class VisualTransformer():
                                            self._patch_size,
                                            strides=self._patch_size,
                                            use_bias=False,
-                                           name=f"{self._name}.conv1")(inputs)
+                                           name=f"{self._name}_conv1")(inputs)
 
         var_x = layers.Reshape((-1, self._width))(var_x)  # shape = [*, grid ** 2, width]
 
         class_embed = ClassEmbedding((self._width, ),
                                      self._width ** -0.5,
-                                     name=f"{self._name}.class_embedding")(var_x)
+                                     name=f"{self._name}_class_embedding")(var_x)
         var_x = layers.Concatenate(axis=1)([class_embed, var_x])
 
         pos_embed = PositionalEmbedding(((self._input_resolution // self._patch_size) ** 2 + 1,
                                         self._width),
                                         self._width ** -0.5,
-                                        name=f"{self._name}.positional_embedding")(var_x)
+                                        name=f"{self._name}_positional_embedding")(var_x)
         var_x = layers.Add()([var_x, pos_embed])
-        var_x = layers.LayerNormalization(epsilon=1e-05, name=f"{self._name}.ln_pre")(var_x)
+        var_x = layers.LayerNormalization(epsilon=1e-05, name=f"{self._name}_ln_pre")(var_x)
         var_x = Transformer(self._width,
                             self._num_layers,
                             self._heads,
-                            name=f"{self._name}.transformer")(var_x)
+                            name=f"{self._name}_transformer")(var_x)
         var_x = layers.LayerNormalization(epsilon=1e-05,
-                                          name=f"{self._name}.ln_post")(var_x[:, 0, :])
+                                          name=f"{self._name}_ln_post")(var_x[:, 0, :])
         proj = Projection((self._width, self._output_dim),
                           self._width ** -0.5,
-                          name=f"{self._name}.proj")(var_x)
+                          name=f"{self._name}_proj")(var_x)
         var_x = layers.Dot(axes=-1)([var_x, proj])
         return models.Model(inputs=inputs, outputs=var_x, name=self._name)
 
@@ -487,14 +487,14 @@ class Bottleneck():
         if self._stride <= 1 and self._inplanes == self._planes * self.expansion:
             return inputs
 
-        name = f"{self._name}.downsample"
-        out = layers.AveragePooling2D(self._stride, name=f"{name}.avgpool")(inputs)
+        name = f"{self._name}_downsample"
+        out = layers.AveragePooling2D(self._stride, name=f"{name}_avgpool")(inputs)
         out = layers.Conv2D(self._planes * self.expansion,
                             1,
                             strides=1,
                             use_bias=False,
-                            name=f"{name}.0")(out)
-        out = layers.BatchNormalization(name=f"{name}.1", epsilon=1e-5)(out)
+                            name=f"{name}_0")(out)
+        out = layers.BatchNormalization(name=f"{name}_1", epsilon=1e-5)(out)
         return out
 
     def __call__(self, inputs: KerasTensor) -> KerasTensor:
@@ -513,13 +513,13 @@ class Bottleneck():
         :class:`keras.KerasTensor`
             The result of the forward pass through the Bottleneck block.
         """
-        out = layers.Conv2D(self._planes, 1, use_bias=False, name=f"{self._name}.conv1")(inputs)
-        out = layers.BatchNormalization(name=f"{self._name}.bn1", epsilon=1e-5)(out)
+        out = layers.Conv2D(self._planes, 1, use_bias=False, name=f"{self._name}_conv1")(inputs)
+        out = layers.BatchNormalization(name=f"{self._name}_bn1", epsilon=1e-5)(out)
         out = layers.ReLU()(out)
 
         out = layers.ZeroPadding2D(padding=((1, 1), (1, 1)))(out)
-        out = layers.Conv2D(self._planes, 3, use_bias=False, name=f"{self._name}.conv2")(out)
-        out = layers.BatchNormalization(name=f"{self._name}.bn2", epsilon=1e-5)(out)
+        out = layers.Conv2D(self._planes, 3, use_bias=False, name=f"{self._name}_conv2")(out)
+        out = layers.BatchNormalization(name=f"{self._name}_bn2", epsilon=1e-5)(out)
         out = layers.ReLU()(out)
 
         if self._stride > 1:
@@ -528,8 +528,8 @@ class Bottleneck():
         out = layers.Conv2D(self._planes * self.expansion,
                             1,
                             use_bias=False,
-                            name=f"{self._name}.conv3")(out)
-        out = layers.BatchNormalization(name=f"{self._name}.bn3", epsilon=1e-5)(out)
+                            name=f"{self._name}_conv3")(out)
+        out = layers.BatchNormalization(name=f"{self._name}_bn3", epsilon=1e-5)(out)
 
         identity = self._downsample(inputs)
 
@@ -590,14 +590,14 @@ class AttentionPool2d():
                                                      keepdims=True), var_x])
         pos_embed = PositionalEmbedding((self._spatial_dim ** 2 + 1, self._embed_dim),  # N(HW+1)C
                                         self._embed_dim ** 0.5,
-                                        name=f"{self._name}.positional_embedding")(var_x)
+                                        name=f"{self._name}_positional_embedding")(var_x)
         var_x = layers.Add()([var_x, pos_embed])
         # TODO At this point torch + keras match. They mismatch after MHA
         var_x = layers.MultiHeadAttention(num_heads=self._num_heads,
                                           key_dim=self._embed_dim // self._num_heads,
                                           output_shape=self._output_dim or self._embed_dim,
                                           use_bias=True,
-                                          name=f"{self._name}.mha")(var_x[:, :1, ...],
+                                          name=f"{self._name}_mha")(var_x[:, :1, ...],
                                                                     var_x,
                                                                     var_x)
         # only return the first element in the sequence
@@ -700,11 +700,11 @@ class ModifiedResNet():
             Sequential block of bottlenecks
         """
         retval: KerasTensor
-        retval = Bottleneck(planes, planes, stride, name=f"{name}.0")(inputs)
+        retval = Bottleneck(planes, planes, stride, name=f"{name}_0")(inputs)
         for i in range(1, blocks):
             retval = Bottleneck(planes * Bottleneck.expansion,
                                 planes,
-                                name=f"{name}.{i}")(retval)
+                                name=f"{name}_{i}")(retval)
         return retval
 
     def __call__(self) -> models.Model:
@@ -724,13 +724,13 @@ class ModifiedResNet():
                                      self._width * (2 ** i),
                                      self._layer_config[i],
                                      stride=stride,
-                                     name=f"{self._name}.layer{i + 1}")
+                                     name=f"{self._name}_layer{i + 1}")
 
         var_x = AttentionPool2d(self._input_resolution // 32,
                                 self._width * 32,  # the ResNet feature dimension
                                 self._heads,
                                 self._output_dim,
-                                name=f"{self._name}.attnpool")(var_x)
+                                name=f"{self._name}_attnpool")(var_x)
         return models.Model(inputs, outputs=var_x, name=self._name)
 
 
@@ -763,12 +763,12 @@ class ViT():
                  load_weights: bool = False) -> None:
         logger.debug("Initializing: %s (name: %s, input_size: %s, load_weights: %s)",
                      self.__class__.__name__, name, input_size, load_weights)
-        assert name in ModelConfig, ("Name must be one of %s", list(ModelConfig))
+        assert name in MODEL_CONFIG, ("Name must be one of %s", list(MODEL_CONFIG))
 
         self._name = name
         self._load_weights = load_weights
 
-        config = ModelConfig[name]
+        config = MODEL_CONFIG[name]
         self._git_id = config.git_id
 
         res = input_size if input_size is not None else config.resolution
@@ -843,7 +843,8 @@ class ViT():
                 # top_level_weights where they don't exist. This always generates a scary looking
                 # warning, so it supressed for now
                 warnings.simplefilter("ignore")
-                net.load_weights(model_path, by_name=True, skip_mismatch=True)
+                # NOTE: Don't load by name as we had to replace local dots with underscores
+                net.load_weights(model_path, by_name=False, skip_mismatch=True)
 
         return net
 
@@ -853,3 +854,6 @@ for name_, obj in inspect.getmembers(sys.modules[__name__]):
     if (inspect.isclass(obj) and issubclass(obj, layers.Layer)
             and obj.__module__ == __name__):
         saving.get_custom_objects().update({name_: obj})
+
+
+__all__ = get_module_objects(__name__)

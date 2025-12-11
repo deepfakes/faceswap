@@ -1,7 +1,2 @@
-multithreading module
-=====================
-
-.. automodule:: lib.multithreading
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: lib.multithreading
+   :include-all-objects:

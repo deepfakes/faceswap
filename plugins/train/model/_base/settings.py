@@ -25,6 +25,7 @@ from lib.model.optimizers import AdaBelief
 from lib.model.autoclip import AutoClipper
 from lib.model.nn_blocks import reset_naming
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
@@ -309,7 +310,7 @@ class Optimizer():
     @property
     def optimizer(self) -> optimizers.Optimizer:
         """ :class:`keras.optimizers.Optimizer`: The requested optimizer. """
-        return self._optimizer(**self._kwargs)
+        return T.cast(optimizers.Optimizer, self._optimizer(**self._kwargs))
 
     def _configure_clipping(self,
                             method: T.Literal["autoclip", "norm", "value"] | None,
@@ -424,13 +425,13 @@ class Optimizer():
         config: dict[str, ConfigValueType]:
             The user settings configuration dictionary
         """
-        clip_type: T.TypeAlias = T.Literal["autoclip", "norm", "value"]
         clip_method = config["gradient_clipping"]
         assert clip_method is None or (isinstance(clip_method, str)
-                                       and clip_method in T.get_args(clip_type))
+                                       and clip_method in ["autoclip", "norm", "value"])
         assert isinstance(config["clipping_value"], float)
         assert isinstance(config["autoclip_history"], int)
-        self._configure_clipping(T.cast(clip_type | None, clip_method),
+        self._configure_clipping(T.cast(T.Literal["autoclip", "norm", "value"] | None,
+                                        clip_method),
                                  config["clipping_value"],
                                  config["autoclip_history"])
 
@@ -621,6 +622,35 @@ class Settings():
 
 #        return tf.distribute.experimental.CentralStorageStrategy(parameter_device="/cpu:0")
 
+    @classmethod
+    def _dtype_from_config(cls, config: dict[str, T.Any]) -> str:
+        """ Obtain the dtype of a layer from the given layer config
+
+        Parameters
+        ----------
+        config: dict[str, Any] : The Keras layer configuration dictionary
+
+        Returns
+        -------
+        str
+            The datatype of the layer
+        """
+        dtype = config["dtype"]
+        logger.debug("Obtaining layer dtype from config: %s", dtype)
+        if isinstance(dtype, str):
+            return dtype
+        # Fail tests if Keras changes the way it stores dtypes
+        assert isinstance(dtype, dict) and "config" in dtype, (
+            "Keras config dtype storage method has changed")
+
+        dtype_conf = dtype["config"]
+        # Fail tests if Keras changes the way it stores dtypes
+        assert isinstance(dtype_conf, dict) and "name" in dtype_conf, (
+            "Keras config dtype storage method has changed")
+
+        retval = dtype_conf["name"]
+        return retval
+
     def _get_mixed_precision_layers(self, layers: list[dict]) -> list[str]:
         """ Obtain the names of the layers in a mixed precision model that have their dtype policy
         explicitly set to mixed-float16.
@@ -647,10 +677,9 @@ class Settings():
                 logger.debug("Skipping unsupported layer: %s %s",
                              layer.get("name", f"class_name: {layer['class_name']}"), config)
                 continue
-            dtype = config["dtype"]
+            dtype = self._dtype_from_config(config)
+            logger.debug("layer: '%s', dtype: '%s'", config["name"], dtype)
 
-            # Fail tests if Keras changes the way it stores dtypes
-            assert isinstance(dtype, str), "Keras config dtype storage method has changed"
             if dtype == "mixed_float16":
                 logger.debug("Adding supported mixed precision layer: %s %s",
                              layer["config"]["name"], dtype)
@@ -790,3 +819,6 @@ class Settings():
         retval = nullcontext() if self._strategy is None else self._strategy.scope()
         logger.debug("Using strategy scope: %s", retval)
         return retval
+
+
+__all__ = get_module_objects(__name__)

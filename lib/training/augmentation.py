@@ -3,6 +3,7 @@
 from __future__ import annotations
 import logging
 import typing as T
+from dataclasses import dataclass
 
 import cv2
 import numexpr as ne
@@ -11,6 +12,7 @@ from scipy.interpolate import griddata
 
 from lib.image import batch_convert_color
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from lib.config import ConfigValueType
@@ -18,152 +20,325 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AugConstants:  # pylint:disable=too-many-instance-attributes,too-few-public-methods
-    """ Dataclass for holding constants for Image Augmentation.
+@dataclass
+class ConstantsColor:
+    """ Dataclass for holding constants for enhancing an image (ie contrast/color adjustment)
 
     Parameters
     ----------
-    config: dict[str, ConfigValueType]
-        The user training configuration options
-    processing_size: int:
-        The size of image to augment the data for
-    batch_size: int
-        The batch size that augmented data is being prepared for
+    clahe_base_contrast : int
+        The base number for Contrast Limited Adaptive Histogram Equalization
+    clahe_chance : float
+        Probability to perform Contrast Limited Adaptive Histogram Equilization
+    clahe_max_size : int
+        Maximum clahe window size
+    lab_adjust : :class:`numpy.ndarray`
+        Adjustment amounts for L*A*B augmentation
     """
-    def __init__(self,
-                 config: dict[str, ConfigValueType],
-                 processing_size: int,
-                 batch_size: int) -> None:
-        logger.debug(parse_class_init(locals()))
-        self.clahe_base_contrast: int = 0
-        """int: The base number for Contrast Limited Adaptive Histogram Equalization"""
-        self.clahe_chance: float = 0.0
-        """float: Probability to perform Contrast Limited Adaptive Histogram Equilization"""
-        self.clahe_max_size: int = 0
-        """int: Maximum clahe window size"""
+    clahe_base_contrast: int
+    """ int : The base number for Contrast Limited Adaptive Histogram Equalization """
+    clahe_chance: float
+    """ float : Probability to perform Contrast Limited Adaptive Histogram Equilization """
+    clahe_max_size: int
+    """ int : Maximum clahe window size"""
+    lab_adjust: np.ndarray
+    """ :class:`numpy.ndarray` : Adjustment amounts for L*A*B augmentation """
 
-        self.lab_adjust: np.ndarray
-        """:class:`numpy.ndarray`: Adjustment amounts for L*A*B augmentation"""
-        self.transform_rotation: int = 0
-        """int: Rotation range for transformations"""
-        self.transform_zoom: float = 0.0
-        """float: Zoom range for transformations"""
-        self.transform_shift: float = 0.0
-        """float: Shift range for transformations"""
-        self.warp_maps: np.ndarray
-        """:class:`numpy.ndarray`The stacked (x, y) mappings for image warping"""
-        self.warp_pad: tuple[int, int] = (0, 0)
-        """:tuple[int, int]: The padding to apply for image warping"""
-        self.warp_slices: slice
-        """:slice: The slices for extracting a warped image"""
-        self.warp_lm_edge_anchors: np.ndarray
-        """::class:`numpy.ndarray`: The edge anchors for landmark based warping"""
-        self.warp_lm_grids: np.ndarray
-        """::class:`numpy.ndarray`: The grids for landmark based warping"""
 
-        self._config = config
-        self._size = processing_size
-        self._load_config(batch_size)
-        logger.debug("Initialized: %s", self.__class__.__name__)
+@dataclass
+class ConstantsTransform:
+    """ Dataclass for holding constants for transforming an image
 
-    def _load_clahe(self) -> None:
-        """ Load the CLAHE constants from user config """
-        color_clahe_chance = self._config.get("color_clahe_chance", 50)
-        color_clahe_max_size = self._config.get("color_clahe_max_size", 4)
-        assert isinstance(color_clahe_chance, int)
-        assert isinstance(color_clahe_max_size, int)
+    Parameters
+    ----------
+    rotation : int
+        Rotation range for transformations
+    zoom : float
+        Zoom range for transformations
+    shift : float
+        Shift range for transformations
+    """
+    rotation: int
+    """ int : Rotation range for transformations """
+    zoom: float
+    """ float : Zoom range for transformations """
+    shift: float
+    """ float : Shift range for transformations """
+    flip: float
+    """ float : The chance to flip an image """
 
-        self.clahe_base_contrast = max(2, self._size // 128)
-        self.clahe_chance = color_clahe_chance / 100
-        self.clahe_max_size = color_clahe_max_size
-        logger.debug("clahe_base_contrast: %s, clahe_chance: %s, clahe_max_size: %s",
-                     self.clahe_base_contrast, self.clahe_chance, self.clahe_max_size)
 
-    def _load_lab(self) -> None:
-        """ Load the random L*A*B augmentation constants """
-        color_lightness = self._config.get("color_lightness", 30)
-        color_ab = self._config.get("color_ab", 8)
-        assert isinstance(color_lightness, int)
-        assert isinstance(color_ab, int)
+@dataclass
+class ConstantsWarp:
+    """ Dataclass for holding constants for warping an image
 
-        amount_l = int(color_lightness) / 100
-        amount_ab = int(color_ab) / 100
+    Parameters
+    ----------
+    maps : :class:`numpy.ndarray`
+        The stacked (x, y) mappings for image warping
+    pad : tuple[int, int]
+        The padding to apply for image warping
+    slices : slice
+        The slices for extracting a warped image
+    lm_edge_anchors : :class:`numpy.ndarray`
+        The edge anchors for landmark based warping
+    lm_grids : :class:`numpy.ndarray`
+        The grids for landmark based warping
+    """
+    maps: np.ndarray
+    """ :class:`numpy.ndarray` : The stacked (x, y) mappings for image warping """
+    pad: tuple[int, int]
+    """ :tuple[int, int] : The padding to apply for image warping """
+    slices: slice
+    """ slice : The slices for extracting a warped image """
+    scale: float
+    """ float : The scaling to apply to standard warping """
+    lm_edge_anchors: np.ndarray
+    """ :class:`numpy.ndarray` : The edge anchors for landmark based warping """
+    lm_grids: np.ndarray
+    """ :class:`numpy.ndarray` : The grids for landmark based warping """
+    lm_scale: float
+    """ float : The scaling to apply to landmark based warping """
 
-        self.lab_adjust = np.array([amount_l, amount_ab, amount_ab], dtype="float32")
-        logger.debug("lab_adjust: %s", self.lab_adjust)
+    def __repr__(self) -> str:
+        """ Display shape/type information for arrays in __repr__ """
+        params = {k: f"array[shape: {v.shape}, dtype: {v.dtype}]"
+                  if isinstance(v, np.ndarray) else v
+                  for k, v in self.__dict__.items()}
+        str_params = ", ".join(f"{k}={v}" for k, v in params.items())
+        return f"{self.__class__.__name__}({str_params})"
 
-    def _load_transform(self) -> None:
-        """ Load the random transform constants """
-        shift_range = self._config.get("shift_range", 5)
-        rotation_range = self._config.get("rotation_range", 10)
-        zoom_amount = self._config.get("zoom_amount", 5)
-        assert isinstance(shift_range, int)
-        assert isinstance(rotation_range, int)
-        assert isinstance(zoom_amount, int)
 
-        self.transform_shift = (shift_range / 100) * self._size
-        self.transform_rotation = rotation_range
-        self.transform_zoom = zoom_amount / 100
-        logger.debug("transform_shift: %s, transform_rotation: %s, transform_zoom: %s",
-                     self.transform_shift, self.transform_rotation, self.transform_zoom)
+@dataclass
+class ConstantsAugmentation:
+    """ Dataclass for holding constants for Image Augmentation.
 
-    def _load_warp(self, batch_size: int) -> None:
-        """ Load the warp augmentation constants
+    Attributes
+    ----------
+    color : :class:`ConstantsColor`
+        The constants for adjusting color/contrast in an image
+    transform : :class:`ConstantsTransform`
+        The constants for image transformation
+    warp : :class:`ConstantsTransform`
+        The constants for image warping
+
+    Dataclass should be initialized using its :func:`from_config` method:
+
+    Example
+    -------
+    >>> constants = ConstantsAugmentation.from_config(config=config,
+    ...                                               processing_size=256,
+    ...                                               batch_size=16)
+    """
+    color: ConstantsColor
+    """ :class:`ConstantsColor` : The constants for adjusting color/contrast in an image """
+    transform: ConstantsTransform
+    """ :class:`ConstantsTransform` : The constants for image transformation """
+    warp: ConstantsWarp
+    """ :class:`ConstantsTransform` : The constants for image warping """
+
+    @classmethod
+    def _get_clahe(cls, config: dict[str, ConfigValueType], size: int
+                   ) -> tuple[int, float, int]:
+        """ Get the CLAHE constants from user config
 
         Parameters
         ----------
-        batch_size: int
-            The batch size that augmented data is being prepared for
+        config : dict[str, ConfigValueType]
+            The user training configuration options
+        size : int
+            The size of image to augment the data for
+
+        Returns
+        -------
+        clahe_base_contrast : int
+            The base number for Contrast Limited Adaptive Histogram Equalization
+        clahe_chance : float
+            Probability to perform Contrast Limited Adaptive Histogram Equilization
+        clahe_max_size : int
+            Maximum clahe window size
         """
-        warp_range = np.linspace(0, self._size, 5, dtype='float32')
-        warp_mapx = np.broadcast_to(warp_range, (batch_size, 5, 5)).astype("float32")
-        warp_mapy = np.broadcast_to(warp_mapx[0].T, (batch_size, 5, 5)).astype("float32")
-        warp_pad = int(1.25 * self._size)
+        color_clahe_chance = config.get("color_clahe_chance", 50)
+        color_clahe_max_size = config.get("color_clahe_max_size", 4)
+        assert isinstance(color_clahe_chance, int)
+        assert isinstance(color_clahe_max_size, int)
 
-        self.warp_maps = np.stack((warp_mapx, warp_mapy), axis=1)
-        self.warp_pad = (warp_pad, warp_pad)
-        self.warp_slices = slice(warp_pad // 10, -warp_pad // 10)
-        logger.debug("warp_maps: (%s, %s), warp_pad: %s, warp_slices: %s",
-                     self.warp_maps.shape, self.warp_maps.dtype,
-                     self.warp_pad, self.warp_slices)
+        clahe_base_contrast = max(2, size // 128)
+        clahe_chance = color_clahe_chance / 100
+        clahe_max_size = color_clahe_max_size
+        logger.debug("clahe_base_contrast: %s, clahe_chance: %s, clahe_max_size: %s",
+                     clahe_base_contrast, clahe_chance, clahe_max_size)
+        return clahe_base_contrast, clahe_chance, clahe_max_size
 
-    def _load_warp_to_landmarks(self, batch_size: int) -> None:
+    @classmethod
+    def _get_lab(cls, config: dict[str, ConfigValueType]) -> np.ndarray:
+        """ Load the random L*A*B augmentation constants
+
+        Parameters
+        ----------
+        config : dict[str, ConfigValueType]
+            The user training configuration options
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            Adjustment amounts for L*A*B augmentation
+        """
+        color_lightness = config.get("color_lightness", 30)
+        color_ab = config.get("color_ab", 8)
+        assert isinstance(color_lightness, int)
+        assert isinstance(color_ab, int)
+
+        amount_l = color_lightness / 100.
+        amount_ab = color_ab / 100.
+
+        lab_adjust = np.array([amount_l, amount_ab, amount_ab], dtype="float32")
+        logger.debug("lab_adjust: %s", lab_adjust)
+        return lab_adjust
+
+    @classmethod
+    def _get_color(cls, config: dict[str, ConfigValueType], size: int) -> ConstantsColor:
+        """ Get the image enhancements constants from user config
+
+        Parameters
+        ----------
+        config : dict[str, ConfigValueType]
+            The user training configuration options
+        size : int
+            The size of image to augment the data for
+
+        Returns
+        -------
+        :class:`ConstantsColor`
+            The constants for image enhancement
+        """
+        clahe_base_contrast, clahe_chance, clahe_max_size = cls._get_clahe(config, size)
+        retval = ConstantsColor(clahe_base_contrast=clahe_base_contrast,
+                                clahe_chance=clahe_chance,
+                                clahe_max_size=clahe_max_size,
+                                lab_adjust=cls._get_lab(config))
+        logger.debug(retval)
+        return retval
+
+    @classmethod
+    def _get_transform(cls, config: dict[str, ConfigValueType], size: int) -> ConstantsTransform:
+        """ Load the random transform constants
+
+        Parameters
+        ----------
+        config : dict[str, ConfigValueType]
+            The user training configuration options
+        size : int
+            The size of image to augment the data for
+
+        Returns
+        -------
+        :class:`ConstantsTransform`
+            The constants for image transformation
+        """
+        rotation_range = config.get("rotation_range", 10)
+        zoom_amount = config.get("zoom_amount", 5)
+        shift_range = config.get("shift_range", 5)
+        flip = config.get("random_flip", 50)
+        assert isinstance(rotation_range, int)
+        assert isinstance(zoom_amount, int)
+        assert isinstance(shift_range, int)
+        assert isinstance(flip, int)
+
+        retval = ConstantsTransform(rotation=rotation_range,
+                                    zoom=zoom_amount / 100.,
+                                    shift=(shift_range / 100.) * size,
+                                    flip=flip / 100.)
+        logger.debug(retval)
+        return retval
+
+    @classmethod
+    def _get_warp_to_landmarks(cls, size: int, batch_size: int) -> tuple[np.ndarray, np.ndarray]:
         """ Load the warp-to-landmarks augmentation constants
 
         Parameters
         ----------
-        batch_size: int
+        size : int
+            The size of image to augment the data for
+        batch_size : int
             The batch size that augmented data is being prepared for
+
+        Returns
+        -------
+        edge_anchors : :class:`numpy.ndarray`
+            The edge anchors for landmark based warping
+        grids : :class:`numpy.ndarray`
+            The grids for landmark based warping
         """
-        p_mx = self._size - 1
-        p_hf = (self._size // 2) - 1
+        p_mx = size - 1
+        p_hf = (size // 2) - 1
         edge_anchors = np.array([(0, 0), (0, p_mx), (p_mx, p_mx), (p_mx, 0),
                                  (p_hf, 0), (p_hf, p_mx), (p_mx, p_hf), (0, p_hf)]).astype("int32")
         edge_anchors = np.broadcast_to(edge_anchors, (batch_size, 8, 2))
-        grids = np.mgrid[0: p_mx: complex(self._size),  # type:ignore[misc]
-                         0: p_mx: complex(self._size)]  # type:ignore[misc]
+        grids = np.mgrid[0: p_mx: complex(size),  # type:ignore[misc]  # pylint:disable=no-member
+                         0: p_mx: complex(size)].astype("float32")  # type:ignore[misc]
 
-        self.warp_lm_edge_anchors = edge_anchors
-        self.warp_lm_grids = grids
-        logger.debug("warp_lm_edge_anchors: (%s, %s), warp_lm_grids: (%s, %s)",
-                     self.warp_lm_edge_anchors.shape, self.warp_lm_edge_anchors.dtype,
-                     self.warp_lm_grids.shape, self.warp_lm_grids.dtype)
+        logger.debug("edge_anchors: (%s, %s), grids: (%s, %s)",
+                     edge_anchors.shape, edge_anchors.dtype,
+                     grids.shape, grids.dtype)  # pylint:disable=no-member
+        return edge_anchors, grids
 
-    def _load_config(self, batch_size: int) -> None:
-        """ Load the constants into the class from user config
+    @classmethod
+    def _get_warp(cls, size: int, batch_size: int) -> ConstantsWarp:
+        """ Load the warp augmentation constants
 
         Parameters
         ----------
-        batch_size: int
+        size: int
+            The size of image to augment the data for
+        batch_size : int
+            The batch size that augmented data is being prepared for
+
+        Returns
+        -------
+        :class:`ConstantsTransform`
+            The constants for image warping
+        """
+        lm_edge_anchors, lm_grids = cls._get_warp_to_landmarks(size, batch_size)
+
+        warp_range = np.linspace(0, size, 5, dtype='float32')
+        warp_mapx = np.broadcast_to(warp_range, (batch_size, 5, 5)).astype("float32")
+        warp_mapy = np.broadcast_to(warp_mapx[0].T, (batch_size, 5, 5)).astype("float32")
+        warp_pad = int(1.25 * size)
+
+        retval = ConstantsWarp(maps=np.stack((warp_mapx, warp_mapy), axis=1),
+                               pad=(warp_pad, warp_pad),
+                               slices=slice(warp_pad // 10, -warp_pad // 10),
+                               scale=5 / 256 * size,  # Normal random variable scale
+                               lm_edge_anchors=lm_edge_anchors,
+                               lm_grids=lm_grids,
+                               lm_scale=2 / 256 * size)  # Normal random variable scale
+        logger.debug(retval)
+        return retval
+
+    @classmethod
+    def from_config(cls,
+                    config: dict[str, ConfigValueType],
+                    processing_size: int,
+                    batch_size: int) -> ConstantsAugmentation:
+        """ Create a new dataclass instance from user config
+
+        Parameters
+        ----------
+        config : dict[str, ConfigValueType]
+            The user training configuration options
+        processing_size : int:
+            The size of image to augment the data for
+        batch_size : int
             The batch size that augmented data is being prepared for
         """
-        logger.debug("Loading augmentation constants")
-        self._load_clahe()
-        self._load_lab()
-        self._load_transform()
-        self._load_warp(batch_size)
-        self._load_warp_to_landmarks(batch_size)
-        logger.debug("Loaded augmentation constants")
+        logger.debug("Initializing %s(processing_size=%s, batch_size=%s, config=%s)",
+                     cls.__name__, processing_size, batch_size, config)
+        retval = cls(color=cls._get_color(config, processing_size),
+                     transform=cls._get_transform(config, processing_size),
+                     warp=cls._get_warp(processing_size, batch_size))
+        logger.debug(retval)
+        return retval
 
 
 class ImageAugmentation():
@@ -171,12 +346,12 @@ class ImageAugmentation():
 
     Parameters
     ----------
-    batch_size: int
+    batch_size : int
         The number of images that will be fed through the augmentation functions at once.
     processing_size: int
         The largest input or output size of the model. This is the size that images are processed
         at.
-    config: dict
+    config : dict[str, Any]
         The configuration `dict` generated from :file:`config.train.ini` containing the trainer
         plugin configuration options.
     """
@@ -187,20 +362,68 @@ class ImageAugmentation():
         logger.debug(parse_class_init(locals()))
         self._processing_size = processing_size
         self._batch_size = batch_size
-
-        # flip_args
-        flip_chance = config.get("random_flip", 50)
-        assert isinstance(flip_chance, int)
-        self._flip_chance = flip_chance
-
-        # Warp args
-        self._warp_scale = 5 / 256 * self._processing_size  # Normal random variable scale
-        self._warp_lm_scale = 2 / 256 * self._processing_size  # Normal random variable scale
-
-        self._constants = AugConstants(config, processing_size, batch_size)
+        self._constants = ConstantsAugmentation.from_config(config, processing_size, batch_size)
         logger.debug("Initialized %s", self.__class__.__name__)
 
+    def __repr__(self) -> str:
+        """ Pretty print this object """
+        return (f"{self.__class__.__name__}(batch_size={self._batch_size}, "
+                f"processing_size={self._processing_size})")
+
     # <<< COLOR AUGMENTATION >>> #
+    def _random_lab(self, batch: np.ndarray) -> None:
+        """ Perform random color/lightness adjustment in L*a*b* color space on a batch of
+        images
+
+        Parameters
+        ----------
+        batch : :class:`numpy.ndarray`
+            The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
+            `3`) and in `BGR` format of uint8 dtype.
+        """
+        randoms = np.random.uniform(-self._constants.color.lab_adjust,
+                                    self._constants.color.lab_adjust,
+                                    size=(self._batch_size, 1, 1, 3)).astype("float32")
+        logger.trace("Random LAB adjustments: %s", randoms)  # type:ignore[attr-defined]
+        # Iterating through the images and channels is much faster than numpy.where and slightly
+        # faster than numexpr.where.
+        for image, rand in zip(batch, randoms):
+            for idx in range(rand.shape[-1]):
+                adjustment = rand[:, :, idx]
+                if adjustment >= 0:
+                    image[:, :, idx] = ((255 - image[:, :, idx]) * adjustment) + image[:, :, idx]
+                else:
+                    image[:, :, idx] = image[:, :, idx] * (1 + adjustment)
+
+    def _random_clahe(self, batch: np.ndarray) -> None:
+        """ Randomly perform Contrast Limited Adaptive Histogram Equalization on
+        a batch of images
+
+        Parameters
+        ----------
+        batch : :class:`numpy.ndarray`
+            The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
+            `3`) and in `BGR` format of uint8 dtype.
+        """
+        base_contrast = self._constants.color.clahe_base_contrast
+
+        batch_random = np.random.rand(self._batch_size)
+        indices = np.where(batch_random < self._constants.color.clahe_chance)[0]
+        if not np.any(indices):
+            return
+        grid_bases = np.random.randint(self._constants.color.clahe_max_size + 1,
+                                       size=indices.shape[0],
+                                       dtype="uint8")
+        grid_sizes = (grid_bases * (base_contrast // 2)) + base_contrast
+        logger.trace("Adjusting Contrast. Grid Sizes: %s", grid_sizes)  # type:ignore[attr-defined]
+
+        clahes = [cv2.createCLAHE(clipLimit=2.0,
+                                  tileGridSize=(grid_size, grid_size))
+                  for grid_size in grid_sizes]
+
+        for idx, clahe in zip(indices, clahes):
+            batch[idx, :, :, 0] = clahe.apply(batch[idx, :, :, 0], )
+
     def color_adjust(self, batch: np.ndarray) -> np.ndarray:
         """ Perform color augmentation on the passed in batch.
 
@@ -208,9 +431,9 @@ class ImageAugmentation():
 
         Parameters
         ----------
-        batch: :class:`numpy.ndarray`
+        batch : :class:`numpy.ndarray`
             The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
-            `3`) and in `BGR` format.
+            `3`) and in `BGR` format of uint8 dtype.
 
         Returns
         ----------
@@ -225,45 +448,6 @@ class ImageAugmentation():
         batch = batch_convert_color(batch, "LAB2BGR")
         return batch
 
-    def _random_clahe(self, batch: np.ndarray) -> None:
-        """ Randomly perform Contrast Limited Adaptive Histogram Equalization on
-        a batch of images """
-        base_contrast = self._constants.clahe_base_contrast
-
-        batch_random = np.random.rand(self._batch_size)
-        indices = np.where(batch_random < self._constants.clahe_chance)[0]
-        if not np.any(indices):
-            return
-        grid_bases = np.random.randint(self._constants.clahe_max_size + 1,
-                                       size=indices.shape[0],
-                                       dtype="uint8")
-        grid_sizes = (grid_bases * (base_contrast // 2)) + base_contrast
-        logger.trace("Adjusting Contrast. Grid Sizes: %s", grid_sizes)  # type:ignore[attr-defined]
-
-        clahes = [cv2.createCLAHE(clipLimit=2.0,
-                                  tileGridSize=(grid_size, grid_size))
-                  for grid_size in grid_sizes]
-
-        for idx, clahe in zip(indices, clahes):
-            batch[idx, :, :, 0] = clahe.apply(batch[idx, :, :, 0], )
-
-    def _random_lab(self, batch: np.ndarray) -> None:
-        """ Perform random color/lightness adjustment in L*a*b* color space on a batch of
-        images """
-        randoms = np.random.uniform(-self._constants.lab_adjust,
-                                    self._constants.lab_adjust,
-                                    size=(self._batch_size, 1, 1, 3)).astype("float32")
-        logger.trace("Random LAB adjustments: %s", randoms)  # type:ignore[attr-defined]
-        # Iterating through the images and channels is much faster than numpy.where and slightly
-        # faster than numexpr.where.
-        for image, rand in zip(batch, randoms):
-            for idx in range(rand.shape[-1]):
-                adjustment = rand[:, :, idx]
-                if adjustment >= 0:
-                    image[:, :, idx] = ((255 - image[:, :, idx]) * adjustment) + image[:, :, idx]
-                else:
-                    image[:, :, idx] = image[:, :, idx] * (1 + adjustment)
-
     # <<< IMAGE AUGMENTATION >>> #
     def transform(self, batch: np.ndarray):
         """ Perform random transformation on the passed in batch.
@@ -272,21 +456,20 @@ class ImageAugmentation():
 
         Parameters
         ----------
-        batch: :class:`numpy.ndarray`
+        batch : :class:`numpy.ndarray`
             The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
             `channels`) and in `BGR` format.
         """
         logger.trace("Randomly transforming image")  # type:ignore[attr-defined]
-
-        rotation = np.random.uniform(-self._constants.transform_rotation,
-                                     self._constants.transform_rotation,
+        rotation = np.random.uniform(-self._constants.transform.rotation,
+                                     self._constants.transform.rotation,
                                      size=self._batch_size).astype("float32")
-        scale = np.random.uniform(1 - self._constants.transform_zoom,
-                                  1 + self._constants.transform_zoom,
+        scale = np.random.uniform(1 - self._constants.transform.zoom,
+                                  1 + self._constants.transform.zoom,
                                   size=self._batch_size).astype("float32")
 
-        tform = np.random.uniform(-self._constants.transform_shift,
-                                  self._constants.transform_shift,
+        tform = np.random.uniform(-self._constants.transform.shift,
+                                  self._constants.transform.shift,
                                   size=(self._batch_size, 2)).astype("float32")
         mats = np.array(
             [cv2.getRotationMatrix2D((self._processing_size // 2, self._processing_size // 2),
@@ -311,54 +494,23 @@ class ImageAugmentation():
 
         Parameters
         ----------
-        batch: :class:`numpy.ndarray`
+        batch : :class:`numpy.ndarray`
             The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
             `channels`) and in `BGR` format.
         """
         logger.trace("Randomly flipping image")  # type:ignore[attr-defined]
         randoms = np.random.rand(self._batch_size)
-        indices = np.where(randoms <= self._flip_chance / 100)[0]
+        indices = np.where(randoms <= self._constants.transform.flip)[0]
         batch[indices] = batch[indices, :, ::-1]
         logger.trace("Randomly flipped %s images of %s",  # type:ignore[attr-defined]
                      len(indices), self._batch_size)
-
-    def warp(self, batch: np.ndarray, to_landmarks: bool = False, **kwargs) -> np.ndarray:
-        """ Perform random warping on the passed in batch by one of two methods.
-
-        Parameters
-        ----------
-        batch: :class:`numpy.ndarray`
-            The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
-            `3`) and in `BGR` format.
-        to_landmarks: bool, optional
-            If ``False`` perform standard random warping of the input image. If ``True`` perform
-            warping to semi-random similar corresponding landmarks from the other side. Default:
-            ``False``
-        kwargs: dict
-            If :attr:`to_landmarks` is ``True`` the following additional kwargs must be passed in:
-
-            * **batch_src_points** (:class:`numpy.ndarray`) - A batch of 68 point landmarks for \
-            the source faces. This is a 3-dimensional array in the shape (`batchsize`, `68`, `2`).
-
-            * **batch_dst_points** (:class:`numpy.ndarray`) - A batch of randomly chosen closest \
-            match destination faces landmarks. This is a 3-dimensional array in the shape \
-            (`batchsize`, `68`, `2`).
-
-        Returns
-        ----------
-        :class:`numpy.ndarray`
-            A 4-dimensional array of the same shape as :attr:`batch` with warping applied.
-        """
-        if to_landmarks:
-            return self._random_warp_landmarks(batch, **kwargs)
-        return self._random_warp(batch)
 
     def _random_warp(self, batch: np.ndarray) -> np.ndarray:
         """ Randomly warp the input batch
 
         Parameters
         ----------
-        batch: :class:`numpy.ndarray`
+        batch : :class:`numpy.ndarray`
             The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
             `3`) and in `BGR` format.
 
@@ -368,11 +520,12 @@ class ImageAugmentation():
             A 4-dimensional array of the same shape as :attr:`batch` with warping applied.
         """
         logger.trace("Randomly warping batch")  # type:ignore[attr-defined]
-        slices = self._constants.warp_slices
+        slices = self._constants.warp.slices
         rands = np.random.normal(size=(self._batch_size, 2, 5, 5),
-                                 scale=self._warp_scale).astype("float32")
-        batch_maps = ne.evaluate("m + r", local_dict={"m": self._constants.warp_maps, "r": rands})
-        batch_interp = np.array([[cv2.resize(map_, self._constants.warp_pad)[slices, slices]
+                                 scale=self._constants.warp.scale).astype("float32")
+        batch_maps = ne.evaluate("m + r", local_dict={"m": self._constants.warp.maps, "r": rands})
+
+        batch_interp = np.array([[cv2.resize(map_, self._constants.warp.pad)[slices, slices]
                                   for map_ in maps]
                                  for maps in batch_maps])
         warped_batch = np.array([cv2.remap(image, interp[0], interp[1], cv2.INTER_LINEAR)
@@ -387,13 +540,13 @@ class ImageAugmentation():
                                batch_dst_points: np.ndarray) -> np.ndarray:
         """ From dfaker. Warp the image to a similar set of landmarks from the opposite side
 
-        batch: :class:`numpy.ndarray`
+        batch : :class:`numpy.ndarray`
             The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
             `3`) and in `BGR` format.
-        batch_src_points :class:`numpy.ndarray`
+        batch_src_points : :class:`numpy.ndarray`
             A batch of 68 point landmarks for the source faces. This is a 3-dimensional array in
             the shape (`batchsize`, `68`, `2`).
-        batch_dst_points :class:`numpy.ndarray`
+        batch_dst_points : :class:`numpy.ndarray`
             A batch of randomly chosen closest match destination faces landmarks. This is a
             3-dimensional array in the shape (`batchsize`, `68`, `2`).
 
@@ -403,11 +556,11 @@ class ImageAugmentation():
             A 4-dimensional array of the same shape as :attr:`batch` with warping applied.
         """
         logger.trace("Randomly warping landmarks")  # type:ignore[attr-defined]
-        edge_anchors = self._constants.warp_lm_edge_anchors
-        grids = self._constants.warp_lm_grids
+        edge_anchors = self._constants.warp.lm_edge_anchors
+        grids = self._constants.warp.lm_grids
 
-        batch_dst = (batch_dst_points + np.random.normal(size=batch_dst_points.shape,
-                                                         scale=self._warp_lm_scale))
+        batch_dst = batch_dst_points + np.random.normal(size=batch_dst_points.shape,
+                                                        scale=self._constants.warp.lm_scale)
 
         face_cores = [cv2.convexHull(np.concatenate([src[17:], dst[17:]], axis=0))
                       for src, dst in zip(batch_src_points.astype("int32"),
@@ -440,3 +593,44 @@ class ImageAugmentation():
                                  for image, map_ in zip(batch, maps)])
         logger.trace("Warped batch shape: %s", warped_batch.shape)  # type:ignore[attr-defined]
         return warped_batch
+
+    def warp(self,
+             batch: np.ndarray,
+             to_landmarks: bool = False,
+             batch_src_points: np.ndarray | None = None,
+             batch_dst_points: np.ndarray | None = None
+             ) -> np.ndarray:
+
+        """ Perform random warping on the passed in batch by one of two methods.
+
+        Parameters
+        ----------
+        batch : :class:`numpy.ndarray`
+            The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
+            `3`) and in `BGR` format.
+        to_landmarks : bool, optional
+            If ``False`` perform standard random warping of the input image. If ``True`` perform
+            warping to semi-random similar corresponding landmarks from the other side. Default:
+            ``False``
+        batch_src_points : :class:`numpy.ndarray`, optional
+            Only used when :attr:`to_landmarks` is ``True``. A batch of 68 point landmarks for the
+            source faces. This is a 3-dimensional array in the shape (`batchsize`, `68`, `2`).
+            Default: ``None``
+        batch_dst_points : :class:`numpy.ndarray`, optional
+            Only used when :attr:`to_landmarks` is ``True``. A batch of randomly chosen closest
+            match destination faces landmarks. This is a 3-dimensional array in the shape
+            (`batchsize`, `68`, `2`). Default ``None``
+
+        Returns
+        ----------
+        :class:`numpy.ndarray`
+            A 4-dimensional array of the same shape as :attr:`batch` with warping applied.
+        """
+        if to_landmarks:
+            assert batch_src_points is not None
+            assert batch_dst_points is not None
+            return self._random_warp_landmarks(batch, batch_src_points, batch_dst_points)
+        return self._random_warp(batch)
+
+
+__all__ = get_module_objects(__name__)

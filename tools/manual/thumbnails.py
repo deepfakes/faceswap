@@ -16,6 +16,7 @@ from tqdm import tqdm
 from lib.align import AlignedFace
 from lib.image import SingleFrameLoader, generate_thumbnail
 from lib.multithreading import MultiThread
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from .detected_faces import DetectedFaces
@@ -170,14 +171,18 @@ class ThumbsCreator():
         thread for some speed up.
         """
         reader = SingleFrameLoader(self._location)
-        num_threads = min(reader.count, self._num_threads)
-        frame_split = reader.count // self._num_threads
+        skip_list = [idx for idx, f in enumerate(reader.file_list)
+                     if os.path.basename(f) not in self._alignments.data]
+        if skip_list:
+            reader.add_skip_list(skip_list)
+        num_threads = min(reader.process_count, self._num_threads)
+        frame_split = reader.process_count // self._num_threads
         logger.debug("total images: %s, num_threads: %s, frames_per_thread: %s",
-                     reader.count, num_threads, frame_split)
+                     reader.process_count, num_threads, frame_split)
         for idx in range(num_threads):
             is_final = idx == num_threads - 1
             start_idx = idx * frame_split
-            end_idx = reader.count if is_final else start_idx + frame_split
+            end_idx = reader.process_count if is_final else start_idx + frame_split
             thread = MultiThread(self._load_from_folder, reader, start_idx, end_idx)
             thread.start()
             self._threads.append(thread)
@@ -295,3 +300,6 @@ class ThumbsCreator():
         with self._pbar.lock:
             assert self._pbar.pbar is not None
             self._pbar.pbar.update(1)
+
+
+__all__ = get_module_objects(__name__)

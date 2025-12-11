@@ -14,6 +14,7 @@ import numpy as np
 from tqdm import tqdm
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from keras import optimizers
@@ -31,7 +32,7 @@ class LRStrength(Enum):
     EXTREME = 2.5
 
 
-class LearningRateFinder:
+class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
     """ Learning Rate Finder
 
     Parameters
@@ -47,7 +48,7 @@ class LearningRateFinder:
     beta: float
         Amount to smooth loss by, for graphing purposes
     """
-    def __init__(self,
+    def __init__(self,  # pylint:disable=too-many-positional-arguments
                  model: ModelBase,
                  config: dict[str, ConfigValueType],
                  feeder: Feeder,
@@ -163,7 +164,7 @@ class LearningRateFinder:
         new_lr: float
             The discovered optimal learning rate
         """
-        self._model.state.update_session_config("learning_rate", new_lr)
+        self._model.state.add_lr_finder(new_lr)
         self._model.state.save()
 
         if self._config["lr_finder_mode"] == "graph_and_exit":
@@ -248,3 +249,6 @@ class LearningRateFinder:
         output = os.path.join(self._model.io.model_dir, f"learning_rate_finder_{now}.png")
         logger.info("Saving Learning Rate Finder graph to: '%s'", output)
         plt.savefig(output)
+
+
+__all__ = get_module_objects(__name__)

@@ -15,6 +15,7 @@ from PIL import Image, ImageTk
 
 from lib.align import transform_image
 from lib.align.aligned_face import CenteringType
+from lib.utils import get_module_objects
 from scripts.convert import ConvertItem
 
 
@@ -33,7 +34,7 @@ class _Faces:
     dst: list[np.ndarray] = field(default_factory=list)
 
 
-class FacesDisplay():
+class FacesDisplay():  # pylint:disable=too-many-instance-attributes
     """ Compiles the 2 rows of sample faces (original and swapped) into a single image
 
     Parameters
@@ -294,3 +295,6 @@ class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._display.update_tk_image()
         self._canvas.itemconfig(self._displaycanvas, image=self._display.tk_image)
         logger.debug("Reloaded preview image")
+
+
+__all__ = get_module_objects(__name__)

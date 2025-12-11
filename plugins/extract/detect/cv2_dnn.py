@@ -4,6 +4,7 @@ import logging
 
 import numpy as np
 
+from lib.utils import get_module_objects
 from ._base import BatchType, cv2, Detector, DetectorBatch
 
 
@@ -65,3 +66,6 @@ class Detect(Detector):
     def process_output(self, batch: BatchType) -> None:
         """ Compile found faces for output """
         return
+
+
+__all__ = get_module_objects(__name__)

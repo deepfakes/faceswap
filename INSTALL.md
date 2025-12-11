@@ -110,7 +110,7 @@ Reboot your PC, so that everything you have just installed gets registered.
 - Select "Create" at the bottom
 - In the pop up:
     - Give it the name: faceswap
-    - **IMPORTANT**: Select python version 3.10
+    - **IMPORTANT**: Select python version 3.13
     - Hit "Create" (NB: This may take a while as it will need to download Python)
 ![Anaconda virtual env setup](https://i.imgur.com/CLIDDfa.png)
 
@@ -135,8 +135,26 @@ Do not follow these steps if the Easy Install above completed succesfully.
 If you are using an Nvidia card make sure you have the correct versions of Cuda/cuDNN installed for the required version of Torch
 - Install tkinter (required for the GUI) by typing: `conda install tk`
 - Install requirements:
-  - For Nvidia GPU users: `pip install -r ./requirements/requirements_nvidia.txt`
-  - For CPU users: `pip install -r ./requirements/requirements_cpu.txt`
+  - For **Nvidia** GPU users:
+    - RTX20xx GPUS onwards: `pip install -r ./requirements/requirements_nvidia_13.txt`
+    - GTX9xx - GTX10xx GPUs: `pip install -r ./requirements/requirements_nvidia_12.txt`
+    - GTX7xx - GTX8xx GPUs: `pip install -r ./requirements/requirements_nvidia_11.txt`
+      - **Note:** Maximum supported Python version for GTX8xx - GTX9xx GPUs is `3.13`
+
+  - For **AMD** GPU users (Linux only):
+    - **Note** You must install a version of ROCm to your system that is compatible with your OS and GPU.
+    - ROCm 6.4: `pip install -r ./requirements/requirements_rocm64.txt`
+    - ROCm 6.3: `pip install -r ./requirements/requirements_rocm63.txt`
+    - ROCm 6.2: `pip install -r ./requirements/requirements_rocm62.txt`
+      - **Note:** Maximum supported Python version for ROCm 6.2 is `3.13`
+    - ROCm 6.1: `pip install -r ./requirements/requirements_rocm61.txt`
+      - **Note:** Maximum supported Python version for ROCm 6.1 is `3.13`
+    - ROCm 6.0: `pip install -r ./requirements/requirements_rocm60.txt`
+      - **Note:** Maximum supported Python version for ROCm 6.0 is `3.12`
+
+  - For **CPU** users: `pip install -r ./requirements/requirements_cpu.txt`
+
+  - For **Apple-Silicon (M Series)** users: `pip install -r ./requirements/requirements_apple-silicon.txt`
 
 ## Running faceswap
 - If you are not already in your virtual environment follow [these steps](#entering-your-virtual-environment)
@@ -192,7 +210,7 @@ $ source ~/miniforge3/bin/activate
 ## Setup
 ### Create and Activate the Environment
 ```sh
-$ conda create --name faceswap python=3.10
+$ conda create --name faceswap python=3.13
 $ conda activate faceswap
 ```
 
@@ -222,7 +240,7 @@ Obtain git for your distribution from the [git website](https://git-scm.com/down
 The recommended install method is to use a Conda3 Environment as this will handle the installation of Nvidia's CUDA and cuDNN straight into your Conda Environment. This is by far the easiest and most reliable way to setup the project.
   - MiniConda3 is recommended: [MiniConda3](https://docs.conda.io/en/latest/miniconda.html)
 
-Alternatively you can install Python (3.12 64-bit) for your distribution (links below.) If you go down this route and are using an Nvidia GPU you should install CUDA (https://developer.nvidia.com/cuda-zone) and cuDNN (https://developer.nvidia.com/cudnn). for your system. If you do not plan to build Torch yourself, make sure you install the correct Cuda and cuDNN package for the currently installed version of Torch.
+Alternatively you can install Python (3.14 64-bit) for your distribution (links below.) If you go down this route and are using an Nvidia GPU you should install CUDA (https://developer.nvidia.com/cuda-zone) and cuDNN (https://developer.nvidia.com/cudnn). for your system. If you do not plan to build Torch yourself, make sure you install the correct Cuda and cuDNN package for the currently installed version of Torch.
   - Python distributions:
     - apt/yum install python3 (Linux)
     - [Installer](https://www.python.org/downloads/release/python-368/) (Windows)

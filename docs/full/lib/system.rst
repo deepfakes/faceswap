@@ -1,32 +1,21 @@
-**************
-system package
-**************
+******************
+lib.system package
+******************
 
-The System Package handles detecting and returning information about the currently running system.
+The System Package handles collecting information about the running system
 
 .. contents:: Contents
    :local:
+   :depth: 2
 
-system.ml_libs module
-=====================
+.. automodapi:: lib.system.ml_libs
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-.. automodule:: lib.system.ml_libs
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: lib.system.sysinfo
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-system.sysinfo module
-=====================
-
-.. automodule:: lib.system.sysinfo
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-system.system module
-====================
-
-.. automodule:: lib.system.system
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: lib.system.system
+   :include-all-objects:
+   :no-inheritance-diagram:

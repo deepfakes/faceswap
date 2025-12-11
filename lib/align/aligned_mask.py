@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .alignments import MaskAlignmentsFileDict
 from . import get_adjusted_center, get_centered_size
@@ -22,7 +23,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Mask():
+class Mask():  # pylint:disable=too-many-instance-attributes
     """ Face Mask information and convenience methods
 
     Holds a Faceswap mask as generated from :mod:`plugins.extract.mask` and the information
@@ -50,7 +51,7 @@ class Mask():
                  storage_centering: CenteringType = "face") -> None:
         logger.trace(parse_class_init(locals()))  # type:ignore[attr-defined]
         self.stored_size = storage_size
-        self.stored_centering = storage_centering
+        self.stored_centering: CenteringType = storage_centering
 
         self._mask: bytes | None = None
         self._affine_matrix: np.ndarray | None = None
@@ -401,16 +402,16 @@ class LandmarksMask(Mask):
 
     Parameters
     ----------
-    points: list
+    points : list[:class:`numpy.ndarray`]
         A list of landmark points that correspond to the given storage_size to create
         the mask. Each item in the list should be a :class:`numpy.ndarray` that a filled
         convex polygon will be created from
-    storage_size: int, optional
+    storage_size : int, optional
         The size (in pixels) that the compressed mask should be stored at. Default: 128.
-    storage_centering, str (optional):
+    storage_centering : str, optional:
         The centering to store the mask at. One of `"legacy"`, `"face"`, `"head"`.
         Default: `"face"`
-    dilation: float, optional
+    dilation : float, optional
         The amount of dilation to apply to the mask. as a percentage of the mask size. Default: 0.0
     """
     def __init__(self,
@@ -601,3 +602,6 @@ class BlurMask():
                   for kword in self._kwarg_requirements[self._blur_type]}
         logger.trace("BlurMask kwargs: %s", retval)  # type:ignore[attr-defined]
         return retval
+
+
+__all__ = get_module_objects(__name__)

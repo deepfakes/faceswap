@@ -8,14 +8,17 @@ import sys
 
 from subprocess import PIPE, Popen
 
-import psutil
-
 from lib.git import git
-from lib.gpu_stats import GPUStats, GPUInfo
-from lib.utils import get_backend
+from lib.gpu_stats import GPUInfo, GPUStats
+from lib.utils import get_backend, get_module_objects, PROJECT_ROOT
 
 from .ml_libs import Cuda, ROCm
 from .system import Packages, System
+
+try:
+    import psutil
+except ImportError:
+    psutil = None  # type:ignore[assignment]
 
 
 class _SysInfo():
@@ -34,21 +37,29 @@ class _SysInfo():
     @property
     def _ram_free(self) -> int:
         """ int : The amount of free RAM in bytes. """
+        if psutil is None:
+            return -1
         return psutil.virtual_memory().free
 
     @property
     def _ram_total(self) -> int:
         """ int : The amount of total RAM in bytes. """
+        if psutil is None:
+            return -1
         return psutil.virtual_memory().total
 
     @property
     def _ram_available(self) -> int:
         """ int : The amount of available RAM in bytes. """
+        if psutil is None:
+            return -1
         return psutil.virtual_memory().available
 
     @property
     def _ram_used(self) -> int:
         """ int : The amount of used RAM in bytes. """
+        if psutil is None:
+            return -1
         return psutil.virtual_memory().used
 
     @property
@@ -130,6 +141,12 @@ class _SysInfo():
         :class:`~lib.gpu_stats.GPUInfo`
             The information on connected GPUs
         """
+        if GPUStats is None:
+            return GPUInfo(vram=[],
+                           vram_free=[],
+                           driver="N/A",
+                           devices=["Error obtaining GPU Stats: 'GPUStats import error'"],
+                           devices_active=[])
         try:
             retval = GPUStats(log=False).sys_info
         except Exception as err:  # pylint:disable=broad-except
@@ -140,6 +157,21 @@ class _SysInfo():
                              devices=[f"Error obtaining GPU Stats: '{err_string}'"],
                              devices_active=[])
         return retval
+
+    def _format_ram(self) -> str:
+        """ Format the RAM stats into Megabytes to make it more readable.
+
+        Returns
+        -------
+        str
+            The total, available, used and free RAM displayed in Megabytes
+        """
+        retval = []
+        for name in ("total", "available", "used", "free"):
+            value = getattr(self, f"_ram_{name}")
+            value = int(value / (1024 * 1024))
+            retval.append(f"{name.capitalize()}: {value}MB")
+        return ", ".join(retval)
 
     def full_info(self) -> str:
         """ Obtain extensive system information stats, formatted into a human readable format.
@@ -192,21 +224,6 @@ class _SysInfo():
         retval += self._configs
         return retval
 
-    def _format_ram(self) -> str:
-        """ Format the RAM stats into Megabytes to make it more readable.
-
-        Returns
-        -------
-        str
-            The total, available, used and free RAM displayed in Megabytes
-        """
-        retval = []
-        for name in ("total", "available", "used", "free"):
-            value = getattr(self, f"_ram_{name}")
-            value = int(value / (1024 * 1024))
-            retval.append(f"{name.capitalize()}: {value}MB")
-        return ", ".join(retval)
-
 
 def get_sysinfo() -> str:
     """ Obtain extensive system information stats, formatted into a human readable format.
@@ -232,7 +249,7 @@ class _Configs():  # pylint:disable=too-few-public-methods
     in a human readable format. """
 
     def __init__(self) -> None:
-        self.config_dir = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), "config")
+        self.config_dir = os.path.join(PROJECT_ROOT, "config")
         self.configs = self._get_configs()
 
     def _get_configs(self) -> str:
@@ -368,7 +385,7 @@ class _State():  # pylint:disable=too-few-public-methods
         for opt in args:
             if opt in cmd:
                 idx = cmd.index(opt) + 1
-                if len(cmd) < idx:
+                if len(cmd) > idx:
                     return cmd[idx]
         return None
 
@@ -393,6 +410,9 @@ class _State():  # pylint:disable=too-few-public-methods
 
 
 sysinfo = get_sysinfo()  # pylint:disable=invalid-name
+
+
+__all__ = get_module_objects(__name__)
 
 
 if __name__ == "__main__":

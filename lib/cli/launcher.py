@@ -11,7 +11,8 @@ from importlib import import_module
 
 from lib.gpu_stats import GPUStats
 from lib.logger import crash_log, log_setup
-from lib.utils import FaceswapError, get_backend, get_torch_version, safe_shutdown, set_backend
+from lib.utils import (FaceswapError, get_backend, get_torch_version,
+                       get_module_objects, safe_shutdown, set_backend)
 
 if T.TYPE_CHECKING:
     import argparse
@@ -75,10 +76,10 @@ class ScriptExecutor():
         Raises
         ------
         FaceswapError
-            If PyTorch is not found, or is not between versions 2.3 and 2.3
+            If PyTorch is not found, or is not between versions 2.3 and 2.9
         """
-        min_ver = (2, 2)
-        max_ver = (2, 3)
+        min_ver = (2, 3)
+        max_ver = (2, 9)
         try:
             import torch  # noqa:F401 pylint:disable=unused-import,import-outside-toplevel
         except ImportError as err:
@@ -226,6 +227,7 @@ class ScriptExecutor():
             setattr(arguments, "exclude_gpus", None)
             return
 
+        assert GPUStats is not None
         if arguments.exclude_gpus:
             if not all(idx.isdigit() for idx in arguments.exclude_gpus):
                 logger.error("GPUs passed to the ['-X', '--exclude-gpus'] argument must all be "
@@ -240,3 +242,6 @@ class ScriptExecutor():
             logger.info(msg)
 
         logger.debug("Executing: %s. PID: %s", self._command, os.getpid())
+
+
+__all__ = get_module_objects(__name__)

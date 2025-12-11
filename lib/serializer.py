@@ -13,7 +13,7 @@ from io import BytesIO
 
 import numpy as np
 
-from lib.utils import FaceswapError
+from lib.utils import FaceswapError, get_module_objects
 
 try:
     import yaml
@@ -278,6 +278,7 @@ def get_serializer(serializer):
     -------
     >>> serializer = get_serializer('json')
     """
+    retval = None
     if serializer.lower() == "npy":
         retval = _NPYSerializer()
     elif serializer.lower() == "compressed":
@@ -339,3 +340,6 @@ def get_serializer_from_filename(filename):
         retval = _JSONSerializer()
     logger.debug(retval)
     return retval
+
+
+__all__ = get_module_objects(__name__)

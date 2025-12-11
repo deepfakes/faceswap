@@ -8,6 +8,7 @@ from tkinter import font as tk_font
 from matplotlib import font_manager
 
 from lib.config import FaceswapConfig
+from lib.utils import get_module_objects
 
 logger = logging.getLogger(__name__)
 
@@ -117,3 +118,6 @@ def get_clean_fonts():
         retval = sorted([fnt for fnt in tk_font.families()
                          if not fnt.startswith("@") and not any(ord(c) > 127 for c in fnt)])
     return ["default"] + retval
+
+
+__all__ = get_module_objects(__name__)

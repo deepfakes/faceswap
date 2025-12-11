@@ -1,0 +1,43 @@
+[tool.flake8]
+max-line-length = 99
+max-complexity=10
+statistics = true
+count = true
+exclude = [".git", "__pycache__"]
+per-file-ignores = ["__init__.py:F401"]
+
+[tool.pylint.DESIGN]
+min-public-methods = 1
+max-args = 10
+max-attributes = 10
+max-positional-arguments = 10
+
+[tool.pylint.TYPECHECK]
+generated-members = ["cv2"]
+
+[[tool.mypy.overrides]]
+module = [
+    "fastcluster.*",
+    "ffmpy.*",
+    "h5py.*",
+    "imageio_ffmpeg.*",
+    "keras.*",
+    "numexpr.*",
+    "pexpect.*",
+    "pynvml.*",
+    "scipy.*",
+    "sklearn.*",
+    "tensorboard.*",
+    "torch.*",
+    "tqdm.*",
+    "win32console.*",
+    "winpty.*",]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning:keras.*:"]
+
+[tool.pyright]
+reportUnsupportedDunderAll = false

@@ -20,6 +20,8 @@ from PIL import Image, ImageTk
 
 import cv2
 
+from lib.utils import get_module_objects
+
 from .preview_cv import PreviewBase, TriggerKeysType
 
 if T.TYPE_CHECKING:
@@ -487,7 +489,7 @@ class _Image():
         """
         if self._interpolation == interpolation:
             return False
-        logger.debug("Setting interpolation: %s")
+        logger.debug("Setting interpolation: %s", interpolation)
         self._interpolation = interpolation
         return True
 
@@ -937,6 +939,9 @@ def main():
     buff = PreviewBuffer()  # pylint:disable=used-before-assignment
     buff.add_image("test_image", img)
     PreviewTk(buff)
+
+
+__all__ = get_module_objects(__name__)
 
 
 if __name__ == "__main__":

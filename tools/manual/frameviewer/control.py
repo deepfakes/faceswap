@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image, ImageTk
 
 from lib.align import AlignedFace
+from lib.utils import get_module_objects
 
 logger = logging.getLogger(__name__)
 
@@ -299,3 +300,6 @@ class BackgroundImage():
                             self._globals.frame_display_dims[1] / 2)
         img = self._tk_face if self._current_view_mode == "face" else self._tk_frame
         self._canvas.itemconfig(self._image, image=img)
+
+
+__all__ = get_module_objects(__name__)

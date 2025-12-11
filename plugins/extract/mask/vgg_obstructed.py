@@ -9,12 +9,15 @@ import numpy as np
 from keras import layers as kl, Model
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 from ._base import BatchType, Masker, MaskerBatch
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
+
+# pylint:disable=duplicate-code
 
 
 class Mask(Masker):
@@ -242,3 +245,6 @@ class _ScorePool():
                           name="score" + self._name)(var_x)
         var_x = kl.Cropping2D(cropping=self._cropping, name="score" + self._name + "c")(var_x)
         return var_x
+
+
+__all__ = get_module_objects(__name__)

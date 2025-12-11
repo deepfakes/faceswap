@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .constants import CenteringType, EXTRACT_RATIOS, LandmarkType, _MEAN_FACE
 from .pose import PoseEstimate
@@ -35,7 +36,10 @@ def get_matrix_scaling(matrix: np.ndarray) -> tuple[int, int]:
         for an upscale matrix and (Area, Cubic) for a downscale matrix
     """
     x_scale = np.sqrt(matrix[0, 0] * matrix[0, 0] + matrix[0, 1] * matrix[0, 1])
-    y_scale = (matrix[0, 0] * matrix[1, 1] - matrix[0, 1] * matrix[1, 0]) / x_scale
+    if x_scale == 0:
+        y_scale = 0.
+    else:
+        y_scale = (matrix[0, 0] * matrix[1, 1] - matrix[0, 1] * matrix[1, 0]) / x_scale
     avg_scale = (x_scale + y_scale) * 0.5
     if avg_scale >= 1.:
         interpolators = cv2.INTER_CUBIC, cv2.INTER_AREA
@@ -242,7 +246,7 @@ class _FaceCache:  # pylint:disable=too-many-instance-attributes
         return self._locks[name]
 
 
-class AlignedFace():
+class AlignedFace():  # pylint:disable=too-many-instance-attributes
     """ Class to align a face.
 
     Holds the aligned landmarks and face image, as well as associated matrices and information
@@ -766,3 +770,6 @@ def _umeyama(source: np.ndarray, destination: np.ndarray, estimate_scale: bool) 
     retval[:dim, :dim] *= scale
 
     return retval
+
+
+__all__ = get_module_objects(__name__)

@@ -7,6 +7,7 @@ import typing as T
 from keras import initializers, layers
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .initializers import ICNR, ConvolutionAware
 from .layers import PixelShuffler, ReflectionPadding2D, Swish, KResizeImages
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 _CONFIG: dict = {}
-_NAMES: dict[str, int] = {}
+_names: dict[str, int] = {}
 
 
 def set_config(configuration: dict) -> None:
@@ -55,8 +56,8 @@ def _get_name(name: str) -> str:
     str
         The unique name for this layer
     """
-    _NAMES[name] = _NAMES.setdefault(name, -1) + 1
-    name = f"{name}_{_NAMES[name]}"
+    _names[name] = _names.setdefault(name, -1) + 1
+    name = f"{name}_{_names[name]}"
     logger.debug("Generating block name: %s", name)
     return name
 
@@ -67,8 +68,8 @@ def reset_naming() -> None:
     Used when a model needs to be rebuilt and the names for each build should be identical
     """
     logger.debug("Resetting nn_block layer naming")
-    global _NAMES  # pylint:disable=global-statement
-    _NAMES = {}
+    global _names  # pylint:disable=global-statement
+    _names = {}
 
 
 #  << CONVOLUTIONS >>
@@ -107,7 +108,7 @@ def _get_default_initializer(
     return retval
 
 
-class Conv2D(layers.Conv2D):  # pylint:disable=too-many-ancestors,abstract-method
+class Conv2D():  # pylint:disable=too-many-ancestors,abstract-method
     """ A standard Keras Convolution 2D layer with parameters updated to be more appropriate for
     Faceswap architecture.
 
@@ -136,11 +137,31 @@ class Conv2D(layers.Conv2D):  # pylint:disable=too-many-ancestors,abstract-metho
         if is_upscale and _CONFIG["icnr_init"]:
             initializer = ICNR(initializer=initializer)
             logger.debug("Using ICNR Initializer: %s", initializer)
-        super().__init__(*args, padding=padding, kernel_initializer=initializer, **kwargs)
+        self._conv2d = layers.Conv2D(
+            *args,
+            padding=padding,
+            kernel_initializer=initializer,  # pyright:ignore[reportArgumentType]
+            **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
+    def __call__(self, *args, **kwargs) -> KerasTensor:
+        """ Call the Conv2D layer
 
-class DepthwiseConv2D(layers.DepthwiseConv2D):  # noqa,pylint:disable=too-many-ancestors,abstract-method
+        Parameters
+        ----------
+        args : tuple
+            Standard Conv2D layer call arguments
+        kwargs : dict[str, Any]
+            Standard Conv2D layer call keyword arguments
+
+        Returns
+        -------
+        :class: `keras.KerasTensor`
+            The Tensor from the Conv2D layer
+        """
+        return self._conv2d(*args, **kwargs)
+
+class DepthwiseConv2D():  # noqa,pylint:disable=too-many-ancestors,abstract-method
     """ A standard Keras Depthwise Convolution 2D layer with parameters updated to be more
     appropriate for Faceswap architecture.
 
@@ -168,8 +189,29 @@ class DepthwiseConv2D(layers.DepthwiseConv2D):  # noqa,pylint:disable=too-many-a
         if is_upscale and _CONFIG["icnr_init"]:
             initializer = ICNR(initializer=initializer)
             logger.debug("Using ICNR Initializer: %s", initializer)
-        super().__init__(*args, padding=padding, depthwise_initializer=initializer, **kwargs)
+        self._deptwiseconv2d = layers.DepthwiseConv2D(
+            *args,
+            padding=padding,
+            depthwise_initializer=initializer,  # pyright:ignore[reportArgumentType]
+            **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def __call__(self, *args, **kwargs) -> KerasTensor:
+        """ Call the DepthwiseConv2D layer
+
+        Parameters
+        ----------
+        args : tuple
+            Standard DepthwiseConv2D layer call arguments
+        kwargs : dict[str, Any]
+            Standard DepthwiseConv2D layer call keyword arguments
+
+        Returns
+        -------
+        :class: `keras.KerasTensor`
+            The Tensor from the DepthwiseConv2D layer
+        """
+        return self._deptwiseconv2d(*args, **kwargs)
 
 
 class Conv2DOutput():
@@ -208,7 +250,11 @@ class Conv2DOutput():
         logger.debug(parse_class_init(locals()))
         name = _get_name(kwargs.pop("name")) if "name" in kwargs else _get_name(
                          f"conv_output_{filters}")
-        self._conv = Conv2D(filters, kernel_size, padding=padding, name=f"{name}_conv2d", **kwargs)
+        self._conv = Conv2D(filters,
+                            kernel_size,
+                            padding=padding,
+                            name=f"{name}_conv2d",
+                            **kwargs)
         self._activation = layers.Activation(activation, dtype="float32", name=name)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -229,7 +275,7 @@ class Conv2DOutput():
         return self._activation(var_x)
 
 
-class Conv2DBlock():
+class Conv2DBlock():  # pylint:disable=too-many-instance-attributes
     """ A standard Convolution 2D layer which applies user specified configuration to the
     layer.
 
@@ -320,7 +366,9 @@ class Conv2DBlock():
                                               kernel_size=self._args[-1][0],  # type:ignore[index]
                                               name=f"{self._name}_reflectionpadding2d"))
 
-        conv: layers.Layer = DepthwiseConv2D if self._use_depthwise else Conv2D
+        conv: layers.Layer = (
+            DepthwiseConv2D if self._use_depthwise
+            else Conv2D)  # pyright:ignore[reportAssignmentType]
 
         retval.append(conv(*self._args,
                            strides=self._strides,
@@ -394,14 +442,15 @@ class SeparableConv2DBlock():
         initializer = _get_default_initializer(kwargs.pop("kernel_initializer", None))
 
         name = _get_name(f"separableconv2d_{filters}")
-        self._conv = layers.SeparableConv2D(filters,
-                                            kernel_size=kernel_size,
-                                            strides=strides,
-                                            padding="same",
-                                            depthwise_initializer=initializer,
-                                            pointwise_initializer=initializer,
-                                            name=f"{name}_seperableconv2d",
-                                            **kwargs)
+        self._conv = layers.SeparableConv2D(
+            filters,
+            kernel_size=kernel_size,
+            strides=strides,
+            padding="same",
+            depthwise_initializer=initializer,  # pyright:ignore[reportArgumentType]
+            pointwise_initializer=initializer,  # pyright:ignore[reportArgumentType]
+            name=f"{name}_seperableconv2d",
+            **kwargs)
         self._activation = layers.Activation("relu", name=f"{name}_relu")
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -586,6 +635,7 @@ class Upscale2xBlock():
             The output tensor from the Upscale Layer
         """
         var_x = inputs
+        var_x_sr = None
         if not self._fast:
             var_x_sr = self._upscale(var_x)
         if self._fast or (not self._fast and self._filters > 0):
@@ -600,6 +650,7 @@ class Upscale2xBlock():
                 var_x = self._joiner([var_x_sr, var_x2])
 
         else:
+            assert var_x_sr is not None
             var_x = var_x_sr
 
         return var_x
@@ -821,13 +872,13 @@ class ResidualBlock():
         list[:class:`keras.layers.Layer]
             The layers, in the correct order, to pass the tensor through
         """
-        retval = []
+        retval: list[layers.Layer] = []
         if self._use_reflect_padding:
             retval.append(ReflectionPadding2D(stride=1,
                                               kernel_size=self._kernel_size[0],
                                               name=f"{self._name}_reflectionpadding2d_0"))
 
-        retval.append(Conv2D(self._filters,
+        retval.append(Conv2D(self._filters,  # pyright:ignore[reportArgumentType]
                              kernel_size=self._kernel_size,
                              padding=self._padding,
                              name=f"{self._name}_conv2d_0",
@@ -844,7 +895,7 @@ class ResidualBlock():
             kwargs["kernel_initializer"] = initializers.VarianceScaling(scale=0.2,
                                                                         mode="fan_in",
                                                                         distribution="uniform")
-        retval.append(Conv2D(self._filters,
+        retval.append(Conv2D(self._filters,  # pyright:ignore[reportArgumentType]
                              kernel_size=self._kernel_size,
                              padding=self._padding,
                              name=f"{self._name}_conv2d_1",
@@ -872,3 +923,6 @@ class ResidualBlock():
 
         var_x = self._add([var_x, inputs])
         return self._activation(var_x)
+
+
+__all__ = get_module_objects(__name__)

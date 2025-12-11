@@ -11,6 +11,7 @@ from PIL import Image, ImageTk
 
 from lib.align import AlignedFace, LANDMARK_PARTS, LandmarkType
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .interact import ActiveFrame, HoverBox
 
@@ -316,6 +317,7 @@ class Viewport():
             part of the mesh annotation, from the top left corner location.
         """
         key = f"{frame_index}_{face_index}"
+        landmarks: dict[T.Literal["polygon", "line"], list[np.ndarray]] | None
         landmarks = self._landmarks.get(key, None)
         if not landmarks or refresh:
             aligned = AlignedFace(face.landmarks_xy,
@@ -412,7 +414,7 @@ class Recycler:
         """
         logger.trace("Recycling %s objects", len(asset_ids))  # type:ignore[attr-defined]
         for asset_id in asset_ids:
-            asset_type = self._canvas.type(asset_id)
+            asset_type = T.cast(T.Literal["image", "line", "polygon"], self._canvas.type(asset_id))
             assert asset_type in self._assets
             coords = (0, 0, 0, 0) if asset_type == "line" else (0, 0)
             self._canvas.coords(asset_id, *coords)
@@ -504,8 +506,8 @@ class VisibleObjects():
         self._visible_grid = np.zeros((4, 0, 0))
         self._visible_faces = np.zeros((0, 0))
         self._recycler = Recycler(self._canvas)
-        self._images = np.zeros((0, 0), dtype=np.int64)
-        self._meshes = np.zeros((0, 0))
+        self._images: np.ndarray = np.zeros((0, 0), dtype=np.int64)
+        self._meshes: np.ndarray = np.zeros((0, 0))
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
@@ -650,8 +652,8 @@ class VisibleObjects():
             meshes.append([{} if face is None else self._recycler.get_mesh(face)
                            for face in self._visible_faces[row]])
 
-        a_images = np.array(images)
-        a_meshes = np.array(meshes)
+        a_images: np.ndarray = np.array(images)
+        a_meshes: np.ndarray = np.array(meshes)
 
         if not np.any(self._images):
             logger.debug("Adding initial viewport objects: (image shapes: %s, mesh shapes: %s)",
@@ -760,13 +762,14 @@ class TKFace():
         :class:`numpy.ndarray`
             The decoded jpg as a 3 channel BGR image
         """
-        face = cv2.imdecode(face, cv2.IMREAD_UNCHANGED)
-        interp = cv2.INTER_CUBIC if face.shape[0] < self._size else cv2.INTER_AREA
-        if face.shape[0] != self._size:
-            face = cv2.resize(face, (self._size, self._size), interpolation=interp)
-        return face[..., 2::-1]
+        retval = cv2.imdecode(face, cv2.IMREAD_UNCHANGED)
+        assert retval is not None
+        interp = cv2.INTER_CUBIC if retval.shape[0] < self._size else cv2.INTER_AREA
+        if retval.shape[0] != self._size:
+            face = cv2.resize(retval, (self._size, self._size), interpolation=interp)
+        return retval[..., 2::-1]
 
-    def _generate_tk_face_data(self, mask: np.ndarray | None) -> tk.PhotoImage:
+    def _generate_tk_face_data(self, mask: np.ndarray | None) -> Image.Image:
         """ Create the :class:`tkinter.PhotoImage` from the currant :attr:`_face`.
 
         Parameters
@@ -776,7 +779,7 @@ class TKFace():
 
         Returns
         -------
-        :class:`tkinter.PhotoImage`
+        :class:`PIL.Image.Image`
             The face formatted for the  :class:`~tools.manual.faceviewer.frame.FacesViewer` canvas.
         """
         mask = np.ones(self._face.shape[:2], dtype="uint8") * 255 if mask is None else mask
@@ -784,3 +787,6 @@ class TKFace():
             mask = cv2.resize(mask, self._face.shape[:2], interpolation=cv2.INTER_AREA)
         img = np.concatenate((self._face, mask[..., None]), axis=-1)
         return Image.fromarray(img)
+
+
+__all__ = get_module_objects(__name__)

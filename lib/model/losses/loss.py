@@ -10,11 +10,12 @@ from keras import Loss, backend as K
 from keras import ops, Variable
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if K.backend() == "torch":
     import torch  # pylint:disable=import-error
 else:
-    import tensorflow as tf  # pylint:disable=import-error
+    import tensorflow as tf  # pylint:disable=import-error  # type:ignore
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
@@ -103,7 +104,7 @@ class FocalFrequencyLoss(Loss):
                 patch_list.append(inputs[:, row_from: row_to, col_from: col_to, :])
 
         retval = ops.stack(patch_list, axis=1)
-        return retval
+        return T.cast("KerasTensor", retval)
 
     def _tensor_to_frequency_spectrum(self, patch: KerasTensor) -> KerasTensor:
         """ Perform FFT to create the orthonomalized DFT frequencies.
@@ -118,15 +119,17 @@ class FocalFrequencyLoss(Loss):
         :class:`keras.KerasTensor`
             The DFT frequencies split into real and imaginary numbers as float32
         """
-        patch = ops.transpose(patch, (0, 1, 4, 2, 3))  # move channels to first
+        patch = T.cast("KerasTensor",
+                       ops.transpose(patch, (0, 1, 4, 2, 3)))  # move channels to first
 
         assert K.backend() in ("torch", "tensorflow"), "Only Torch and Tensorflow are supported"
         if K.backend() == "torch":
-            freq = torch.fft.fft2(patch, norm="ortho")
+            freq = torch.fft.fft2(patch,  # pylint:disable=not-callable  # type:ignore
+                                  norm="ortho")
         else:
             patch = patch / np.sqrt(self._dims[0] * self._dims[1])  # Orthonormalization
-            patch = ops.cast(patch, "complex64")
-            freq = tf.signal.fft2d(patch)[..., None]
+            patch = T.cast("KerasTensor", ops.cast(patch, "complex64"))
+            freq = tf.signal.fft2d(patch)[..., None]  # type:ignore
 
         freq = ops.stack([freq.real, freq.imag], axis=-1)
 
@@ -134,7 +137,7 @@ class FocalFrequencyLoss(Loss):
             freq = ops.cast(freq, "float32")
 
         freq = ops.transpose(freq, (0, 1, 3, 4, 2, 5))  # channels to last
-        return freq
+        return T.cast("KerasTensor", freq)
 
     def _get_weight_matrix(self, freq_true: KerasTensor, freq_pred: KerasTensor) -> KerasTensor:
         """ Calculate a continuous, dynamic weight matrix based on current Euclidean distance.
@@ -166,7 +169,7 @@ class FocalFrequencyLoss(Loss):
 
         weights = ops.clip(weights, x_min=0.0, x_max=1.0)
 
-        return weights
+        return T.cast("KerasTensor", weights)
 
     @classmethod
     def _calculate_loss(cls,
@@ -192,7 +195,7 @@ class FocalFrequencyLoss(Loss):
         freq_distance = tmp[..., 0] + tmp[..., 1]
         loss = weight_matrix * freq_distance  # dynamic spectrum weighting (Hadamard product)
 
-        return ops.mean(loss)
+        return T.cast("KerasTensor", ops.mean(loss))
 
     def call(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
         """ Call the Focal Frequency Loss Function.
@@ -211,6 +214,7 @@ class FocalFrequencyLoss(Loss):
         """
         if not all(self._dims):
             rows, cols = y_true.shape[1:3]
+            assert rows is not None and cols is not None
             assert cols % self._patch_factor == 0 and rows % self._patch_factor == 0, (
                 "Patch factor must be a divisor of the image height and width")
             self._dims = (rows, cols)
@@ -222,8 +226,8 @@ class FocalFrequencyLoss(Loss):
         freq_pred = self._tensor_to_frequency_spectrum(patches_pred)
 
         if self._ave_spectrum:  # whether to use minibatch average spectrum
-            freq_true = ops.mean(freq_true, axis=0, keepdims=True)
-            freq_pred = ops.mean(freq_pred, axis=0, keepdims=True)
+            freq_true = T.cast("KerasTensor", ops.mean(freq_true, axis=0, keepdims=True))
+            freq_pred = T.cast("KerasTensor", ops.mean(freq_pred, axis=0, keepdims=True))
 
         weight_matrix = self._get_weight_matrix(freq_true, freq_pred)
         return self._calculate_loss(freq_true, freq_pred, weight_matrix)
@@ -278,7 +282,7 @@ class GeneralizedLoss(Loss):
                             (self._alpha / 2.)) - 1.)
         loss = (ops.abs(2. - self._alpha)/self._alpha) * second
         loss = ops.mean(loss, axis=-1) * self._beta
-        return loss
+        return T.cast("KerasTensor", loss)
 
 
 class GradientLoss(Loss):
@@ -309,7 +313,7 @@ class GradientLoss(Loss):
         x_inner = img[:, :, 2:, :] - img[:, :, :-2, :]
         x_right = img[:, :, -1:, :] - img[:, :, -2:-1, :]
         x_out = ops.concatenate([x_left, x_inner, x_right], axis=2)
-        return x_out * 0.5
+        return T.cast("KerasTensor", x_out) * 0.5
 
     @classmethod
     def _diff_y(cls, img: KerasTensor) -> KerasTensor:
@@ -318,7 +322,7 @@ class GradientLoss(Loss):
         y_inner = img[:, 2:, :, :] - img[:, :-2, :, :]
         y_bot = img[:, -1:, :, :] - img[:, -2:-1, :, :]
         y_out = ops.concatenate([y_top, y_inner, y_bot], axis=1)
-        return y_out * 0.5
+        return T.cast("KerasTensor", y_out) * 0.5
 
     @classmethod
     def _diff_xx(cls, img: KerasTensor) -> KerasTensor:
@@ -375,8 +379,8 @@ class GradientLoss(Loss):
         bottom = img[:, -2:-1, -1:, :] + img[:, -1:, -2:-1, :]
         xy_right = ops.concatenate([top, inner, bottom], axis=1)
 
-        xy_out1 = ops.concatenate([xy_left, xy_mid, xy_right], axis=2)
-        xy_out2 = ops.concatenate([xy_left, xy_mid, xy_right], axis=2)
+        xy_out1 = T.cast("KerasTensor", ops.concatenate([xy_left, xy_mid, xy_right], axis=2))
+        xy_out2 = T.cast("KerasTensor", ops.concatenate([xy_left, xy_mid, xy_right], axis=2))
         return (xy_out1 - xy_out2) * 0.25
 
     def call(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
@@ -407,7 +411,7 @@ class GradientLoss(Loss):
                                     self._diff_xy(y_pred)) * 2.)
         loss = loss / (self._tv_weight + self._tv2_weight)
         # TODO simplify to use MSE instead
-        return loss
+        return T.cast("KerasTensor", loss)
 
 
 class LaplacianPyramidLoss(Loss):
@@ -487,7 +491,9 @@ class LaplacianPyramidLoss(Loss):
         # TF doesn't implement replication padding like pytorch. This is an inefficient way to
         # implement it for a square guassian kernel
         # TODO Make this pure pytorch code
-        size = self._gaussian_kernel.shape[1] // 2
+        gauss_shape = self._gaussian_kernel.shape[1]
+        assert gauss_shape is not None
+        size = gauss_shape // 2
         padded_inputs = inputs
         for _ in range(size):
             padded_inputs = ops.pad(padded_inputs,
@@ -495,7 +501,7 @@ class LaplacianPyramidLoss(Loss):
                                     mode="symmetric")
 
         retval = ops.conv(padded_inputs, gauss, strides=1, padding="valid")
-        return retval
+        return T.cast("KerasTensor", retval)
 
     def _get_laplacian_pyramid(self, inputs: KerasTensor) -> list[KerasTensor]:
         """ Obtain the Laplacian Pyramid.
@@ -539,12 +545,10 @@ class LaplacianPyramidLoss(Loss):
         pyramid_pred = self._get_laplacian_pyramid(y_pred)
 
         losses = ops.stack(
-            [ops.sum(ops.abs(ppred - ptrue)) / ops.cast(ops.prod(Variable(ops.shape(ptrue))),
-                                                        "float32")
+            [ops.sum(ops.abs(ppred - ptrue)) / ops.cast(ops.prod(ops.shape(ptrue)), "float32")
              for ptrue, ppred in zip(pyramid_true, pyramid_pred)])
         loss = ops.sum(losses * self._weights)
-
-        return loss
+        return T.cast("KerasTensor", loss)
 
 
 class LInfNorm(Loss):
@@ -572,7 +576,7 @@ class LInfNorm(Loss):
         diff = ops.abs(y_true - y_pred)
         max_loss = ops.max(diff, axis=(1, 2), keepdims=True)
         loss = ops.mean(max_loss, axis=-1)
-        return loss
+        return T.cast("KerasTensor", loss)
 
 
 class LossWrapper(Loss):
@@ -598,13 +602,13 @@ class LossWrapper(Loss):
     def __init__(self, name="LossWrapper", reduction="sum_over_batch_size") -> None:
         logger.debug(parse_class_init(locals()))
         super().__init__(name=name, reduction=reduction)
-        self._loss_functions: list[Loss] = []
+        self._loss_functions: list[Loss | Callable] = []
         self._loss_weights: list[float] = []
         self._mask_channels: list[int] = []
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def add_loss(self,
-                 function: Callable,
+                 function: Callable | Loss,
                  weight: float = 1.0,
                  mask_channel: int = -1) -> None:
         """ Add the given loss function with the given weight to the loss function chain.
@@ -656,7 +660,7 @@ class LossWrapper(Loss):
                          func, weight, mask_channel)
             n_true, n_pred = self._apply_mask(y_true, y_pred, mask_channel)
             loss += (func(n_true, n_pred) * weight)
-        return loss
+        return T.cast("KerasTensor", loss)
 
     @classmethod
     def _apply_mask(cls,
@@ -699,3 +703,6 @@ class LossWrapper(Loss):
         m_pred = y_pred[..., :3] * mask
 
         return m_true, m_pred
+
+
+__all__ = get_module_objects(__name__)

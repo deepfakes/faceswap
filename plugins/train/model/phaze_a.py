@@ -389,6 +389,7 @@ class Model(ModelBase):
         """
         input_shapes = inputs["a"].shape[1:]
 
+        fc_a = fc_both = None
         if self.config["split_fc"]:
             fc_a = FullyConnected("a", input_shapes, self.config)()
             inter_a = [fc_a(inputs["a"])]
@@ -402,8 +403,10 @@ class Model(ModelBase):
             if self.config["shared_fc"] == "full":
                 fc_shared = FullyConnected("shared", input_shapes, self.config)()
             elif self.config["split_fc"]:
+                assert fc_a is not None
                 fc_shared = fc_a
             else:
+                assert fc_both is not None
                 fc_shared = fc_both
             inter_a = [kl.Concatenate(name="inter_a")([inter_a[0], fc_shared(inputs["a"])])]
             inter_b = [kl.Concatenate(name="inter_b")([inter_b[0], fc_shared(inputs["b"])])]
@@ -707,7 +710,7 @@ class Encoder():
         :class:`keras.models.Model`
             The selected Encoder Model
         """
-        input_ = kl.Input(shape=self._input_shape)
+        input_ = T.cast("KerasTensor", kl.Input(shape=self._input_shape))
         var_x = input_
 
         scaling = self._selected_model[0].scaling
@@ -944,7 +947,7 @@ class FullyConnected():
             The Fully connected model
         """
         input_ = kl.Input(shape=self._input_shape)
-        var_x = input_
+        var_x = T.cast("KerasTensor", input_)
 
         node_curve = _get_curve(self._min_nodes,
                                 self._max_nodes,
@@ -1314,7 +1317,7 @@ class Decoder():
         :class:`keras.models.Model`
             The Decoder model
         """
-        inputs = kl.Input(shape=self._input_shape)
+        inputs = T.cast("KerasTensor", kl.Input(shape=self._input_shape))
 
         num_ups_in_fc = self._config["dec_upscales_in_fc"]
 

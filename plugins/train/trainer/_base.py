@@ -19,8 +19,8 @@ from keras import ops
 from keras.src.tree import flatten
 from torch.cuda import OutOfMemoryError
 
-from lib.training import Feeder, LearningRateFinder
-from lib.utils import FaceswapError
+from lib.training import Feeder, LearningRateFinder, LearningRateWarmup
+from lib.utils import get_module_objects, FaceswapError
 from plugins.train._config import Config
 
 from ._display import Samples, Timelapse
@@ -90,6 +90,7 @@ class TrainerBase():
         if self._exit_early:
             return
 
+        self._warmup = self._get_warmup()
         self._model.state.add_session_batchsize(batch_size)
         self._images = images
         self._sides = sorted(key for key in self._images.keys())
@@ -159,15 +160,32 @@ class TrainerBase():
         if not self._model.command_line_arguments.use_lr_finder:
             return False
 
+        if self._model.state.lr_finder > -1:
+            learning_rate = self._model.state.lr_finder
+            logger.info("Setting learning rate from Learning Rate Finder to %s",
+                        f"{learning_rate:.1e}")
+            self._model.model.optimizer.learning_rate.assign(learning_rate)
+            self._model.state.update_session_config("learning_rate", learning_rate)
+            return False
+
         if self._model.state.iterations == 0 and self._model.state.session_id == 1:
             lrf = LearningRateFinder(self._model, self._config, self._feeder)
             success = lrf.find()
             return self._config["lr_finder_mode"] == "graph_and_exit" or not success
 
-        learning_rate = self._model.state.sessions[1]["config"]["learning_rate"]
-        logger.info("Setting learning rate from Learning Rate Finder to %s",
-                    f"{learning_rate:.1e}")
+        logger.debug("No learning rate finder rate. Not setting")
         return False
+
+    def _get_warmup(self) -> LearningRateWarmup:
+        """ Obtain the learning rate warmup instance
+
+        Returns
+        -------
+        :class:`plugins.train.lr_warmup.LRWarmup`
+            The Learning Rate Warmup object
+        """
+        target_lr = float(self._model.model.optimizer.learning_rate.value.cpu().numpy())
+        return LearningRateWarmup(self._model.model, target_lr, self._model.warmup_steps)
 
     def _set_tensorboard(self) -> TorchTensorBoard | None:
         """ Set up Tensorboard callback for logging loss.
@@ -280,6 +298,7 @@ class TrainerBase():
         do_snapshot = (snapshot_interval != 0 and
                        self._model.iterations - 1 >= snapshot_interval and
                        (self._model.iterations - 1) % snapshot_interval == 0)
+        self._warmup()
         try:
             loss_t = self._forward()
             self._backwards_and_apply(loss_t)
@@ -420,3 +439,6 @@ class TrainerBase():
         self._tensorboard.on_save()
         if is_exit:
             self._clear_tensorboard()
+
+
+__all__ = get_module_objects(__name__)

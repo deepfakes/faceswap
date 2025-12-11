@@ -5,9 +5,11 @@ import gettext
 
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import DirFullPaths, SaveFileFullPaths, Radio, Slider
+from lib.utils import get_module_objects
 
 
-# LOCALES
+# pylint:disable=duplicate-code
+# # LOCALES
 _LANG = gettext.translation("tools.sort.cli", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
@@ -63,11 +65,11 @@ _BIN_TYPES = [
     (("color-black", "color-gray", "color-luma", "color-green", "color-orange"), _GPCOLOR),
     (("yaw", "pitch", "roll"), _GPDEGREES),
     (("blur", "blur-fft", "distance", "size"), _GPLINEAR)]
-_SORT_HELP = ""
+_sort_help = ""
 _GROUP_HELP = ""
 
 for method in sorted(_METHOD_TEXT):
-    _SORT_HELP += f"\nL|{method}: {_('Sort')} {_METHOD_TEXT[method]}"
+    _sort_help += f"\nL|{method}: {_('Sort')} {_METHOD_TEXT[method]}"
     _GROUP_HELP += (f"\nL|{method}: {_('Group')} {_METHOD_TEXT[method]} "
                     f"{next((x[1] for x in _BIN_TYPES if method in x[0]), '')}")
 
@@ -126,7 +128,7 @@ class SortArgs(FaceSwapArgs):
                 "\nL|'none': Don't sort the images. When a 'group-by' method is selected, "
                 "selecting 'none' means that the files will be moved/copied into their respective "
                 "bins, but the files will keep their original filenames. Selecting 'none' for "
-                "both 'sort-by' and 'group-by' will do nothing" + _SORT_HELP + "\nDefault: face")})
+                "both 'sort-by' and 'group-by' will do nothing" + _sort_help + "\nDefault: face")})
         argument_list.append({
             "opts": ('-g', '--group-by'),
             "action": Radio,
@@ -228,3 +230,6 @@ class SortArgs(FaceSwapArgs):
             "dest": "depr_log-file_lf_f",
             "help": argparse.SUPPRESS})
         return argument_list
+
+
+__all__ = get_module_objects(__name__)

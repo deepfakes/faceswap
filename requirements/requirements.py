@@ -20,6 +20,11 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+PYTHON_VERSIONS: dict[str, tuple[int, int]] = {"rocm_60": (3, 12)}
+""" dict[str, tuple[int, int]] : Mapping of requirement file names to the maximum supported
+Python version, if below the project maximum """
+
+
 class Requirements:
     """ Parse requirement information
 

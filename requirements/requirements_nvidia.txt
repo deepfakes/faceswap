@@ -1,5 +1,2 @@
--r _requirements_base.txt
-# Exclude badly numbered Python2 version of nvidia-ml-py
-nvidia-ml-py>=12.535,<300
---extra-index-url https://download.pytorch.org/whl/cu121
-torch>=2.2.2,<2.4.0
+# Meta requirements file for latest Nvidia version
+-r _requirements_nvidia_13.txt

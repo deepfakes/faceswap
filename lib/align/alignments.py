@@ -10,7 +10,7 @@ from datetime import datetime
 import numpy as np
 
 from lib.serializer import get_serializer
-from lib.utils import FaceswapError
+from lib.utils import FaceswapError, get_module_objects
 
 from .thumbnails import Thumbnails
 from .updater import (FileStructure, IdentityAndVideoMeta, LandmarkRename, Legacy, ListToNumpy,
@@ -51,7 +51,7 @@ class PNGHeaderAlignmentsDict(T.TypedDict):
     y: int
     w: int
     h: int
-    landmarks_xy: list[float] | np.ndarray
+    landmarks_xy: list[list[float]] | np.ndarray
     mask: dict[str, MaskAlignmentsFileDict]
     identity: dict[str, list[float]]
 
@@ -83,7 +83,7 @@ class PNGHeaderDict(T.TypedDict):
     source: PNGHeaderSourceDict
 
 
-class Alignments():
+class Alignments():  # pylint:disable=too-many-public-methods
     """ The alignments file is a custom serialized ``.fsa`` file that holds information for each
     frame for a video or series of images.
 
@@ -748,3 +748,6 @@ class _IO():
         logger.info("Backing up original alignments to '%s'", dst)
         os.rename(src, dst)
         logger.debug("Backed up alignments")
+
+
+__all__ = get_module_objects(__name__)

@@ -19,6 +19,7 @@ from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
 from matplotlib.backend_bases import NavigationToolbar2
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .custom_widgets import Tooltip
 from .utils import get_config, get_images, LongRunningTask
@@ -493,8 +494,8 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint:disable=too-many-ancest
     pack_toolbar: bool, Optional
         Whether to pack the Tool bar or not. Default: ``True``
     """
-    toolitems = tuple([t for t in NavigationToolbar2Tk.toolitems if
-                       t[0] in ("Home", "Pan", "Zoom", "Save")])
+    toolitems = tuple(t for t in NavigationToolbar2Tk.toolitems if
+                      t[0] in ("Home", "Pan", "Zoom", "Save"))
 
     def __init__(self,  # pylint:disable=super-init-not-called
                  canvas: FigureCanvasTkAgg,
@@ -594,3 +595,6 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint:disable=too-many-ancest
 
         btn.pack(side=tk.RIGHT, padx=2)
         return btn
+
+
+__all__ = get_module_objects(__name__)

@@ -10,6 +10,8 @@ import sys
 import threading
 from types import TracebackType
 
+from lib.utils import get_module_objects
+
 if T.TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
@@ -298,3 +300,6 @@ class BackgroundGenerator(MultiThread):
                 logger.debug("Got EOF OR NONE in BackgroundGenerator")
                 break
             yield next_item
+
+
+__all__ = get_module_objects(__name__)

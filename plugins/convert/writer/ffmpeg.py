@@ -11,6 +11,8 @@ import imageio
 import imageio_ffmpeg as im_ffm
 import numpy as np
 
+from lib.utils import get_module_objects
+
 from ._base import Output, logger
 
 if T.TYPE_CHECKING:
@@ -261,3 +263,6 @@ class Writer(Output):
         """ Close the ffmpeg writer and mux the audio """
         if self._writer is not None:
             self._writer.close()
+
+
+__all__ = get_module_objects(__name__)

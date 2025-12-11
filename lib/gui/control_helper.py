@@ -12,6 +12,8 @@ from functools import partial
 
 from _tkinter import Tcl_Obj, TclError
 
+from lib.utils import get_module_objects
+
 from .custom_widgets import ContextMenu, MultiOption, ToggledFrame, Tooltip
 from .utils import FileHandler, get_config, get_images
 
@@ -141,7 +143,9 @@ class ControlPanelOption():
         Required if tracking modified. The command that this option belongs to. Default: None
     """
 
-    def __init__(self, title, dtype,  # pylint:disable=too-many-arguments
+    def __init__(self,  # pylint:disable=too-many-arguments,too-many-positional-arguments,too-many-locals  # noqa[E501]
+                 title,
+                 dtype,
                  group=None, subgroup=None, default=None, initial_value=None, choices=None,
                  is_radio=False, is_multi_option=False, rounding=None, min_max=None,
                  sysbrowser=None, helptext=None, track_modified=False, command=None):
@@ -353,7 +357,7 @@ class ControlPanelOption():
         get_config().tk_vars.analysis_folder.set(folder)
 
 
-class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
+class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors,too-many-instance-attributes
     """
     A Control Panel to hold control panel options.
     This class handles all of the formatting, placing and TK_Variables
@@ -395,7 +399,7 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         Default: ``True``
     """
 
-    def __init__(self, parent, options,  # pylint:disable=too-many-arguments
+    def __init__(self, parent, options,  # pylint:disable=too-many-arguments,too-many-positional-arguments  # noqa[E501]
                  label_width=20, columns=1, max_columns=4, option_columns=4, header_text=None,
                  style=None, blank_nones=True, scrollbar=True):
         logger.debug("Initializing %s: (parent: '%s', options: %s, label_width: %s, columns: %s, "
@@ -865,7 +869,7 @@ class AutoFillContainer():
             rc_menu = widget_dict["rc_menu"]
             if rc_menu is not None:
                 # Re-initialize for new widget and bind
-                rc_menu.__init__(widget=clone)
+                rc_menu.__init__(widget=clone)  # pylint:disable=unnecessary-dunder-call
                 rc_menu.cm_bind()
             clone.pack(**widget_dict["pack_info"])
 
@@ -1370,3 +1374,6 @@ class FileBrowser():
         if filename:
             logger.debug(filename)
             filepath.set(filename)
+
+
+__all__ = get_module_objects(__name__)

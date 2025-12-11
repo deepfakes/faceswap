@@ -2,6 +2,7 @@
 """ Components Mask for faceswap.py """
 import logging
 import numpy as np
+from lib.utils import get_module_objects
 from ._base import BatchType, Masker
 
 logger = logging.getLogger(__name__)
@@ -10,6 +11,7 @@ logger = logging.getLogger(__name__)
 class Mask(Masker):
     """ A mask that fills the whole face area with 1s or 0s (depending on user selected settings)
     for custom editing. """
+    # pylint:disable=duplicate-code
     def __init__(self, **kwargs):
         git_model_id = None
         model_filename = None
@@ -40,3 +42,6 @@ class Mask(Masker):
     def process_output(self, batch: BatchType) -> None:
         """ Compile found faces for output """
         return
+
+
+__all__ = get_module_objects(__name__)

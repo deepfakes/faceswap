@@ -15,6 +15,8 @@ import typing as T
 from abc import ABC, abstractmethod
 from shutil import which
 
+from lib.utils import get_module_objects
+
 from .system import _lines_from_command
 
 if platform.system() == "Windows":
@@ -328,7 +330,7 @@ class _Cuda(ABC):
         return retval
 
 
-class _CudaLinux(_Cuda):  # pylint:disable=too-few-public-methods
+class CudaLinux(_Cuda):
     """ Find the location of system installed Cuda and cuDNN on Linux. """
     def __init__(self) -> None:
         self._folder_prefix = "cuda-"
@@ -540,7 +542,7 @@ class _CudaLinux(_Cuda):  # pylint:disable=too-few-public-methods
         return retval
 
 
-class _CudaWindows(_Cuda):  # pylint:disable=too-few-public-methods
+class CudaWindows(_Cuda):
     """ Find the location of system installed Cuda and cuDNN on Windows. """
 
     @classmethod
@@ -675,12 +677,20 @@ class _CudaWindows(_Cuda):  # pylint:disable=too-few-public-methods
         return retval
 
 
-if platform.system().lower() == "windows":
-    Cuda: type[_Cuda] = _CudaWindows
-    """ Find the location of system installed Cuda and cuDNN on Windows and Windows. """
-else:
-    Cuda = _CudaLinux
-    """ Find the location of system installed Cuda and cuDNN on Windows and Linux. """
+def get_cuda_finder() -> type[_Cuda]:
+    """Create a platform-specific CUDA object.
+
+    Returns
+    -------
+    type[_Cuda]
+        The OS specific finder for system-wide Cuda
+    """
+    if platform.system().lower() == "windows":
+        return CudaWindows
+    return CudaLinux
+
+
+Cuda = get_cuda_finder()
 
 
 class ROCm():
@@ -978,6 +988,9 @@ class ROCm():
         self._get_versions()
         self._get_version()
         logger.debug("ROCm Versions: %s, Version: %s", self.versions, self.version)
+
+
+__all__ = get_module_objects(__name__)
 
 
 if __name__ == "__main__":

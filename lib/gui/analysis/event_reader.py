@@ -15,6 +15,7 @@ from tensorboard.compat.proto import event_pb2  # type:ignore[import-untyped]
 
 from lib.logger import parse_class_init
 from lib.serializer import get_serializer
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from collections.abc import Generator, Iterator
@@ -901,3 +902,6 @@ class _EventParser():
         step.loss.append(loss)
 
         return step
+
+
+__all__ = get_module_objects(__name__)

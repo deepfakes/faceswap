@@ -19,6 +19,9 @@ import numpy as np
 
 from lib.logger import parse_class_init
 from lib.serializer import get_serializer
+from lib.utils import get_module_objects
+
+from .moving_average import ExponentialMovingAverage
 
 from .event_reader import TensorBoardLogs
 
@@ -61,9 +64,14 @@ class GlobalSession():
         return os.path.join(self._model_dir, self._model_name)
 
     @property
+    def have_session_data(self) -> bool:
+        """ bool : ``True`` if session data is available otherwise ``False`` """
+        return bool(self._state and self._state["sessions"])
+
+    @property
     def batch_sizes(self) -> dict[int, int]:
         """ dict: The batch sizes for each session_id for the model. """
-        if not self._state:
+        if not self.have_session_data:
             return {}
         return {int(sess_id): sess["batchsize"]
                 for sess_id, sess in self._state.get("sessions", {}).items()}
@@ -76,9 +84,9 @@ class GlobalSession():
 
     @property
     def logging_disabled(self) -> bool:
-        """ bool: ``True`` if logging is enabled for the currently training session otherwise
+        """ bool: ``True`` if logging is disabled for the currently training session otherwise
         ``False``. """
-        if not self._state:
+        if not self.have_session_data:
             return True
         max_id = str(max(int(idx) for idx in self._state["sessions"]))
         return self._state["sessions"][max_id]["no_logs"]
@@ -313,6 +321,10 @@ class SessionsSummary():
             within the loaded data as well as the totals.
         """
         logger.debug("Compiling sessions summary data")
+        if not self._session.have_session_data:
+            logger.debug("Session data doesn't exist. Most likely task has been "
+                         "terminated during compilation, or is from LR finder")
+            return []
         self._get_time_stats()
         self._get_per_session_stats()
         if not self._per_session_stats:
@@ -367,9 +379,9 @@ class SessionsSummary():
             compiled = []
             for session_id in self._time_stats:
                 logger.debug("Compiling session ID: %s", session_id)
-                if not self._state:
-                    logger.debug("Session state dict doesn't exist. Most likely task has been "
-                                 "terminated during compilation")
+                if not self._session.have_session_data:
+                    logger.debug("Session data doesn't exist. Most likely task has been "
+                                 "terminated during compilation, or is from LR finder")
                     return
                 compiled.append(self._collate_stats(session_id))
 
@@ -437,6 +449,8 @@ class SessionsSummary():
             iterations for all session ids within the loaded data.
         """
         logger.debug("Compiling Totals")
+        starttime = 0.0
+        endtime = 0.0
         elapsed = 0
         examples = 0
         iterations = 0
@@ -452,13 +466,14 @@ class SessionsSummary():
             batchset.add(summary["batch"])
             iterations += summary["iterations"]
         batch = ",".join(str(bs) for bs in batchset)
-        totals = {"session": "Total",
-                  "start": starttime,
-                  "end": endtime,
-                  "elapsed": elapsed,
-                  "rate": examples / elapsed if elapsed != 0 else 0,
-                  "batch": batch,
-                  "iterations": iterations}
+        totals: dict[str, str | int | float] = {
+            "session": "Total",
+            "start": starttime,
+            "end": endtime,
+            "elapsed": elapsed,
+            "rate": examples / elapsed if elapsed != 0 else 0,
+            "batch": batch,
+            "iterations": iterations}
         logger.debug(totals)
         return totals
 
@@ -535,7 +550,7 @@ class Calculations():
         ``True`` if values significantly away from the average should be excluded, otherwise
         ``False``. Default: ``False``
     """
-    def __init__(self, session_id,
+    def __init__(self, session_id,  # pylint:disable=too-many-positional-arguments
                  display: str = "loss",
                  loss_keys: list[str] | str = "loss",
                  selections: list[str] | str = "raw",
@@ -543,7 +558,7 @@ class Calculations():
                  smooth_amount: float = 0.90,
                  flatten_outliers: bool = False) -> None:
         logger.debug(parse_class_init(locals()))
-        warnings.simplefilter("ignore", np.RankWarning)
+        warnings.simplefilter("ignore", np.exceptions.RankWarning)
 
         self._session_id = session_id
 
@@ -825,7 +840,7 @@ class Calculations():
         :class:`numpy.ndarray`
             The smoothed data
         """
-        retval = _ExponentialMovingAverage(data, self._args["smooth_amount"])()
+        retval = ExponentialMovingAverage(data, self._args["smooth_amount"])()
         logger.debug("Calculated Smoothed data: shape: %s", retval.shape)
         return retval
 
@@ -855,165 +870,4 @@ class Calculations():
         return trend
 
 
-class _ExponentialMovingAverage():
-    """ Reshapes data before calculating exponential moving average, then iterates once over the
-    rows to calculate the offset without precision issues.
-
-    Parameters
-    ----------
-    data: :class:`numpy.ndarray`
-        A 1 dimensional numpy array to obtain smoothed data for
-    amount: float
-        in the range (0.0, 1.0) The alpha parameter (smoothing amount) for the moving average.
-
-    Notes
-    -----
-    Adapted from: https://stackoverflow.com/questions/42869495
-    """
-    def __init__(self, data: np.ndarray, amount: float) -> None:
-        logger.debug(parse_class_init(locals()))
-        assert data.ndim == 1
-        amount = min(max(amount, 0.001), 0.999)
-
-        self._data = np.nan_to_num(data)
-        self._alpha = 1. - amount
-        self._dtype = "float32" if data.dtype == np.float32 else "float64"
-        self._row_size = self._get_max_row_size()
-        self._out = np.empty_like(data, dtype=self._dtype)
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def __call__(self) -> np.ndarray:
-        """ Perform the exponential moving average calculation.
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            The smoothed data
-        """
-        if self._data.size <= self._row_size:
-            self._ewma_vectorized(self._data, self._out)  # Normal function can handle this input
-        else:
-            self._ewma_vectorized_safe()  # Use the safe version
-        return self._out
-
-    def _get_max_row_size(self) -> int:
-        """ Calculate the maximum row size for the running platform for the given dtype.
-
-        Returns
-        -------
-        int
-            The maximum row size possible on the running platform for the given :attr:`_dtype`
-
-        Notes
-        -----
-        Might not be the optimal value for speed, which is hard to predict due to numpy
-        optimizations.
-        """
-        # Use :func:`np.finfo(dtype).eps` if you are worried about accuracy and want to be safe.
-        epsilon = np.finfo(self._dtype).tiny  # pylint:disable=no-member
-        # If this produces an OverflowError, make epsilon larger:
-        retval = int(np.log(epsilon) / np.log(1 - self._alpha)) + 1
-        logger.debug("row_size: %s", retval)
-        return retval
-
-    def _ewma_vectorized_safe(self) -> None:
-        """ Perform the vectorized exponential moving average in a safe way. """
-        num_rows = int(self._data.size // self._row_size)  # the number of rows to use
-        leftover = int(self._data.size % self._row_size)  # the amount of data leftover
-        first_offset = self._data[0]
-
-        if leftover > 0:
-            # set temporary results to slice view of out parameter
-            out_main_view = np.reshape(self._out[:-leftover], (num_rows, self._row_size))
-            data_main_view = np.reshape(self._data[:-leftover], (num_rows, self._row_size))
-        else:
-            out_main_view = self._out.reshape(-1, self._row_size)
-            data_main_view = self._data.reshape(-1, self._row_size)
-
-        self._ewma_vectorized_2d(data_main_view, out_main_view)  # get the scaled cumulative sums
-
-        scaling_factors = (1 - self._alpha) ** np.arange(1, self._row_size + 1)
-        last_scaling_factor = scaling_factors[-1]
-
-        # create offset array
-        offsets = np.empty(out_main_view.shape[0], dtype=self._dtype)
-        offsets[0] = first_offset
-        # iteratively calculate offset for each row
-
-        for i in range(1, out_main_view.shape[0]):
-            offsets[i] = offsets[i - 1] * last_scaling_factor + out_main_view[i - 1, -1]
-
-        # add the offsets to the result
-        out_main_view += offsets[:, np.newaxis] * scaling_factors[np.newaxis, :]
-
-        if leftover > 0:
-            # process trailing data in the 2nd slice of the out parameter
-            self._ewma_vectorized(self._data[-leftover:],
-                                  self._out[-leftover:],
-                                  offset=out_main_view[-1, -1])
-
-    def _ewma_vectorized(self,
-                         data: np.ndarray,
-                         out: np.ndarray,
-                         offset: float | None = None) -> None:
-        """ Calculates the exponential moving average over a vector. Will fail for large inputs.
-
-        The result is processed in place into the array passed to the `out` parameter
-
-        Parameters
-        ----------
-        data: :class:`numpy.ndarray`
-            A 1 dimensional numpy array to obtain smoothed data for
-        out: :class:`numpy.ndarray`
-            A location into which the result is stored. It must have the same shape and dtype as
-            the input data
-        offset: float, optional
-            The offset for the moving average, scalar. Default: the value held in data[0].
-        """
-        if data.size < 1:  # empty input, return empty array
-            return
-
-        offset = data[0] if offset is None else offset
-
-        # scaling_factors -> 0 as len(data) gets large. This leads to divide-by-zeros below
-        scaling_factors = np.power(1. - self._alpha, np.arange(data.size + 1, dtype=self._dtype),
-                                   dtype=self._dtype)
-        # create cumulative sum array
-        np.multiply(data, (self._alpha * scaling_factors[-2]) / scaling_factors[:-1],
-                    dtype=self._dtype, out=out)
-        np.cumsum(out, dtype=self._dtype, out=out)
-
-        out /= scaling_factors[-2::-1]  # cumulative sums / scaling
-
-        if offset != 0:
-            noffset = np.array(offset, copy=False).astype(self._dtype, copy=False)
-            out += noffset * scaling_factors[1:]
-
-    def _ewma_vectorized_2d(self, data: np.ndarray, out: np.ndarray) -> None:
-        """ Calculates the exponential moving average over the last axis.
-
-        The result is processed in place into the array passed to the `out` parameter
-
-        Parameters
-        ----------
-        data: :class:`numpy.ndarray`
-            A 1 or 2 dimensional numpy array to obtain smoothed data for.
-        out: :class:`numpy.ndarray`
-            A location into which the result is stored. It must have the same shape and dtype as
-            the input data
-        """
-        if data.size < 1:  # empty input, return empty array
-            return
-
-        # calculate the moving average
-        scaling_factors = np.power(1. - self._alpha, np.arange(data.shape[1] + 1,
-                                                               dtype=self._dtype),
-                                   dtype=self._dtype)
-        # create a scaled cumulative sum array
-        np.multiply(data,
-                    np.multiply(self._alpha * scaling_factors[-2],
-                                np.ones((data.shape[0], 1), dtype=self._dtype),
-                                dtype=self._dtype) / scaling_factors[np.newaxis, :-1],
-                    dtype=self._dtype, out=out)
-        np.cumsum(out, axis=1, dtype=self._dtype, out=out)
-        out /= scaling_factors[np.newaxis, -2::-1]
+__all__ = get_module_objects(__name__)

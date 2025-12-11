@@ -10,6 +10,7 @@ import typing as T
 from keras import constraints, initializers, InputSpec, layers, ops, regularizers, saving
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -408,7 +409,7 @@ class InstanceNormalization(layers.Layer):  # pylint:disable=too-many-ancestors,
         - Instance Normalization: The Missing Ingredient for Fast Stylization - \
         https://arxiv.org/abs/1607.08022
     """
-    # pylint:disable=too-many-instance-attributes,too-many-arguments
+    # pylint:disable=too-many-instance-attributes,too-many-arguments,too-many-positional-arguments
     def __init__(self,
                  axis: int | None = None,
                  epsilon: float = 1e-3,
@@ -728,3 +729,6 @@ class RMSNormalization(layers.Layer):  # pylint:disable=too-many-ancestors,abstr
 for name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
         saving.get_custom_objects().update({name: obj})
+
+
+__all__ = get_module_objects(__name__)

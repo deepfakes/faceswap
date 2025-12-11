@@ -9,12 +9,12 @@ import typing as T
 import numpy as np
 
 from lib.logger import parse_class_init
-from lib.utils import VIDEO_EXTENSIONS
+from lib.utils import get_module_objects, VIDEO_EXTENSIONS
 
 logger = logging.getLogger(__name__)
 
 if T.TYPE_CHECKING:
-    from .alignments import Alignments, AlignmentFileDict
+    from lib import align
 
 
 class _Updater():
@@ -22,10 +22,10 @@ class _Updater():
 
     Parameters
     ----------
-    alignments: :class:`~Alignments`
+    alignments : :class:`~lib.align.alignments.Alignments`
         The alignments object that is being tested and updated
     """
-    def __init__(self, alignments: Alignments) -> None:
+    def __init__(self, alignments: align.alignments.Alignments) -> None:
         logger.debug(parse_class_init(locals()))
         self._alignments = alignments
         self._needs_update = self._test()
@@ -35,7 +35,7 @@ class _Updater():
 
     @property
     def is_updated(self) -> bool:
-        """ bool. ``True`` if this updater has been run otherwise ``False`` """
+        """ bool : ``True`` if this updater has been run otherwise ``False`` """
         return self._needs_update
 
     def _test(self) -> bool:
@@ -93,12 +93,12 @@ class VideoExtension(_Updater):
 
     Parameters
     ----------
-    alignments: :class:`~Alignments`
+    alignments : :class:`~lib.align.alignments.Alignments`
         The alignments object that is being tested and updated
-    video_filename: str
+    video_filename : str
         The video filename that holds these alignments
     """
-    def __init__(self, alignments: Alignments, video_filename: str) -> None:
+    def __init__(self, alignments: align.alignments.Alignments, video_filename: str) -> None:
         self._video_name, self._extension = os.path.splitext(video_filename)
         super().__init__(alignments)
 
@@ -135,7 +135,7 @@ class VideoExtension(_Updater):
 
         Parameters
         ----------
-        video_filename: str
+        video_filename : str
             The filename of the video file that created these alignments
         """
         updated = 0
@@ -329,13 +329,13 @@ class Legacy():
 
     Parameters
     ----------
-    alignments: :class:`~Alignments`
+    alignments : :class:`~lib.align.alignments.Alignments`
         The alignments object that requires these legacy properties
     """
-    def __init__(self, alignments: Alignments) -> None:
+    def __init__(self, alignments: align.alignments.Alignments) -> None:
         self._alignments = alignments
         self._hashes_to_frame: dict[str, dict[str, int]] = {}
-        self._hashes_to_alignment: dict[str, AlignmentFileDict] = {}
+        self._hashes_to_alignment: dict[str, align.alignments.AlignmentFileDict] = {}
 
     @property
     def hashes_to_frame(self) -> dict[str, dict[str, int]]:
@@ -361,7 +361,7 @@ class Legacy():
         return self._hashes_to_frame
 
     @property
-    def hashes_to_alignment(self) -> dict[str, AlignmentFileDict]:
+    def hashes_to_alignment(self) -> dict[str, align.alignments.AlignmentFileDict]:
         """ dict: The SHA1 hash of the face mapped to the alignment for the face that the hash
         corresponds to. The structure of the dictionary is:
 
@@ -379,3 +379,6 @@ class Legacy():
                                          for val in self._alignments.data.values()
                                          for face in val["faces"]}
         return self._hashes_to_alignment
+
+
+__all__ = get_module_objects(__name__)

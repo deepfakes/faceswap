@@ -7,6 +7,8 @@ import numpy as np
 
 from keras import ops, Variable
 
+from lib.utils import get_module_objects
+
 if T.TYPE_CHECKING:
     from keras import KerasTensor
 
@@ -141,12 +143,12 @@ class ColorSpaceConvert():
         Parameters
         ----------
         image: :class:`keras.KerasTensor`
-            The image tensor in the colorspace defined by :param:`from_space`
+            The image tensor in the colorspace defined by :attr:`from_space`
 
         Returns
         -------
         :class:`keras.KerasTensor`
-            The image tensor in the colorspace defined by :param:`to_space`
+            The image tensor in the colorspace defined by :attr:`to_space`
         """
         return self._func(image)
 
@@ -347,3 +349,6 @@ class ColorSpaceConvert():
                                 ch_y,
                                 ch_y - (image[..., 2:3] / self._xyz_multipliers[2])],
                                axis=-1) * self._ref_illuminant
+
+
+__all__ = get_module_objects(__name__)

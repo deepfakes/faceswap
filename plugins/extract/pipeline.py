@@ -15,7 +15,7 @@ from lib.gpu_stats import GPUStats
 from lib.logger import parse_class_init
 from lib.queue_manager import EventQueue, queue_manager, QueueEmpty
 from lib.serializer import get_serializer
-from lib.utils import get_backend, FaceswapError
+from lib.utils import get_backend, get_module_objects, FaceswapError
 from plugins.plugin_loader import PluginLoader
 
 if T.TYPE_CHECKING:
@@ -40,7 +40,7 @@ def _get_instance():
     return _INSTANCES
 
 
-class Extractor():
+class Extractor():  # pylint:disable=too-many-instance-attributes
     """ Creates a :mod:`~plugins.extract.detect`/:mod:`~plugins.extract.align``/\
     :mod:`~plugins.extract.mask` pipeline and yields results frame by frame from the
     :attr:`detected_faces` generator
@@ -92,7 +92,7 @@ class Extractor():
         The current phase that the pipeline is running. Used in conjunction with :attr:`passes` and
         :attr:`final_pass` to indicate to the caller which phase is being processed
     """
-    def __init__(self,
+    def __init__(self,  # pylint:disable=too-many-arguments,too-many-positional-arguments
                  detector: str | None,
                  aligner: str | None,
                  masker: str | list[str] | None,
@@ -347,6 +347,7 @@ class Extractor():
 
         last_fname = ""
         is_68_point = True
+        data = {}
         for plugin in import_plugins:
             plugin_type = plugin.__class__.__name__
             path = os.path.join(folder, plugin.config["file_name"])
@@ -551,6 +552,7 @@ class Extractor():
             Statistics on available VRAM
         """
         vram_buffer = 256  # Leave a buffer for VRAM allocation
+        assert GPUStats is not None
         gpu_stats = GPUStats()
         stats = gpu_stats.get_card_most_free()
         retval: dict[str, int | str] = {"count": gpu_stats.device_count,
@@ -869,3 +871,6 @@ class Extractor():
         """ Check all threads for errors and raise if one occurs """
         for plugin in self._active_plugins:
             plugin.check_and_raise_error()
+
+
+__all__ = get_module_objects(__name__)

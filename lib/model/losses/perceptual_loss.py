@@ -13,9 +13,11 @@ from keras import ops, Variable
 
 from lib.keras_utils import ColorSpaceConvert, frobenius_norm, replicate_pad
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
+    from torch import Tensor
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +84,7 @@ class DSSIMObjective(keras.losses.Loss):
         kernel = Variable(np.reshape(kernel, (1, -1)), trainable=False)
         kernel = ops.softmax(kernel)
         kernel = ops.reshape(kernel, (self._filter_size, self._filter_size, 1, 1))
-        return kernel
+        return T.cast("KerasTensor", kernel)
 
     @classmethod
     def _depthwise_conv2d(cls, image: KerasTensor, kernel: KerasTensor) -> KerasTensor:
@@ -100,7 +102,7 @@ class DSSIMObjective(keras.losses.Loss):
         :class:`keras.KerasTensor`
             The output from the convolution
         """
-        return ops.depthwise_conv(image, kernel, strides=(1, 1), padding="valid")
+        return T.cast("KerasTensor", ops.depthwise_conv(image, kernel, strides=1, padding="valid"))
 
     def _get_ssim(self,
                   y_true: KerasTensor,
@@ -133,14 +135,15 @@ class DSSIMObjective(keras.losses.Loss):
 
         # SSIM contrast-structure measure is (2 * cov_{xy} + c2) / (cov_{xx} + cov_{yy} + c2)
         num_con = self._depthwise_conv2d(y_true * y_pred, kernel) * 2.0
-        den_con = self._depthwise_conv2d(ops.square(y_true) + ops.square(y_pred), kernel)
+        den_con = self._depthwise_conv2d(
+            T.cast("KerasTensor", ops.square(y_true) + ops.square(y_pred)), kernel)
 
         contrast = (num_con - num_lum + self._c2) / (den_con - den_lum + self._c2)
 
         # Average over the height x width dimensions
         axes = (-3, -2)
-        ssim = ops.mean(luminance * contrast, axis=axes)
-        contrast = ops.mean(contrast, axis=axes)
+        ssim = T.cast("KerasTensor", ops.mean(luminance * contrast, axis=axes))
+        contrast = T.cast("KerasTensor", ops.mean(contrast, axis=axes))
 
         return ssim, contrast
 
@@ -161,7 +164,7 @@ class DSSIMObjective(keras.losses.Loss):
         """
         ssim = self._get_ssim(y_true, y_pred)[0]
         retval = (1. - ssim) / 2.0
-        return ops.mean(retval)
+        return T.cast("KerasTensor", ops.mean(retval))
 
 
 class GMSDLoss(keras.losses.Loss):
@@ -242,10 +245,11 @@ class GMSDLoss(keras.losses.Loss):
             shape = ops.concatenate([image_shape, num_kernels], axis=0)
             output = ops.reshape(output, shape)
             output = ops.reshape(output, ops.concatenate([image_shape, num_kernels]))
-            output = torch.atan(ops.squeeze(output[:, :, :, :, 0] / output[:, :, :, :, 1],
-                                            axis=None))
+            output = torch.atan(T.cast("Tensor",
+                                       ops.squeeze(output[:, :, :, :, 0] / output[:, :, :, :, 1],
+                                                   axis=None)))
         # magnitude of edges -- unified x & y edges don't work well with Neural Networks
-        return output
+        return T.cast("KerasTensor", output)
 
     def call(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
         """ Return the Gradient Magnitude Similarity Deviation Loss.
@@ -270,10 +274,10 @@ class GMSDLoss(keras.losses.Loss):
         gms = (upper + ephsilon) / (lower + ephsilon)
         gmsd = ops.std(gms, axis=(1, 2, 3), keepdims=True)
         gmsd = ops.squeeze(gmsd, axis=-1)
-        return gmsd
+        return T.cast("KerasTensor", gmsd)
 
 
-class LDRFLIPLoss(keras.losses.Loss):
+class LDRFLIPLoss(keras.losses.Loss):  # pylint:disable=too-many-instance-attributes
     """ Computes the LDR-FLIP error map between two LDR images, assuming the images are observed
     at a certain number of pixels per degree of visual angle.
 
@@ -377,8 +381,8 @@ class LDRFLIPLoss(keras.losses.Loss):
             y_true = y_true[..., [2, 1, 0]]
             y_pred = y_pred[..., [2, 1, 0]]
 
-        y_true = ops.clip(y_true, 0, 1.)
-        y_pred = ops.clip(y_pred, 0, 1.)
+        y_true = T.cast("KerasTensor", ops.clip(y_true, 0, 1.))
+        y_pred = T.cast("KerasTensor", ops.clip(y_pred, 0, 1.))
 
         true_ycxcz = self._col_conv["rgb2ycxcz"](y_true)
         pred_ycxcz = self._col_conv["rgb2ycxcz"](y_pred)
@@ -387,7 +391,7 @@ class LDRFLIPLoss(keras.losses.Loss):
         delta_e_features = self._process_features(true_ycxcz, pred_ycxcz)
 
         loss = ops.power(delta_e_color, 1 - delta_e_features)
-        return loss
+        return T.cast("KerasTensor", loss)
 
     def _color_pipeline(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
         """ Perform the color processing part of the FLIP loss function
@@ -415,9 +419,9 @@ class LDRFLIPLoss(keras.losses.Loss):
         hunt_adjusted_blue = self._hunt_adjustment(rgb2lab(self._hunt["blue"]))
 
         delta = self._hyab(preprocessed_true, preprocessed_pred)
-        power_delta = ops.power(delta, self._computed_distance_exponent)
-        cmax = ops.power(self._hyab(hunt_adjusted_green, hunt_adjusted_blue),
-                         self._computed_distance_exponent)
+        power_delta = T.cast("KerasTensor", ops.power(delta, self._computed_distance_exponent))
+        cmax = T.cast("KerasTensor", ops.power(self._hyab(hunt_adjusted_green, hunt_adjusted_blue),
+                                               self._computed_distance_exponent))
         return self._redistribute_errors(power_delta, cmax)
 
     def _process_features(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
@@ -447,7 +451,7 @@ class LDRFLIPLoss(keras.losses.Loss):
                             ops.abs(frobenius_norm(points_pred) - frobenius_norm(points_true)))
 
         delta = ops.clip(delta, x_min=self._epsilon, x_max=np.inf)
-        return ops.power(((1 / np.sqrt(2)) * delta), self._feature_exponent)
+        return T.cast("KerasTensor", ops.power(((1 / np.sqrt(2)) * delta), self._feature_exponent))
 
     @classmethod
     def _hunt_adjustment(cls, image: KerasTensor) -> KerasTensor:
@@ -465,9 +469,9 @@ class LDRFLIPLoss(keras.losses.Loss):
         """
         ch_l = image[..., 0:1]
         adjusted = ops.concatenate([ch_l, image[..., 1:] * (ch_l * 0.01)], axis=-1)
-        return adjusted
+        return T.cast("KerasTensor", adjusted)
 
-    def _hyab(self, y_true, y_pred):
+    def _hyab(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
         """ Compute the HyAB distance between true and predicted images.
 
         Parameters
@@ -483,13 +487,15 @@ class LDRFLIPLoss(keras.losses.Loss):
             image tensor containing the per-pixel HyAB distances between true and predicted images
         """
         delta = y_true - y_pred
-        root = ops.sqrt(ops.clip(ops.power(delta[..., 0:1], 2),
-                                 x_min=self._epsilon,
-                                 x_max=np.inf))
+        root = T.cast("KerasTensor", ops.sqrt(ops.clip(ops.power(delta[..., 0:1], 2),
+                                                       x_min=self._epsilon,
+                                                       x_max=np.inf)))
         delta_norm = frobenius_norm(delta[..., 1:3])
         return root + delta_norm
 
-    def _redistribute_errors(self, power_delta_e_hyab, cmax):
+    def _redistribute_errors(self,
+                             power_delta_e_hyab: KerasTensor,
+                             cmax: KerasTensor) -> KerasTensor:
         """ Redistribute exponentiated HyAB errors to the [0,1] range
 
         Parameters
@@ -510,7 +516,7 @@ class LDRFLIPLoss(keras.losses.Loss):
             power_delta_e_hyab < pccmax,
             (self._pt / pccmax) * power_delta_e_hyab,
             self._pt + ((power_delta_e_hyab - pccmax) / (cmax - pccmax)) * (1.0 - self._pt))
-        return delta_e_c
+        return T.cast("KerasTensor", delta_e_c)
 
 
 class _SpatialFilters():
@@ -601,12 +607,12 @@ class _SpatialFilters():
             sensitivity functions
         """
         padded_image = replicate_pad(image, self._radius)
-        image_tilde_opponent = ops.conv(padded_image,
-                                        self._spatial_filters,
-                                        strides=1,
-                                        padding="valid")
+        image_tilde_opponent = T.cast("KerasTensor", ops.conv(padded_image,
+                                                              self._spatial_filters,
+                                                              strides=1,
+                                                              padding="valid"))
         rgb = ops.clip(self._ycxcz2rgb(image_tilde_opponent), 0., 1.)
-        return rgb
+        return T.cast("KerasTensor", rgb)
 
 
 class _FeatureDetection():
@@ -629,9 +635,11 @@ class _FeatureDetection():
 
         gradient = np.exp(-(grid[0] ** 2 + grid[1] ** 2) / (2 * (self._std ** 2)))
         self._grads = {
-            "edge": Variable(np.multiply(-grid[0], gradient), trainable=False),
+            "edge": Variable(np.multiply(-grid[0], gradient), trainable=False, dtype="float32"),
             "point": Variable(np.multiply(grid[0] ** 2 / (self._std ** 2) - 1, gradient),
-                              trainable=False)}
+                              trainable=False,
+                              dtype="float32")}
+
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def __call__(self, image: KerasTensor, feature_type: str) -> KerasTensor:
@@ -659,7 +667,6 @@ class _FeatureDetection():
                            grad_x / negative_weights_sum,
                            grad_x / positive_weights_sum)
         kernel = ops.expand_dims(ops.expand_dims(grad_x, axis=-1), axis=-1)
-
         features_x = ops.conv(replicate_pad(image, self._radius),
                               kernel,
                               strides=1,
@@ -670,7 +677,7 @@ class _FeatureDetection():
                               strides=1,
                               padding="valid")
         features = ops.concatenate([features_x, features_y], axis=-1)
-        return features
+        return T.cast("KerasTensor", features)
 
 
 class MSSIMLoss(keras.losses.Loss):
@@ -737,8 +744,8 @@ class MSSIMLoss(keras.losses.Loss):
         """
         shape = image.shape
         var_x = ops.reshape(image, (-1, *shape[-3:]))
-        var_y = ops.nn.depthwise_conv(var_x, kernel, strides=(1, 1), padding="valid")
-        return ops.reshape(var_y, (*shape[:-3], *var_y.shape[1:]))
+        var_y = ops.nn.depthwise_conv(var_x, kernel, strides=1, padding="valid")
+        return T.cast("KerasTensor", ops.reshape(var_y, (*shape[:-3], *var_y.shape[1:])))
 
     def _ssim_helper(self,
                      image1: KerasTensor,
@@ -772,7 +779,8 @@ class MSSIMLoss(keras.losses.Loss):
         luminance = (num0 + c_1) / (den0 + c_1)
 
         num1 = self._reducer(image1 * image2, kernel) * 2.0
-        den1 = self._reducer(ops.square(image1) + ops.square(image2), kernel)
+        den1 = self._reducer(T.cast("KerasTensor", ops.square(image1) + ops.square(image2)),
+                             kernel)
         cs_ = (num1 - num0 + c_2) / (den1 - den0 + c_2)
 
         return luminance, cs_
@@ -799,7 +807,7 @@ class MSSIMLoss(keras.losses.Loss):
         gauss = ops.reshape(gauss, [1, -1]) + ops.reshape(gauss, [-1, 1])
         gauss = ops.reshape(gauss, [1, -1])  # For ops.softmax().
         gauss = ops.softmax(gauss)
-        return ops.reshape(gauss, [size, size, 1, 1])
+        return T.cast("KerasTensor", ops.reshape(gauss, [size, size, 1, 1]))
 
     def _ssim_per_channel(self,
                           image1: KerasTensor,
@@ -836,17 +844,17 @@ class MSSIMLoss(keras.losses.Loss):
         luminance, cs_ = self._ssim_helper(image1, image2, kernel)
 
         # Average over the second and the third from the last: height, width.
-        ssim_val = ops.mean(luminance * cs_, [-3, -2])
-        cs_ = ops.mean(cs_, [-3, -2])
+        ssim_val = T.cast("KerasTensor", ops.mean(luminance * cs_, [-3, -2]))
+        cs_ = T.cast("KerasTensor", ops.mean(cs_, [-3, -2]))
         return ssim_val, cs_
 
     @classmethod
-    def _do_pad(cls, images: KerasTensor, remainder: KerasTensor) -> list[KerasTensor]:
+    def _do_pad(cls, images: list[KerasTensor], remainder: KerasTensor) -> list[KerasTensor]:
         """ Pad images
 
         Parameters
         ----------
-        images: :class:`keras.KerasTensor`
+        images: list[:class:`keras.KerasTensor`]
             Images to pad
         remainder: :class:`keras.KerasTensor`
             Remainding images to pad
@@ -860,7 +868,7 @@ class MSSIMLoss(keras.losses.Loss):
         padding = ops.pad(padding, [[1, 0], [1, 0]], mode="constant")
         return [ops.pad(x, padding, mode="symmetric") for x in images]
 
-    def _mssism(self,
+    def _mssism(self,  # pylint:disable=too-many-locals
                 y_true: KerasTensor,
                 y_pred: KerasTensor,
                 filter_size: int) -> KerasTensor:
@@ -883,10 +891,11 @@ class MSSIMLoss(keras.losses.Loss):
         tails = [s[-3:] for s in shapes]
 
         mcs = []
+        ssim_per_channel = None
         for k in range(len(self._power_factors)):
             if k > 0:
                 # Avg pool takes rank 4 tensors. Flatten leading dimensions.
-                flat_images = [ops.reshape(x, (-1, *t))
+                flat_images = [T.cast("KerasTensor", ops.reshape(x, (-1, *t)))
                                for x, t in zip(images, tails)]
                 remainder = tails[0] % self._divisor_tensor
 
@@ -904,7 +913,7 @@ class MSSIMLoss(keras.losses.Loss):
                               for x in padded]
 
                 tails = [x.shape[1:] for x in downscaled]
-                images = [ops.reshape(x, (*h, *t))
+                images = [T.cast("KerasTensor", ops.reshape(x, (*h, *t)))
                           for x, h, t in zip(downscaled, heads, tails)]
 
             # Overwrite previous ssim value since we only need the last one.
@@ -916,7 +925,7 @@ class MSSIMLoss(keras.losses.Loss):
         mcs_and_ssim = ops.stack(mcs + [ops.relu(ssim_per_channel)], axis=-1)
         ms_ssim = ops.prod(ops.power(mcs_and_ssim, self._power_factors), [-1])
 
-        return ops.mean(ms_ssim, [-1])  # Avg over color channels.
+        return T.cast("KerasTensor", ops.mean(ms_ssim, [-1]))  # Avg over color channels.
 
     def call(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
         """ Call the MS-SSIM Loss Function.
@@ -934,13 +943,14 @@ class MSSIMLoss(keras.losses.Loss):
             The MS-SSIM Loss value
         """
         im_size = y_true.shape[1]
+        assert isinstance(im_size, int)
         # filter size cannot be larger than the smallest scale
         smallest_scale = self._get_smallest_size(im_size, len(self._power_factors) - 1)
         filter_size = min(self.filter_size, smallest_scale)
 
         ms_ssim = self._mssism(y_true, y_pred, filter_size)
         ms_ssim_loss = 1. - ms_ssim
-        return ops.mean(ms_ssim_loss)
+        return T.cast("KerasTensor", ops.mean(ms_ssim_loss))
 
     def _get_smallest_size(self, size: int, idx: int) -> int:
         """ Recursive function to obtain the smallest size that the image will be scaled to.
@@ -963,3 +973,6 @@ class MSSIMLoss(keras.losses.Loss):
         if idx > 0:
             size = self._get_smallest_size(size // 2, idx - 1)
         return size
+
+
+__all__ = get_module_objects(__name__)

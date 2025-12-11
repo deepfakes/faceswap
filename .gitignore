@@ -11,8 +11,8 @@
 
 # Root files
 !Dockerfile*
-!.pylintrc
-!setup.cfg
+!pyproject.toml
+!.gitignore
 !.travis.yml
 !/faceswap.py
 !/setup.py
@@ -28,13 +28,20 @@
 !config/
 !.readthedocs.yml
 !docs/
-!docs/full**
-!docs/_static**
+!docs/_static/
+!docs/_static/*.png
+!docs/full/
+!docs/full/**/
+!docs/full/**/*.rst
 !locales/
 !locales/**
+
+# Test files
 !tests/
 !tests/**/
 !tests/**/*.py
+!tests/**/*.mp4
+!tests/**/*.jpg
 
 # Core files
 !.fs_cache

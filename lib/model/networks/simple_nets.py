@@ -8,6 +8,7 @@ from keras import layers
 from keras.models import Model
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -92,11 +93,11 @@ class AlexNet(_net):
         :class:`keras.KerasTensor`
             The output of the Convolutional block
         """
-        name = f"features.{block_idx}"
+        name = f"features_{block_idx}"
         var_x = inputs
         if max_pool:
-            var_x = layers.MaxPooling2D(pool_size=3, strides=2, name=f"{name}.pool")(var_x)
-        var_x = layers.ZeroPadding2D(padding=padding, name=f"{name}.pad")(var_x)
+            var_x = layers.MaxPooling2D(pool_size=3, strides=2, name=f"{name}_pool")(var_x)
+        var_x = layers.ZeroPadding2D(padding=padding, name=f"{name}_pad")(var_x)
         var_x = layers.Conv2D(filters,
                               kernel_size=kernel_size,
                               strides=strides,
@@ -114,7 +115,7 @@ class AlexNet(_net):
             The compiled AlexNet model
         """
         inputs = layers.Input(self._input_shape)
-        var_x = inputs
+        var_x = T.cast("KerasTensor", inputs)
         kernel_size = 11
         strides = 4
 
@@ -174,16 +175,16 @@ class SqueezeNet(_net):
         :class:`keras.KerasTensor`
             The output of the SqueezeNet fire block
         """
-        name = f"features.{block_idx}"
+        name = f"features_{block_idx}"
         squeezed = layers.Conv2D(squeeze_planes, 1,
-                                 activation="relu", name=f"{name}.squeeze")(inputs)
+                                 activation="relu", name=f"{name}_squeeze")(inputs)
         expand1 = layers.Conv2D(expand_planes, 1,
-                                activation="relu", name=f"{name}.expand1x1")(squeezed)
+                                activation="relu", name=f"{name}_expand1x1")(squeezed)
         expand3 = layers.Conv2D(expand_planes,
                                 3,
                                 activation="relu",
                                 padding="same",
-                                name=f"{name}.expand3x3")(squeezed)
+                                name=f"{name}_expand3x3")(squeezed)
         return layers.Concatenate(axis=-1, name=name)([expand1, expand3])
 
     def __call__(self) -> Model:
@@ -195,7 +196,7 @@ class SqueezeNet(_net):
             The compiled SqueezeNet model
         """
         inputs = layers.Input(self._input_shape)
-        var_x = layers.Conv2D(64, 3, strides=2, activation="relu", name="features.0")(inputs)
+        var_x = layers.Conv2D(64, 3, strides=2, activation="relu", name="features_0")(inputs)
 
         block_idx = 2
         squeeze = 16
@@ -211,3 +212,6 @@ class SqueezeNet(_net):
             squeeze += 16
             expand += 64
         return Model(inputs=inputs, outputs=[var_x])
+
+
+__all__ = get_module_objects(__name__)

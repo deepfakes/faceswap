@@ -19,7 +19,7 @@ from lib.align import DetectedFace
 from lib.cli.args_extract_convert import ConvertArgs
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.convert import Converter
-from lib.utils import FaceswapError, handle_deprecated_cliopts
+from lib.utils import get_module_objects, FaceswapError, handle_deprecated_cliopts
 from lib.queue_manager import queue_manager
 from scripts.fsmedia import Alignments, Images
 from scripts.convert import Predict, ConvertItem
@@ -651,3 +651,6 @@ class Patch():
             idx += 1
         logger.debug("Patched faces")
         return swapped
+
+
+__all__ = get_module_objects(__name__)

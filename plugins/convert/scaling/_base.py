@@ -30,6 +30,7 @@ class Adjustment():
             logger.debug("Loading base config")
             retval = get_config(section, configfile=configfile)
         else:
+            # pylint:disable=duplicate-code
             logger.debug("Loading passed in config")
             config.section = section
             retval = config.config_dict

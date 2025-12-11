@@ -13,14 +13,14 @@ from tqdm import tqdm
 
 from lib.align import AlignedFace
 from lib.image import encode_image, ImagesSaver
-from lib.utils import get_image_paths
+from lib.utils import get_image_paths, get_module_objects
 
 if T.TYPE_CHECKING:
     import numpy as np
     from .loader import Loader
     from plugins.extract import ExtractMedia
-    from lib.align import Alignments, DetectedFace
-    from lib.align.alignments import PNGHeaderDict
+    from lib import align
+    from lib.align import DetectedFace
     from lib.align.aligned_face import CenteringType
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class Import:
                  storage_size: int,
                  input_is_faces: bool,
                  loader: Loader,
-                 alignments: Alignments | None,
+                 alignments: align.alignments.Alignments | None,
                  input_location: str,
                  mask_type: str) -> None:
         logger.debug("Initializing %s (import_path: %s, centering: %s, storage_size: %s, "
@@ -62,7 +62,7 @@ class Import:
 
         self._validate_mask_type(mask_type)
 
-        self._centering = centering
+        self._centering: CenteringType = centering
         self._size = storage_size
         self._is_faces = input_is_faces
         self._alignments = alignments
@@ -329,7 +329,8 @@ class Import:
                                          face.to_alignment())
 
         logger.trace("Updating extracted face: '%s'", media.filename)  # type:ignore[attr-defined]
-        meta: PNGHeaderDict = {"alignments": face.to_png_meta(), "source": media.frame_metadata}
+        meta: align.alignments.PNGHeaderDict = {"alignments": face.to_png_meta(),
+                                                "source": media.frame_metadata}
         self._saver.save(media.filename, encode_image(media.image, ".png", metadata=meta))
 
     @classmethod
@@ -393,7 +394,7 @@ class Import:
             logger.warning("No mask file found for: '%s'", os.path.basename(media.filename))
             return
 
-        mask = cv2.imread(mask_file, cv2.IMREAD_GRAYSCALE)
+        mask = T.cast("np.ndarray", cv2.imread(mask_file, cv2.IMREAD_GRAYSCALE))
 
         logger.trace("Loaded mask for frame '%s': %s",  # type:ignore[attr-defined]
                      os.path.basename(mask_file), mask.shape)
@@ -404,3 +405,6 @@ class Import:
             self._store_mask_face(media, mask)
         else:
             self._store_mask_frame(media, mask)
+
+
+__all__ = get_module_objects(__name__)

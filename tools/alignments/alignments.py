@@ -8,7 +8,8 @@ import typing as T
 from argparse import Namespace
 from multiprocessing import Process
 
-from lib.utils import FaceswapError, handle_deprecated_cliopts, VIDEO_EXTENSIONS
+from lib.utils import (get_module_objects, FaceswapError,
+                       handle_deprecated_cliopts, VIDEO_EXTENSIONS)
 from .media import AlignmentData
 from .jobs import Check, Export, Sort, Spatial  # noqa pylint:disable=unused-import
 from .jobs_faces import FromFaces, RemoveFaces, Rename  # noqa pylint:disable=unused-import
@@ -317,3 +318,6 @@ class _Alignments():
         job = job(self.alignments, self._args)
         logger.debug(job)
         job.process()
+
+
+__all__ = get_module_objects(__name__)

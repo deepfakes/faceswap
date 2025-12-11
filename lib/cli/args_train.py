@@ -4,6 +4,7 @@ import argparse
 import gettext
 import typing as T
 
+from lib.utils import get_module_objects
 from plugins.plugin_loader import PluginLoader
 
 from .actions import DirFullPaths, FileFullPaths, Radio, Slider
@@ -164,6 +165,17 @@ class TrainArgs(FaceSwapArgs):
                 "stop training when you are happy with the previews. However, if you want the "
                 "model to stop automatically at a set number of iterations, you can set that "
                 "value here.")})
+        argument_list.append({
+            "opts": ("-a", "--warmup"),
+            "action": Slider,
+            "min_max": (0, 5000),
+            "rounding": 100,
+            "type": int,
+            "default": 0,
+            "group": _("training"),
+            "help": _(
+                "Learning rate warmup. Linearly increase the learning rate from 0 to the chosen "
+                "target rate over the number of iterations given here. 0 to disable.")})
         # argument_list.append({
         #     "opts": ("-D", "--distribution-strategy"),
         #     "dest": "distribution_strategy",
@@ -380,3 +392,6 @@ class TrainArgs(FaceSwapArgs):
             "dest": "depr_no-warp_nw_W",
             "help": argparse.SUPPRESS})
         return argument_list
+
+
+__all__ = get_module_objects(__name__)

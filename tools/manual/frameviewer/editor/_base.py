@@ -449,7 +449,7 @@ class Editor():
         """
         if self._drag_callback is None:
             return
-        self._drag_callback(event)
+        self._drag_callback(event)  # pylint:disable=not-callable
 
     def _drag_stop(self, event):  # pylint:disable=unused-argument
         """ The action to perform when the user stops clicking and dragging the mouse.

@@ -15,7 +15,7 @@ from keras.regularizers import L2
 
 from lib.logger import parse_class_init
 from lib.model.layers import L2Normalize
-from lib.utils import FaceswapError
+from lib.utils import get_module_objects, FaceswapError
 from ._base import BatchType, RecogBatch, Identity
 
 if T.TYPE_CHECKING:
@@ -592,3 +592,6 @@ class Cluster():
                                        self._num_predictions,
                                        self._num_predictions + self._num_predictions - 2)
         return result_order
+
+
+__all__ = get_module_objects(__name__)

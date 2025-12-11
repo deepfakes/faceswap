@@ -16,18 +16,22 @@ from lib.model import layers
 from lib.utils import get_backend
 from tests.utils import has_arg
 
-CONV_SHAPE = (3, 3, 256, 2048)
-CONV_ID = get_backend().upper()
 
-
-def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,  # noqa:C901
-               input_data=None, expected_output=None,
-               expected_output_dtype=None, fixed_batch_size=False):
+# pylint:disable=dangerous-default-value,too-many-locals,too-many-branches
+def layer_test(layer_cls,  # noqa:C901
+               kwargs={},
+               input_shape=None,
+               input_dtype=None,
+               input_data=None,
+               expected_output=None,
+               expected_output_dtype=None,
+               fixed_batch_size=False):
     """Test routine for a layer with a single input tensor
     and single output tensor.
     """
     with device("cpu"):
         # generate input data
+        # pylint:disable=duplicate-code
         if input_data is None:
             assert input_shape
             if not input_dtype:
@@ -67,7 +71,7 @@ def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,  # noqa
         # check with the functional API
         model = Model(inp, outp)
 
-        actual_output = model.predict(input_data, verbose=0)
+        actual_output = model.predict(input_data, verbose=0)  # type:ignore
         actual_output_shape = actual_output.shape
         for expected_dim, actual_dim in zip(expected_output_shape,
                                             actual_output_shape):
@@ -83,7 +87,7 @@ def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,  # noqa
         if model.weights:
             weights = model.get_weights()
             recovered_model.set_weights(weights)
-            _output = recovered_model.predict(input_data, verbose=0)
+            _output = recovered_model.predict(input_data, verbose=0)  # type:ignore
             assert_allclose(_output, actual_output, rtol=1e-3)
 
         # test training mode (e.g. useful when the layer has a
@@ -144,5 +148,25 @@ def test_reflection_padding_2d(dummy):  # pylint:disable=unused-argument
 
 @pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
 def test_swish(dummy):  # pylint:disable=unused-argument
-    """ Sub Pixel up-scaling layer test """
+    """ Swish activation layer test """
     layer_test(layers.Swish, input_shape=(2, 4, 4, 1024))
+
+
+_PARAMS = ("multiply", "truediv", "add", "subtract")
+_IDS = [f"{x}[{get_backend().upper()}]" for x in _PARAMS]
+
+
+@pytest.mark.parametrize("operation", _PARAMS, ids=_IDS)
+def test_scalar_op(operation):
+    """ Scalar operation layer test """
+    val = 2.0
+    np_ops = {"multiply": np.multiply,
+              "truediv": np.true_divide,
+              "add": np.add,
+              "subtract": np.subtract}
+    input_data = np.random.random((2, 4, 4, 1024)).astype("float32")
+    output_data = np_ops[operation](input_data, val)
+    layer_test(layers.ScalarOp,
+               kwargs={"operation": operation, "value": val},
+               input_data=input_data,
+               expected_output=output_data)

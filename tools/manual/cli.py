@@ -5,6 +5,7 @@ import gettext
 
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import DirOrFileFullPaths, FileFullPaths
+from lib.utils import get_module_objects
 
 # LOCALES
 _LANG = gettext.translation("tools.manual", localedir="locales", fallback=True)
@@ -77,3 +78,6 @@ class ManualArgs(FaceSwapArgs):
             "dest": "depr_frames_fr_f",
             "help": argparse.SUPPRESS})
         return argument_list
+
+
+__all__ = get_module_objects(__name__)

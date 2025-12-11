@@ -14,6 +14,7 @@ from keras.src.initializers.random_initializers import compute_fans
 import numpy as np
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -48,7 +49,8 @@ class ICNR(initializers.Initializer):
     """
 
     def __init__(self,
-                 initializer: dict[str, T.Any] | initializers.Initializer, scale: int = 2) -> None:
+                 initializer: dict[str, T.Any] | initializers.Initializer,
+                 scale: int = 2) -> None:
         logger.debug(parse_class_init(locals()))
 
         self._scale = scale
@@ -58,8 +60,7 @@ class ICNR(initializers.Initializer):
 
     def __call__(self,
                  shape: list[int] | tuple[int, ...],
-                 dtype: str = "float32",
-                 **kwargs) -> KerasTensor:
+                 dtype: str | None = "float32") -> KerasTensor:
         """ Call function for the ICNR initializer.
 
         Parameters
@@ -79,10 +80,9 @@ class ICNR(initializers.Initializer):
         shape = list(shape)
 
         if self._scale == 1:
-            initializer = self._initializer
-            if isinstance(initializer, dict):
-                initializer = next(i for i in self._initializer.values())
-            return initializer(shape)
+            if isinstance(self._initializer, dict):
+                return next(i for i in self._initializer.values())
+            return self._initializer(shape)
 
         new_shape = shape[:3] + [shape[3] // (self._scale ** 2)]
         size = [s * self._scale for s in new_shape[:2]]
@@ -90,17 +90,17 @@ class ICNR(initializers.Initializer):
         if isinstance(self._initializer, dict):
             self._initializer = initializers.deserialize(self._initializer)
 
-        var_x: KerasTensor = self._initializer(new_shape, dtype)
+        var_x = self._initializer(new_shape, dtype)
         var_x = ops.transpose(var_x, [2, 0, 1, 3])
         var_x = ops.image.resize(var_x,
                                  size,
                                  interpolation="nearest",
                                  data_format="channels_last")
-        var_x = self._space_to_depth(var_x)
+        var_x = self._space_to_depth(T.cast("KerasTensor", var_x))
         var_x = ops.transpose(var_x, [1, 2, 0, 3])
 
         logger.debug("ICNR Output shape: %s", var_x.shape)
-        return var_x
+        return T.cast("KerasTensor", var_x)
 
     def _space_to_depth(self, input_tensor: KerasTensor) -> KerasTensor:
         """ Space to depth Keras implementation.
@@ -116,16 +116,17 @@ class ICNR(initializers.Initializer):
             The manipulated input tensor
         """
         batch, height, width, depth = input_tensor.shape
+        assert height is not None and width is not None
         new_height, new_width = height // 2, width // 2
         inter_shape = (batch, new_height, self._scale, new_width, self._scale, depth)
 
         var_x = ops.reshape(input_tensor, inter_shape)
         var_x = ops.transpose(var_x, (0, 1, 3, 2, 4, 5))
-        retval = ops.reshape(var_x, (batch,  new_height, new_width, -1))
+        retval = ops.reshape(var_x, (batch, new_height, new_width, -1))
 
         logger.debug("Space to depth - Input shape: %s, Output shape: %s",
                      input_tensor.shape, retval.shape)
-        return retval
+        return T.cast("KerasTensor", retval)
 
     def get_config(self) -> dict[str, T.Any]:
         """ Return the ICNR Initializer configuration.
@@ -256,9 +257,9 @@ class ConvolutionAware(initializers.Initializer):
                      filters.shape, variance, retval.shape)
         return retval
 
-    def __call__(self,
+    def __call__(self,  # pylint: disable=too-many-locals
                  shape: list[int] | tuple[int, ...],
-                 dtype: str | None = None, **kwargs) -> Variable:
+                 dtype: str | None = None) -> Variable:
         """ Call function for the ICNR initializer.
 
         Parameters
@@ -274,7 +275,7 @@ class ConvolutionAware(initializers.Initializer):
             The modified kernel weights
         """
         if self._initialized:   # Avoid re-calculating initializer when loading a saved model
-            return self._he_uniform(shape, dtype=dtype)
+            return T.cast("Variable", self._he_uniform(shape, dtype=dtype))
         dtype = K.floatx() if dtype is None else dtype
         logger.info("Calculating Convolution Aware Initializer for shape: %s", shape)
         rank = len(shape)
@@ -344,11 +345,16 @@ class ConvolutionAware(initializers.Initializer):
         config = {"eps_std": self._eps_std,
                   "seed": self._seed,
                   "initialized": self._initialized}
+        # pylint:disable=duplicate-code
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
+# pylint:disable=duplicate-code
 # Update initializers into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
         saving.get_custom_objects().update({name: obj})
+
+
+__all__ = get_module_objects(__name__)

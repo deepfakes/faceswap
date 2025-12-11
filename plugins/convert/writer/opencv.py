@@ -2,10 +2,12 @@
 """ Image output writer for faceswap.py converter
     Uses cv2 for writing as in testing this was a lot faster than both Pillow and ImageIO
 """
-import cv2
-import numpy as np
 import typing as T
 
+import cv2
+import numpy as np
+
+from lib.utils import get_module_objects
 from ._base import Output, logger
 
 
@@ -69,6 +71,7 @@ class Writer(Output):
         """
         logger.trace("Outputting: (filename: '%s'", filename)  # type:ignore
         filenames = self.output_filename(filename, self._separate_mask)
+        # pylint:disable=duplicate-code
         for fname, img in zip(filenames, image):
             try:
                 with open(fname, "wb") as outfile:
@@ -110,3 +113,6 @@ class Writer(Output):
     def close(self) -> None:
         """ Does nothing as OpenCV writer does not need a close method """
         return
+
+
+__all__ = get_module_objects(__name__)

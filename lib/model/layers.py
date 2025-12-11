@@ -11,6 +11,7 @@ import typing as T
 from keras import InputSpec, Layer, ops, saving
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -150,7 +151,9 @@ class KResizeImages(Layer):  # pylint:disable=too-many-ancestors,abstract-method
         :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
-        size = int(round(inputs.shape[1] * self.size)), int(round(inputs.shape[2] * self.size))
+        height, width = inputs.shape[1:3]
+        assert height is not None and width is not None
+        size = int(round(width * self.size)), int(round(height * self.size))
         retval = ops.image.resize(inputs,
                                   size,
                                   interpolation=self.interpolation,
@@ -322,8 +325,10 @@ class PixelShuffler(Layer):  # pylint:disable=too-many-ancestors,abstract-method
                              str(4) +
                              "; Received input shape:", str(input_shape))
 
+        out = None
         if self.data_format == "channels_first":
             batch_size, channels, height, width = input_shape
+            assert height is not None and width is not None and channels is not None
             if batch_size is None:
                 batch_size = -1
             r_height, r_width = self.size
@@ -335,6 +340,7 @@ class PixelShuffler(Layer):  # pylint:disable=too-many-ancestors,abstract-method
             out = ops.reshape(out, (batch_size, o_channels, o_height, o_width))
         elif self.data_format == "channels_last":
             batch_size, height, width, channels = input_shape
+            assert height is not None and width is not None and channels is not None
             if batch_size is None:
                 batch_size = -1
             r_height, r_width = self.size
@@ -344,10 +350,11 @@ class PixelShuffler(Layer):  # pylint:disable=too-many-ancestors,abstract-method
             out = ops.reshape(inputs, (batch_size, height, width, r_height, r_width, o_channels))
             out = ops.transpose(out, (0, 1, 3, 2, 4, 5))
             out = ops.reshape(out, (batch_size, o_height, o_width, o_channels))
-        return out
+        assert out is not None
+        return T.cast("KerasTensor", out)
 
-    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
-                             ) -> tuple[int, ...]:
+    def compute_output_shape(self,    # pylint:disable=arguments-differ
+                             input_shape: tuple[int | None, ...]) -> tuple[int | None, ...]:
         """Computes the output shape of the layer.
 
         Assumes that the layer will be built to match that input shape provided.
@@ -368,6 +375,7 @@ class PixelShuffler(Layer):  # pylint:disable=too-many-ancestors,abstract-method
                              str(4) +
                              "; Received input shape:", str(input_shape))
 
+        retval: tuple[int | None, ...]
         if self.data_format == "channels_first":
             height = None
             width = None
@@ -375,7 +383,9 @@ class PixelShuffler(Layer):  # pylint:disable=too-many-ancestors,abstract-method
                 height = input_shape[2] * self.size[0]
             if input_shape[3] is not None:
                 width = input_shape[3] * self.size[1]
-            channels = input_shape[1] // self.size[0] // self.size[1]
+            chs = input_shape[1]
+            assert chs is not None
+            channels = chs // self.size[0] // self.size[1]
 
             if channels * self.size[0] * self.size[1] != input_shape[1]:
                 raise ValueError("channels of input and size are incompatible")
@@ -391,7 +401,9 @@ class PixelShuffler(Layer):  # pylint:disable=too-many-ancestors,abstract-method
                 height = input_shape[1] * self.size[0]
             if input_shape[2] is not None:
                 width = input_shape[2] * self.size[1]
-            channels = input_shape[3] // self.size[0] // self.size[1]
+            chs = input_shape[3]
+            assert chs is not None
+            channels = chs // self.size[0] // self.size[1]
 
             if channels * self.size[0] * self.size[1] != input_shape[3]:
                 raise ValueError("channels of input and size are incompatible")
@@ -489,7 +501,7 @@ class ReflectionPadding2D(Layer):  # pylint:disable=too-many-ancestors,abstract-
             stride = stride[0]
         self.stride = stride
         self.kernel_size = kernel_size
-        self.input_spec: list[KerasTensor] | None = None
+        self.input_spec: list[InputSpec] | None = None
         super().__init__(**kwargs)
 
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -508,17 +520,10 @@ class ReflectionPadding2D(Layer):  # pylint:disable=too-many-ancestors,abstract-
         self.input_spec = [InputSpec(shape=input_shape)]
         super().build(input_shape)
 
-    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
-                             ) -> tuple[int, ...]:
+    def compute_output_shape(self, *args, **kwargs) -> tuple[int | None, ...]:
         """Computes the output shape of the layer.
 
         Assumes that the layer will be built to match that input shape provided.
-
-        Parameters
-        ----------
-        input_shape: tuple or list of tuples
-            Shape tuple (tuple of integers) or list of shape tuples (one per output tensor of the
-            layer).  Shape tuples can include None for free dimensions, instead of an integer.
 
         Returns
         -------
@@ -527,6 +532,8 @@ class ReflectionPadding2D(Layer):  # pylint:disable=too-many-ancestors,abstract-
         """
         assert self.input_spec is not None
         input_shape = self.input_spec[0].shape
+        assert input_shape is not None
+        assert input_shape[1] is not None and input_shape[2] is not None
         in_width, in_height = input_shape[2], input_shape[1]
         kernel_width, kernel_height = self.kernel_size, self.kernel_size
 
@@ -560,6 +567,8 @@ class ReflectionPadding2D(Layer):  # pylint:disable=too-many-ancestors,abstract-
         """
         assert self.input_spec is not None
         input_shape = self.input_spec[0].shape
+        assert input_shape is not None
+        assert input_shape[1] is not None and input_shape[2] is not None
         in_width, in_height = input_shape[2], input_shape[1]
         kernel_width, kernel_height = self.kernel_size, self.kernel_size
 
@@ -694,6 +703,17 @@ class ScalarOp(Layer):  # pylint:disable=too-many-ancestors,abstract-method
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> tuple[int, ...]:
+        """ Output shape is the same as the input shape.
+
+        Parameters
+        ----------
+        input_shape: tuple
+            The input shape to the layer
+        """
+        return input_shape
+
     def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
              ) -> KerasTensor:
         """ Call the Scalar operation function.
@@ -727,3 +747,6 @@ class ScalarOp(Layer):  # pylint:disable=too-many-ancestors,abstract-method
 for name_, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
         saving.get_custom_objects().update({name_: obj})
+
+
+__all__ = get_module_objects(__name__)
