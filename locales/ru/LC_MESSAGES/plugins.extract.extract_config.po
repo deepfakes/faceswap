@@ -7,45 +7,28 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-06-08 16:43+0100\n"
-"PO-Revision-Date: 2023-06-12 19:42+0700\n"
+"POT-Creation-Date: 2025-12-12 13:11+0000\n"
+"PO-Revision-Date: 2025-12-12 13:14+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ru_RU\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Poedit 3.3.1\n"
+"X-Generator: Poedit 3.8\n"
 
-#: plugins/extract/_config.py:32
+#: plugins/extract/extract_config.py:23
 msgid "Options that apply to all extraction plugins"
 msgstr "Параметры, применимые ко всем плагинам извлечения"
 
-#: plugins/extract/_config.py:38
-msgid "settings"
-msgstr "настройки"
-
-#: plugins/extract/_config.py:39
-msgid ""
-"Enable the Tensorflow GPU `allow_growth` configuration "
-"option. This option prevents Tensorflow from allocating all of the GPU VRAM "
-"at launch but can lead to higher VRAM fragmentation and slower performance. "
-"Should only be enabled if you are having problems running extraction."
-msgstr ""
-"Включите опцию конфигурации Tensorflow GPU "
-"`allow_growth`. Эта опция не позволяет Tensorflow выделять всю видеопамять "
-"видеокарты при запуске, но может привести к повышенной фрагментации "
-"видеопамяти и снижению производительности. Следует включать только в том "
-"случае, если у вас есть проблемы с запуском извлечения."
-
-#: plugins/extract/_config.py:50 plugins/extract/_config.py:64
-#: plugins/extract/_config.py:78 plugins/extract/_config.py:89
-#: plugins/extract/_config.py:99 plugins/extract/_config.py:108
-#: plugins/extract/_config.py:119
+#: plugins/extract/extract_config.py:30 plugins/extract/extract_config.py:45
+#: plugins/extract/extract_config.py:60 plugins/extract/extract_config.py:72
+#: plugins/extract/extract_config.py:85 plugins/extract/extract_config.py:95
+#: plugins/extract/extract_config.py:107
 msgid "filters"
 msgstr "фильтры"
 
-#: plugins/extract/_config.py:51
+#: plugins/extract/extract_config.py:32
 msgid ""
 "Filters out faces below this size. This is a multiplier of the minimum "
 "dimension of the frame (i.e. 1280x720 = 720). If the original face extract "
@@ -62,7 +45,7 @@ msgstr ""
 "изображениями, за исключением экстремально длинных снимков. Обычно их можно "
 "смело отбрасывать."
 
-#: plugins/extract/_config.py:65
+#: plugins/extract/extract_config.py:47
 msgid ""
 "Filters out faces above this size. This is a multiplier of the minimum "
 "dimension of the frame (i.e. 1280x720 = 720). If the original face extract "
@@ -79,7 +62,7 @@ msgstr ""
 "изображениями, за исключением экстремальных крупных планов. Обычно их можно "
 "смело отбрасывать."
 
-#: plugins/extract/_config.py:79
+#: plugins/extract/extract_config.py:62
 msgid ""
 "Filters out faces who's landmarks are above this distance from an 'average' "
 "face. Values above 15 tend to be fairly safe. Values above 10 will remove "
@@ -90,7 +73,7 @@ msgstr ""
 "безопасны. Значения выше 10 устраняют больше ложных срабатываний, но также "
 "могут отфильтровать некоторые лица под экстремальными углами."
 
-#: plugins/extract/_config.py:90
+#: plugins/extract/extract_config.py:74
 msgid ""
 "Filters out faces who's calculated roll is greater than zero +/- this value "
 "in degrees. Aligned faces should have a roll value close to zero. Values "
@@ -103,7 +86,7 @@ msgstr ""
 "правило, представляют собой неправильно выровненные изображения. Обычно их "
 "можно смело отбрасывать."
 
-#: plugins/extract/_config.py:100
+#: plugins/extract/extract_config.py:87
 msgid ""
 "Filters out faces where the lowest point of the aligned face's eye or "
 "eyebrow is lower than the highest point of the aligned face's mouth. Any "
@@ -114,7 +97,7 @@ msgstr ""
 "которых это происходит, являются неправильно выровненными и могут быть смело "
 "отброшены."
 
-#: plugins/extract/_config.py:109
+#: plugins/extract/extract_config.py:97
 msgid ""
 "If enabled, and 're-feed' has been selected for extraction, then interim "
 "alignments will be filtered prior to averaging the final landmarks. This can "
@@ -129,7 +112,7 @@ msgstr ""
 "результатов, а также может помочь выявить сложные выравнивания. Если эта "
 "функция отключена, то все результаты повторной подачи будут усреднены."
 
-#: plugins/extract/_config.py:120
+#: plugins/extract/extract_config.py:109
 msgid ""
 "If enabled, saves any filtered out images into a sub-folder during the "
 "extraction process. If disabled, filtered faces are deleted. Note: The faces "
@@ -141,11 +124,11 @@ msgstr ""
 "Примечание: Лица всегда будут отфильтрованы из файла выравнивания, "
 "независимо от того, сохраняете вы эти лица или нет."
 
-#: plugins/extract/_config.py:129 plugins/extract/_config.py:138
+#: plugins/extract/extract_config.py:118 plugins/extract/extract_config.py:128
 msgid "re-align"
 msgstr "повторное выравнивание"
 
-#: plugins/extract/_config.py:130
+#: plugins/extract/extract_config.py:120
 msgid ""
 "If enabled, and 're-align' has been selected for extraction, then all re-"
 "feed iterations are re-aligned. If disabled, then only the final averaged "
@@ -156,7 +139,7 @@ msgstr ""
 "отключено, то выравнивается только конечный усредненный результат повторной "
 "подачи."
 
-#: plugins/extract/_config.py:139
+#: plugins/extract/extract_config.py:130
 msgid ""
 "If enabled, and 're-align' has been selected for extraction, then any "
 "alignments which would be filtered out will not be re-aligned."
@@ -164,3 +147,18 @@ msgstr ""
 "Если эта функция включена, и для извлечения выбрано 'повторное "
 "выравнивание'('re-align'), то все выравнивания, которые будут отфильтрованы, "
 "не будут повторно выравниваться."
+
+#~ msgid "settings"
+#~ msgstr "настройки"
+
+#~ msgid ""
+#~ "Enable the Tensorflow GPU `allow_growth` configuration option. This "
+#~ "option prevents Tensorflow from allocating all of the GPU VRAM at launch "
+#~ "but can lead to higher VRAM fragmentation and slower performance. Should "
+#~ "only be enabled if you are having problems running extraction."
+#~ msgstr ""
+#~ "Включите опцию конфигурации Tensorflow GPU `allow_growth`. Эта опция не "
+#~ "позволяет Tensorflow выделять всю видеопамять видеокарты при запуске, но "
+#~ "может привести к повышенной фрагментации видеопамяти и снижению "
+#~ "производительности. Следует включать только в том случае, если у вас есть "
+#~ "проблемы с запуском извлечения."
