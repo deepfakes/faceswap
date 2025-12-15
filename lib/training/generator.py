@@ -16,13 +16,14 @@ from lib.align.aligned_face import CenteringType
 from lib.image import read_image_batch
 from lib.multithreading import BackgroundGenerator
 from lib.utils import FaceswapError, get_module_objects
+from plugins.train import train_config as mod_cfg
+from plugins.train.trainer import trainer_config as trn_cfg
 
 from . import ImageAugmentation
 from .cache import get_cache, RingBuffer
 
 if T.TYPE_CHECKING:
     from collections.abc import Generator
-    from lib.config import ConfigValueType
     from plugins.train.model._base import ModelBase
     from .cache import Cache
 
@@ -40,9 +41,6 @@ class DataGenerator():  # pylint:disable=too-many-instance-attributes
     ----------
     model: :class:`~plugins.train.model.ModelBase`
         The model that this data generator is feeding
-    config: dict
-        The configuration `dict` generated from :file:`config.train.ini` containing the trainer
-        plugin configuration options.
     side: {'a' or 'b'}
         The side of the model that this iterator is for.
     images: list
@@ -52,15 +50,13 @@ class DataGenerator():  # pylint:disable=too-many-instance-attributes
         objects of this size from the iterator.
     """
     def __init__(self,
-                 config: dict[str, ConfigValueType],
                  model: ModelBase,
                  side: T.Literal["a", "b"],
                  images: list[str],
                  batch_size: int) -> None:
         logger.debug("Initializing %s: (model: %s, side: %s, images: %s , "
-                     "batch_size: %s, config: %s)", self.__class__.__name__, model.name, side,
-                     len(images), batch_size, config)
-        self._config = config
+                     "batch_size: %s)", self.__class__.__name__, model.name, side,
+                     len(images), batch_size)
         self._side = side
         self._images = images
         self._batch_size = batch_size
@@ -71,8 +67,8 @@ class DataGenerator():  # pylint:disable=too-many-instance-attributes
 
         self._coverage_ratio = model.coverage_ratio
         self._color_order = model.color_order.lower()
-        self._use_mask = self._config["mask_type"] and (self._config["penalized_mask_loss"] or
-                                                        self._config["learn_mask"])
+        self._use_mask = mod_cfg.Loss.mask_type() and (mod_cfg.Loss.penalized_mask_loss() or
+                                                       mod_cfg.Loss.learn_mask())
 
         self._validate_samples()
         self._buffer = RingBuffer(batch_size,
@@ -80,7 +76,6 @@ class DataGenerator():  # pylint:disable=too-many-instance-attributes
                                   dtype="uint8")
         self._face_cache: Cache = get_cache(side,
                                             filenames=images,
-                                            config=self._config,
                                             size=self._process_size,
                                             coverage_ratio=self._coverage_ratio)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -90,13 +85,16 @@ class DataGenerator():  # pylint:disable=too-many-instance-attributes
         """int: The total number of channels, including mask channels that the target image
         should hold. """
         channels = 3
-        if self._config["mask_type"] and (self._config["learn_mask"] or
-                                          self._config["penalized_mask_loss"]):
+        if mod_cfg.Loss.mask_type() and (mod_cfg.Loss.learn_mask() or
+                                         mod_cfg.Loss.penalized_mask_loss()):
             channels += 1
 
-        mults = [area for area in ["eye", "mouth"]
-                 if T.cast(int, self._config[f"{area}_multiplier"]) > 1]
-        if self._config["penalized_mask_loss"] and mults:
+        mults = [area
+                 for area, amount in zip(["eye", "mouth"],
+                                         [mod_cfg.Loss.eye_multiplier(),
+                                          mod_cfg.Loss.mouth_multiplier()])
+                 if amount > 1]
+        if mod_cfg.Loss.penalized_mask_loss() and mults:
             channels += len(mults)
         return channels
 
@@ -400,9 +398,6 @@ class TrainingDataGenerator(DataGenerator):
     ----------
     model: :class:`~plugins.train.model.ModelBase`
         The model that this data generator is feeding
-    config: dict
-        The configuration `dict` generated from :file:`config.train.ini` containing the trainer
-        plugin configuration options.
     side: {'a' or 'b'}
         The side of the model that this iterator is for.
     images: list
@@ -412,12 +407,11 @@ class TrainingDataGenerator(DataGenerator):
         objects of this size from the iterator.
     """
     def __init__(self,
-                 config: dict[str, ConfigValueType],
                  model: ModelBase,
                  side: T.Literal["a", "b"],
                  images: list[str],
                  batch_size: int) -> None:
-        super().__init__(config, model, side, images, batch_size)
+        super().__init__(model, side, images, batch_size)
         self._augment_color = not model.command_line_arguments.no_augment_color
         self._no_flip = model.command_line_arguments.no_flip
         self._no_warp = model.command_line_arguments.no_warp
@@ -427,8 +421,7 @@ class TrainingDataGenerator(DataGenerator):
         if self._warp_to_landmarks:
             self._face_cache.pre_fill(images, side)
         self._processing = ImageAugmentation(batch_size,
-                                             self._process_size,
-                                             self._config)
+                                             self._process_size)
         self._nearest_landmarks: dict[str, tuple[str, ...]] = {}
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -625,9 +618,6 @@ class PreviewDataGenerator(DataGenerator):
     ----------
     model: :class:`~plugins.train.model.ModelBase`
         The model that this data generator is feeding
-    config: dict
-        The configuration `dict` generated from :file:`config.train.ini` containing the trainer
-        plugin configuration options.
     side: {'a' or 'b'}
         The side of the model that this iterator is for.
     images: list
@@ -660,15 +650,15 @@ class PreviewDataGenerator(DataGenerator):
         output_size = self._output_sizes[-1]
         full_size = 2 * int(np.rint((output_size / self._coverage_ratio) / 2))
 
-        assert self._config["centering"] in T.get_args(CenteringType)
+        assert mod_cfg.centering() in T.get_args(CenteringType)
         retval = np.empty((full_size, full_size, 3), dtype="float32")
-        y_offset = self._config["vertical_offset"]
+        y_offset = mod_cfg.vertical_offset()
         assert isinstance(y_offset, int)
         retval = self._to_float32(np.array([
             AlignedFace(face.landmarks_xy,
                         image=images[idx],
                         centering=T.cast(CenteringType,
-                                         self._config["centering"]),
+                                         mod_cfg.centering()),
                         y_offset=y_offset / 100.,
                         size=full_size,
                         dtype="uint8",
@@ -747,8 +737,6 @@ class Feeder():
         The selected model that will be running this trainer
     batch_size: int
         The size of the batch to be processed for each side at each iteration
-    config: dict
-        The configuration for this trainer
     include_preview: bool, optional
         ``True`` to create a feeder for generating previews. Default: ``True``
     """
@@ -756,15 +744,13 @@ class Feeder():
                  images: dict[T.Literal["a", "b"], list[str]],
                  model: ModelBase,
                  batch_size: int,
-                 config: dict[str, ConfigValueType],
                  include_preview: bool = True) -> None:
-        logger.debug("Initializing %s: num_images: %s, batch_size: %s, config: %s, "
-                     "include_preview: %s)", self.__class__.__name__,
-                     {k: len(v) for k, v in images.items()}, batch_size, config, include_preview)
+        logger.debug("Initializing %s: num_images: %s, batch_size: %s, include_preview: %s)",
+                     self.__class__.__name__, {k: len(v) for k, v in images.items()}, batch_size,
+                     include_preview)
         self._model = model
         self._images = images
         self._batch_size = batch_size
-        self._config = config
         self._feeds = {
             side: self._load_generator(side, False).minibatch_ab()
             for side in T.get_args(T.Literal["a", "b"])}
@@ -802,8 +788,7 @@ class Feeder():
         logger.debug("Loading generator, side: %s, is_display: %s,  batch_size: %s",
                      side, is_display, batch_size)
         generator = PreviewDataGenerator if is_display else TrainingDataGenerator
-        retval = generator(self._config,
-                           self._model,
+        retval = generator(self._model,
                            side,
                            self._images[side] if images is None else images,
                            self._batch_size if batch_size is None else batch_size)
@@ -822,7 +807,7 @@ class Feeder():
             value.
         """
         retval: dict[T.Literal["a", "b"], Generator[BatchType, None, None]] = {}
-        num_images = self._config.get("preview_images", 14)
+        num_images = trn_cfg.preview_images()
         assert isinstance(num_images, int)
         for side in T.get_args(T.Literal["a", "b"]):
             logger.debug("Setting preview feed: (side: '%s')", side)
@@ -848,7 +833,7 @@ class Feeder():
         model_targets: list[list[np.ndarray]] = []
         for side in ("a", "b"):
             side_feed, side_targets = next(self._feeds[side])
-            if self._model.config["learn_mask"]:  # Add the face mask as it's own target
+            if mod_cfg.Loss.learn_mask():  # Add the face mask as it's own target
                 side_targets += [side_targets[-1][..., 3][..., None]]
             logger.trace(  # type:ignore[attr-defined]
                 "side: %s, input_shapes: %s, target_shapes: %s",
@@ -927,7 +912,7 @@ class Feeder():
             The list of samples, targets and masks as :class:`numpy.ndarrays` for creating a
             preview image
          """
-        num_images = self._config.get("preview_images", 14)
+        num_images = trn_cfg.preview_images()
         assert isinstance(num_images, int)
         num_images = min(image_count, num_images)
         retval: dict[T.Literal["a", "b"], list[np.ndarray]] = {}

@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 from lib.utils import get_module_objects
 from ._base import Adjustment
+from . import manual_balance_defaults as cfg
 
 
 class Color(Adjustment):
@@ -12,9 +13,9 @@ class Color(Adjustment):
 
     def process(self, old_face, new_face, raw_mask):
         image = self.convert_colorspace(new_face * 255.0)
-        adjustment = np.array([self.config["balance_1"] / 100.0,
-                               self.config["balance_2"] / 100.0,
-                               self.config["balance_3"] / 100.0]).astype("float32")
+        adjustment = np.array([cfg.balance_1() / 100.0,
+                               cfg.balance_2() / 100.0,
+                               cfg.balance_3() / 100.0]).astype("float32")
         for idx in range(3):
             if adjustment[idx] >= 0:
                 image[:, :, idx] = ((1 - image[:, :, idx]) * adjustment[idx]) + image[:, :, idx]
@@ -29,8 +30,8 @@ class Color(Adjustment):
         """
         Adjust image contrast and brightness.
         """
-        contrast = max(-126, int(round(self.config["contrast"] * 1.27)))
-        brightness = max(-126, int(round(self.config["brightness"] * 1.27)))
+        contrast = max(-126, int(round(cfg.contrast() * 1.27)))
+        brightness = max(-126, int(round(cfg.brightness() * 1.27)))
 
         if not contrast and not brightness:
             return image
@@ -42,7 +43,7 @@ class Color(Adjustment):
 
     def convert_colorspace(self, new_face, to_bgr=False):
         """ Convert colorspace based on mode or back to bgr """
-        mode = self.config["colorspace"].lower()
+        mode = cfg.colorspace().lower()
         colorspace = "YCrCb" if mode == "ycrcb" else mode.upper()
         conversion = f"{colorspace}2BGR" if to_bgr else f"BGR2{colorspace}"
         image = cv2.cvtColor(new_face.astype("uint8"),  # pylint:disable=no-member

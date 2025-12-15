@@ -10,6 +10,7 @@ import imageio
 from lib.utils import get_module_objects
 
 from ._base import Output, logger
+from . import gif_defaults as cfg
 
 if T.TYPE_CHECKING:
     from imageio.core import format as im_format  # noqa:F401
@@ -48,7 +49,10 @@ class Writer(Output):
     @property
     def _gif_params(self) -> dict:
         """ dict: The selected gif plugin configuration options. """
-        kwargs = {key: int(val) for key, val in self.config.items()}
+        kwargs = {"fps": cfg.fps(),
+                  "loop": cfg.loop(),
+                  "palettesize": cfg.palettesize(),
+                  "subrectangles": cfg.subrectangles()}
         logger.debug(kwargs)
         return kwargs
 
@@ -60,7 +64,6 @@ class Writer(Output):
         :class:`imageio.plugins.pillowmulti.GIFFormat.Writer`
             The imageio GIF writer
         """
-        logger.debug("writer config: %s", self.config)
         assert self._gif_file is not None
         return imageio.get_writer(self._gif_file,
                                   mode="i",

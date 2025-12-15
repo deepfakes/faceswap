@@ -14,15 +14,19 @@ colour package
 .. automodapi:: plugins.convert.color.avg_color
    :include-all-objects:
 
+|
 .. automodapi:: plugins.convert.color.color_transfer
    :include-all-objects:
 
+|
 .. automodapi:: plugins.convert.color.manual_balance
    :include-all-objects:
 
+|
 .. automodapi:: plugins.convert.color.match_hist
    :include-all-objects:
 
+|
 .. automodapi:: plugins.convert.color.seamless_clone
    :include-all-objects:
 
@@ -45,14 +49,18 @@ writer package
 .. automodapi:: plugins.convert.writer.ffmpeg
    :include-all-objects:
 
+|
 .. automodapi:: plugins.convert.writer.gif
    :include-all-objects:
 
+|
 .. automodapi:: plugins.convert.writer.opencv
    :include-all-objects:
 
+|
 .. automodapi:: plugins.convert.writer.patch
    :include-all-objects:
 
+|
 .. automodapi:: plugins.convert.writer.pillow
    :include-all-objects:

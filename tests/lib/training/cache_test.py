@@ -11,12 +11,14 @@ import pytest_mock
 
 from lib.align.constants import LandmarkType
 from lib.training import cache as cache_mod
-from lib.training.cache import (Cache, _CacheConfig, _check_reset, get_cache, _MaskConfig,
-                                _MaskProcessing, RingBuffer)
 from lib.utils import FaceswapError
+from plugins.train import train_config as cfg
 
 
-# pylint:disable=protected-access,invalid-name
+from tests.lib.config.helpers import patch_config  # # pylint:disable=unused-import  # noqa[F401]
+
+# pylint:disable=protected-access,invalid-name,redefined-outer-name
+
 
 # ## HELPERS ###
 
@@ -24,42 +26,35 @@ MODULE_PREFIX = "lib.training.cache"
 _DUMMY_IMAGE_LIST = ["/path/to/img1.png", "~/img2.png", "img3.png"]
 
 
-def _get_config():
+def _get_config(centering="face", vertical_offset=0):
     """ Return a fresh valid config """
-    return {"centering": "face",
-            "vertical_offset": 0,
-            "penalized_mask_loss": True,
-            "mask_type": "extended",
-            "mask_dilation": 0.5,
-            "mask_blur_kernel": 3,
-            "mask_threshold": 4,
-            "mask_eye_multiplier": 3,
-            "mask_mouth_multiplier": 2}
+    return {"centering": centering,
+            "vertical_offset": vertical_offset}
 
 
-STANDARD_CACHE_ARGS = (_DUMMY_IMAGE_LIST, _get_config(), 256, 1.0)
-STANDARD_MASK_ARGS = (_get_config(), 256, 1.0, "face")
+STANDARD_CACHE_ARGS = (_DUMMY_IMAGE_LIST, 256, 1.0)
+STANDARD_MASK_ARGS = (256, 1.0, "face")
 
 
 # ## MASK PROCESSING ###
 
-def get_mask_config(penalized_mask_loss,
-                    learn_mask,
-                    mask_type,
-                    mask_dilation,
-                    mask_kernel,
-                    mask_threshold,
-                    mask_eye_multiplier,
-                    mask_mouth_multiplier):
+def get_mask_config(penalized_mask_loss=True,
+                    learn_mask=True,
+                    mask_type="extended",
+                    mask_dilation=1.0,
+                    mask_kernel=3,
+                    mask_threshold=4,
+                    mask_eye_multiplier=2,
+                    mask_mouth_multiplier=3):
     """ Generate the mask config dictionary with the given arguments """
     return {"penalized_mask_loss": penalized_mask_loss,
             "learn_mask": learn_mask,
             "mask_type": mask_type,
             "mask_dilation": mask_dilation,
-            "mask_kernel": mask_kernel,
+            "mask_blur_kernel": mask_kernel,
             "mask_threshold": mask_threshold,
-            "mask_eye_multiplier": mask_eye_multiplier,
-            "mask_mouth_multiplier": mask_mouth_multiplier}
+            "eye_multiplier": mask_eye_multiplier,
+            "mouth_multiplier": mask_mouth_multiplier}
 
 
 _MASK_CONFIG_PARAMS = (
@@ -81,18 +76,17 @@ _MASK_CONFIG_IDS = [x[-1] for x in _MASK_CONFIG_PARAMS]
 
 
 @pytest.mark.parametrize(("config", "status"), _MASK_CONFIG_PARAMS, ids=_MASK_CONFIG_IDS)
-def test_MaskConfig(config: dict[str, T.Any], status: str) -> None:
+def test_MaskConfig(config: dict[str, T.Any],
+                    status: str,
+                    patch_config) -> None:  # noqa[F811]
     """ Test that cache._MaskConfig dataclass initializes from config """
-    if not status.startswith("pass"):
-        with pytest.raises(AssertionError):
-            _MaskConfig.from_config(config)
-        return
-
-    retval = _MaskConfig.from_config(config)
+    patch_config(cfg.Loss, config)
+    retval = cache_mod._MaskConfig()
     if status.startswith("pass-mask-disable"):
         assert not retval.mask_enabled
     else:
         assert retval.mask_enabled
+
     if status == "pass-multiplier-disable" or not config["penalized_mask_loss"]:
         assert not retval.multiplier_enabled
     else:
@@ -119,15 +113,13 @@ def test_MaskProcessing_init(size,
     mock_maskconfig = mocker.MagicMock()
     mocker.patch(f"{MODULE_PREFIX}._MaskConfig", new=mock_maskconfig)
 
-    _config = _get_config()
     if not status == "pass":
         with pytest.raises(AssertionError):
-            _MaskProcessing(_config, size, coverage, centering)
+            cache_mod._MaskProcessing(size, coverage, centering)
         return
 
-    instance = _MaskProcessing(_config, size, coverage, centering)
-    attrs = {"_config_dict": dict,
-             "_size": int,
+    instance = cache_mod._MaskProcessing(size, coverage, centering)
+    attrs = {"_size": int,
              "_coverage": float,
              "_centering": str,
              "_config": mocker.MagicMock}  # Our mocked _MaskConfig
@@ -140,8 +132,7 @@ def test_MaskProcessing_init(size,
     assert instance._size == size
     assert instance._coverage == coverage
     assert instance._centering == centering
-    assert instance._config_dict == {k: v for k, v in _config.items() if "mask" in k}
-    mock_maskconfig.from_config.assert_called_once_with(instance._config_dict)
+    mock_maskconfig.assert_called_once()
 
 
 def test_MaskProcessing_check_mask_exists(mocker: pytest_mock.MockerFixture) -> None:
@@ -149,7 +140,7 @@ def test_MaskProcessing_check_mask_exists(mocker: pytest_mock.MockerFixture) -> 
     mock_det_face = mocker.MagicMock()
     mock_det_face.mask = ["extended", "components"]
 
-    instance = _MaskProcessing(*STANDARD_MASK_ARGS)  # type:ignore[arg-type]
+    instance = cache_mod._MaskProcessing(*STANDARD_MASK_ARGS)  # type:ignore[arg-type]
 
     instance._check_mask_exists("", mock_det_face)
 
@@ -163,19 +154,18 @@ def test_MaskProcessing_check_mask_exists(mocker: pytest_mock.MockerFixture) -> 
 def test_MaskProcessing_preprocess(dilation: float,
                                    kernel: int,
                                    threshold: int,
-                                   mocker: pytest_mock.MockerFixture) -> None:
+                                   mocker: pytest_mock.MockerFixture,
+                                   patch_config) -> None:  # noqa[F811]
     """ Test cache._MaskProcessing._preprocess functions as expected """
     mock_mask = mocker.MagicMock()
     mock_det_face = mocker.MagicMock()
     mock_det_face.mask = {"extended": mock_mask}
 
-    mask_args = STANDARD_MASK_ARGS[1:]
-    _config = _get_config()
-    _config["mask_dilation"] = dilation
-    _config["mask_kernel"] = kernel
-    _config["mask_threshold"] = threshold
+    patch_config(cfg.Loss, get_mask_config(mask_dilation=dilation,
+                                           mask_kernel=kernel,
+                                           mask_threshold=threshold))
 
-    instance = _MaskProcessing(_config, *mask_args)  # type:ignore[arg-type]
+    instance = cache_mod._MaskProcessing(*STANDARD_MASK_ARGS)  # type:ignore[arg-type]
     instance._preprocess(mock_det_face, "extended")
     mock_mask.set_dilation.assert_called_once_with(dilation)
     mock_mask.set_blur_and_threshold.assert_called_once_with(blur_kernel=kernel,
@@ -222,7 +212,7 @@ def test_MaskProcessing_crop_and_resize(mask_centering: str,  # pylint:disable=t
     mock_cv2_cubic = mocker.patch(f"{MODULE_PREFIX}.cv2.INTER_CUBIC")
     mock_cv2_area = mocker.patch(f"{MODULE_PREFIX}.cv2.INTER_AREA")
 
-    instance = _MaskProcessing(_get_config(), size, coverage, train_centering)
+    instance = cache_mod._MaskProcessing(size, coverage, train_centering)
 
     retval = instance._crop_and_resize(mock_det_face, mock_mask)
     mock_mask.set_sub_crop.assert_called_once_with(mock_pose.offset[mask_centering],
@@ -244,12 +234,12 @@ def test_MaskProcessing_crop_and_resize(mask_centering: str,  # pylint:disable=t
 
 @pytest.mark.parametrize("mask_type", (None, "extended", "components"))
 def test_MaskProcessing_get_face_mask(mask_type: str | None,
-                                      mocker: pytest_mock.MockerFixture) -> None:
+                                      mocker: pytest_mock.MockerFixture,
+                                      patch_config) -> None:  # noqa[F811]
     """ Test cache._MaskProcessing._get_face_mask functions as expected """
-    args = STANDARD_MASK_ARGS[1:]
-    config = _get_config()
-    config["mask_type"] = mask_type
-    instance = _MaskProcessing(config, *args)  # type:ignore[arg-type]
+    patch_config(cfg, _get_config())
+    patch_config(cfg.Loss, get_mask_config(mask_type=mask_type))
+    instance = cache_mod._MaskProcessing(*STANDARD_MASK_ARGS)  # type:ignore[arg-type]
     assert instance._config.mask_type == mask_type  # sanity check
 
     instance._check_mask_exists = mocker.MagicMock()  # type:ignore[method-assign]
@@ -296,13 +286,13 @@ def test_MaskProcessing_get_localized_mask(eye_multiplier: int,
                                            mouth_multiplier: int,
                                            size: int,
                                            enabled: bool,
-                                           mocker: pytest_mock.MockerFixture) -> None:
+                                           mocker: pytest_mock.MockerFixture,
+                                           patch_config) -> None:  # noqa[F811]
     """ Test cache._MaskProcessing._get_localized_mask functions as expected """
-    args = STANDARD_MASK_ARGS[2:]
-    config = _get_config()
-    config["mask_eye_multiplier"] = eye_multiplier
-    config["mask_mouth_multiplier"] = mouth_multiplier
-    instance = _MaskProcessing(config, size, *args)  # type:ignore[arg-type]
+    args = STANDARD_MASK_ARGS[1:]
+    patch_config(cfg.Loss, get_mask_config(mask_eye_multiplier=eye_multiplier,
+                                           mask_mouth_multiplier=mouth_multiplier))
+    instance = cache_mod._MaskProcessing(size, *args)  # type:ignore[arg-type]
 
     filename = "filename"
     detected_face = mocker.MagicMock()
@@ -326,7 +316,7 @@ def test_MaskProcessing_get_localized_mask(eye_multiplier: int,
 
 def test_MaskProcessing_call(mocker: pytest_mock.MockerFixture) -> None:
     """ Test cache._MaskProcessing.__call__ functions as expected """
-    instance = _MaskProcessing(*STANDARD_MASK_ARGS)  # type:ignore[arg-type]
+    instance = cache_mod._MaskProcessing(*STANDARD_MASK_ARGS)  # type:ignore[arg-type]
     face_return = "face_mask"
     area_return = "area_mask"
     instance._get_face_mask = mocker.MagicMock(  # type:ignore[method-assign]
@@ -401,26 +391,27 @@ _RESET_PARAMS = [x[:-1] for x in _RESET_PARAMS]  # type:ignore[misc]
 def test_check_reset(face_cache_reset_scenario, expected):  # pylint:disable=redefined-outer-name
     """ Test that cache._check_reset functions as expected """
     this_cache = face_cache_reset_scenario
-    assert _check_reset(this_cache) == expected
+    assert cache_mod._check_reset(this_cache) == expected
 
 
 @pytest.mark.parametrize(
-        ("filenames", "config", "size", "coverage_ratio"),
-        [(_DUMMY_IMAGE_LIST, _get_config(), 256, 1.0),
-         (_DUMMY_IMAGE_LIST[:-1], _get_config() | {"centering": "legacy"}, 96, .75),
-         (_DUMMY_IMAGE_LIST[2:], _get_config() | {"centering": "head"}, 384, .66)])
-def test_Cache_init(filenames, config, size, coverage_ratio):
+        ("filenames", "size", "coverage_ratio", "centering"),
+        [(_DUMMY_IMAGE_LIST, 256, 1.0, "face"),
+         (_DUMMY_IMAGE_LIST[:-1], 96, .75, "head"),
+         (_DUMMY_IMAGE_LIST[2:], 384, .66, "legacy")])
+def test_Cache_init(filenames, size, coverage_ratio, centering, patch_config):  # noqa[F811]
     """ Test that cache.Cache correctly initializes """
     attrs = {"_lock": type(Lock()),
              "_cache_info": dict,
+             "_config": cache_mod._CacheConfig,
              "_partially_loaded": list,
              "_image_count": int,
              "_cache": dict,
              "_aligned_landmarks": dict,
              "_extract_version": float,
-             "_config": _CacheConfig,
-             "_mask_prepare": _MaskProcessing}
-    instance = Cache(filenames, config, size, coverage_ratio)
+             "_mask_prepare": cache_mod._MaskProcessing}
+    patch_config(cfg, _get_config(centering=centering))
+    instance = cache_mod.Cache(filenames, size, coverage_ratio)
 
     for attr, attr_type in attrs.items():
         assert attr in instance.__dict__
@@ -437,18 +428,13 @@ def test_Cache_init(filenames, config, size, coverage_ratio):
     assert not instance._aligned_landmarks
     assert instance._extract_version == 0.0
     assert instance._config.size == size
-    assert instance._config.centering == config["centering"]
-    assert instance._config.config == config
+    assert instance._config.centering == centering
     assert instance._config.coverage == coverage_ratio
-
-    config["centering"] = "__fail"
-    with pytest.raises(AssertionError):
-        Cache(filenames, config, size, coverage_ratio)
 
 
 def test_Cache_cache_full(mocker: pytest_mock.MockerFixture):
     """ Test that cache.Cache.cache_full property behaves correctly """
-    instance = Cache(*STANDARD_CACHE_ARGS)
+    instance = cache_mod.Cache(*STANDARD_CACHE_ARGS)
     instance._lock = mocker.MagicMock()
 
     is_full1 = instance.cache_full
@@ -466,7 +452,7 @@ def test_Cache_cache_full(mocker: pytest_mock.MockerFixture):
 
 def test_Cache_aligned_landmarks(mocker: pytest_mock.MockerFixture):
     """ Test that cache.Cache.aligned_landmarks property behaves correcly """
-    instance = Cache(*STANDARD_CACHE_ARGS)
+    instance = cache_mod.Cache(*STANDARD_CACHE_ARGS)
     instance._lock = mocker.MagicMock()
     for fname in _DUMMY_IMAGE_LIST:
         mock_face = mocker.MagicMock()
@@ -490,13 +476,13 @@ def test_Cache_aligned_landmarks(mocker: pytest_mock.MockerFixture):
 @pytest.mark.parametrize("size", (64, 96, 128, 256, 384))
 def test_Cache_size(size):
     """ Test that cache.Cache.size property returns correctly """
-    instance = Cache(_DUMMY_IMAGE_LIST, _get_config(), size, 1.0)
+    instance = cache_mod.Cache(_DUMMY_IMAGE_LIST, size, 1.0)
     assert instance.size == size
 
 
 def test_Cache_check_reset():
     """ Test that cache.Cache.check_reset behaves correctly """
-    instance = Cache(*STANDARD_CACHE_ARGS)
+    instance = cache_mod.Cache(*STANDARD_CACHE_ARGS)
     retval1 = instance.check_reset()
     assert not retval1
     assert not instance._cache_info["has_reset"]
@@ -511,7 +497,7 @@ def test_Cache_check_reset():
                          (_DUMMY_IMAGE_LIST, _DUMMY_IMAGE_LIST[:-1], _DUMMY_IMAGE_LIST[2:]))
 def test_Cache_get_items(filenames: list[str]) -> None:
     """ Test that cache.Cache.get_items returns correctly """
-    instance = Cache(filenames, _get_config(), 256, 1.0)
+    instance = cache_mod.Cache(filenames, 256, 1.0)
     instance._cache = {os.path.basename(f): f"faces_for_{f}"  # type:ignore[misc]
                        for f in filenames}
 
@@ -520,23 +506,23 @@ def test_Cache_get_items(filenames: list[str]) -> None:
 
 
 @pytest.mark.parametrize("set_flag", (True, False), ids=("set-flag", "no-set-flag"))
-def test_Cache_reset_cache(set_flag: bool, mocker: pytest_mock.MockerFixture) -> None:
+def test_Cache_reset_cache(set_flag: bool,
+                           mocker: pytest_mock.MockerFixture,
+                           patch_config) -> None:  # noqa[F811]
     """ Test that cache.Cache._reset_cache functions correctly """
+    patch_config(cfg, _get_config(centering="head"))
     mock_warn = mocker.MagicMock()
     mocker.patch(f"{MODULE_PREFIX}.logger.warning", mock_warn)
-    config = _get_config()
-    instance = Cache(STANDARD_CACHE_ARGS[0], config, *STANDARD_CACHE_ARGS[2:])
+    instance = cache_mod.Cache(*STANDARD_CACHE_ARGS)
     instance._cache = {"test": "cache"}  # type:ignore[dict-item]
     instance._cache_info["cache_full"] = True
 
-    assert instance._config.config["centering"] != "legacy"
     assert instance._config.centering != "legacy"
     assert instance._cache
     assert instance._cache_info["cache_full"]
 
     instance._reset_cache(set_flag)
 
-    assert instance._config.config["centering"] == "legacy"
     assert instance._config.centering == "legacy"
     assert not instance._cache
     assert instance._cache_info["cache_full"] is False
@@ -550,14 +536,27 @@ def test_Cache_reset_cache(set_flag: bool, mocker: pytest_mock.MockerFixture) ->
                           {"source": {"alignments_version": 2.0}},
                           {"source": {"alignments_version": 2.2}}),
                          ids=("v1.0", "v2.0", "v2.2"))
-def test_Cache_validate_version(png_meta):
+def test_Cache_validate_version(png_meta, mocker):
     """ Test that cache.Cache._validate_version executes correctly """
-    instance = Cache(*STANDARD_CACHE_ARGS)
+    instance = cache_mod.Cache(*STANDARD_CACHE_ARGS)
+    instance._reset_cache = mocker.MagicMock()
     fname = "test_filename.png"
     version = png_meta["source"]["alignments_version"]
 
-    instance._validate_version(png_meta, fname)
-    assert instance._extract_version == version
+    if version == 1.0:
+        for centering in ("legacy", "face"):
+            instance._extract_version = 0.0
+            instance._config.centering = centering
+            instance._validate_version(png_meta, fname)
+            if centering == "legacy":
+                instance._reset_cache.assert_not_called()
+            else:
+                instance._reset_cache.assert_called_once_with(True)
+            assert instance._extract_version == version
+    else:
+        instance._validate_version(png_meta, fname)
+        instance._reset_cache.assert_not_called()
+        assert instance._extract_version == version
 
     instance._extract_version = 1.0  # Legacy alignments have been seen
     if version > 1.0:  # Newer alignments inbound
@@ -596,10 +595,11 @@ def test_Cache_load_detected_face(size: int,
                                   coverage: float,
                                   y_offset: int | float,
                                   extract_version: float,
-                                  mocker: pytest_mock.MockerFixture) -> None:
+                                  mocker: pytest_mock.MockerFixture,
+                                  patch_config) -> None:  # noqa[F811]
     """ Test that cache.Cache._load_detected_faces executes correctly """
-    instance = Cache(_DUMMY_IMAGE_LIST, _get_config(), size, coverage)
-    instance._config.config["vertical_offset"] = y_offset
+    patch_config(cfg, _get_config(vertical_offset=y_offset))
+    instance = cache_mod.Cache(_DUMMY_IMAGE_LIST, size, coverage)
     instance._extract_version = extract_version
     alignments = {}  # type:ignore[var-annotated]
 
@@ -607,11 +607,6 @@ def test_Cache_load_detected_face(size: int,
     mock_det_face.from_png_meta = mocker.MagicMock()
     mock_det_face.load_aligned = mocker.MagicMock()
     mocker.patch(f"{MODULE_PREFIX}.DetectedFace", return_value=mock_det_face)
-
-    if not isinstance(y_offset, int):
-        with pytest.raises(AssertionError):
-            instance._load_detected_face("", alignments)  # type:ignore[arg-type]
-        return
 
     retval = instance._load_detected_face("", alignments)  # type:ignore[arg-type]
     assert retval is mock_det_face
@@ -634,7 +629,7 @@ def test_Cache_populate_cache(partially_loaded: bool,
     filenames = _DUMMY_IMAGE_LIST + already_cached
     metadata = [{"alignments": f"{f}_alignments"} for f in filenames]
 
-    instance = Cache(*STANDARD_CACHE_ARGS)
+    instance = cache_mod.Cache(*STANDARD_CACHE_ARGS)
     instance._validate_version = mocker.MagicMock()  # type:ignore[method-assign]
     instance._mask_prepare = mocker.MagicMock()
     instance._cache = {os.path.basename(f): "existing"  # type:ignore[misc]
@@ -679,7 +674,7 @@ def test_Cache_populate_cache(partially_loaded: bool,
 @pytest.mark.parametrize("scenario", ("read-error", "size-error", "success"))
 def test_Cache_get_batch_with_metadata(scenario: str, mocker: pytest_mock.MockerFixture) -> None:
     """ Test that cache.Cache._get_batch_with_metadata executes correctly """
-    instance = Cache(*STANDARD_CACHE_ARGS)
+    instance = cache_mod.Cache(*STANDARD_CACHE_ARGS)
     filenames = ["list", "of", "test", "filenames"]
 
     mock_read_image_batch = mocker.MagicMock()
@@ -711,7 +706,7 @@ def test_Cache_update_cache_full(scenario: bool, mocker: pytest_mock.MockerFixtu
     """ Test that cache.Cache._update_cache_full executes correctly """
     mock_verbose = mocker.patch(f"{MODULE_PREFIX}.logger.verbose")
     filenames = ["test", "file", "names"]
-    instance = Cache(*STANDARD_CACHE_ARGS)
+    instance = cache_mod.Cache(*STANDARD_CACHE_ARGS)
     instance._image_count = 10
 
     assert instance._cache_info["cache_full"] is False
@@ -744,7 +739,7 @@ def test_Cache_cache_metadata(scenario: str, mocker: pytest_mock.MockerFixture) 
     mock_read_image_batch = mocker.patch(f"{MODULE_PREFIX}.read_image_batch",
                                          return_value=mock_return_batch)
 
-    instance = Cache(*STANDARD_CACHE_ARGS)
+    instance = cache_mod.Cache(*STANDARD_CACHE_ARGS)
     filenames = _DUMMY_IMAGE_LIST.copy()
 
     if scenario in ("full", "partial"):
@@ -799,7 +794,7 @@ def test_Cache_pre_fill(scenario: str, mocker: pytest_mock.MockerFixture) -> Non
             effect[1]["itxt"] = {"alignments": [1, 2, 3]}
     mock_read_image_batch.side_effect = [side_effect_read_image_batch]
 
-    instance = Cache(*STANDARD_CACHE_ARGS)
+    instance = cache_mod.Cache(*STANDARD_CACHE_ARGS)
     instance._lock = mocker.MagicMock()
     instance._validate_version = mocker.MagicMock()  # type:ignore[method-assign]
     mock_detected_faces = [mocker.MagicMock() for _ in filenames]
@@ -849,23 +844,21 @@ def test_Cache_pre_fill(scenario: str, mocker: pytest_mock.MockerFixture) -> Non
     assert instance._partially_loaded == [os.path.basename(f) for f in filenames]
 
 
-_PARAMS_GET = (("a", _DUMMY_IMAGE_LIST, _get_config(), 256, 1.),
-               ("b", _DUMMY_IMAGE_LIST, _get_config(), 256, 1.),
-               ("c", _DUMMY_IMAGE_LIST, _get_config(), 256, 1.),
-               ("a", None, _get_config(), 256, 1,),
-               ("a", _DUMMY_IMAGE_LIST, None, 256, 1,),
-               ("a", _DUMMY_IMAGE_LIST, _get_config(), None, 1.),
-               ("a", _DUMMY_IMAGE_LIST, _get_config(), 256, None))
+_PARAMS_GET = (("a", _DUMMY_IMAGE_LIST, 256, 1.),
+               ("b", _DUMMY_IMAGE_LIST, 256, 1.),
+               ("c", _DUMMY_IMAGE_LIST, 256, 1.),
+               ("a", None, 256, 1,),
+               ("a", _DUMMY_IMAGE_LIST, None, 1.),
+               ("a", _DUMMY_IMAGE_LIST, 256, None))
 _IDS_GET = ("pass-a", "pass-b", "fail-side", "fail-no-filenames",
-            "fail-no-config", "fail-no-size", "fail-no-coverage")
+            "fail-no-size", "fail-no-coverage")
 
 
-@pytest.mark.parametrize(("side", "filenames", "config", "size", "coverage_ratio", "status"),
+@pytest.mark.parametrize(("side", "filenames", "size", "coverage_ratio", "status"),
                          (x + (y,) for x, y in zip(_PARAMS_GET, _IDS_GET)),
                          ids=_IDS_GET)
 def test_get_cache_initial(side: str,
                            filenames: list[str],
-                           config: dict[str, T.Any],
                            size: int,
                            coverage_ratio: float,
                            status: str,
@@ -875,31 +868,30 @@ def test_get_cache_initial(side: str,
     patched_cache = mocker.patch(f"{MODULE_PREFIX}.Cache")
     if status.startswith("fail"):
         with pytest.raises(AssertionError):
-            get_cache(side, filenames, config, size, coverage_ratio)  # type:ignore[arg-type]
+            cache_mod.get_cache(side, filenames, size, coverage_ratio)  # type:ignore[arg-type]
         patched_cache.assert_not_called()
         return
 
-    retval = get_cache(side, filenames, config, size, coverage_ratio)  # type:ignore[arg-type]
+    retval = cache_mod.get_cache(side, filenames, size, coverage_ratio)  # type:ignore[arg-type]
     assert side in cache_mod._FACE_CACHES
-    patched_cache.assert_called_once_with(filenames, config, size, coverage_ratio)
+    patched_cache.assert_called_once_with(filenames, size, coverage_ratio)
     assert cache_mod._FACE_CACHES[side] is patched_cache.return_value
     assert retval is patched_cache.return_value
 
-    retval2 = get_cache(side, filenames, config, size, coverage_ratio)  # type:ignore[arg-type]
+    retval2 = cache_mod.get_cache(side, filenames, size, coverage_ratio)  # type:ignore[arg-type]
     patched_cache.assert_called_once()  # Not called again
     assert retval2 is retval
 
 
 _IDS_GET2 = ("pass-a", "pass-b", "fail-side", "pass-no-filenames",
-             "pass-no-config", "pass-no-size", "pass-no-coverage")
+             "pass-no-size", "pass-no-coverage")
 
 
-@pytest.mark.parametrize(("side", "filenames", "config", "size", "coverage_ratio", "status"),
+@pytest.mark.parametrize(("side", "filenames", "size", "coverage_ratio", "status"),
                          (x + (y,) for x, y in zip(_PARAMS_GET, _IDS_GET2)),
                          ids=_IDS_GET2)
 def test_get_cache_exists(side: str,
                           filenames: list[str],
-                          config: dict[str, T.Any],
                           size: int,
                           coverage_ratio: float,
                           status: str,
@@ -911,11 +903,11 @@ def test_get_cache_exists(side: str,
 
     if status.startswith("fail"):
         with pytest.raises(AssertionError):
-            get_cache(side, filenames, config, size, coverage_ratio)  # type:ignore[arg-type]
+            cache_mod.get_cache(side, filenames, size, coverage_ratio)  # type:ignore[arg-type]
         patched_cache.assert_not_called()
         return
 
-    retval = get_cache(side, filenames, config, size, coverage_ratio)  # type:ignore[arg-type]
+    retval = cache_mod.get_cache(side, filenames, size, coverage_ratio)  # type:ignore[arg-type]
     patched_cache.assert_not_called()
     assert retval is cache_mod._FACE_CACHES[side]
 
@@ -937,7 +929,7 @@ _RING_BUFFER_IDS = [f"bs{x[0]}|{x[1][0]}px|buffer-size{x[2]}|dtype-{x[3]}"
 def test_RingBuffer_init(batch_size, image_shape, buffer_size, dtype):
     """ test cache.RingBuffer initializes correctly """
     attrs = {"_max_index": int, "_index": int, "_buffer": list}
-    instance = RingBuffer(batch_size, image_shape, buffer_size, dtype)
+    instance = cache_mod.RingBuffer(batch_size, image_shape, buffer_size, dtype)
 
     for attr, attr_type in attrs.items():
         assert attr in instance.__dict__
@@ -960,7 +952,7 @@ def test_RingBuffer_init(batch_size, image_shape, buffer_size, dtype):
                          ids=_RING_BUFFER_IDS)
 def test_RingBuffer_call(batch_size, image_shape, buffer_size, dtype):
     """ Test calling cache.RingBuffer works correctly """
-    instance = RingBuffer(batch_size, image_shape, buffer_size, dtype)
+    instance = cache_mod.RingBuffer(batch_size, image_shape, buffer_size, dtype)
     for i in range(buffer_size * 3):
         retval = instance()
         assert isinstance(retval, np.ndarray)

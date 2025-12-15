@@ -60,7 +60,7 @@ class Preview(tk.Tk):
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         super().__init__()
         arguments = handle_deprecated_cliopts(arguments)
-        self._config_tools = ConfigTools()
+        self._config_tools = ConfigTools(arguments.configfile)
         self._lock = Lock()
         self._dispatcher = Dispatcher(self)
         self._display = FacesDisplay(self, 256, 64)
@@ -579,7 +579,7 @@ class Patch():
             self._feed_swapped_faces(patch_queue_in, samples)
             with self._app.lock:
                 self._update_converter_arguments()
-                self._converter.reinitialize(config=self._app.config_tools.config)
+                self._converter.reinitialize()
             swapped = self._patch_faces(patch_queue_in, patch_queue_out, samples.sample_size)
             with self._app.lock:
                 self._app.display.destination = swapped

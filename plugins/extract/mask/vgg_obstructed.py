@@ -11,6 +11,7 @@ from keras import layers as kl, Model
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
 from ._base import BatchType, Masker, MaskerBatch
+from . import vgg_obstructed_defaults as cfg
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -31,7 +32,7 @@ class Mask(Masker):
         self.input_size = 500
         self.vram = 1728  # 1710 in testing
         self.vram_per_batch = 896  # ~886 in testing
-        self.batchsize = self.config["batch-size"]
+        self.batchsize = cfg.batch_size()
 
     def init_model(self) -> None:
         assert isinstance(self.model_path, str)

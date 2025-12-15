@@ -16,7 +16,7 @@ from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
 from lib.utils import GetModel
 from lib.utils import get_backend
-from ._config import Config
+from . import extract_config as cfg
 from . import ExtractMedia
 
 if T.TYPE_CHECKING:
@@ -29,27 +29,6 @@ if T.TYPE_CHECKING:
     from .recognition._base import RecogBatch
 
 logger = logging.getLogger(__name__)
-
-
-def _get_config(plugin_name: str, configfile: str | None = None) -> dict[str, T.Any]:
-    """ Return the configuration for the requested model
-
-    Parameters
-    ----------
-    plugin_name: str
-        The module name of the child plugin.
-    configfile: str, optional
-        Path to a :file:`./config/<plugin_type>.ini` file for this plugin. Default: use system
-        configuration.
-
-    Returns
-    -------
-    config_dict, dict
-       A dictionary of configuration items from the configuration file
-    """
-    return Config(plugin_name, configfile=configfile).config_dict
-
-
 BatchType = T.Union["DetectorBatch", "AlignerBatch", "MaskerBatch", "RecogBatch"]
 
 
@@ -135,7 +114,7 @@ class SplitTracker:
     output_faces: list[DetectedFace]
 
 
-class Extractor():
+class Extractor():  # pylint:disable=too-many-instance-attributes
     """ Extractor Plugin Object
 
     All ``_base`` classes for Aligners, Detectors and Maskers inherit from this class.
@@ -198,12 +177,10 @@ class Extractor():
                  configfile: str | None = None,
                  instance: int = 0) -> None:
         logger.debug(parse_class_init(locals()))
+        cfg.load_config(configfile)
 
         self._info = PluginInfo(instance=instance)
         """:class:`PluginInfo`: holds information about the plugin instance"""
-
-        self.config = _get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
-        """ dict: Config for this plugin, loaded from ``extract.ini`` configfile """
 
         self.model_path = self._get_model(git_model_id, model_filename)
         """ str or list: Path to the model file(s) (if required). Multiple model files should

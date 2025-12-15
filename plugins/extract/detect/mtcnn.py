@@ -13,6 +13,7 @@ from keras.layers import Conv2D, Dense, Flatten, Input, MaxPooling2D, Permute, P
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
 from ._base import BatchType, Detector
+from . import mtcnn_defaults as cfg
 
 
 logger = logging.getLogger(__name__)
@@ -27,9 +28,9 @@ class Detect(Detector):
         self.name = "MTCNN"
         self.model: MTCNN
         self.input_size = 640
-        self.vram = 128 if not self.config["cpu"] else 0  # 66 in testing
-        self.vram_per_batch = 64 if not self.config["cpu"] else 0  # ~50 in testing
-        self.batchsize = self.config["batch-size"]
+        self.vram = 128 if not cfg.cpu() else 0  # 66 in testing
+        self.vram_per_batch = 64 if not cfg.cpu() else 0  # ~50 in testing
+        self.batchsize = cfg.batch_size()
         self._kwargs = self._validate_kwargs()
         self.color_format = "RGB"
 
@@ -37,13 +38,11 @@ class Detect(Detector):
                                        int | float | list[float]]:
         """ Validate that config options are correct. If not reset to default """
         valid = True
-        threshold = [self.config["threshold_1"],
-                     self.config["threshold_2"],
-                     self.config["threshold_3"]]
+        threshold = [cfg.threshold_1(), cfg.threshold_2(), cfg.threshold_3()]
         kwargs: dict[T.Literal["minsize", "threshold", "factor", "input_size"],
-                     int | float | list[float]] = {"minsize": self.config["minsize"],
+                     int | float | list[float]] = {"minsize": cfg.minsize(),
                                                    "threshold": threshold,
-                                                   "factor": self.config["scalefactor"],
+                                                   "factor": cfg.scalefactor(),
                                                    "input_size": self.input_size}
 
         assert isinstance(kwargs["input_size"], int)
@@ -76,7 +75,7 @@ class Detect(Detector):
         assert isinstance(self._kwargs["threshold"], list)
         assert isinstance(self._kwargs["factor"], float)
 
-        with self.get_device_context(self.config["cpu"]):
+        with self.get_device_context(cfg.cpu()):
             self.model = MTCNN(self.model_path,
                                self.batchsize,
                                input_size=self._kwargs["input_size"],
@@ -109,7 +108,7 @@ class Detect(Detector):
             The batch with the predictions added to the dictionary
         """
         assert isinstance(self.model, MTCNN)
-        with self.get_device_context(self.config["cpu"]):
+        with self.get_device_context(cfg.cpu()):
             prediction, points = self.model.detect_faces(feed)
         logger.trace("prediction: %s, mtcnn_points: %s",  # type:ignore[attr-defined]
                      prediction, points)

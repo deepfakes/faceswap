@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageTk
 
+from lib.gui import gui_config as cfg
 from lib.training.preview_cv import PreviewBuffer
 from lib.utils import get_module_objects
 
@@ -18,8 +19,8 @@ if T.TYPE_CHECKING:
     from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
-_images: Images | None = None
-_preview_trigger: PreviewTrigger | None = None
+_IMAGES: Images | None = None
+_PREVIEW_TRIGGER: PreviewTrigger | None = None
 TRAININGPREVIEW = ".gui_training_preview.png"
 
 
@@ -29,11 +30,11 @@ def initialize_images() -> None:
     This should only be called once on first GUI startup. Future access to :class:`Images`
     handler should only be executed through :func:`get_images`.
     """
-    global _images  # pylint:disable=global-statement
-    if _images is not None:
+    global _IMAGES  # pylint:disable=global-statement
+    if _IMAGES is not None:
         return
     logger.debug("Initializing images")
-    _images = Images()
+    _IMAGES = Images()
 
 
 def get_images() -> "Images":
@@ -44,8 +45,8 @@ def get_images() -> "Images":
     :class:`Images`
         The Master GUI Images handler
     """
-    assert _images is not None
-    return _images
+    assert _IMAGES is not None
+    return _IMAGES
 
 
 def _get_previews(image_path: str) -> list[str]:
@@ -565,7 +566,7 @@ class Images():
             The icons formatted as described in :attr:`icons`
 
         """
-        size = get_config().user_config_dict.get("icon_size", 16)
+        size = cfg.icon_size()
         size = int(round(size * get_config().scaling_factor))
         icons: dict[str, ImageTk.PhotoImage] = {}
         pathicons = os.path.join(PATHCACHE, "icons")
@@ -655,10 +656,10 @@ def preview_trigger() -> PreviewTrigger:
         The trigger to indicate to the main faceswap process that it should perform a training
         preview update
     """
-    global _preview_trigger  # pylint:disable=global-statement
-    if _preview_trigger is None:
-        _preview_trigger = PreviewTrigger()
-    return _preview_trigger
+    global _PREVIEW_TRIGGER  # pylint:disable=global-statement
+    if _PREVIEW_TRIGGER is None:
+        _PREVIEW_TRIGGER = PreviewTrigger()
+    return _PREVIEW_TRIGGER
 
 
 __all__ = get_module_objects(__name__)

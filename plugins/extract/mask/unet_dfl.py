@@ -23,6 +23,7 @@ from keras import backend as K, layers as kl, Model
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
 from ._base import BatchType, Masker, MaskerBatch
+from . import unet_dfl_defaults as cfg
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -42,7 +43,7 @@ class Mask(Masker):
         self.input_size = 256
         self.vram = 320  # 276 in testing
         self.vram_per_batch = 256  # ~215 in testing
-        self.batchsize = self.config["batch-size"]
+        self.batchsize = cfg.batch_size()
         self._storage_centering = "legacy"
 
     def init_model(self) -> None:

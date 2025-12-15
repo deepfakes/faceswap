@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-06-11 23:28+0100\n"
+"POT-Creation-Date: 2025-12-11 19:02+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,44 +17,44 @@ msgstr ""
 "Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: lib/config.py:393
+#: lib/config/objects.py:115
 msgid ""
 "\n"
 "This option can be updated for existing models.\n"
 msgstr ""
 
-#: lib/config.py:395
+#: lib/config/objects.py:117
 msgid ""
 "\n"
 "If selecting multiple options then each option should be separated by a "
 "space or a comma (e.g. item1, item2, item3)\n"
 msgstr ""
 
-#: lib/config.py:398
+#: lib/config/objects.py:120
 msgid ""
 "\n"
 "Choose from: {}"
 msgstr ""
 
-#: lib/config.py:400
+#: lib/config/objects.py:122
 msgid ""
 "\n"
 "Choose from: True, False"
 msgstr ""
 
-#: lib/config.py:404
+#: lib/config/objects.py:126
 msgid ""
 "\n"
 "Select an integer between {} and {}"
 msgstr ""
 
-#: lib/config.py:408
+#: lib/config/objects.py:130
 msgid ""
 "\n"
 "Select a decimal number between {} and {}"
 msgstr ""
 
-#: lib/config.py:409
+#: lib/config/objects.py:132
 msgid ""
 "\n"
 "[Default: {}]"

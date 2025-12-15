@@ -3,14 +3,14 @@
 import logging
 import platform
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, ttk
 import typing as T
 
 from lib.utils import get_module_objects
 
 logger = logging.getLogger(__name__)
 _FILETYPE = T.Literal["default", "alignments", "config_project", "config_task",
-                      "config_all", "csv", "image", "ini", "state", "log", "video"]
+                      "config_all", "csv", "image", "ini", "json", "state", "log", "video"]
 _HANDLETYPE = T.Literal["open", "save", "filename", "filename_multi", "save_filename",
                         "context", "dir"]
 
@@ -47,7 +47,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
     variable: str, optional
         Required for context handling file dialog, otherwise unused. The variable to associate
         with this file dialog. Default: ``None``
-    parent: :class:`tkinter.Frame`, optional
+    parent: :class:`tkinter.Frame` | :class:`tkinter.ttk.Frame`, optional
         The parent that is launching the file dialog. ``None`` sets this to root. Default: ``None``
 
     Attributes
@@ -72,7 +72,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                  command: str | None = None,
                  action: str | None = None,
                  variable: str | None = None,
-                 parent: tk.Frame | None = None) -> None:
+                 parent: tk.Frame | ttk.Frame | None = None) -> None:
         logger.debug("Initializing %s: (handle_type: '%s', file_type: '%s', title: '%s', "
                      "initial_folder: '%s', initial_file: '%s', command: '%s', action: '%s', "
                      "variable: %s, parent: %s)", self.__class__.__name__, handle_type, file_type,
@@ -215,8 +215,8 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                     command: str | None,
                     action: str | None,
                     variable: str | None,
-                    parent: tk.Frame | None
-                    ) -> dict[str, None | tk.Frame | str | list[tuple[str, str]]]:
+                    parent: tk.Frame | ttk.Frame | None
+                    ) -> dict[str, None | tk.Frame | ttk.Frame | str | list[tuple[str, str]]]:
         """ Generate the required kwargs for the requested file dialog browser.
 
         Parameters
@@ -239,7 +239,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         variable: str, optional
             Required for context handling file dialog, otherwise unused. The variable to associate
             with this file dialog. Default: ``None``
-        parent: :class:`tkinter.Frame`
+        parent: :class:`tkinter.Frame` | :class:`tkinter.tk.Frame | None
             The parent that is launching the file dialog. ``None`` sets this to root
 
         Returns
@@ -252,7 +252,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                      title, initial_folder, initial_file, file_type, command, action, variable,
                      parent)
 
-        kwargs: dict[str, None | tk.Frame | str | list[tuple[str, str]]] = {
+        kwargs: dict[str, None | tk.Frame | ttk.Frame | str | list[tuple[str, str]]] = {
             "master": self._dummy_master}
 
         if self._handletype.lower() == "context":

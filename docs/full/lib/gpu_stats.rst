@@ -14,8 +14,10 @@ The GPU Stats Package handles collection of information from connected GPUs
 .. automodapi:: lib.gpu_stats.cpu
    :include-all-objects:
 
+|
 .. automodapi:: lib.gpu_stats.nvidia
    :include-all-objects:
 
+|
 .. automodapi:: lib.gpu_stats.rocm
    :include-all-objects:

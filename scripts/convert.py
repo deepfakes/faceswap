@@ -27,6 +27,7 @@ from lib.utils import (get_module_objects, FaceswapError, get_folder,
                        get_image_paths, handle_deprecated_cliopts)
 from plugins.extract import ExtractMedia, Extractor
 from plugins.plugin_loader import PluginLoader
+from plugins.train import train_config as mod_cfg
 
 if T.TYPE_CHECKING:
     from argparse import Namespace
@@ -335,9 +336,9 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
 
     @property
     def draw_transparent(self) -> bool:
-        """ bool: ``True`` if the selected writer's Draw_transparent configuration item is set
-        otherwise ``False`` """
-        return self._writer.config.get("draw_transparent", False)
+        """ bool: ``True`` if the selected writer can output transparent and it's Draw_transparent
+        configuration item is set otherwise ``False`` """
+        return self._writer.output_alpha
 
     @property
     def pre_encode(self) -> Callable[[np.ndarray, T.Any], list[bytes]] | None:
@@ -749,8 +750,8 @@ class Predict():  # pylint:disable=too-many-instance-attributes
         self._batchsize = self._get_batchsize(queue_size)
         self._sizes = self._get_io_sizes()
         self._coverage_ratio = self._model.coverage_ratio
-        self._y_offset = self._model.config["vertical_offset"] / 100.
-        self._centering = self._model.config["centering"]
+        self._y_offset = mod_cfg.vertical_offset() / 100.
+        self._centering: CenteringType = T.cast("CenteringType", mod_cfg.centering())
 
         self._thread: MultiThread | None = None
         logger.debug("Initialized %s: (out_queue: %s)", self.__class__.__name__, self._out_queue)
@@ -796,7 +797,7 @@ class Predict():  # pylint:disable=too-many-instance-attributes
     @property
     def has_predicted_mask(self) -> bool:
         """ bool: ``True`` if the model was trained to learn a mask, otherwise ``False``. """
-        return bool(self._model.config.get("learn_mask", False))
+        return bool(mod_cfg.Loss.learn_mask())
 
     @property
     def output_size(self) -> int:
@@ -855,7 +856,7 @@ class Predict():  # pylint:disable=too-many-instance-attributes
         """
         logger.debug("Getting batchsize")
         is_cpu = GPUStats is None or GPUStats().device_count == 0
-        batchsize = 1 if is_cpu else self._model.config["convert_batchsize"]
+        batchsize = 1 if is_cpu else mod_cfg.convert_batchsize()
         batchsize = min(queue_size, batchsize)
         logger.debug("Got batchsize: %s", batchsize)
         return batchsize

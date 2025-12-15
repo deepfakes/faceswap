@@ -118,6 +118,8 @@ class TestFacesDisplay():
         f_display.set_display_dimensions(dimensions)
         assert f_display._display_dims == dimensions
 
+    # TODO remove the next line that supresses a weird pytest bug when it tears down the tempdir
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     @pytest.mark.parametrize("columns, face_size", _PARAMS, ids=_IDS)
     def test_update_tk_image(self,
                              columns: int,

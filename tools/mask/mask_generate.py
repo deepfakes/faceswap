@@ -16,6 +16,7 @@ if T.TYPE_CHECKING:
     from lib.align import DetectedFace
     from lib.queue_manager import EventQueue
     from plugins.extract import ExtractMedia
+    from plugins.extract.mask.bisenet_fp import Mask as bfp_mask
     from .loader import Loader
 
 
@@ -82,7 +83,7 @@ class MaskGenerator:
         return extractor
 
     def _set_correct_mask_type(self, mask_type: str) -> str:
-        """ Some masks have multiple variants that they can be saved as depending on config options
+        """ Some masks have multiple variants that they can be saved depending on config options
 
         Parameters
         ----------
@@ -98,10 +99,10 @@ class MaskGenerator:
             return mask_type
 
         # Hacky look up into masker to get the type of mask
-        mask_plugin = self._extractor._mask[0]  # pylint:disable=protected-access
+        mask_plugin = T.cast("bfp_mask | None",
+                             self._extractor._mask[0])  # pylint:disable=protected-access
         assert mask_plugin is not None
-        mtype = "head" if mask_plugin.config.get("include_hair", False) else "face"
-        new_type = f"{mask_type}_{mtype}"
+        new_type = f"{mask_type}_{mask_plugin.storage_centering}"
         logger.debug("Updating '%s' to '%s'", mask_type, new_type)
         return new_type
 

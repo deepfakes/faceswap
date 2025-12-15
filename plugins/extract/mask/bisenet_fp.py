@@ -18,8 +18,9 @@ from keras.models import Model
 
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
-from plugins.extract._base import _get_config
+from plugins.extract.extract_config import load_config
 from ._base import BatchType, Masker, MaskerBatch
+from . import bisenet_fp_defaults as cfg
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -30,7 +31,10 @@ logger = logging.getLogger(__name__)
 class Mask(Masker):  # pylint:disable=too-many-instance-attributes
     """ Neural network to process face image into a segmentation mask of the face """
     def __init__(self, **kwargs) -> None:
-        self._is_faceswap, version = self._check_weights_selection(kwargs.get("configfile"))
+        # We need access to user config prior to parent being initialized to correctly set the
+        # model filename
+        load_config(kwargs.get("configfile"))
+        self._is_faceswap, version = self._check_weights_selection()
 
         git_model_id = 14
         model_filename = f"bisnet_face_parsing_v{version}.h5"
@@ -40,37 +44,33 @@ class Mask(Masker):  # pylint:disable=too-many-instance-attributes
         self.name = "BiSeNet - Face Parsing"
         self.input_size = 512
         self.color_format = "RGB"
-        self.vram = 384 if not self.config["cpu"] else 0  # 378 in testing
-        self.vram_per_batch = 384 if not self.config["cpu"] else 0  # ~328 in testing
-        self.batchsize = self.config["batch-size"]
+        self.vram = 384 if not cfg.cpu() else 0  # 378 in testing
+        self.vram_per_batch = 384 if not cfg.cpu() else 0  # ~328 in testing
+        self.batchsize = cfg.batch_size()
 
         self._segment_indices = self._get_segment_indices()
-        self._storage_centering = "head" if self.config["include_hair"] else "face"
+        self.storage_centering = "head" if cfg.include_hair() else "face"
+        """ Literal["head", "face"] The mask type/storage centering to use """
         # Separate storage for face and head masks
         self._storage_name = f"{self._storage_name}_{self._storage_centering}"
 
-    def _check_weights_selection(self, configfile: str | None) -> tuple[bool, int]:
+    def _check_weights_selection(self) -> tuple[bool, int]:
         """ Check which weights have been selected.
 
         This is required for passing along the correct file name for the corresponding weights
-        selection, so config needs to be loaded and scanned prior to parent loading it.
-
-        Parameters
-        ----------
-        configfile: str
-            Path to a custom configuration ``ini`` file. ``None`` to use system configfile
+        selection.
 
         Returns
         -------
-        tuple (bool, int)
-            First position is ``True`` if `faceswap` trained weights have been selected.
-            ``False`` if `original` weights have been selected.
-            Second position is the version of the model to use (``1`` for non-faceswap, ``1`` if
-            faceswap and full-head model is required. ``3`` if faceswap and full-face is required)
+        is_faceswap : bool
+            ``True`` if `faceswap` trained weights have been selected. ``False`` if `original`
+            weights have been selected.
+        version : int
+            ``1`` for non-faceswap, ``2`` if faceswap and full-head model is required. ``3`` if
+            faceswap and full-face is required
         """
-        config = _get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
-        is_faceswap = config.get("weights", "faceswap").lower() == "faceswap"
-        version = 1 if not is_faceswap else 2 if config.get("include_hair") else 3
+        is_faceswap = cfg.weights() == "faceswap"
+        version = 1 if not is_faceswap else 2 if cfg.include_hair() else 3
         return is_faceswap, version
 
     def _get_segment_indices(self) -> list[int]:
@@ -94,11 +94,11 @@ class Mask(Masker):  # pylint:disable=too-many-instance-attributes
         """
         retval = [1] if self._is_faceswap else [1, 2, 3, 4, 5, 10, 11, 12, 13]
 
-        if self.config["include_glasses"]:
+        if cfg.include_glasses():
             retval.append(4 if self._is_faceswap else 6)
-        if self.config["include_ears"]:
+        if cfg.include_ears():
             retval.extend([2] if self._is_faceswap else [7, 8, 9])
-        if self.config["include_hair"]:
+        if cfg.include_hair():
             retval.append(3 if self._is_faceswap else 17)
         logger.debug("Selected segment indices: %s", retval)
         return retval
@@ -110,7 +110,7 @@ class Mask(Masker):  # pylint:disable=too-many-instance-attributes
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")
 
-        with self.get_device_context(self.config["cpu"]):
+        with self.get_device_context(cfg.cpu()):
             self.model = BiSeNet(self.model_path, self.batchsize, self.input_size, lbls)
             self.model(placeholder)
 
@@ -127,7 +127,7 @@ class Mask(Masker):  # pylint:disable=too-many-instance-attributes
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions """
-        with self.get_device_context(self.config["cpu"]):
+        with self.get_device_context(cfg.cpu()):
             return self.model(feed)[0]
 
     def process_output(self, batch: BatchType) -> None:

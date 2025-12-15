@@ -11,6 +11,7 @@ import numpy as np
 import keras
 from keras import applications as kapp, layers as kl
 
+from lib.logger import parse_class_init
 from lib.model.nn_blocks import (
     Conv2D, Conv2DBlock, Conv2DOutput, ResidualBlock, UpscaleBlock, Upscale2xBlock,
     UpscaleResizeImagesBlock, UpscaleDNYBlock)
@@ -18,8 +19,10 @@ from lib.model.normalization import (
     AdaInstanceNormalization, GroupNormalization, InstanceNormalization, RMSNormalization)
 from lib.model.networks import ViT, TypeModelsViT
 from lib.utils import get_keras_version, FaceswapError
+from plugins.train.train_config import Loss as cfg_loss
 
 from ._base import ModelBase, get_all_sub_models
+from . import phaze_a_defaults as cfg
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -172,14 +175,23 @@ class Model(ModelBase):
     """
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        if self.config["output_size"] % 16 != 0:
+        if cfg.output_size() % 16 != 0:
             raise FaceswapError("Phaze-A output shape must be a multiple of 16")
 
         self._validate_encoder_architecture()
-        self.config["freeze_layers"] = self._select_freeze_layers()
 
         self.input_shape: tuple[int, int, int] = self._get_input_shape()
-        self.color_order = _MODEL_MAPPING[self.config["enc_architecture"]].color_order
+        self.color_order = _MODEL_MAPPING[cfg.enc_architecture()].color_order
+
+    @property
+    def freeze_layers(self) -> list[str]:
+        """ list[str] : Valid layers to freeze based on configured options """
+        return self._select_real_layers(cfg.freeze_layers())
+
+    @property
+    def load_layers(self) -> list[str]:
+        """ list[str] : Valid layers to load based on configured options """
+        return self._select_real_layers(cfg.load_layers())
 
     def build(self) -> None:
         """ Build the model and assign to :attr:`model`.
@@ -217,8 +229,7 @@ class Model(ModelBase):
         :class:`keras.models.Model`
             The loaded Keras Model with the dropout rates updated
         """
-        dropouts = {"fc": self.config["fc_dropout"],
-                    "gblock": self.config["fc_gblock_dropout"]}
+        dropouts = {"fc": cfg.fc_dropout(), "gblock": cfg.fc_gblock_dropout()}
         logger.debug("Config dropouts: %s", dropouts)
         updated = False
         for mod in get_all_sub_models(model):
@@ -247,30 +258,29 @@ class Model(ModelBase):
             model = new_model
         return model
 
-    def _select_freeze_layers(self) -> list[str]:
-        """ Process the selected frozen layers and replace the `keras_encoder` option with the
-        actual keras model name
+    def _select_real_layers(self, layers: list[str]) -> list[str]:
+        """ Process the selected freeze or load layers configuration options and replace the
+        `keras_encoder` option with the actual keras model name for the configured architecture
 
         Returns
         -------
         list
             The selected layers for weight freezing
         """
-        arch = self.config["enc_architecture"]
-        layers = self.config["freeze_layers"]
+        arch = cfg.enc_architecture()
         # EfficientNetV2 is inconsistent with other model's naming conventions
         keras_name = _MODEL_MAPPING[arch].keras_name.replace("EfficientNetV2", "EfficientNetV2-")
         # CLIPv model is always called 'visual' regardless of weights/format loaded
         keras_name = "visual" if arch.startswith("clipv_") else keras_name
 
-        if "keras_encoder" not in self.config["freeze_layers"]:
+        if "keras_encoder" not in cfg.freeze_layers():
             retval = layers
         elif keras_name:
-            retval = [layer.replace("keras_encoder", keras_name.lower()) for layer in layers]
-            logger.debug("Substituting 'keras_encoder' for '%s'", arch)
+            retval = [layer.replace("keras_encoder", keras_name) for layer in layers]
+            logger.debug("Substituting 'keras_encoder' for '%s'", keras_name)
         else:
             retval = [layer for layer in layers if layer != "keras_encoder"]
-            logger.debug("Removing 'keras_encoder' for '%s'", arch)
+            logger.debug("Removing 'keras_encoder' for '%s'", keras_name)
 
         return retval
 
@@ -290,15 +300,15 @@ class Model(ModelBase):
         tuple
             The shape tuple for the input size to the Phaze-A model
         """
-        arch = self.config["enc_architecture"]
+        arch = cfg.enc_architecture()
         enforce_size = _MODEL_MAPPING[arch].enforce_for_weights
         default_size = _MODEL_MAPPING[arch].default_size
-        scaling = self.config["enc_scaling"] / 100
+        scaling = cfg.enc_scaling() / 100
 
         min_size = _MODEL_MAPPING[arch].min_size
         size = int(max(min_size, ((default_size * scaling) // 16) * 16))
 
-        if self.config["enc_load_weights"] and enforce_size and scaling != 1.0:
+        if cfg.enc_load_weights() and enforce_size and scaling != 1.0:
             logger.warning("%s requires input size to be %spx when loading imagenet weights. "
                            "Adjusting input size from %spx to %spx",
                            arch, default_size, size, default_size)
@@ -315,7 +325,7 @@ class Model(ModelBase):
 
         If the selection is not valid, an error is logged and system exits.
         """
-        arch = self.config["enc_architecture"].lower()
+        arch = cfg.enc_architecture()
         model = _MODEL_MAPPING.get(arch)
         if not model:
             raise FaceswapError(f"'{arch}' is not a valid choice for encoder architecture. Choose "
@@ -367,7 +377,7 @@ class Model(ModelBase):
         dict
             side as key ('a' or 'b'), encoder for side as value
         """
-        encoder = Encoder(self.input_shape, self.config)()
+        encoder = Encoder(self.input_shape)()
         retval = {"a": encoder(inputs[0]), "b": encoder(inputs[1])}
         logger.debug("Encoders: %s", retval)
         return retval
@@ -390,19 +400,19 @@ class Model(ModelBase):
         input_shapes = inputs["a"].shape[1:]
 
         fc_a = fc_both = None
-        if self.config["split_fc"]:
-            fc_a = FullyConnected("a", input_shapes, self.config)()
+        if cfg.split_fc():
+            fc_a = FullyConnected("a", input_shapes)()
             inter_a = [fc_a(inputs["a"])]
-            inter_b = [FullyConnected("b", input_shapes, self.config)()(inputs["b"])]
+            inter_b = [FullyConnected("b", input_shapes)()(inputs["b"])]
         else:
-            fc_both = FullyConnected("both", input_shapes, self.config)()
+            fc_both = FullyConnected("both", input_shapes)()
             inter_a = [fc_both(inputs["a"])]
             inter_b = [fc_both(inputs["b"])]
 
-        if self.config["shared_fc"]:
-            if self.config["shared_fc"] == "full":
-                fc_shared = FullyConnected("shared", input_shapes, self.config)()
-            elif self.config["split_fc"]:
+        if cfg.shared_fc():
+            if cfg.shared_fc() == "full":
+                fc_shared = FullyConnected("shared", input_shapes)()
+            elif cfg.split_fc():
                 assert fc_a is not None
                 fc_shared = fc_a
             else:
@@ -411,8 +421,8 @@ class Model(ModelBase):
             inter_a = [kl.Concatenate(name="inter_a")([inter_a[0], fc_shared(inputs["a"])])]
             inter_b = [kl.Concatenate(name="inter_b")([inter_b[0], fc_shared(inputs["b"])])]
 
-        if self.config["enable_gblock"]:
-            fc_gblock = FullyConnected("gblock", input_shapes, self.config)()
+        if cfg.enable_gblock():
+            fc_gblock = FullyConnected("gblock", input_shapes)()
             inter_a.append(fc_gblock(inputs["a"]))
             inter_b.append(fc_gblock(inputs["b"]))
 
@@ -440,16 +450,16 @@ class Model(ModelBase):
             side as key ('a' or 'b'), g-block model for side as value. If g-block has been disabled
             then the values will be the fully connected layers
         """
-        if not self.config["enable_gblock"]:
+        if not cfg.enable_gblock():
             logger.debug("No G-Block selected, returning Inters: %s", inputs)
             return inputs
 
         input_shapes = [inter.shape[1:] for inter in inputs["a"]]
-        if self.config["split_gblock"]:
-            retval = {"a": GBlock("a", input_shapes, self.config)()(inputs["a"]),
-                      "b": GBlock("b", input_shapes, self.config)()(inputs["b"])}
+        if cfg.split_gblock():
+            retval = {"a": GBlock("a", input_shapes)()(inputs["a"]),
+                      "b": GBlock("b", input_shapes)()(inputs["b"])}
         else:
-            g_block = GBlock("both", input_shapes, self.config)()
+            g_block = GBlock("both", input_shapes)()
             retval = {"a": g_block((inputs["a"])), "b": g_block((inputs["b"]))}
 
         logger.debug("G-Blocks: %s", retval)
@@ -479,16 +489,16 @@ class Model(ModelBase):
 
         # If learning a mask and upscales have been placed into FC layer, then the mask will also
         # come as an input
-        if self.config["learn_mask"] and self.config["dec_upscales_in_fc"]:
+        if cfg_loss.learn_mask() and cfg.dec_upscales_in_fc():
             input_ = input_[0]
 
         input_shape = input_.shape[1:]
 
-        if self.config["split_decoders"]:
-            retval = {"a": Decoder("a", input_shape, self.config)()(inputs["a"]),
-                      "b": Decoder("b", input_shape, self.config)()(inputs["b"])}
+        if cfg.split_decoders():
+            retval = {"a": Decoder("a", input_shape)()(inputs["a"]),
+                      "b": Decoder("b", input_shape)()(inputs["b"])}
         else:
-            decoder = Decoder("both", input_shape, self.config)()
+            decoder = Decoder("both", input_shape)()
             retval = {"a": decoder(inputs["a"]), "b": decoder(inputs["b"])}
 
         logger.debug("Decoders: %s", retval)
@@ -672,30 +682,28 @@ class Encoder():
     ----------
     input_shape: tuple
         The shape tuple for the input tensor
-    config: dict
-        The model configuration options
     """
-    def __init__(self, input_shape: tuple[int, int, int], config: dict) -> None:
+    def __init__(self, input_shape: tuple[int, int, int]) -> None:
+        logger.debug(parse_class_init(locals()))
         self.input_shape = input_shape
-        self._config = config
         self._input_shape = input_shape
 
     @property
-    def _model_kwargs(self) -> dict[str, dict[str, str | bool]]:
+    def _model_kwargs(self) -> dict[str, dict[str, float | int | bool]]:
         """ dict: Configuration option for architecture mapped to optional kwargs. """
-        return {"mobilenet": {"alpha": self._config["mobilenet_width"],
-                              "depth_multiplier": self._config["mobilenet_depth"],
-                              "dropout": self._config["mobilenet_dropout"]},
-                "mobilenet_v2": {"alpha": self._config["mobilenet_width"]},
-                "mobilenet_v3": {"alpha": self._config["mobilenet_width"],
-                                 "minimalist": self._config["mobilenet_minimalistic"],
+        return {"mobilenet": {"alpha": cfg.mobilenet_width(),
+                              "depth_multiplier": cfg.mobilenet_depth(),
+                              "dropout": cfg.mobilenet_dropout()},
+                "mobilenet_v2": {"alpha": cfg.mobilenet_width()},
+                "mobilenet_v3": {"alpha": cfg.mobilenet_width(),
+                                 "minimalist": cfg.mobilenet_minimalistic(),
                                  "include_preprocessing": False}}
 
     @property
     def _selected_model(self) -> tuple[_EncoderInfo, dict]:
         """ tuple(dict, :class:`_EncoderInfo`): The selected encoder model and it's associated
         keyword arguments """
-        arch = self._config["enc_architecture"]
+        arch = cfg.enc_architecture()
         model = _MODEL_MAPPING[arch]
         kwargs = self._model_kwargs.get(arch, {})
         if arch.startswith("efficientnet_v2"):
@@ -717,7 +725,7 @@ class Encoder():
 
         if scaling:
             #  Some models expect different scaling.
-            logger.debug("Scaling to %s for '%s'", scaling, self._config["enc_architecture"])
+            logger.debug("Scaling to %s for '%s'", scaling, cfg.enc_architecture())
             if scaling == (0, 255):
                 # models expecting inputs from 0 to 255.
                 var_x = var_x * 255.
@@ -728,11 +736,11 @@ class Encoder():
 
         var_x = self._get_encoder_model()(var_x)
 
-        if self._config["bottleneck_in_encoder"]:
+        if cfg.bottleneck_in_encoder():
             var_x = _bottleneck(var_x,
-                                self._config["bottleneck_type"],
-                                self._config["bottleneck_size"],
-                                self._config["bottleneck_norm"])
+                                cfg.bottleneck_type(),
+                                cfg.bottleneck_size(),
+                                cfg.bottleneck_norm())
 
         return keras.models.Model(input_, var_x, name="encoder")
 
@@ -745,38 +753,32 @@ class Encoder():
             The selected keras model for the chosen encoder architecture
         """
         model, kwargs = self._selected_model
-        if model.keras_name and self._config["enc_architecture"].startswith("clipv_"):
+        if model.keras_name and cfg.enc_architecture().startswith("clipv_"):
             assert model.keras_name in T.get_args(TypeModelsViT)
             kwargs["input_shape"] = self._input_shape
-            kwargs["load_weights"] = self._config["enc_load_weights"]
+            kwargs["load_weights"] = cfg.enc_load_weights()
             retval = ViT(T.cast(TypeModelsViT, model.keras_name),
                          input_size=self._input_shape[0],
-                         load_weights=self._config["enc_load_weights"])()
+                         load_weights=cfg.enc_load_weights())()
         elif model.keras_name:
             kwargs["input_shape"] = self._input_shape
             kwargs["include_top"] = False
-            kwargs["weights"] = "imagenet" if self._config["enc_load_weights"] else None
+            kwargs["weights"] = "imagenet" if cfg.enc_load_weights() else None
             retval = getattr(kapp, model.keras_name)(**kwargs)
         else:
-            retval = _EncoderFaceswap(self._config)
+            retval = _EncoderFaceswap()
         return retval
 
 
 class _EncoderFaceswap():
-    """ A configurable standard Faceswap encoder based off Original model.
-
-    Parameters
-    ----------
-    config: dict
-        The model configuration options
-    """
-    def __init__(self, config: dict) -> None:
-        self._config = config
-        self._type = self._config["enc_architecture"]
-        self._depth = config[f"{self._type}_depth"]
-        self._min_filters = config["fs_original_min_filters"]
-        self._max_filters = config["fs_original_max_filters"]
-        self._is_alt = config["fs_original_use_alt"]
+    """ A configurable standard Faceswap encoder based off Original model. """
+    def __init__(self) -> None:
+        logger.debug(parse_class_init(locals()))
+        self._type = cfg.enc_architecture()
+        self._depth = getattr(cfg, f"{self._type}_depth")()
+        self._min_filters = cfg.fs_original_min_filters()
+        self._max_filters = cfg.fs_original_max_filters()
+        self._is_alt = cfg.fs_original_use_alt()
         self._relu_alpha = 0.2 if self._is_alt else 0.1
         self._kernel_size = 3 if self._is_alt else 5
         self._strides = 1 if self._is_alt else 2
@@ -795,7 +797,7 @@ class _EncoderFaceswap():
             The output tensor from the Faceswap Encoder
         """
         var_x = inputs
-        filters = self._config["fs_original_min_filters"]
+        filters = cfg.fs_original_min_filters()
 
         if self._is_alt:
             var_x = Conv2DBlock(filters,
@@ -810,7 +812,7 @@ class _EncoderFaceswap():
                                 strides=self._strides,
                                 relu_alpha=self._relu_alpha,
                                 name=f"{name}_convblk_{i}")(var_x)
-            filters = min(self._config["fs_original_max_filters"], filters * 2)
+            filters = min(cfg.fs_original_max_filters(), filters * 2)
             if self._is_alt and i == self._depth - 1:
                 var_x = Conv2DBlock(filters,
                                     kernel_size=4,
@@ -837,19 +839,14 @@ class FullyConnected():
         The side of the model that the fully connected layers belong to. Used for naming
     input_shape: tuple
         The input shape for the fully connected layers
-    config: dict
-        The user configuration dictionary
     """
     def __init__(self,
                  side: T.Literal["a", "b", "both", "gblock", "shared"],
-                 input_shape: tuple,
-                 config: dict) -> None:
-        logger.debug("Initializing: %s (side: %s, input_shape: %s)",
-                     self.__class__.__name__, side, input_shape)
+                 input_shape: tuple) -> None:
+        logger.debug(parse_class_init(locals()))
         self._side = side
         self._input_shape = input_shape
-        self._config = config
-        self._final_dims = self._config["fc_dimensions"] * (self._config["fc_upsamples"] + 1)
+        self._final_dims = cfg.fc_dimensions() * (cfg.fc_upsamples() + 1)
         self._prefix = "fc_gblock" if self._side == "gblock" else "fc"
 
         logger.debug("Initialized: %s (side: %s, min_nodes: %s, max_nodes: %s)",
@@ -861,9 +858,9 @@ class FullyConnected():
         given minimum filters multiplied by the dimensions squared. For g-block layers, this is the
         given value """
         if self._side == "gblock":
-            return self._config["fc_gblock_min_nodes"]
-        retval = self._scale_filters(self._config["fc_min_filters"])
-        retval = int(retval * self._config["fc_dimensions"] ** 2)
+            return cfg.fc_gblock_min_nodes()
+        retval = self._scale_filters(cfg.fc_min_filters())
+        retval = int(retval * cfg.fc_dimensions() ** 2)
         return retval
 
     @property
@@ -875,9 +872,9 @@ class FullyConnected():
         For g-block layers, this is the given config value.
         """
         if self._side == "gblock":
-            return self._config["fc_gblock_max_nodes"]
-        retval = self._scale_filters(self._config["fc_max_filters"])
-        retval = int(retval * self._config["fc_dimensions"] ** 2)
+            return cfg.fc_gblock_max_nodes()
+        retval = self._scale_filters(cfg.fc_max_filters())
+        retval = int(retval * cfg.fc_dimensions() ** 2)
         return retval
 
     def _scale_filters(self, original_filters: int) -> int:
@@ -893,7 +890,7 @@ class FullyConnected():
         int
             The number of filters scaled down for output size
         """
-        scaled_dim = _scale_dim(self._config["output_size"], self._final_dims)
+        scaled_dim = _scale_dim(cfg.output_size(), self._final_dims)
         if scaled_dim == self._final_dims:
             logger.debug("filters don't require scaling. Returning: %s", original_filters)
             return original_filters
@@ -918,9 +915,11 @@ class FullyConnected():
         :class:`keras.KerasTensor`
             The output from the upsample layers
         """
-        upsample_filts = self._scale_filters(self._config["fc_upsample_filters"])
-        upsampler = self._config["fc_upsampler"].lower()
-        num_upsamples = self._config["fc_upsamples"]
+        upsample_filts = self._scale_filters(cfg.fc_upsample_filters())
+        upsampler = T.cast(T.Literal["resize_images", "subpixel", "upscale_dny", "upscale_fast",
+                                     "upscale_hybrid", "upsample2d"],
+                           cfg.fc_upsampler().lower())
+        num_upsamples = cfg.fc_upsamples()
         var_x = inputs
         if upsampler == "upsample2d" and num_upsamples > 1:
             upscaler = _get_upscale_layer(upsampler,
@@ -951,29 +950,28 @@ class FullyConnected():
 
         node_curve = _get_curve(self._min_nodes,
                                 self._max_nodes,
-                                self._config[f"{self._prefix}_depth"],
-                                self._config[f"{self._prefix}_filter_slope"])
+                                getattr(cfg, f"{self._prefix}_depth")(),
+                                getattr(cfg, f"{self._prefix}_filter_slope")())
 
-        if not self._config["bottleneck_in_encoder"]:
+        if not cfg.bottleneck_in_encoder():
             var_x = _bottleneck(var_x,
-                                self._config["bottleneck_type"],
-                                self._config["bottleneck_size"],
-                                self._config["bottleneck_norm"])
+                                cfg.bottleneck_type(),
+                                cfg.bottleneck_size(),
+                                cfg.bottleneck_norm())
 
-        dropout = f"{self._prefix}_dropout"
+        dropout = getattr(cfg, f"{self._prefix}_dropout")()
         for idx, nodes in enumerate(node_curve):
-            var_x = kl.Dropout(self._config[dropout], name=f"{dropout}_{idx + 1}")(var_x)
+            var_x = kl.Dropout(dropout, name=f"{dropout}_{idx + 1}")(var_x)
             var_x = kl.Dense(nodes)(var_x)
 
         if self._side != "gblock":
-            dim = self._config["fc_dimensions"]
+            dim = cfg.fc_dimensions()
             var_x = kl.Reshape((dim, dim, int(self._max_nodes / (dim ** 2))))(var_x)
             var_x = self._do_upsampling(var_x)
 
-            num_upscales = self._config["dec_upscales_in_fc"]
+            num_upscales = cfg.dec_upscales_in_fc()
             if num_upscales:
                 var_x = UpscaleBlocks(self._side,
-                                      self._config,
                                       layer_indicies=(0, num_upscales))(var_x)
 
         return keras.models.Model(input_, var_x, name=f"fc_{self._side}")
@@ -993,8 +991,6 @@ class UpscaleBlocks():
     ----------
     side: ["a", "b", "both", "shared"]
         The side of the model that the Decoder belongs to. Used for naming
-    config: dict
-        The user configuration dictionary
     layer_indices: tuple, optional
         The tuple indicies indicating the starting layer index and the ending layer index to
         generate upscales for. Used for when splitting upscales between the Fully Connected Layers
@@ -1005,13 +1001,10 @@ class UpscaleBlocks():
 
     def __init__(self,
                  side: T.Literal["a", "b", "both", "shared"],
-                 config: dict,
                  layer_indicies: tuple[int, int] | None = None) -> None:
-        logger.debug("Initializing: %s (side: %s, layer_indicies: %s)",
-                     self.__class__.__name__, side, layer_indicies)
+        logger.debug(parse_class_init(locals()))
         self._side = side
-        self._config = config
-        self._is_dny = self._config["dec_upscale_method"].lower() == "upscale_dny"
+        self._is_dny = cfg.dec_upscale_method().lower() == "upscale_dny"
         self._layer_indicies = layer_indicies
         logger.debug("Initialized: %s", self.__class__.__name__,)
 
@@ -1033,12 +1026,12 @@ class UpscaleBlocks():
         """
         var_x = inputs
         old_dim = inputs.shape[1]
-        new_dim = _scale_dim(self._config["output_size"], old_dim)
+        new_dim = _scale_dim(cfg.output_size(), old_dim)
         if new_dim != old_dim:
             old_shape = inputs.shape[1:]
             new_shape = (new_dim, new_dim, np.prod(old_shape) // new_dim ** 2)
             logger.debug("Reshaping tensor from %s to %s for output size %s",
-                         inputs.shape[1:], new_shape, self._config["output_size"])
+                         inputs.shape[1:], new_shape, cfg.output_size())
             var_x = kl.Reshape(new_shape)(var_x)
         return var_x
 
@@ -1068,19 +1061,22 @@ class UpscaleBlocks():
         :class:`keras.KerasTensor`
             The output tensor from the upscale block
         """
-        upscaler = _get_upscale_layer(self._config["dec_upscale_method"].lower(),
+        upscaler = _get_upscale_layer(T.cast(T.Literal["resize_images", "subpixel", "upscale_dny",
+                                                       "upscale_fast", "upscale_hybrid",
+                                                       "upsample2d"],
+                                             cfg.dec_upscale_method()),
                                       filters,
                                       activation="leakyrelu",
                                       upsamples=2,
                                       interpolation="bilinear")
 
         var_x = upscaler(inputs)
-        if not is_mask and self._config["dec_gaussian"]:
+        if not is_mask and cfg.dec_gaussian():
             var_x = kl.GaussianNoise(1.0)(var_x)
-        if not is_mask and self._config["dec_res_blocks"] and not skip_residual:
+        if not is_mask and cfg.dec_res_blocks() and not skip_residual:
             var_x = self._normalization(var_x)
             var_x = kl.LeakyReLU(negative_slope=0.2)(var_x)
-            for _ in range(self._config["dec_res_blocks"]):
+            for _ in range(cfg.dec_res_blocks()):
                 var_x = ResidualBlock(filters)(var_x)
         else:
             var_x = self._normalization(var_x)
@@ -1101,14 +1097,14 @@ class UpscaleBlocks():
         :class:`keras.KerasTensor`
             The tensor with any normalization applied
         """
-        if not self._config["dec_norm"]:
+        if not cfg.dec_norm():
             return inputs
         norms = {"batch": kl.BatchNormalization,
                  "group": GroupNormalization,
                  "instance": InstanceNormalization,
                  "layer": kl.LayerNormalization,
                  "rms": RMSNormalization}
-        return norms[self._config["dec_norm"]]()(inputs)
+        return norms[cfg.dec_norm()]()(inputs)
 
     def _dny_entry(self, inputs: KerasTensor) -> KerasTensor:
         """ Entry convolutions for using the upscale_dny method.
@@ -1123,12 +1119,12 @@ class UpscaleBlocks():
         :class:`keras.KerasTensor`
             The output from the dny entry block
         """
-        var_x = Conv2DBlock(self._config["dec_max_filters"],
+        var_x = Conv2DBlock(cfg.dec_max_filters(),
                             kernel_size=4,
                             strides=1,
                             padding="same",
                             relu_alpha=0.2)(inputs)
-        var_x = Conv2DBlock(self._config["dec_max_filters"],
+        var_x = Conv2DBlock(cfg.dec_max_filters(),
                             kernel_size=3,
                             strides=1,
                             padding="same",
@@ -1156,11 +1152,11 @@ class UpscaleBlocks():
 
         var_x: KerasTensor
         var_y: KerasTensor
-        if self._config["learn_mask"] and start_idx == 0:
+        if cfg_loss.learn_mask() and start_idx == 0:
             # Mask needs to be created
             var_x = inputs
             var_y = inputs
-        elif self._config["learn_mask"]:
+        elif cfg_loss.learn_mask():
             # Mask has already been created and is an input to upscale blocks
             var_x, var_y = inputs
         else:
@@ -1170,32 +1166,33 @@ class UpscaleBlocks():
         if start_idx == 0:
             var_x = self._reshape_for_output(var_x)
 
-            if self._config["learn_mask"]:
+            if cfg_loss.learn_mask():
                 var_y = self._reshape_for_output(var_y)
 
             if self._is_dny:
                 var_x = self._dny_entry(var_x)
-            if self._is_dny and self._config["learn_mask"]:
+            if self._is_dny and cfg_loss.learn_mask():
                 var_y = self._dny_entry(var_y)
 
         # De-convolve
         if not self._filters:
-            upscales = int(np.log2(self._config["output_size"] / var_x.shape[1]))
-            self._filters.extend(_get_curve(self._config["dec_max_filters"],
-                                            self._config["dec_min_filters"],
+            upscales = int(np.log2(cfg.output_size() / var_x.shape[1]))
+            self._filters.extend(_get_curve(cfg.dec_max_filters(),
+                                            cfg.dec_min_filters(),
                                             upscales,
-                                            self._config["dec_filter_slope"],
-                                            mode=self._config["dec_slope_mode"]))
+                                            cfg.dec_filter_slope(),
+                                            mode=T.cast(T.Literal["full", "cap_min", "cap_max"],
+                                                        cfg.dec_slope_mode())))
             logger.debug("Generated class filters: %s", self._filters)
 
         filters = self._filters[start_idx: end_idx]
 
         for idx, filts in enumerate(filters):
-            skip_res = idx == len(filters) - 1 and self._config["dec_skip_last_residual"]
+            skip_res = idx == len(filters) - 1 and cfg.dec_skip_last_residual()
             var_x = self._upscale_block(var_x, filts, skip_residual=skip_res)
-            if self._config["learn_mask"]:
+            if cfg_loss.learn_mask():
                 var_y = self._upscale_block(var_y, filts, is_mask=True)
-        retval = [var_x, var_y] if self._config["learn_mask"] else var_x
+        retval = [var_x, var_y] if cfg_loss.learn_mask() else var_x
         return retval
 
 
@@ -1210,17 +1207,10 @@ class GBlock():
         The shape tuples for the input to the G-Block. The first item is the input from each side's
         fully connected model, the second item is the input shape from the combined fully connected
         model.
-    config: dict
-        The user configuration dictionary
     """
-    def __init__(self,
-                 side: T.Literal["a", "b", "both"],
-                 input_shapes: list | tuple,
-                 config: dict) -> None:
-        logger.debug("Initializing: %s (side: %s, input_shapes: %s)",
-                     self.__class__.__name__, side, input_shapes)
+    def __init__(self, side: T.Literal["a", "b", "both"], input_shapes: list | tuple) -> None:
+        logger.debug(parse_class_init(locals()))
         self._side = side
-        self._config = config
         self._inputs = [kl.Input(shape=shape) for shape in input_shapes]
         self._dense_nodes = 512
         self._dense_recursions = 3
@@ -1295,18 +1285,13 @@ class Decoder():
         The side of the model that the Decoder belongs to. Used for naming
     input_shape: tuple
         The shape tuple for the input to the decoder.
-    config: dict
-        The user configuration dictionary
     """
     def __init__(self,
                  side: T.Literal["a", "b", "both"],
-                 input_shape: tuple[int, int, int],
-                 config: dict) -> None:
-        logger.debug("Initializing: %s (side: %s, input_shape: %s)",
-                     self.__class__.__name__, side, input_shape)
+                 input_shape: tuple[int, int, int]) -> None:
+        logger.debug(parse_class_init(locals()))
         self._side = side
         self._input_shape = input_shape
-        self._config = config
         logger.debug("Initialized: %s", self.__class__.__name__,)
 
     def __call__(self) -> keras.models.Model:
@@ -1319,26 +1304,24 @@ class Decoder():
         """
         inputs = T.cast("KerasTensor", kl.Input(shape=self._input_shape))
 
-        num_ups_in_fc = self._config["dec_upscales_in_fc"]
+        num_ups_in_fc = cfg.dec_upscales_in_fc()
 
-        if self._config["learn_mask"] and num_ups_in_fc:
+        if cfg_loss.learn_mask() and num_ups_in_fc:
             # Mask has already been created in FC and is an output of that model
             inputs = [inputs, kl.Input(shape=self._input_shape)]
 
         indicies = None if not num_ups_in_fc else (num_ups_in_fc, -1)
-        upscales = UpscaleBlocks(self._side,
-                                 self._config,
-                                 layer_indicies=indicies)(inputs)
+        upscales = UpscaleBlocks(self._side, layer_indicies=indicies)(inputs)
 
-        if self._config["learn_mask"]:
+        if cfg_loss.learn_mask():
             var_x, var_y = upscales
         else:
             var_x = upscales
 
-        outputs = [Conv2DOutput(3, self._config["dec_output_kernel"], name="face_out")(var_x)]
-        if self._config["learn_mask"]:
+        outputs = [Conv2DOutput(3, cfg.dec_output_kernel(), name="face_out")(var_x)]
+        if cfg_loss.learn_mask():
             outputs.append(Conv2DOutput(1,
-                                        self._config["dec_output_kernel"],
+                                        cfg.dec_output_kernel(),
                                         name="mask_out")(var_y))
 
         return keras.models.Model(inputs, outputs=outputs, name=f"decoder_{self._side}")

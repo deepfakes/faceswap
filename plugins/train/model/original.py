@@ -10,7 +10,10 @@ from keras import Input, layers, Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
 from lib.utils import get_module_objects
+from plugins.train.train_config import Loss as cfg_loss
 from ._base import ModelBase
+from . import original_defaults as cfg
+# pylint:disable=duplicate-code
 
 
 class Model(ModelBase):
@@ -42,8 +45,8 @@ class Model(ModelBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.input_shape = (64, 64, 3)
-        self.low_mem = self.config.get("lowmem", False)
-        self.learn_mask = self.config["learn_mask"]
+        self.low_mem = cfg.lowmem()
+        self.learn_mask = cfg_loss.learn_mask()
         self.encoder_dim = 512 if self.low_mem else 1024
 
     def build_model(self, inputs):

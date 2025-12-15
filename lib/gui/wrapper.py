@@ -14,6 +14,7 @@ from time import time
 
 import psutil
 
+from lib.gui import gui_config as cfg
 from lib.utils import get_module_objects
 
 from .analysis import Session
@@ -599,7 +600,7 @@ class FaceswapControl():
         """
         logger.debug("Terminating wrapper")
         if command == "train":
-            timeout = self._config.user_config_dict.get("timeout", 120)
+            timeout = cfg.timeout()
             logger.debug("Sending Exit Signal")
             print("Sending Exit Signal", flush=True)
             now = time()

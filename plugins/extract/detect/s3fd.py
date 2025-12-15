@@ -19,6 +19,7 @@ from keras import initializers, ops
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
 from ._base import BatchType, Detector
+from . import s3fd_defaults as cfg
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -37,12 +38,12 @@ class Detect(Detector):
         self.input_size = 640
         self.vram = 1088  # 1034 in testing
         self.vram_per_batch = 960  # 922 in testing
-        self.batchsize = self.config["batch-size"]
+        self.batchsize = cfg.batch_size()
 
     def init_model(self) -> None:
         """ Initialize S3FD Model"""
         assert isinstance(self.model_path, str)
-        confidence = self.config["confidence"] / 100
+        confidence = cfg.confidence() / 100
         self.model = S3fd(self.model_path, self.batchsize, confidence)
         placeholder_shape = (self.batchsize, self.input_size, self.input_size, 3)
         placeholder = np.zeros(placeholder_shape, dtype="float32")

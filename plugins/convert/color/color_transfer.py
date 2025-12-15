@@ -27,6 +27,7 @@ import cv2
 import numpy as np
 from lib.utils import get_module_objects
 from ._base import Adjustment
+from . import color_transfer_defaults as cfg
 
 
 class Color(Adjustment):
@@ -65,8 +66,8 @@ class Color(Adjustment):
         transfer: NumPy array
             OpenCV image (w, h, 3) NumPy array (uint8)
         """
-        clip = self.config.get("clip", True)
-        preserve_paper = self.config.get("preserve_paper", True)
+        clip = cfg.clip()
+        preserve_paper = cfg.preserve_paper()
 
         # convert the images from the RGB to L*ab* color space, being
         # sure to utilizing the floating point data type (note: OpenCV

@@ -13,6 +13,7 @@ from lib.align import AlignedFace
 from lib.utils import get_module_objects, FaceswapError, IMAGE_EXTENSIONS
 
 from ._base import Detector
+from . import external_defaults as cfg
 
 if T.TYPE_CHECKING:
     from lib.align import DetectedFace
@@ -20,6 +21,8 @@ if T.TYPE_CHECKING:
     from ._base import BatchType
 
 logger = logging.getLogger(__name__)
+OriginType = T.Literal["top-left", "bottom-left", "top-right", "bottom-right"]
+# pylint:disable=duplicate-code
 
 
 class Detect(Detector):
@@ -32,10 +35,11 @@ class Detect(Detector):
         self.name = "External"
         self.batchsize = 16
 
-        self._origin: T.Literal["top-left",
-                                "bottom-left",
-                                "top-right",
-                                "bottom-right"] = self.config["origin"]
+        self.origin: OriginType = T.cast(OriginType, cfg.origin())
+        """ Literal["top-left", "bottom-left", "top-right", "bottom-right"] : The origin (0, 0)
+        location of the co-ordinates system used"""
+        self.file_name = cfg.file_name()
+        """ str : The file name to import ROI data from """
 
         self._re_frame_no: re.Pattern = re.compile(r"\d+$")
         self._missing: list[str] = []
@@ -181,10 +185,7 @@ class Detect(Detector):
 
     def _import_frame_face(self,
                            face: dict[str, list[int] | list[list[float]]],
-                           align_origin: T.Literal["top-left",
-                                                   "bottom-left",
-                                                   "top-right",
-                                                   "bottom-right"] | None) -> np.ndarray:
+                           align_origin: OriginType | None) -> np.ndarray:
         """ Import a detected face ROI from the import file
 
         Parameters
@@ -214,9 +215,9 @@ class Detect(Detector):
                                "to poor results")
                 self._log_once = False
 
-            if self._log_once and align_origin is not None and align_origin != self._origin:
+            if self._log_once and align_origin is not None and align_origin != self.origin:
                 logger.info("Updating Detect origin from Aligner config to '%s'", align_origin)
-                self._origin = align_origin
+                self.origin = align_origin
                 self._log_once = False
 
             return self._bbox_from_landmarks2d(T.cast(list[list[float]], face["landmarks_2d"]))
@@ -278,11 +279,11 @@ class Detect(Detector):
         :class:`numpy.ndarray`
             The adjusted bounding box for a top-left origin
         """
-        if not np.any(box) or self._origin == "top-left":
+        if not np.any(box) or self.origin == "top-left":
             return box
-        if self._origin.startswith("bottom"):
+        if self.origin.startswith("bottom"):
             box[:, [1, 3]] = frame_dims[0] - box[:, [1, 3]]
-        if self._origin.endswith("right"):
+        if self.origin.endswith("right"):
             box[:, [0, 2]] = frame_dims[1] - box[:, [0, 2]]
 
         return box
@@ -341,14 +342,14 @@ class Detect(Detector):
         if self._missing:
             logger.warning("[DETECT] %s input frames could not be matched in the import file "
                            "'%s'. Run in verbose mode for a list of frames.",
-                           len(self._missing), self.config["file_name"])
+                           len(self._missing), cfg.file_name())
             logger.verbose(  # type:ignore[attr-defined]
                 "[DETECT] Input frames not in import file: %s", self._missing)
 
         if self._imported:
             logger.warning("[DETECT] %s items in the import file '%s' could not be matched to any "
                            "input frames. Run in verbose mode for a list of items.",
-                           len(self._imported), self.config["file_name"])
+                           len(self._imported), cfg.file_name())
             logger.verbose(  # type:ignore[attr-defined]
                 "[DETECT] import file items not in input frames: %s", list(self._imported))
 

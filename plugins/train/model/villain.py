@@ -8,8 +8,11 @@ from keras import initializers, Input, layers, Model as KModel
 from lib.model.layers import PixelShuffler
 from lib.model.nn_blocks import (Conv2DOutput, Conv2DBlock, ResidualBlock, SeparableConv2DBlock,
                                  UpscaleBlock)
+from plugins.train.train_config import Loss as cfg_loss
 
 from .original import Model as OriginalModel
+from . import villain_defaults as cfg
+# pylint:disable=duplicate-code
 
 
 class Model(OriginalModel):
@@ -33,7 +36,7 @@ class Model(OriginalModel):
         tmp_x = var_x
 
         var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
-        res_cycles = 8 if self.config.get("lowmem", False) else 16
+        res_cycles = 8 if cfg.lowmem() else 16
         for _ in range(res_cycles):
             nn_x = ResidualBlock(in_conv_filters, **kwargs)(var_x)
             var_x = nn_x
@@ -47,7 +50,7 @@ class Model(OriginalModel):
         var_x = Conv2DBlock(128, activation="leakyrelu", **kwargs)(var_x)
         var_x = SeparableConv2DBlock(256, **kwargs)(var_x)
         var_x = Conv2DBlock(512, activation="leakyrelu", **kwargs)(var_x)
-        if not self.config.get("lowmem", False):
+        if not cfg.lowmem():
             var_x = SeparableConv2DBlock(1024, **kwargs)(var_x)
 
         var_x = layers.Dense(self.encoder_dim, **kwargs)(layers.Flatten()(var_x))
@@ -75,7 +78,7 @@ class Model(OriginalModel):
         var_x = Conv2DOutput(3, 5, name=f"face_out_{side}")(var_x)
         outputs = [var_x]
 
-        if self.config.get("learn_mask", False):
+        if cfg_loss.learn_mask():
             var_y = input_
             var_y = UpscaleBlock(512, activation="leakyrelu")(var_y)
             var_y = UpscaleBlock(256, activation="leakyrelu")(var_y)

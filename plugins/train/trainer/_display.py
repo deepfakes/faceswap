@@ -13,6 +13,7 @@ import torch
 
 from lib.image import hex_to_rgb
 from lib.utils import get_folder, get_image_paths, get_module_objects
+from plugins.train import train_config as cfg
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -52,7 +53,7 @@ class Samples():
                      "mask_color: %s)",
                      self.__class__.__name__, model, coverage_ratio, mask_opacity, mask_color)
         self._model = model
-        self._display_mask = model.config["learn_mask"] or model.config["penalized_mask_loss"]
+        self._display_mask = cfg.Loss.learn_mask() or cfg.Loss.penalized_mask_loss()
         self.images: dict[T.Literal["a", "b"], list[np.ndarray]] = {}
         self._coverage_ratio = coverage_ratio
         self._mask_opacity = mask_opacity / 100.0
@@ -61,7 +62,7 @@ class Samples():
 
     def toggle_mask_display(self) -> None:
         """ Toggle the mask overlay on or off depending on user input. """
-        if not (self._model.config["learn_mask"] or self._model.config["penalized_mask_loss"]):
+        if not (cfg.Loss.learn_mask() or cfg.Loss.penalized_mask_loss()):
             return
         display_mask = not self._display_mask
         print("\x1b[2K", end="\r")  # Clear last line
@@ -140,7 +141,7 @@ class Samples():
         swapped: list[:class:`keras.KerasTensor`]
             The swapped output from the model, filtered to just the largest output
         """
-        sizes = set(p.shape[1] for p in standard)
+        sizes = T.cast(set[int], set(p.shape[1] for p in standard))
         if len(sizes) == 1:
             return standard, swapped
         logger.debug("Received outputs. standard: %s, swapped: %s",
@@ -152,16 +153,16 @@ class Samples():
                      [s.shape for s in standard], [s.shape for s in swapped])
         return standard, swapped
 
-    def _collate_output(self, standard: list[KerasTensor], swapped: list[KerasTensor]
+    def _collate_output(self, standard: list[torch.Tensor], swapped: list[torch.Tensor]
                         ) -> tuple[list[np.ndarray], list[np.ndarray]]:
         """ Merge the mask onto the preview image's 4th channel if learn mask is selected.
         Return as numpy array
 
         Parameters
         ----------
-        standard: list[:class:`keras.KerasTensor`]
+        standard: list[:class:`torch.Tensor`]
             The standard output from the model
-        swapped: list[:class:`keras.KerasTensor`]
+        swapped: list[:class:`torch.Tensor`]
             The swapped output from the model
 
         Returns
@@ -175,18 +176,18 @@ class Samples():
                      [s.shape for s in standard], [s.shape for s in swapped])
 
         # Pull down outputs
-        standard = [p.cpu().detach().numpy() for p in standard]
-        swapped = [p.cpu().detach().numpy() for p in swapped]
+        nstandard = [p.cpu().detach().numpy() for p in standard]
+        nswapped = [p.cpu().detach().numpy() for p in swapped]
 
-        if self._model.config["learn_mask"]:  # Add mask to 4th channel of final output
-            standard = [np.concatenate(standard[idx * 2: (idx * 2) + 2], axis=-1)
+        if cfg.Loss.learn_mask():  # Add mask to 4th channel of final output
+            nstandard = [np.concatenate(nstandard[idx * 2: (idx * 2) + 2], axis=-1)
+                         for idx in range(2)]
+            nswapped = [np.concatenate(nswapped[idx * 2: (idx * 2) + 2], axis=-1)
                         for idx in range(2)]
-            swapped = [np.concatenate(swapped[idx * 2: (idx * 2) + 2], axis=-1)
-                       for idx in range(2)]
         logger.debug("Collated output. standard: %s, swapped: %s",
-                     [(s.shape, s.dtype) for s in standard],
-                     [(s.shape, s.dtype) for s in swapped])
-        return standard, swapped
+                     [(s.shape, s.dtype) for s in nstandard],
+                     [(s.shape, s.dtype) for s in nswapped])
+        return nstandard, nswapped
 
     def _get_predictions(self, feed_a: np.ndarray, feed_b: np.ndarray
                          ) -> dict[T.Literal["a_a", "a_b", "b_b", "b_a"], np.ndarray]:
@@ -300,7 +301,7 @@ class Samples():
 
         if self._display_mask:
             images = self._compile_masked(images, samples[-1])
-        elif self._model.config["learn_mask"]:
+        elif cfg.Loss.learn_mask():
             # Remove masks when learn mask is selected but mask toggle is off
             images = [batch[..., :3] for batch in images]
 

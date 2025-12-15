@@ -5,7 +5,7 @@ import logging
 import os
 import typing as T
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from threading import Lock
 
 import cv2
@@ -16,11 +16,11 @@ from lib.align import CenteringType, DetectedFace, LandmarkType
 from lib.image import read_image_batch, read_image_meta_batch
 from lib.logger import parse_class_init
 from lib.utils import FaceswapError, get_module_objects
+from plugins.train import train_config as cfg
 
 if T.TYPE_CHECKING:
     from lib.align.alignments import PNGHeaderAlignmentsDict, PNGHeaderDict
     from lib import align
-    from lib.config import ConfigValueType
 
 logger = logging.getLogger(__name__)
 _FACE_CACHES: dict[str, Cache] = {}
@@ -29,13 +29,18 @@ _FACE_CACHES: dict[str, Cache] = {}
 @dataclass
 class _MaskConfig:
     """ Holds the constants required for manipulating training masks """
-    penalized: bool
-    learn: bool
-    mask_type: str | None
-    dilation: float
-    kernel: int
-    threshold: int
-    multiplier_enabled: bool
+    # pylint:disable=unnecessary-lambda
+    penalized: bool = field(default_factory=lambda: cfg.Loss.penalized_mask_loss())
+    learn: bool = field(default_factory=lambda: cfg.Loss.learn_mask())
+    mask_type: str | None = field(default_factory=lambda: None
+                                  if cfg.Loss.mask_type() == "none"
+                                  else cfg.Loss.mask_type())
+    dilation: float = field(default_factory=lambda: cfg.Loss.mask_dilation())
+    kernel: int = field(default_factory=lambda: cfg.Loss.mask_blur_kernel())
+    threshold: int = field(default_factory=lambda: cfg.Loss.mask_threshold())
+    multiplier_enabled: bool = field(
+        default_factory=lambda: ((cfg.Loss.eye_multiplier() > 1 or cfg.Loss.mouth_multiplier() > 1)
+                                 and cfg.Loss.penalized_mask_loss()))
 
     @property
     def mask_enabled(self) -> bool:
@@ -43,54 +48,12 @@ class _MaskConfig:
         :attr:`mask_type` is not ``None`` """
         return self.mask_type is not None and (self.learn or self.penalized)
 
-    @classmethod
-    def from_config(cls, config: dict[str, bool | int | float | list[str] | str | None]
-                    ) -> _MaskConfig:
-        """ Create a new dataclass instance from user config
-
-        Parameters
-        ----------
-        config : dict[str, ConfigValueType]
-            The user training configuration options
-        """
-        logger.debug("Initializing %s(config=%s)", cls.__name__, config)
-
-        penalized = config.get("penalized_mask_loss", True)
-        learn = config.get("learn_mask", True)
-        mask_type = config.get("mask_type", "extended")
-        dilation = config.get("mask_dilation", 0)
-        kernel = config.get("mask_kernel", 3)
-        threshold = config.get("mask_threshold", 4)
-        multipliers = (config.get("mask_eye_multiplier", 3),
-                       config.get("mask_mouth_multiplier", 2))
-
-        assert isinstance(penalized, bool)
-        assert isinstance(learn, bool)
-        assert isinstance(mask_type, str) or mask_type is None
-        assert isinstance(dilation, float)
-        assert isinstance(kernel, int)
-        assert isinstance(threshold, int)
-        assert all(isinstance(m, int) for m in multipliers)
-
-        retval = cls(
-            penalized=penalized,
-            learn=learn,
-            mask_type=mask_type,
-            dilation=dilation,
-            kernel=kernel,
-            threshold=threshold,
-            multiplier_enabled=penalized and (any(T.cast(int, m) > 1 for m in multipliers)))
-        logger.debug(retval)
-        return retval
-
 
 class _MaskProcessing:
     """ Handle the extraction and processing of masks from faceswap PNG headers for caching
 
     Parameters
     ----------
-    config : dict[str, bool | int | float | list[str] | str | None]
-        The user selected training configuration options
     size : int
         The largest output size of the model
     coverage_ratio : float
@@ -98,11 +61,9 @@ class _MaskProcessing:
     centering : Literal["face", "head", "legacy"]
     """
     def __init__(self,
-                 config: dict[str, ConfigValueType],
                  size: int,
                  coverage_ratio: float,
                  centering: CenteringType) -> None:
-        self._config_dict = {k: v for k, v in config.items() if "mask" in k}
 
         assert isinstance(size, int)
         assert isinstance(coverage_ratio, float)
@@ -112,13 +73,12 @@ class _MaskProcessing:
         self._coverage = coverage_ratio
         self._centering: CenteringType = centering
 
-        self._config = _MaskConfig.from_config(self._config_dict)
-        logger.debug("Initialized %s", self)  # TODO
+        self._config = _MaskConfig()
+        logger.debug("Initialized %s", self)
 
     def __repr__(self) -> str:
         """ Pretty print for logging """
-        params = (f"config={repr(self._config_dict)}, size={repr(self._size)}, "
-                  f"coverage_ratio={repr(self._coverage)}, centering={repr(self._centering)}")
+        params = f"coverage_ratio={repr(self._coverage)}, centering={repr(self._centering)}"
         return f"{self.__class__.__name__}({params})"
 
     def _check_mask_exists(self, filename: str, detected_face: DetectedFace) -> None:
@@ -307,9 +267,6 @@ class _CacheConfig:
     """ Literal["face", "head", "legacy"] : The centering type to train at """
     coverage: float
     """ float : The selected coverage ration for training """
-    config: dict[str, ConfigValueType]
-    """ dict[str,  bool | int | float | list[str] | str | None] : The training configuration
-    options """
 
 
 class Cache():
@@ -331,8 +288,6 @@ class Cache():
     filenames : list[str]
         The filenames of all the images. This can either be the full path or the base name. If the
         full paths are passed in, they are stripped to base name for use as the cache key.
-    config : dict[str, bool | int | float | list[str] | str]
-        The user selected training configuration options
     size : int
         The largest output size of the model
     coverage_ratio : float
@@ -340,7 +295,6 @@ class Cache():
     """
     def __init__(self,
                  filenames: list[str],
-                 config: dict[str, ConfigValueType],
                  size: int,
                  coverage_ratio: float) -> None:
         logger.debug(parse_class_init(locals()))
@@ -353,12 +307,10 @@ class Cache():
         self._aligned_landmarks: dict[str, np.ndarray] = {}
         self._extract_version = 0.0
 
-        assert config["centering"] in T.get_args(CenteringType)
         self._config = _CacheConfig(size=size,
-                                    centering=T.cast(CenteringType, config["centering"]),
-                                    coverage=coverage_ratio,
-                                    config=config)
-        self._mask_prepare = _MaskProcessing(config, size, coverage_ratio, self._config.centering)
+                                    centering=T.cast(CenteringType, cfg.centering()),
+                                    coverage=coverage_ratio)
+        self._mask_prepare = _MaskProcessing(size, coverage_ratio, self._config.centering)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
@@ -435,7 +387,7 @@ class Cache():
             logger.warning("You are using legacy extracted faces but have selected '%s' centering "
                            "which is incompatible. Switching centering to 'legacy'",
                            self._config.centering)
-        self._config.config["centering"] = "legacy"
+        cfg.centering.set("legacy")
         self._config.centering = "legacy"
         self._cache = {}
         self._cache_info["cache_full"] = False
@@ -492,8 +444,7 @@ class Cache():
         :class:`~lib.align.detected_face.DetectedFace`
             The loaded Detected Face object
         """
-        y_offset = self._config.config["vertical_offset"]
-        assert isinstance(y_offset, int)
+        y_offset = cfg.vertical_offset()
         detected_face = DetectedFace()
         detected_face.from_png_meta(alignments)
         detected_face.load_aligned(None,
@@ -663,7 +614,6 @@ class Cache():
 
 def get_cache(side: T.Literal["a", "b"],
               filenames: list[str] | None = None,
-              config: dict[str, ConfigValueType] | None = None,
               size: int | None = None,
               coverage_ratio: float | None = None) -> Cache:
     """ Obtain a :class:`Cache` object for the given side. If the object does not pre-exist then
@@ -678,9 +628,6 @@ def get_cache(side: T.Literal["a", "b"],
         full paths are passed in, they are stripped to base name for use as the cache key. Must be
         passed for the first call of this function for each side. For subsequent calls this
         parameter is ignored. Default: ``None``
-    config : dict[str, bool | int | float | list[str] | str] | None, optional
-        The user selected training configuration options. Must be passed for the first call of this
-        function for each side. For subsequent calls this parameter is ignored. Default: ``None``
     size: int | None, optional
         The largest output size of the model. Must be passed for the first call of this function
         for each side. For subsequent calls this parameter is ignored. Default: ``None``
@@ -695,14 +642,13 @@ def get_cache(side: T.Literal["a", "b"],
     """
     assert side in ("a", "b")
     if not _FACE_CACHES.get(side):
-        assert config is not None, "config must be provided for first call to cache"
         assert filenames is not None, "filenames must be provided for first call to cache"
         assert size is not None, "size must be provided for first call to cache"
         assert coverage_ratio is not None, ("coverage_ratio must be provided for first call to "
                                             "cache")
         logger.debug("Creating cache. side: %s, size: %s, coverage_ratio: %s",
                      side, size, coverage_ratio)
-        _FACE_CACHES[side] = Cache(filenames, config, size, coverage_ratio)
+        _FACE_CACHES[side] = Cache(filenames, size, coverage_ratio)
     return _FACE_CACHES[side]
 
 

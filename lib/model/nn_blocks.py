@@ -8,6 +8,7 @@ from keras import initializers, layers
 
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
+from plugins.train import train_config as cfg
 
 from .initializers import ICNR, ConvolutionAware
 from .layers import PixelShuffler, ReflectionPadding2D, Swish, KResizeImages
@@ -19,25 +20,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-_CONFIG: dict = {}
 _names: dict[str, int] = {}
-
-
-def set_config(configuration: dict) -> None:
-    """ Set the global configuration parameters from the user's config file.
-
-    These options are used when creating layers for new models.
-
-    Parameters
-    ----------
-    configuration: dict
-        The configuration options that exist in the training configuration files that pertain
-        specifically to Custom Faceswap Layers. The keys should be: `icnr_init`, `conv_aware_init`
-        and 'reflect_padding'
-     """
-    global _CONFIG  # pylint:disable=global-statement
-    _CONFIG = configuration
-    logger.debug("Set NNBlock configuration to: %s", _CONFIG)
 
 
 def _get_name(name: str) -> str:
@@ -96,7 +79,7 @@ def _get_default_initializer(
         logger.debug("Returning serialized initialized ConvAware initializer: %s", initializer)
         return initializer
 
-    if _CONFIG.get("conv_aware_init"):
+    if cfg.conv_aware_init():
         retval = ConvolutionAware()
     elif initializer is None:
         retval = initializers.HeUniform()
@@ -134,7 +117,7 @@ class Conv2D():  # pylint:disable=too-many-ancestors,abstract-method
             filters = kwargs["filters"] if "filters" in kwargs else args[0]
             kwargs["name"] = _get_name(f"conv2d_{filters}")
         initializer = _get_default_initializer(kwargs.pop("kernel_initializer", None))
-        if is_upscale and _CONFIG["icnr_init"]:
+        if is_upscale and cfg.icnr_init():
             initializer = ICNR(initializer=initializer)
             logger.debug("Using ICNR Initializer: %s", initializer)
         self._conv2d = layers.Conv2D(
@@ -186,7 +169,7 @@ class DepthwiseConv2D():  # noqa,pylint:disable=too-many-ancestors,abstract-meth
         if kwargs.get("name", None) is None:
             kwargs["name"] = _get_name("dwconv2d")
         initializer = _get_default_initializer(kwargs.pop("depthwise_initializer", None))
-        if is_upscale and _CONFIG["icnr_init"]:
+        if is_upscale and cfg.icnr_init():
             initializer = ICNR(initializer=initializer)
             logger.debug("Using ICNR Initializer: %s", initializer)
         self._deptwiseconv2d = layers.DepthwiseConv2D(
@@ -329,7 +312,7 @@ class Conv2DBlock():  # pylint:disable=too-many-instance-attributes
         logger.debug(parse_class_init(locals()))
 
         self._name = kwargs.pop("name") if "name" in kwargs else _get_name(f"conv_{filters}")
-        self._use_reflect_padding = _CONFIG["reflect_padding"]
+        self._use_reflect_padding = cfg.reflect_padding()
 
         kernel_size = (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
         self._args = (kernel_size, ) if use_depthwise else (filters, kernel_size)
@@ -851,7 +834,7 @@ class ResidualBlock():
         logger.debug(parse_class_init(locals()))
 
         self._name = _get_name(f"residual_{filters}")
-        self._use_reflect_padding = _CONFIG["reflect_padding"]
+        self._use_reflect_padding = cfg.reflect_padding()
 
         self._filters = filters
         self._kernel_size = (kernel_size,
@@ -891,7 +874,7 @@ class ResidualBlock():
                                               name=f"{self._name}_reflectionpadding2d_1"))
 
         kwargs = {key: val for key, val in self._kwargs.items() if key != "kernel_initializer"}
-        if not _CONFIG["conv_aware_init"]:
+        if not cfg.conv_aware_init():
             kwargs["kernel_initializer"] = initializers.VarianceScaling(scale=0.2,
                                                                         mode="fan_in",
                                                                         distribution="uniform")
