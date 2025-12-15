@@ -9,6 +9,7 @@ tools.effmpeg package
 .. automodapi:: tools.effmpeg.cli
    :include-all-objects:
 
+|
 .. automodapi:: tools.effmpeg.effmpeg
    :include-all-objects:
    :no-inheritance-diagram:

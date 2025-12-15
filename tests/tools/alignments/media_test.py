@@ -273,6 +273,8 @@ class TestMediaLoader:
         vid_cap.set.assert_called_once()
         np.testing.assert_equal(output, expected)
 
+    # TODO remove the next line that supresses a weird pytest bug when it tears down the tempdir
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_stream(self,
                     media_loader_instance: MediaLoader,
                     mocker: pytest_mock.MockerFixture) -> None:
@@ -302,6 +304,8 @@ class TestMediaLoader:
         assert output == expected
         skip_call.assert_called_once_with(skip_list)
 
+    # TODO remove the next line that supresses a weird pytest bug when it tears down the tempdir
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_save_image(self,
                         media_loader_instance: MediaLoader,
                         mocker: pytest_mock.MockerFixture) -> None:
@@ -761,6 +765,8 @@ class TestExtractedFaces:
         assert extract_face_mock.call_count == 1
         assert faces.current_frame == frame
 
+    # TODO remove the next line that supresses a weird pytest bug when it tears down the tempdir
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_extract_one_face(self,
                               extracted_faces_instance: ExtractedFaces,
                               mocker: pytest_mock.MockerFixture) -> None:

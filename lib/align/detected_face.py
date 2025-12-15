@@ -535,7 +535,7 @@ def update_legacy_png_header(filename: str, alignments: Alignments
     hashes_seen = _HASHES_SEEN[folder]
 
     in_image = read_image(filename, raise_error=True)
-    in_hash = sha1(in_image).hexdigest()
+    in_hash = sha1(T.cast(bytes, in_image)).hexdigest()
     hashes_seen[in_hash] = hashes_seen.get(in_hash, -1) + 1
 
     alignment = alignments.hashes_to_alignment.get(in_hash)

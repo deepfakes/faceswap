@@ -9,6 +9,7 @@ tools.model package
 .. automodapi:: tools.model.cli
    :include-all-objects:
 
+|
 .. automodapi:: tools.model.model
    :include-all-objects:
    :no-inheritance-diagram:

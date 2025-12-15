@@ -160,8 +160,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 pylint mypy pytest pytest-mock wheel
-          pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
+          pip install types-attrs types-cryptography types-pyOpenSSL wheel
+          pip install -r ./requirements/_requirements_dev.txt
           pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
       - name: Set Faceswap Backend EnvVar
         run: echo "FACESWAP_BACKEND=${{ matrix.backend }}" | Out-File -FilePath $env:GITHUB_ENV -Append

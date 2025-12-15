@@ -12,10 +12,12 @@ The System Package handles collecting information about the running system
    :include-all-objects:
    :no-inheritance-diagram:
 
+|
 .. automodapi:: lib.system.sysinfo
    :include-all-objects:
    :no-inheritance-diagram:
 
+|
 .. automodapi:: lib.system.system
    :include-all-objects:
    :no-inheritance-diagram:

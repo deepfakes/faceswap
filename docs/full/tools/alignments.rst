@@ -10,21 +10,26 @@ tools.alignments package
    :include-all-objects:
    :no-inheritance-diagram:
 
+|
 .. automodapi:: tools.alignments.cli
    :include-all-objects:
    :no-inheritance-diagram:
 
+|
 .. automodapi:: tools.alignments.jobs
    :include-all-objects:
    :no-inheritance-diagram:
 
+|
 .. automodapi:: tools.alignments.jobs_faces
    :include-all-objects:
    :no-inheritance-diagram:
 
+|
 .. automodapi:: tools.alignments.jobs_frames
    :include-all-objects:
    :no-inheritance-diagram:
 
+|
 .. automodapi:: tools.alignments.media
    :include-all-objects:
