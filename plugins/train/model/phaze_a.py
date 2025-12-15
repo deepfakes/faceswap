@@ -409,8 +409,9 @@ class Model(ModelBase):
             inter_a = [fc_both(inputs["a"])]
             inter_b = [fc_both(inputs["b"])]
 
-        if cfg.shared_fc():
-            if cfg.shared_fc() == "full":
+        shared_fc = None if cfg.shared_fc() == "none" else cfg.shared_fc()
+        if shared_fc:
+            if shared_fc == "full":
                 fc_shared = FullyConnected("shared", input_shapes)()
             elif cfg.split_fc():
                 assert fc_a is not None
@@ -525,6 +526,7 @@ def _bottleneck(inputs: KerasTensor, bottleneck: str, size: int, normalization: 
     :class:`keras.KerasTensor`
         The output from the bottleneck
     """
+    norm = None if normalization == "none" else normalization
     norms = {"layer": kl.LayerNormalization,
              "rms": RMSNormalization,
              "instance": InstanceNormalization}
@@ -532,8 +534,8 @@ def _bottleneck(inputs: KerasTensor, bottleneck: str, size: int, normalization: 
                    "dense": kl.Dense(size),
                    "max_pooling": kl.GlobalMaxPooling2D()}
     var_x = inputs
-    if normalization:
-        var_x = norms[normalization]()(var_x)
+    if norm:
+        var_x = norms[norm]()(var_x)
     if bottleneck == "dense" and var_x.ndim > 2:  # Flatten non-1D inputs for dense
         var_x = kl.Flatten()(var_x)
     if bottleneck != "flatten":
@@ -1097,14 +1099,16 @@ class UpscaleBlocks():
         :class:`keras.KerasTensor`
             The tensor with any normalization applied
         """
-        if not cfg.dec_norm():
+        dec_norm = cfg.dec_norm()
+        dec_norm = None if dec_norm == "none" else dec_norm
+        if not dec_norm:
             return inputs
         norms = {"batch": kl.BatchNormalization,
                  "group": GroupNormalization,
                  "instance": InstanceNormalization,
                  "layer": kl.LayerNormalization,
                  "rms": RMSNormalization}
-        return norms[cfg.dec_norm()]()(inputs)
+        return norms[dec_norm]()(inputs)
 
     def _dny_entry(self, inputs: KerasTensor) -> KerasTensor:
         """ Entry convolutions for using the upscale_dny method.
