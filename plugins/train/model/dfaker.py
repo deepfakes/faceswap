@@ -7,16 +7,19 @@ import sys
 from keras import initializers, Input, layers, Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, UpscaleBlock, ResidualBlock
+from plugins.train.train_config import Loss as cfg_loss
 from .original import Model as OriginalModel
+from . import dfaker_defaults as cfg
 
 logger = logging.getLogger(__name__)
+# pylint:disable=duplicate-code
 
 
 class Model(OriginalModel):
     """ Dfaker Model """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._output_size = self.config["output_size"]
+        self._output_size = cfg.output_size()
         if self._output_size not in (128, 256):
             logger.error("Dfaker output shape should be 128 or 256 px")
             sys.exit(1)
@@ -46,7 +49,7 @@ class Model(OriginalModel):
         var_x = Conv2DOutput(3, 5, name=f"face_out_{side}")(var_x)
         outputs = [var_x]
 
-        if self.config.get("learn_mask", False):
+        if cfg_loss.learn_mask():
             var_y = input_
             if self._output_size == 256:
                 var_y = UpscaleBlock(1024, activation="leakyrelu")(var_y)

@@ -8,28 +8,10 @@ import typing as T
 
 import numpy as np
 
-from plugins.convert._config import Config
+from lib.logger import parse_class_init
+from plugins.convert import convert_config
 
 logger = logging.getLogger(__name__)
-
-
-def get_config(plugin_name: str, configfile: str | None = None) -> dict:
-    """ Obtain the configuration settings for the writer plugin.
-
-    Parameters
-    ----------
-    plugin_name: str
-        The name of the convert plugin to return configuration settings for
-    configfile: str, optional
-        The full path to a custom configuration ini file. If ``None`` is passed
-        then the file is loaded from the default location. Default: ``None``.
-
-    Returns
-    -------
-    dict
-        The requested configuration dictionary
-    """
-    return Config(plugin_name, configfile=configfile).config_dict
 
 
 class Output():
@@ -44,11 +26,8 @@ class Output():
         then the file is loaded from the default location. Default: ``None``.
     """
     def __init__(self, output_folder: str, configfile: str | None = None) -> None:
-        logger.debug("Initializing %s: (output_folder: '%s')",
-                     self.__class__.__name__, output_folder)
-        self.config: dict = get_config(".".join(self.__module__.split(".")[-2:]),
-                                       configfile=configfile)
-        logger.debug("config: %s", self.config)
+        logger.debug(parse_class_init(locals()))
+        convert_config.load_config(config_file=configfile)
         self.output_folder: str = output_folder
 
         # For creating subfolders when separate mask is selected
@@ -67,6 +46,12 @@ class Output():
         the order in which frames should be written out (eg. gif/ffmpeg) """
         retval = hasattr(self, "_frame_order")
         return retval
+
+    @property
+    def output_alpha(self) -> bool:
+        """ bool : Override if the plugin can output an alpha channel and the user configuration
+        option is set to use it. Default ``False`` """
+        return False
 
     @classmethod
     def _set_frame_order(cls,
@@ -98,17 +83,19 @@ class Output():
         logger.debug("frame_order: %s", retval)
         return retval
 
-    def output_filename(self, filename: str, separate_mask: bool = False) -> list[str]:
+    def get_output_filename(self,
+                            filename: str,
+                            extension: str,
+                            separate_mask: bool = False) -> list[str]:
         """ Obtain the full path for the output file, including the correct extension, for the
         given input filename.
 
-        NB: The plugin must have a config item 'format' that contains the file extension to use
-        this method.
-
         Parameters
         ----------
-        filename: str
+        filename : str
             The input frame filename to generate the output file name for
+        extension : str
+            The extension to use for the output file
         separate_mask: bool, optional
             ``True`` if the mask should be saved out to a sub-folder otherwise ``False``
 
@@ -118,8 +105,9 @@ class Output():
             The full path for the output converted frame to be saved to in position 1. The full
             path for the mask to be output to in position 2 (if requested)
         """
+        extension = extension.strip(".")
         filename = os.path.splitext(os.path.basename(filename))[0]
-        out_filename = f"{filename}.{self.config['format']}"
+        out_filename = f"{filename}.{extension}"
         retval = [os.path.join(self.output_folder, out_filename)]
         if separate_mask:
             retval.append(os.path.join(self.output_folder, "masks", out_filename))

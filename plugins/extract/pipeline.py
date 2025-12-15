@@ -335,9 +335,8 @@ class Extractor():  # pylint:disable=too-many-instance-attributes
             return
 
         align_origin = None
-        assert self.aligner.name is not None
-        if self.aligner.name.lower() == "external":
-            align_origin = self.aligner.config["origin"]
+        if len(import_plugins) == 2:
+            align_origin = import_plugins[-1].origin
 
         logger.info("Importing external data for %s from json file...",
                     " and ".join([p.__class__.__name__ for p in import_plugins]))
@@ -350,7 +349,7 @@ class Extractor():  # pylint:disable=too-many-instance-attributes
         data = {}
         for plugin in import_plugins:
             plugin_type = plugin.__class__.__name__
-            path = os.path.join(folder, plugin.config["file_name"])
+            path = os.path.join(folder, plugin.file_name)
             if not os.path.isfile(path):
                 raise FaceswapError(f"{plugin_type} import file could not be found at '{path}'")
 

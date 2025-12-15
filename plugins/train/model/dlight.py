@@ -14,8 +14,10 @@ from keras import layers, Input, Model as KModel
 from lib.model.nn_blocks import (Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock,
                                  Upscale2xBlock)
 from lib.utils import FaceswapError
+from plugins.train.train_config import Loss as cfg_loss
 
 from ._base import ModelBase
+from . import dlight_defaults as cfg
 
 
 logger = logging.getLogger(__name__)
@@ -28,25 +30,25 @@ class Model(ModelBase):
         super().__init__(*args, **kwargs)
         self.input_shape = (128, 128, 3)
 
-        self.features = {"lowmem": 0, "fair": 1, "best": 2}[self.config["features"]]
+        self.features = {"lowmem": 0, "fair": 1, "best": 2}[cfg.features()]
         self.encoder_filters = 64 if self.features > 0 else 48
 
         bonum_fortunam = 128
         self.encoder_dim = {0: 512 + bonum_fortunam,
                             1: 1024 + bonum_fortunam,
                             2: 1536 + bonum_fortunam}[self.features]
-        self.details = {"fast": 0, "good": 1}[self.config["details"]]
+        self.details = {"fast": 0, "good": 1}[cfg.details()]
         try:
             self.upscale_ratio = {128: 2,
                                   256: 4,
-                                  384: 6}[self.config["output_size"]]
+                                  384: 6}[cfg.output_size()]
         except KeyError as err:
             logger.error("Config error: output_size must be one of: 128, 256, or 384.")
             raise FaceswapError("Config error: output_size must be one of: "
                                 "128, 256, or 384.") from err
 
         logger.debug("output_size: %s, features: %s, encoder_filters: %s, encoder_dim: %s, "
-                     " details: %s, upscale_ratio: %s", self.config["output_size"], self.features,
+                     " details: %s, upscale_ratio: %s", cfg.output_size(), self.features,
                      self.encoder_filters, self.encoder_dim, self.details, self.upscale_ratio)
 
     def build_model(self, inputs):
@@ -119,7 +121,7 @@ class Model(ModelBase):
 
         outputs = [var_x]
 
-        if self.config.get("learn_mask", False):
+        if cfg_loss.learn_mask():
             var_y = var_xy  # mask decoder
             var_y = Upscale2xBlock(mask_complexity, activation="leakyrelu", fast=False)(var_y)
             var_y = Upscale2xBlock(mask_complexity // 2, activation="leakyrelu", fast=False)(var_y)
@@ -153,7 +155,7 @@ class Model(ModelBase):
 
         outputs = [var_x]
 
-        if self.config.get("learn_mask", False):
+        if cfg_loss.learn_mask():
             var_y = var_xy  # mask decoder
 
             var_y = Upscale2xBlock(mask_complexity, activation="leakyrelu", fast=False)(var_y)
@@ -204,7 +206,7 @@ class Model(ModelBase):
 
         outputs = [var_x]
 
-        if self.config.get("learn_mask", False):
+        if cfg_loss.learn_mask():
             var_y = var_xy  # mask decoder
             var_y = layers.LeakyReLU(negative_slope=0.1)(var_y)
 

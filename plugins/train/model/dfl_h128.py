@@ -6,7 +6,9 @@
 from keras import Input, layers, Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
+from plugins.train.train_config import Loss as cfg_loss
 from .original import Model as OriginalModel
+from . import dfl_h128_defaults as cfg
 
 
 class Model(OriginalModel):
@@ -14,7 +16,7 @@ class Model(OriginalModel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.input_shape = (128, 128, 3)
-        self.encoder_dim = 256 if self.config["lowmem"] else 512
+        self.encoder_dim = 256 if cfg.lowmem() else 512
 
     def encoder(self):
         """ DFL H128 Encoder """
@@ -39,7 +41,7 @@ class Model(OriginalModel):
         var_x = Conv2DOutput(3, 5, name=f"face_out_{side}")(var_x)
         outputs = [var_x]
 
-        if self.config.get("learn_mask", False):
+        if cfg_loss.learn_mask():
             var_y = input_
             var_y = UpscaleBlock(self.encoder_dim, activation="leakyrelu")(var_y)
             var_y = UpscaleBlock(self.encoder_dim // 2, activation="leakyrelu")(var_y)

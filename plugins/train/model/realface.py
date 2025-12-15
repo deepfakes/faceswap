@@ -13,7 +13,11 @@ import sys
 from keras import initializers, Input, layers, Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
+from plugins.train.train_config import Loss as cfg_loss
+
 from ._base import ModelBase
+from . import realface_defaults as cfg
+# pylint:disable=duplicate-code
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +26,7 @@ class Model(ModelBase):
     """ RealFace(tm) Faceswap Model """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.input_shape = (self.config["input_size"], self.config["input_size"], 3)
+        self.input_shape = (cfg.input_size(), cfg.input_size(), 3)
         self.check_input_output()
         self.dense_width, self.upscalers_no = self.get_dense_width_upscalers_numbers()
         self.kernel_initializer = initializers.RandomNormal(0, 0.02)
@@ -44,11 +48,11 @@ class Model(ModelBase):
 
     def check_input_output(self):
         """ Confirm valid input and output sized have been provided """
-        if not 64 <= self.config["input_size"] <= 128 or self.config["input_size"] % 16 != 0:
+        if not 64 <= cfg.input_size() <= 128 or cfg.input_size() % 16 != 0:
             logger.error("Config error: input_size must be between 64 and 128 and be divisible by "
                          "16.")
             sys.exit(1)
-        if not 64 <= self.config["output_size"] <= 256 or self.config["output_size"] % 32 != 0:
+        if not 64 <= cfg.output_size() <= 256 or cfg.output_size() % 32 != 0:
             logger.error("Config error: output_size must be between 64 and 256 and be divisible "
                          "by 32.")
             sys.exit(1)
@@ -56,10 +60,10 @@ class Model(ModelBase):
 
     def get_dense_width_upscalers_numbers(self):
         """ Return the dense width and number of upscale blocks """
-        output_size = self.config["output_size"]
+        output_size = cfg.output_size()
         sides = [(output_size // 2**n, n) for n in [4, 5] if (output_size // 2**n) < 10]
         closest = min([x * self._downscale_ratio for x, _ in sides],
-                      key=lambda x: abs(x - self.config["input_size"]))
+                      key=lambda x: abs(x - cfg.input_size()))
         dense_width, upscalers_no = [(s, n) for s, n in sides
                                      if s * self._downscale_ratio == closest][0]
         logger.debug("dense_width: %s, upscalers_no: %s", dense_width, upscalers_no)
@@ -81,7 +85,7 @@ class Model(ModelBase):
         input_ = Input(shape=self.input_shape)
         var_x = input_
 
-        encoder_complexity = self.config["complexity_encoder"]
+        encoder_complexity = cfg.complexity_encoder()
 
         for idx in range(self.downscalers_no - 1):
             var_x = Conv2DBlock(encoder_complexity * 2**idx, activation=None)(var_x)
@@ -95,13 +99,13 @@ class Model(ModelBase):
 
     def decoder_b(self):
         """ RealFace Decoder Network """
-        input_filters = self.config["complexity_encoder"] * 2**(self.downscalers_no-1)
-        input_width = self.config["input_size"] // self._downscale_ratio
+        input_filters = cfg.complexity_encoder() * 2**(self.downscalers_no-1)
+        input_width = cfg.input_size() // self._downscale_ratio
         input_ = Input(shape=(input_width, input_width, input_filters))
 
         var_xy = input_
 
-        var_xy = layers.Dense(self.config["dense_nodes"])(layers.Flatten()(var_xy))
+        var_xy = layers.Dense(cfg.dense_nodes())(layers.Flatten()(var_xy))
         var_xy = layers.Dense(self.dense_width * self.dense_width * self.dense_filters)(var_xy)
         var_xy = layers.Reshape((self.dense_width, self.dense_width, self.dense_filters))(var_xy)
         var_xy = UpscaleBlock(self.dense_filters, activation=None)(var_xy)
@@ -110,7 +114,7 @@ class Model(ModelBase):
         var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
         var_x = ResidualBlock(self.dense_filters, use_bias=False)(var_x)
 
-        decoder_b_complexity = self.config["complexity_decoder"]
+        decoder_b_complexity = cfg.complexity_decoder()
         for idx in range(self.upscalers_no - 2):
             var_x = UpscaleBlock(decoder_b_complexity // 2**idx, activation=None)(var_x)
             var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
@@ -122,7 +126,7 @@ class Model(ModelBase):
 
         outputs = [var_x]
 
-        if self.config.get("learn_mask", False):
+        if cfg_loss.learn_mask():
             var_y = var_xy
             var_y = layers.LeakyReLU(negative_slope=0.1)(var_y)
 
@@ -139,13 +143,13 @@ class Model(ModelBase):
 
     def decoder_a(self):
         """ RealFace Decoder (A) Network """
-        input_filters = self.config["complexity_encoder"] * 2**(self.downscalers_no-1)
-        input_width = self.config["input_size"] // self._downscale_ratio
+        input_filters = cfg.complexity_encoder() * 2**(self.downscalers_no-1)
+        input_width = cfg.input_size() // self._downscale_ratio
         input_ = Input(shape=(input_width, input_width, input_filters))
 
         var_xy = input_
 
-        dense_nodes = int(self.config["dense_nodes"]/1.5)
+        dense_nodes = int(cfg.dense_nodes()/1.5)
         dense_filters = int(self.dense_filters/1.5)
 
         var_xy = layers.Dense(dense_nodes)(layers.Flatten()(var_xy))
@@ -158,7 +162,7 @@ class Model(ModelBase):
         var_x = layers.LeakyReLU(negative_slope=0.2)(var_x)
         var_x = ResidualBlock(dense_filters, use_bias=False)(var_x)
 
-        decoder_a_complexity = int(self.config["complexity_decoder"] / 1.5)
+        decoder_a_complexity = int(cfg.complexity_decoder() / 1.5)
         for idx in range(self.upscalers_no-2):
             var_x = UpscaleBlock(decoder_a_complexity // 2**idx, activation="leakyrelu")(var_x)
         var_x = UpscaleBlock(decoder_a_complexity // 2**(idx + 1), activation="leakyrelu")(var_x)
@@ -167,7 +171,7 @@ class Model(ModelBase):
 
         outputs = [var_x]
 
-        if self.config.get("learn_mask", False):
+        if cfg_loss.learn_mask():
             var_y = var_xy
             var_y = layers.LeakyReLU(negative_slope=0.1)(var_y)
 

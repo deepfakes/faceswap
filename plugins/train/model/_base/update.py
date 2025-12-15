@@ -35,7 +35,7 @@ class Legacy:  # pylint:disable=too-few-public-methods
         Full path to the legacy Keras 2.x model h5 file to upgrade
     """
     def __init__(self, model_path: str):
-        parse_class_init(locals())
+        logger.debug(parse_class_init(locals()))
         self._old_model_file = model_path
         """str: Full path to the old .h5 model file"""
         self._new_model_file = f"{os.path.splitext(model_path)[0]}.keras"

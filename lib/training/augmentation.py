@@ -2,7 +2,6 @@
 """ Processes the augmentation of images for feeding into a Faceswap model. """
 from __future__ import annotations
 import logging
-import typing as T
 from dataclasses import dataclass
 
 import cv2
@@ -13,9 +12,8 @@ from scipy.interpolate import griddata
 from lib.image import batch_convert_color
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
+from plugins.train.trainer import trainer_config as cfg
 
-if T.TYPE_CHECKING:
-    from lib.config import ConfigValueType
 
 logger = logging.getLogger(__name__)
 
@@ -126,8 +124,7 @@ class ConstantsAugmentation:
 
     Example
     -------
-    >>> constants = ConstantsAugmentation.from_config(config=config,
-    ...                                               processing_size=256,
+    >>> constants = ConstantsAugmentation.from_config(processing_size=256,
     ...                                               batch_size=16)
     """
     color: ConstantsColor
@@ -138,14 +135,11 @@ class ConstantsAugmentation:
     """ :class:`ConstantsTransform` : The constants for image warping """
 
     @classmethod
-    def _get_clahe(cls, config: dict[str, ConfigValueType], size: int
-                   ) -> tuple[int, float, int]:
+    def _get_clahe(cls, size: int) -> tuple[int, float, int]:
         """ Get the CLAHE constants from user config
 
         Parameters
         ----------
-        config : dict[str, ConfigValueType]
-            The user training configuration options
         size : int
             The size of image to augment the data for
 
@@ -158,52 +152,35 @@ class ConstantsAugmentation:
         clahe_max_size : int
             Maximum clahe window size
         """
-        color_clahe_chance = config.get("color_clahe_chance", 50)
-        color_clahe_max_size = config.get("color_clahe_max_size", 4)
-        assert isinstance(color_clahe_chance, int)
-        assert isinstance(color_clahe_max_size, int)
-
         clahe_base_contrast = max(2, size // 128)
-        clahe_chance = color_clahe_chance / 100
-        clahe_max_size = color_clahe_max_size
+        clahe_chance = cfg.color_clahe_chance() / 100
+        clahe_max_size = cfg.color_clahe_max_size()
         logger.debug("clahe_base_contrast: %s, clahe_chance: %s, clahe_max_size: %s",
                      clahe_base_contrast, clahe_chance, clahe_max_size)
         return clahe_base_contrast, clahe_chance, clahe_max_size
 
     @classmethod
-    def _get_lab(cls, config: dict[str, ConfigValueType]) -> np.ndarray:
+    def _get_lab(cls) -> np.ndarray:
         """ Load the random L*A*B augmentation constants
-
-        Parameters
-        ----------
-        config : dict[str, ConfigValueType]
-            The user training configuration options
 
         Returns
         -------
         :class:`numpy.ndarray`
             Adjustment amounts for L*A*B augmentation
         """
-        color_lightness = config.get("color_lightness", 30)
-        color_ab = config.get("color_ab", 8)
-        assert isinstance(color_lightness, int)
-        assert isinstance(color_ab, int)
-
-        amount_l = color_lightness / 100.
-        amount_ab = color_ab / 100.
+        amount_l = cfg.color_lightness() / 100.
+        amount_ab = cfg.color_ab() / 100.
 
         lab_adjust = np.array([amount_l, amount_ab, amount_ab], dtype="float32")
         logger.debug("lab_adjust: %s", lab_adjust)
         return lab_adjust
 
     @classmethod
-    def _get_color(cls, config: dict[str, ConfigValueType], size: int) -> ConstantsColor:
+    def _get_color(cls, size: int) -> ConstantsColor:
         """ Get the image enhancements constants from user config
 
         Parameters
         ----------
-        config : dict[str, ConfigValueType]
-            The user training configuration options
         size : int
             The size of image to augment the data for
 
@@ -212,22 +189,20 @@ class ConstantsAugmentation:
         :class:`ConstantsColor`
             The constants for image enhancement
         """
-        clahe_base_contrast, clahe_chance, clahe_max_size = cls._get_clahe(config, size)
+        clahe_base_contrast, clahe_chance, clahe_max_size = cls._get_clahe(size)
         retval = ConstantsColor(clahe_base_contrast=clahe_base_contrast,
                                 clahe_chance=clahe_chance,
                                 clahe_max_size=clahe_max_size,
-                                lab_adjust=cls._get_lab(config))
+                                lab_adjust=cls._get_lab())
         logger.debug(retval)
         return retval
 
     @classmethod
-    def _get_transform(cls, config: dict[str, ConfigValueType], size: int) -> ConstantsTransform:
+    def _get_transform(cls, size: int) -> ConstantsTransform:
         """ Load the random transform constants
 
         Parameters
         ----------
-        config : dict[str, ConfigValueType]
-            The user training configuration options
         size : int
             The size of image to augment the data for
 
@@ -236,19 +211,10 @@ class ConstantsAugmentation:
         :class:`ConstantsTransform`
             The constants for image transformation
         """
-        rotation_range = config.get("rotation_range", 10)
-        zoom_amount = config.get("zoom_amount", 5)
-        shift_range = config.get("shift_range", 5)
-        flip = config.get("random_flip", 50)
-        assert isinstance(rotation_range, int)
-        assert isinstance(zoom_amount, int)
-        assert isinstance(shift_range, int)
-        assert isinstance(flip, int)
-
-        retval = ConstantsTransform(rotation=rotation_range,
-                                    zoom=zoom_amount / 100.,
-                                    shift=(shift_range / 100.) * size,
-                                    flip=flip / 100.)
+        retval = ConstantsTransform(rotation=cfg.rotation_range(),
+                                    zoom=cfg.zoom_amount() / 100.,
+                                    shift=(cfg.shift_range() / 100.) * size,
+                                    flip=cfg.flip_chance() / 100.)
         logger.debug(retval)
         return retval
 
@@ -318,24 +284,21 @@ class ConstantsAugmentation:
 
     @classmethod
     def from_config(cls,
-                    config: dict[str, ConfigValueType],
                     processing_size: int,
                     batch_size: int) -> ConstantsAugmentation:
         """ Create a new dataclass instance from user config
 
         Parameters
         ----------
-        config : dict[str, ConfigValueType]
-            The user training configuration options
         processing_size : int:
             The size of image to augment the data for
         batch_size : int
             The batch size that augmented data is being prepared for
         """
-        logger.debug("Initializing %s(processing_size=%s, batch_size=%s, config=%s)",
-                     cls.__name__, processing_size, batch_size, config)
-        retval = cls(color=cls._get_color(config, processing_size),
-                     transform=cls._get_transform(config, processing_size),
+        logger.debug("Initializing %s(processing_size=%s, batch_size=%s)",
+                     cls.__name__, processing_size, batch_size)
+        retval = cls(color=cls._get_color(processing_size),
+                     transform=cls._get_transform(processing_size),
                      warp=cls._get_warp(processing_size, batch_size))
         logger.debug(retval)
         return retval
@@ -351,18 +314,12 @@ class ImageAugmentation():
     processing_size: int
         The largest input or output size of the model. This is the size that images are processed
         at.
-    config : dict[str, Any]
-        The configuration `dict` generated from :file:`config.train.ini` containing the trainer
-        plugin configuration options.
     """
-    def __init__(self,
-                 batch_size: int,
-                 processing_size: int,
-                 config: dict[str, ConfigValueType]) -> None:
+    def __init__(self, batch_size: int, processing_size: int) -> None:
         logger.debug(parse_class_init(locals()))
         self._processing_size = processing_size
         self._batch_size = batch_size
-        self._constants = ConstantsAugmentation.from_config(config, processing_size, batch_size)
+        self._constants = ConstantsAugmentation.from_config(processing_size, batch_size)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def __repr__(self) -> str:

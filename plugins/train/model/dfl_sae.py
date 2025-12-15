@@ -9,8 +9,10 @@ import numpy as np
 from keras import Input, layers, Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
+from plugins.train.train_config import Loss as cfg_loss
 
 from ._base import ModelBase
+from . import dfl_sae_defaults as cfg
 
 logger = logging.getLogger(__name__)
 
@@ -19,14 +21,12 @@ class Model(ModelBase):
     """ SAE Model from DFL """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.input_shape = (self.config["input_size"], self.config["input_size"], 3)
-        self.architecture = self.config["architecture"].lower()
-        self.use_mask = self.config.get("learn_mask", False)
-        self.multiscale_count = 3 if self.config["multiscale_decoder"] else 1
-        self.encoder_dim = self.config["encoder_dims"]
-        self.decoder_dim = self.config["decoder_dims"]
-
-        self._patch_weights_management()
+        self.input_shape = (cfg.input_size(), cfg.input_size(), 3)
+        self.architecture = cfg.architecture().lower()
+        self.use_mask = cfg_loss.learn_mask()
+        self.multiscale_count = 3 if cfg.multiscale_decoder() else 1
+        self.encoder_dim = cfg.encoder_dims()
+        self.decoder_dim = cfg.decoder_dims()
 
     @property
     def model_name(self):
@@ -36,20 +36,20 @@ class Model(ModelBase):
     @property
     def ae_dims(self):
         """ Set the Autoencoder Dimensions or set to default """
-        retval = self.config["autoencoder_dims"]
+        retval = cfg.autoencoder_dims()
         if retval == 0:
             retval = 256 if self.architecture == "liae" else 512
         return retval
 
-    def _patch_weights_management(self):
-        """ Patch in the correct encoder name into the config dictionary for freezing and loading
-        weights based on architecture.
-        """
-        self.config["freeze_layers"] = [f"encoder_{self.architecture}"]
-        self.config["load_layers"] = [f"encoder_{self.architecture}"]
-        logger.debug("Patched encoder layers to config: %s",
-                     {k: v for k, v in self.config.items()
-                      if k in ("freeze_layers", "load_layers")})
+    @property
+    def freeze_layers(self) -> list[str]:
+        """ list[str] : The layer name for freezing based on the configured architecture """
+        return [f"encoder_{self.architecture}"]
+
+    @property
+    def load_layers(self) -> list[str]:
+        """ list[str] : The layer name for loading based on the configured architecture """
+        return [f"encoder_{self.architecture}"]
 
     def build_model(self, inputs):
         """ Build the DFL-SAE Model """

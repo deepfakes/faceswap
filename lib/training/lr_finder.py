@@ -15,10 +15,10 @@ from tqdm import tqdm
 
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
+from plugins.train import train_config as cfg
 
 if T.TYPE_CHECKING:
     from keras import optimizers
-    from lib.config import ConfigValueType
     from lib.training import Feeder
     from plugins.train.model._base import ModelBase
 
@@ -39,8 +39,6 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
     ----------
     model: :class:`keras.models.Model`
         The keras model to find the optimal learning rate for
-    config: dict
-        The configuration options for the model
     feeder: :class:`~lib.training.generator.Feeder`
         The feeder for training the model
     stop_factor: int
@@ -50,15 +48,13 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
     """
     def __init__(self,  # pylint:disable=too-many-positional-arguments
                  model: ModelBase,
-                 config: dict[str, ConfigValueType],
                  feeder: Feeder,
                  stop_factor: int = 4,
                  beta: float = 0.98) -> None:
         logger.debug(parse_class_init(locals()))
-        self._iterations = T.cast(int, config["lr_finder_iterations"])
-        self._save_graph = config["lr_finder_mode"] in ("graph_and_set", "graph_and_exit")
-        self._strength = LRStrength[T.cast(str, config["lr_finder_strength"]).upper()].value
-        self._config = config
+        self._iterations = cfg.lr_finder_iterations()
+        self._save_graph = cfg.lr_finder_mode() in ("graph_and_set", "graph_and_exit")
+        self._strength = LRStrength[cfg.lr_finder_strength().upper()].value
 
         self._start_lr = 1e-10
         end_lr = 1e+1
@@ -167,7 +163,7 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
         self._model.state.add_lr_finder(new_lr)
         self._model.state.save()
 
-        if self._config["lr_finder_mode"] == "graph_and_exit":
+        if cfg.lr_finder_mode() == "graph_and_exit":
             return
 
         logger.debug("Resetting optimizer")

@@ -302,8 +302,7 @@ class Train():
         base = PluginLoader.get_trainer(model.trainer)
         trainer: TrainerBase = base(model,
                                     self._images,
-                                    self._args.batch_size,
-                                    self._args.configfile)
+                                    self._args.batch_size)
         logger.debug("Loaded Trainer")
         return trainer
 

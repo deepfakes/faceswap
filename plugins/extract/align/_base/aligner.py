@@ -25,7 +25,7 @@ from torch.cuda import OutOfMemoryError
 
 from lib.align import LandmarkType
 from lib.utils import FaceswapError
-from plugins.extract import ExtractMedia
+from plugins.extract import ExtractMedia, extract_config as cfg
 from plugins.extract._base import BatchType, ExtractorBatch, Extractor
 from .processing import AlignedFilter, ReAlign
 
@@ -36,7 +36,7 @@ if T.TYPE_CHECKING:
     from lib.align.aligned_face import CenteringType
 
 logger = logging.getLogger(__name__)
-_batch_idx: int = 0
+_BATCH_IDX: int = 0
 
 
 def _get_new_batch_id() -> int:
@@ -47,9 +47,9 @@ def _get_new_batch_id() -> int:
     int
         The next available unique batch id
     """
-    global _batch_idx  # pylint:disable=global-statement
-    _batch_idx += 1
-    return _batch_idx
+    global _BATCH_IDX  # pylint:disable=global-statement
+    _BATCH_IDX += 1
+    return _BATCH_IDX
 
 
 @dataclass
@@ -158,19 +158,18 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         self._eof_seen = False
         self._normalize_method: T.Literal["clahe", "hist", "mean"] | None = None
         self._re_feed = re_feed
-        self._filter = AlignedFilter(feature_filter=self.config["aligner_features"],
-                                     min_scale=self.config["aligner_min_scale"],
-                                     max_scale=self.config["aligner_max_scale"],
-                                     distance=self.config["aligner_distance"],
-                                     roll=self.config["aligner_roll"],
-                                     save_output=self.config["save_filtered"],
+        self._filter = AlignedFilter(feature_filter=cfg.aligner_features(),
+                                     min_scale=cfg.aligner_min_scale(),
+                                     max_scale=cfg.aligner_max_scale(),
+                                     distance=cfg.aligner_distance(),
+                                     roll=cfg.aligner_roll(),
+                                     save_output=cfg.save_filtered(),
                                      disable=disable_filter)
         self._re_align = ReAlign(re_align,
-                                 self.config["realign_refeeds"],
-                                 self.config["filter_realign"])
+                                 cfg.realign_refeeds(),
+                                 cfg.filter_realign())
         self._needs_refeed_masks: bool = self._re_feed > 0 and (
-            self.config["filter_refeed"] or (self._re_align.do_refeeds and
-                                             self._re_align.do_filter))
+            cfg.filter_refeed() or (self._re_align.do_refeeds and self._re_align.do_filter))
         self.set_normalize_method(normalize_method)
 
         logger.debug("Initialized %s", self.__class__.__name__)

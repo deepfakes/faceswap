@@ -6,16 +6,20 @@
 from keras import initializers, Input, layers, Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
+from plugins.train.train_config import Loss as cfg_loss
+
 from ._base import ModelBase
+from . import unbalanced_defaults as cfg
+# pylint:disable=duplicate-code
 
 
 class Model(ModelBase):
     """ Unbalanced Faceswap Model """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.input_shape = (self.config["input_size"], self.config["input_size"], 3)
-        self.low_mem = self.config.get("lowmem", False)
-        self.encoder_dim = 512 if self.low_mem else self.config["nodes"]
+        self.input_shape = (cfg.input_size(), cfg.input_size(), 3)
+        self.low_mem = cfg.lowmem()
+        self.encoder_dim = 512 if self.low_mem else cfg.nodes()
         self.kernel_initializer = initializers.RandomNormal(0, 0.02)
 
     def build_model(self, inputs):
@@ -32,7 +36,7 @@ class Model(ModelBase):
     def encoder(self):
         """ Unbalanced Encoder """
         kwargs = {"kernel_initializer": self.kernel_initializer}
-        encoder_complexity = 128 if self.low_mem else self.config["complexity_encoder"]
+        encoder_complexity = 128 if self.low_mem else cfg.complexity_encoder()
         dense_dim = 384 if self.low_mem else 512
         dense_shape = self.input_shape[0] // 16
         input_ = Input(shape=self.input_shape)
@@ -59,7 +63,7 @@ class Model(ModelBase):
     def decoder_a(self):
         """ Decoder for side A """
         kwargs = {"kernel_size": 5, "kernel_initializer": self.kernel_initializer}
-        decoder_complexity = 320 if self.low_mem else self.config["complexity_decoder_a"]
+        decoder_complexity = 320 if self.low_mem else cfg.complexity_decoder_a()
         dense_dim = 384 if self.low_mem else 512
         decoder_shape = self.input_shape[0] // 16
         input_ = Input(shape=(decoder_shape, decoder_shape, dense_dim))
@@ -78,7 +82,7 @@ class Model(ModelBase):
         var_x = Conv2DOutput(3, 5, name="face_out_a")(var_x)
         outputs = [var_x]
 
-        if self.config.get("learn_mask", False):
+        if cfg_loss.learn_mask():
             var_y = input_
             var_y = UpscaleBlock(decoder_complexity, activation="leakyrelu")(var_y)
             var_y = UpscaleBlock(decoder_complexity, activation="leakyrelu")(var_y)
@@ -91,7 +95,7 @@ class Model(ModelBase):
     def decoder_b(self):
         """ Decoder for side B """
         kwargs = {"kernel_size": 5, "kernel_initializer": self.kernel_initializer}
-        decoder_complexity = 384 if self.low_mem else self.config["complexity_decoder_b"]
+        decoder_complexity = 384 if self.low_mem else cfg.complexity_decoder_b()
         dense_dim = 384 if self.low_mem else 512
         decoder_shape = self.input_shape[0] // 16
         input_ = Input(shape=(decoder_shape, decoder_shape, dense_dim))
@@ -119,7 +123,7 @@ class Model(ModelBase):
         var_x = Conv2DOutput(3, 5, name="face_out_b")(var_x)
         outputs = [var_x]
 
-        if self.config.get("learn_mask", False):
+        if cfg_loss.learn_mask():
             var_y = input_
             var_y = UpscaleBlock(decoder_complexity, activation="leakyrelu")(var_y)
             if not self.low_mem:

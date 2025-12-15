@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Manages the widgets that hold the bottom 'control' area of the preview tool """
+"""Manages the widgets that hold the bottom 'control' area of the preview tool."""
 from __future__ import annotations
 import gettext
 import logging
@@ -8,14 +8,14 @@ import typing as T
 import tkinter as tk
 
 from tkinter import ttk
-from configparser import ConfigParser
 
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.control_helper import ControlPanel, ControlPanelOption
+from lib.logger import parse_class_init
 from lib.gui.utils import get_images
 from lib.utils import get_module_objects
 from plugins.plugin_loader import PluginLoader
-from plugins.convert._config import Config
+from plugins.convert import convert_config
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
@@ -29,190 +29,164 @@ _ = _LANG.gettext
 
 
 class ConfigTools():
-    """ Tools for loading, saving, setting and retrieving configuration file values.
+    """Tools for loading, saving, setting and retrieving configuration file values.
+
+    Parameters
+    ----------
+    config_file : str | None
+        Path to a custom config .ini file or ``None`` to load the default config file
 
     Attributes
     ----------
-    tk_vars: dict
+    tk_vars : dict[str, dict[str, tk.BooleanVar | tk.StringVar | tk.IntVar | tk.DoubleVar]]]
         Global tkinter variables. `Refresh` and `Busy` :class:`tkinter.BooleanVar`
     """
-    def __init__(self) -> None:
-        self._config = Config(None)
-        self.tk_vars: dict[str, dict[str, tk.BooleanVar | tk.StringVar | tk.IntVar | tk.DoubleVar]
-                           ] = {}
+
+    def __init__(self, config_file: str | None) -> None:
+        logger.debug(parse_class_init(locals()))
+        self._config = convert_config.load_config(config_file=config_file)
+        self.tk_vars: dict[str, dict[str, tk.Variable]] = {}
         self._config_dicts = self._get_config_dicts()  # Holds currently saved config
 
     @property
-    def config(self) -> Config:
-        """ :class:`plugins.convert._config.Config` The convert configuration """
-        return self._config
-
-    @property
-    def config_dicts(self) -> dict[str, T.Any]:
-        """ dict: The convert configuration options in dictionary form."""
+    def config_dicts(self) -> dict[str, dict[str, ControlPanelOption]]:
+        """dict[str, dict[str, ControlPanelOption]] : The convert configuration options in
+        dictionary form."""
         return self._config_dicts
 
     @property
     def sections(self) -> list[str]:
-        """ list: The sorted section names that exist within the convert Configuration options. """
-        return sorted(set(plugin.split(".")[0] for plugin in self._config.config.sections()
-                          if plugin.split(".")[0] != "writer"))
+        """list: The sorted section names that exist within the convert Configuration options."""
+        return sorted(set(sect.split(".")[0] for sect in self._config.sections
+                          if sect.split(".")[0] != "writer"))
 
     @property
     def plugins_dict(self) -> dict[str, list[str]]:
-        """ dict: Dictionary of configuration option sections as key with a list of containing
-        plugins as the value """
-        return {section: sorted([plugin.split(".")[1] for plugin in self._config.config.sections()
-                                 if plugin.split(".")[0] == section])
+        """dict[str, list[str]] : Dictionary of configuration option sections as key with a list
+        of containing plugin names as the value"""
+        return {section: sorted([sect.split(".")[1] for sect in self._config.sections
+                                 if sect.split(".")[0] == section])
                 for section in self.sections}
 
-    def update_config(self) -> None:
-        """ Update :attr:`config` with the currently selected values from the GUI. """
-        for section, items in self.tk_vars.items():
-            for item, value in items.items():
-                try:
-                    new_value = str(value.get())
-                except tk.TclError as err:
-                    # When manually filling in text fields, blank values will
-                    # raise an error on numeric data types so return 0
-                    logger.debug("Error getting value. Defaulting to 0. Error: %s", str(err))
-                    new_value = str(0)
-                old_value = self._config.config[section][item]
-                if new_value != old_value:
-                    logger.trace("Updating config: %s, %s from %s to %s",  # type: ignore
-                                 section, item, old_value, new_value)
-                    self._config.config[section][item] = new_value
-
-    def _get_config_dicts(self) -> dict[str, dict[str, T.Any]]:
-        """ Obtain a custom configuration dictionary for convert configuration items in use
+    def _get_config_dicts(self) -> dict[str, dict[str, ControlPanelOption]]:
+        """Obtain a custom configuration dictionary for convert configuration items in use
         by the preview tool formatted for control helper.
 
         Returns
         -------
-        dict
-            Each configuration section as keys, with the values as a dict of option:
-            :class:`lib.gui.control_helper.ControlOption` pairs. """
+        dict[str, str | dict[str, ControlPanelOption]]
+            Each configuration section as keys, with the values as a dict of option_name to
+            :class:`lib.gui.control_helper.ControlOption`."""
         logger.debug("Formatting Config for GUI")
-        config_dicts: dict[str, dict[str, T.Any]] = {}
-        for section in self._config.config.sections():
-            if section.startswith("writer."):
+        config_dicts: dict[str, dict[str, ControlPanelOption]] = {}
+        for section_name, section in self._config.sections.items():
+            if section_name.startswith("writer."):
                 continue
-            for key, val in self._config.defaults[section].items.items():
-                if key == "helptext":
-                    config_dicts.setdefault(section, {})[key] = val
-                    continue
-                cp_option = ControlPanelOption(title=key,
-                                               dtype=val.datatype,
-                                               group=val.group,
-                                               default=val.default,
-                                               initial_value=self._config.get(section, key),
-                                               choices=val.choices,
-                                               is_radio=val.gui_radio,
-                                               rounding=val.rounding,
-                                               min_max=val.min_max,
-                                               helptext=val.helptext)
-                self.tk_vars.setdefault(section, {})[key] = cp_option.tk_var
-                config_dicts.setdefault(section, {})[key] = cp_option
+            cp_options: dict[str, ControlPanelOption] = {}
+            for option_name, option in section.options.items():
+                cp_option = ControlPanelOption.from_config_object(option_name, option)
+                cp_options[option_name] = cp_option
+                self.tk_vars.setdefault(section_name, {})[option_name] = cp_option.tk_var
+            config_dicts[section_name] = cp_options
         logger.debug("Formatted Config for GUI: %s", config_dicts)
         return config_dicts
 
+    def update_config(self) -> None:
+        """Update :attr:`config` with the currently selected values from the GUI."""
+        for section, options in self.tk_vars.items():
+            for option_name, tk_option in options.items():
+                try:
+                    new_value = tk_option.get()
+                except tk.TclError as err:
+                    # When manually filling in text fields, blank values will
+                    # raise an error on numeric data types so return 0
+                    logger.trace(  # type:ignore[attr-defined]
+                        "Error getting value. Defaulting to 0. Error: %s", str(err))
+                    new_value = "" if isinstance(tk_option, tk.StringVar) else 0
+                option = self._config.sections[section].options[option_name]
+                old_value = option.value
+                if new_value == old_value or (isinstance(old_value, list) and
+                                              set(str(new_value).split()) == set(old_value)):
+                    logger.trace("Skipping unchanged option '%s'",  # type:ignore[attr-defined]
+                                 option_name)
+                logger.debug("Updating config: '%s', '%s' from %s to %s",
+                             section, option_name, repr(old_value), repr(new_value))
+                option.set(new_value)
+
     def reset_config_to_saved(self, section: str | None = None) -> None:
-        """ Reset the GUI parameters to their saved values within the configuration file.
+        """Reset the GUI parameters to their saved values within the configuration file.
 
         Parameters
         ----------
-        section: str, optional
+        section : str | None, optional
             The configuration section to reset the values for, If ``None`` provided then all
             sections are reset. Default: ``None``
         """
         logger.debug("Resetting to saved config: %s", section)
         sections = [section] if section is not None else list(self.tk_vars.keys())
-        for config_section in sections:
-            for item, options in self._config_dicts[config_section].items():
-                if item == "helptext":
-                    continue
-                val = options.value
-                if val != self.tk_vars[config_section][item].get():
-                    self.tk_vars[config_section][item].set(val)
-                    logger.debug("Setting %s - %s to saved value %s", config_section, item, val)
+        for section_name in sections:
+            for option_name, tk_option in self._config_dicts[section_name].items():
+                val = tk_option.value
+                if val != self.tk_vars[section_name][option_name].get():
+                    self.tk_vars[section_name][option_name].set(val)
+                    logger.debug("Setting '%s' - '%s' to saved value %s",
+                                 section_name, option_name, repr(val))
         logger.debug("Reset to saved config: %s", section)
 
     def reset_config_to_default(self, section: str | None = None) -> None:
-        """ Reset the GUI parameters to their default configuration values.
+        """Reset the GUI parameters to their default configuration values.
 
         Parameters
         ----------
-        section: str, optional
+        section : str | None, optional
             The configuration section to reset the values for, If ``None`` provided then all
             sections are reset. Default: ``None``
         """
         logger.debug("Resetting to default: %s", section)
         sections = [section] if section is not None else list(self.tk_vars.keys())
-        for config_section in sections:
-            for item, options in self._config_dicts[config_section].items():
-                if item == "helptext":
-                    continue
+        for section_name in sections:
+            for option_name, options in self._config_dicts[section_name].items():
                 default = options.default
-                if default != self.tk_vars[config_section][item].get():
-                    self.tk_vars[config_section][item].set(default)
-                    logger.debug("Setting %s - %s to default value %s",
-                                 config_section, item, default)
+                if default != self.tk_vars[section_name][option_name].get():
+                    self.tk_vars[section_name][option_name].set(default)
+                    logger.debug("Setting '%s' - '%s' to default value %s",
+                                 section_name, option_name, repr(default))
         logger.debug("Reset to default: %s", section)
 
     def save_config(self, section: str | None = None) -> None:
-        """ Save the configuration ``.ini`` file with the currently stored values.
-
-        Notes
-        -----
-        We cannot edit the existing saved config as comments tend to get removed, so we create
-        a new config and populate that.
+        """Save the configuration ``.ini`` file with the currently stored values.
 
         Parameters
         ----------
-        section: str, optional
+        section : str | None, optional
             The configuration section to save, If ``None`` provided then all sections are saved.
             Default: ``None``
         """
         logger.debug("Saving %s config", section)
 
-        new_config = ConfigParser(allow_no_value=True)
+        for section_name, sect in self._config.sections.items():
+            if section_name not in self._config_dicts:
+                logger.debug("[%s] Skipping section not in local config", section_name)
+                continue
+            if section is not None and section_name != section:
+                logger.debug("[%s] Skipping section not selected for saving", section_name)
+                continue
+            for option_name, option in sect.options.items():
+                new_opt = self.tk_vars[section_name][option_name].get()
+                fmt_opt = str(new_opt).split() if isinstance(option.value, list) else new_opt
+                logger.debug("[%s] Setting '%s' to %s", section_name, option_name, repr(fmt_opt))
+                option.set(new_opt)
 
-        for section_name, sect in self._config.defaults.items():
-            logger.debug("Adding section: '%s')", section_name)
-            self._config.insert_config_section(section_name,
-                                               sect.helptext,
-                                               config=new_config)
-            for item, options in sect.items.items():
-                if item == "helptext":
-                    continue  # helptext already written at top
-                if ((section is not None and section_name != section)
-                        or section_name not in self.tk_vars):
-                    # retain saved values that have not been updated
-                    new_opt = self._config.get(section_name, item)
-                    logger.debug("Retaining option: (item: '%s', value: '%s')", item, new_opt)
-                else:
-                    new_opt = self.tk_vars[section_name][item].get()
-                    logger.debug("Setting option: (item: '%s', value: '%s')", item, new_opt)
-
-                    # Set config_dicts value to new saved value
-                    self._config_dicts[section_name][item].set_initial_value(new_opt)
-
-                helptext = self._config.format_help(options.helptext, is_section=False)
-                new_config.set(section_name, helptext)
-                new_config.set(section_name, item, str(new_opt))
-
-        self._config.config = new_config
         self._config.save_config()
-        logger.info("Saved config: '%s'", self._config.configfile)
 
 
 class BusyProgressBar():
-    """ An infinite progress bar for when a thread is running to swap/patch a group of samples """
+    """An infinite progress bar for when a thread is running to swap/patch a group of samples"""
     def __init__(self, parent: ttk.Frame) -> None:
         self._progress_bar = self._add_busy_indicator(parent)
 
     def _add_busy_indicator(self, parent: ttk.Frame) -> ttk.Progressbar:
-        """ Place progress bar into bottom bar to indicate when processing.
+        """Place progress bar into bottom bar to indicate when processing.
 
         Parameters
         ----------
@@ -231,7 +205,7 @@ class BusyProgressBar():
         return pbar
 
     def stop(self) -> None:
-        """ Stop and hide progress bar """
+        """Stop and hide progress bar"""
         logger.debug("Stopping busy indicator")
         if not self._progress_bar.winfo_ismapped():
             logger.debug("busy indicator already hidden")
@@ -240,7 +214,7 @@ class BusyProgressBar():
         self._progress_bar.pack_forget()
 
     def start(self) -> None:
-        """ Start and display progress bar """
+        """Start and display progress bar"""
         logger.debug("Starting busy indicator")
         if self._progress_bar.winfo_ismapped():
             logger.debug("busy indicator already started")
@@ -251,7 +225,7 @@ class BusyProgressBar():
 
 
 class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
-    """ Frame that holds the left hand side options panel containing the command line options.
+    """Frame that holds the left hand side options panel containing the command line options.
 
     Parameters
     ----------
@@ -267,7 +241,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         super().__init__(parent)
         self.pack(side=tk.LEFT, anchor=tk.N, fill=tk.Y)
-        self._tk_vars: dict[str, tk.StringVar] = {}
+        self._tk_vars: dict[str, tk.Variable] = {}
 
         self._options = {
             "color": app._patch.converter.cli_arguments.color_adjustment.replace("-", "_"),
@@ -283,7 +257,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     @property
     def convert_args(self) -> dict[str, T.Any]:
-        """ dict: Currently selected Command line arguments from the :class:`ActionFrame`. """
+        """dict: Currently selected Command line arguments from the :class:`ActionFrame`."""
         retval = {opt if opt != "color" else "color_adjustment":
                   self._format_from_display(self._tk_vars[opt].get())
                   for opt in self._options if opt != "face_scale"}
@@ -292,13 +266,15 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     @property
     def busy_progress_bar(self) -> BusyProgressBar:
-        """ :class:`BusyProgressBar`: The progress bar that appears on the left hand side whilst a
-        swap/patch is being applied """
+        """
+        :class:`BusyProgressBar`: The progress bar that appears on the left hand side whilst a
+        swap/patch is being applied.
+        """
         return self._busy_bar
 
     @staticmethod
     def _format_from_display(var: str) -> str:
-        """ Format a variable from the display version to the command line action version.
+        """Format a variable from the display version to the command line action version.
 
         Parameters
         ----------
@@ -314,7 +290,8 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     @staticmethod
     def _format_to_display(var: str) -> str:
-        """ Format a variable from the command line action version to the display version.
+        """Format a variable from the command line action version to the display version.
+
         Parameters
         ----------
         var: str
@@ -333,7 +310,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                      patch_callback: Callable[[], None],
                      available_masks: list[str],
                      has_predicted_mask: bool) -> BusyProgressBar:
-        """ Build the :class:`ActionFrame`.
+        """Build the :class:`ActionFrame`.
 
         Parameters
         ----------
@@ -374,8 +351,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                          defaults: dict[str, T.Any],
                          available_masks: list[str],
                          has_predicted_mask: bool) -> None:
-        """ Create :class:`lib.gui.control_helper.ControlPanel` object for the command
-        line options.
+        """Create :class:`lib.gui.control_helper.ControlPanel` object for the command line options.
 
         parent: :class:`ttk.Frame`
             The frame to hold the command line choices
@@ -394,8 +370,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                                    defaults: dict[str, T.Any],
                                    available_masks: list[str],
                                    has_predicted_mask: bool) -> list[ControlPanelOption]:
-        """ Create :class:`lib.gui.control_helper.ControlPanelOption` objects for the command
-        line options.
+        """Create :class:`lib.gui.control_helper.ControlPanelOption` objects for the cli options.
 
         defaults: dict
             The default command line options
@@ -440,7 +415,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                              defaults: dict[str, T.Any],
                              available_masks: list[str],
                              has_predicted_mask: bool) -> list[str]:
-        """ Set the mask choices and default mask based on available masks.
+        """Set the mask choices and default mask based on available masks.
 
         Parameters
         ----------
@@ -471,7 +446,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def _add_refresh_button(cls,
                             parent: ttk.Frame,
                             refresh_callback: Callable[[], None]) -> None:
-        """ Add a button to refresh the images.
+        """Add a button to refresh the images.
 
         Parameters
         ----------
@@ -482,7 +457,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         btn.pack(padx=5, pady=5, side=tk.TOP, fill=tk.X, anchor=tk.N)
 
     def _add_patch_callback(self, patch_callback: Callable[[], None]) -> None:
-        """ Add callback to re-patch images on action option change.
+        """Add callback to re-patch images on action option change.
 
         Parameters
         ----------
@@ -493,7 +468,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             tk_var.trace("w", patch_callback)
 
     def _add_actions(self, parent: ttk.Frame) -> None:
-        """ Add Action Buttons to the :class:`ActionFrame`
+        """Add Action Buttons to the :class:`ActionFrame`.
 
         Parameters
         ----------
@@ -528,7 +503,8 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
 
 class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
-    """ The notebook that holds the Convert configuration options.
+
+    """The notebook that holds the Convert configuration options.
 
     Parameters
     ----------
@@ -561,7 +537,7 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _build_tabs(self) -> None:
-        """ Build the notebook tabs for the each configuration section. """
+        """Build the notebook tabs for the each configuration section."""
         logger.debug("Build Tabs")
         for section in self.config_tools.sections:
             tab = ttk.Notebook(self)
@@ -569,7 +545,7 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
             self.add(tab, text=section.replace("_", " ").title())
 
     def _build_sub_tabs(self) -> None:
-        """ Build the notebook sub tabs for each convert section's plugin. """
+        """Build the notebook sub tabs for each convert section's plugin."""
         for section, plugins in self.config_tools.plugins_dict.items():
             for plugin in plugins:
                 config_key = ".".join((section, plugin))
@@ -580,7 +556,7 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
                 T.cast(ttk.Notebook, self._tabs[section]["tab"]).add(tab, text=text)
 
     def _add_patch_callback(self, patch_callback: Callable[[], None]) -> None:
-        """ Add callback to re-patch images on configuration option change.
+        """Add callback to re-patch images on configuration option change.
 
         Parameters
         ----------
@@ -593,7 +569,7 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
 
 
 class ConfigFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
-    """ Holds the configuration options for a convert plugin inside the :class:`OptionsBook`.
+    """Holds the configuration options for a convert plugin inside the :class:`OptionsBook`.
 
     Parameters
     ----------
@@ -623,7 +599,7 @@ class ConfigFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _build_frame(self, parent: OptionsBook, config_key: str) -> None:
-        """ Build the options frame for this command
+        """Build the options frame for this command.
 
         Parameters
         ----------
@@ -642,14 +618,14 @@ class ConfigFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.debug("Added Config Frame")
 
     def _add_frame_separator(self) -> None:
-        """ Add a separator between top and bottom frames. """
+        """Add a separator between top and bottom frames."""
         logger.debug("Add frame seperator")
         sep = ttk.Frame(self._action_frame, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=5, side=tk.TOP)
         logger.debug("Added frame seperator")
 
     def _add_actions(self, parent: OptionsBook, config_key: str) -> None:
-        """ Add Action Buttons.
+        """Add Action Buttons.
 
         Parameters
         ----------

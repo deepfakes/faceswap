@@ -15,6 +15,7 @@ import numpy as np
 from lib.image import encode_image, png_read_meta, tiff_read_meta
 from lib.utils import get_module_objects
 from ._base import Output
+from . import patch_defaults as cfg
 
 logger = logging.getLogger(__name__)
 
@@ -35,17 +36,17 @@ class Writer(Output):
     def __init__(self, output_folder: str, patch_size: int, **kwargs) -> None:
         logger.debug("patch_size: %s", patch_size)
         super().__init__(output_folder, **kwargs)
-        self._extension = {"png": ".png", "tiff": ".tif"}[self.config["format"]]
-        self._separate_mask = self.config["separate_mask"]
+        self._extension = {"png": ".png", "tiff": ".tif"}[cfg.format()]
+        self._separate_mask = cfg.separate_mask()
         self._fname_split = re.compile("[^0-9a-zA-Z]")
 
-        if self._extension == ".png" and self.config["bit_depth"] not in ("8", "16"):
+        if self._extension == ".png" and cfg.bit_depth() not in ("8", "16"):
             logger.warning("Patch Writer: Bit Depth '%s' is unsupported for format '%s'. "
-                           "Updating to '16'", self.config["bit_depth"], self.config["format"])
-            self.config["bit_depth"] = "16"
+                           "Updating to '16'", cfg.bit_depth(), cfg.format())
+            cfg.bit_depth.set("16")
 
-        self._dtype = {"8": np.uint8, "16": np.uint16, "32": np.float32}[self.config["bit_depth"]]
-        self._multiplier = {"8": 255., "16": 65535., "32": 1.}[self.config["bit_depth"]]
+        self._dtype = {"8": np.uint8, "16": np.uint16, "32": np.float32}[cfg.bit_depth()]
+        self._multiplier = {"8": 255., "16": 65535., "32": 1.}[cfg.bit_depth()]
 
         self._dummy_patch = np.zeros((1, patch_size, patch_size, 4), dtype=np.float32)
 
@@ -54,9 +55,9 @@ class Writer(Output):
         self._patch_corner = {"top-left": tl_box[0],
                               "top-right": tl_box[1],
                               "bottom-right": tl_box[2],
-                              "bottom-left": tl_box[3]}[self.config["origin"]].copy()
+                              "bottom-left": tl_box[3]}[cfg.origin()].copy()
         self._box = tl_box
-        if self.config["origin"] in ("top-right", "bottom-left"):
+        if cfg.origin() in ("top-right", "bottom-left"):
             self._box[[1, 3], :] = self._box[[3, 1], :]  # keep clockwise from 0,0
 
         self._args = self._get_save_args()
@@ -71,11 +72,11 @@ class Writer(Output):
             The OpenCV specific arguments for the selected file format
          """
         args: tuple[int, ...] = tuple()
-        if self._extension == ".png" and self.config["png_compress_level"] > -1:
-            args = (cv2.IMWRITE_PNG_COMPRESSION, self.config["png_compress_level"])
-        if self._extension == ".tif" and self.config["bit_depth"] != "32":
+        if self._extension == ".png" and cfg.png_compress_level() > -1:
+            args = (cv2.IMWRITE_PNG_COMPRESSION, cfg.png_compress_level())
+        if self._extension == ".tif" and cfg.bit_depth() != "32":
             tiff_methods = {"none": 1, "lzw": 5, "deflate": 8}
-            method = self.config["tiff_compression_method"]
+            method = cfg.tiff_compression_method()
             method = "none" if method is None else method
             args = (cv2.IMWRITE_TIFF_COMPRESSION, tiff_methods[method])
         logger.debug(args)
@@ -104,21 +105,21 @@ class Writer(Output):
         split_fname = self._fname_split.split(fname)
         if split_fname and split_fname[-1].isdigit():
             i_frame_no = (int(split_fname[-1]) +
-                          (int(self.config["start_index"]) - 1) +
-                          self.config["index_offset"])
-            frame_no = f".{str(i_frame_no).rjust(self.config['number_padding'], '0')}"
+                          (int(cfg.start_index()) - 1) +
+                          cfg.index_offset())
+            frame_no = f".{str(i_frame_no).rjust(cfg.number_padding(), '0')}"
             base_fname = fname[:-len(split_fname[-1]) - 1]
         else:
             frame_no = ""
             base_fname = fname
 
         retval = ""
-        if self.config["include_filename"]:
+        if cfg.include_filename():
             retval += base_fname
-        if self.config["face_index_location"] == "before":
+        if cfg.face_index_location() == "before":
             retval = f"{retval}_{face_idx}"
         retval += frame_no
-        if self.config["face_index_location"] == "after":
+        if cfg.face_index_location() == "after":
             retval = f"{retval}.{face_idx}"
         retval += ext
         logger.trace("source filename: '%s', output filename: '%s'",  # type:ignore[attr-defined]
@@ -143,14 +144,14 @@ class Writer(Output):
         read_func = png_read_meta if self._extension == ".png" else tiff_read_meta
         for idx, face in enumerate(image):
             new_filename = self._get_new_filename(filename, idx)
-            filenames = self.output_filename(new_filename, self._separate_mask)
+            filenames = self.get_output_filename(new_filename, cfg.format(), self._separate_mask)
             for fname, img in zip(filenames, face):
                 try:
                     with open(fname, "wb") as outfile:
                         outfile.write(img)
                 except Exception as err:  # pylint:disable=broad-except
                     logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
-                if not self.config["json_output"]:
+                if not cfg.json_output():
                     continue
                 mat = T.cast(dict[str, list[list[float]]], read_func(img))
                 self._matrices[os.path.splitext(os.path.basename(fname))[0]] = mat
@@ -190,19 +191,19 @@ class Writer(Output):
         canvas_size: tuple[int, int]
             The size of the canvas width, height) that the transformation matrix applies to.
         """
-        if self.config["origin"] == "top-left":
+        if cfg.origin() == "top-left":
             return
 
         for mat in matrices:
             og_cnr = cv2.transform(self._patch_corner[None, None], mat[:2, ...]).squeeze()
             x_shift, y_shift = og_cnr
-            if self.config["origin"].split("-")[-1] == "right":
+            if cfg.origin().split("-")[-1] == "right":
                 x_shift = canvas_size[0] - x_shift
-            if self.config["origin"].split("-")[0] == "bottom":
+            if cfg.origin().split("-")[0] == "bottom":
                 y_shift = canvas_size[1] - y_shift
             mat[:2, 2] = [x_shift, y_shift]
 
-        if self.config["origin"] in ("top-right", "bottom-left"):
+        if cfg.origin() in ("top-right", "bottom-left"):
             matrices[..., :2, :2] *= [[[1, -1], [-1, 1]]]  # switch shear
 
     def _get_roi(self, matrices: np.ndarray) -> np.ndarray:
@@ -249,7 +250,7 @@ class Writer(Output):
         canvas_size: tuple[int, int] = kwargs.get("canvas_size", (1, 1))
         matrices: np.ndarray = kwargs.get("matrices", np.array([]))
 
-        if not np.any(image) and self.config["empty_frames"] == "blank":
+        if not np.any(image) and cfg.empty_frames() == "blank":
             image = self._dummy_patch
 
         matrices = self._get_inverse_matrices(matrices)
@@ -281,7 +282,7 @@ class Writer(Output):
 
     def close(self) -> None:
         """ Outputs json file if requested """
-        if not self.config["json_output"]:
+        if not cfg.json_output():
             return
         fname = os.path.join(self.output_folder, "matrices.json")
         with open(fname, "w", encoding="utf-8") as ofile:

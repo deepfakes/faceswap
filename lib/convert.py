@@ -16,7 +16,6 @@ if T.TYPE_CHECKING:
     from collections.abc import Callable
     from lib.align.aligned_face import AlignedFace, CenteringType
     from lib.align.detected_face import DetectedFace
-    from lib.config import FaceswapConfig
     from lib.queue_manager import EventQueue
     from scripts.convert import ConvertItem
     from plugins.convert.color._base import Adjustment as ColorAdjust
@@ -108,26 +107,19 @@ class Converter():  # pylint:disable=too-many-instance-attributes
         process """
         return self._args
 
-    def reinitialize(self, config: FaceswapConfig) -> None:
+    def reinitialize(self) -> None:
         """ Reinitialize this :class:`Converter`.
 
         Called as part of the :mod:`~tools.preview` tool. Resets all adjustments then loads the
-        plugins as specified in the given config.
-
-        Parameters
-        ----------
-        config: :class:`lib.config.FaceswapConfig`
-            Pre-loaded :class:`lib.config.FaceswapConfig`. used over any configuration on disk.
+        plugins as specified in the current config.
         """
         logger.debug("Reinitializing converter")
         self._face_scale = 1.0 - self._args.face_scale / 100.
         self._adjustments = Adjustments()
-        self._load_plugins(config=config, disable_logging=True)
+        self._load_plugins(disable_logging=True)
         logger.debug("Reinitialized converter")
 
-    def _load_plugins(self,
-                      config: FaceswapConfig | None = None,
-                      disable_logging: bool = False) -> None:
+    def _load_plugins(self, disable_logging: bool = False) -> None:
         """ Load the requested adjustment plugins.
 
         Loads the :mod:`plugins.converter` plugins that have been requested for this conversion
@@ -138,34 +130,27 @@ class Converter():  # pylint:disable=too-many-instance-attributes
         config: :class:`lib.config.FaceswapConfig`, optional
             Optional pre-loaded :class:`lib.config.FaceswapConfig`. If passed, then this will be
             used over any configuration on disk. If ``None`` then it is ignored. Default: ``None``
-        disable_logging: bool, optional
-            Plugin loader outputs logging info every time a plugin is loaded. Set to ``True`` to
-            suppress these messages otherwise ``False``. Default: ``False``
         """
-        logger.debug("Loading plugins. config: %s", config)
+        logger.debug("Loading plugins. disable_logging: %s", disable_logging)
         self._adjustments.mask = PluginLoader.get_converter("mask",
                                                             "mask_blend",
                                                             disable_logging=disable_logging)(
                                                                 self._args.mask_type,
                                                                 self._output_size,
                                                                 self._coverage_ratio,
-                                                                configfile=self._configfile,
-                                                                config=config)
+                                                                configfile=self._configfile)
 
-        if self._args.color_adjustment != "none" and self._args.color_adjustment is not None:
+        if self._args.color_adjustment is not None:
             self._adjustments.color = PluginLoader.get_converter("color",
                                                                  self._args.color_adjustment,
                                                                  disable_logging=disable_logging)(
-                                                                    configfile=self._configfile,
-                                                                    config=config)
+                                                                    configfile=self._configfile)
 
         sharpening = PluginLoader.get_converter("scaling",
                                                 "sharpen",
                                                 disable_logging=disable_logging)(
-                                                    configfile=self._configfile,
-                                                    config=config)
-        if sharpening.config.get("method") is not None:
-            self._adjustments.sharpening = sharpening
+                                                    configfile=self._configfile)
+        self._adjustments.sharpening = sharpening
         logger.debug("Loaded plugins: %s", self._adjustments)
 
     def process(self, in_queue: EventQueue, out_queue: EventQueue):

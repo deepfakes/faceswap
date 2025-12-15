@@ -17,6 +17,7 @@ from lib.logger import parse_class_init
 from lib.model.layers import L2Normalize
 from lib.utils import get_module_objects, FaceswapError
 from ._base import BatchType, RecogBatch, Identity
+from . import vgg_face2_defaults as cfg
 
 if T.TYPE_CHECKING:
     from keras import KerasTensor
@@ -52,9 +53,9 @@ class Recognition(Identity):
         self.input_size = 224
         self.color_format = "BGR"
 
-        self.vram = 384 if not self.config["cpu"] else 0  # 334 in testing
-        self.vram_per_batch = 192 if not self.config["cpu"] else 0  # ~155 in testing
-        self.batchsize = self.config["batch-size"]
+        self.vram = 384 if not cfg.cpu() else 0  # 334 in testing
+        self.vram_per_batch = 192 if not cfg.cpu() else 0  # ~155 in testing
+        self.batchsize = cfg.batch_size()
 
         # Average image provided in https://github.com/ox-vgg/vgg_face2
         self._average_img = np.array([91.4953, 103.8827, 131.0912])
@@ -67,7 +68,7 @@ class Recognition(Identity):
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")
 
-        with self.get_device_context(self.config["cpu"]):
+        with self.get_device_context(cfg.cpu()):
             self.model = VGGFace2(self.input_size, self.model_path, self.batchsize)
             self.model(placeholder)
 
@@ -92,7 +93,7 @@ class Recognition(Identity):
         numpy.ndarray
             The encodings for the face
         """
-        with self.get_device_context(self.config["cpu"]):
+        with self.get_device_context(cfg.cpu()):
             retval = self.model(feed)
         assert isinstance(retval, np.ndarray)
         return retval

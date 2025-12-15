@@ -21,7 +21,8 @@ from torch.cuda import OutOfMemoryError
 
 from lib.training import Feeder, LearningRateFinder, LearningRateWarmup
 from lib.utils import get_module_objects, FaceswapError
-from plugins.train._config import Config
+from plugins.train import train_config as mod_cfg
+from plugins.train.trainer import trainer_config as trn_cfg
 
 from ._display import Samples, Timelapse
 from ._tensorboard import TorchTensorBoard
@@ -29,29 +30,8 @@ from ._tensorboard import TorchTensorBoard
 if T.TYPE_CHECKING:
     from collections.abc import Callable
     from plugins.train.model._base import ModelBase
-    from lib.config import ConfigValueType
 
 logger = logging.getLogger(__name__)
-
-
-def _get_config(plugin_name: str,
-                configfile: str | None = None) -> dict[str, ConfigValueType]:
-    """ Return the configuration for the requested trainer.
-
-    Parameters
-    ----------
-    plugin_name: str
-        The name of the plugin to load the configuration for
-    configfile: str, optional
-        A custom configuration file. If ``None`` then configuration is loaded from the default
-        :file:`.config.train.ini` file. Default: ``None``
-
-    Returns
-    -------
-    dict
-        The configuration dictionary for the requested plugin
-    """
-    return Config(plugin_name, configfile=configfile).config_dict
 
 
 class TrainerBase():
@@ -69,22 +49,17 @@ class TrainerBase():
         2 keys ("a" and "b") with the values being a list of full paths corresponding to each side.
     batch_size: int
         The requested batch size for iteration to be trained through the model.
-    configfile: str
-        The path to a custom configuration file. If ``None`` is passed then configuration is loaded
-        from the default :file:`.config.train.ini` file.
     """
 
     def __init__(self,
                  model: ModelBase,
                  images: dict[T.Literal["a", "b"], list[str]],
-                 batch_size: int,
-                 configfile: str | None) -> None:
+                 batch_size: int) -> None:
         logger.debug("Initializing %s: (model: '%s', batch_size: %s)",
                      self.__class__.__name__, model, batch_size)
         self._model = model
-        self._config = self._get_config(configfile)
 
-        self._feeder = Feeder(images, model, batch_size, self._config)
+        self._feeder = Feeder(images, model, batch_size)
 
         self._exit_early = self._handle_lr_finder()
         if self._exit_early:
@@ -98,16 +73,16 @@ class TrainerBase():
         self._tensorboard = self._set_tensorboard()
         self._samples = Samples(self._model,
                                 self._model.coverage_ratio,
-                                T.cast(int, self._config["mask_opacity"]),
-                                T.cast(str, self._config["mask_color"]))
+                                trn_cfg.mask_opacity(),
+                                trn_cfg.mask_color())
 
-        num_images = self._config.get("preview_images", 14)
+        num_images = trn_cfg.preview_images()
         assert isinstance(num_images, int)
         self._timelapse = Timelapse(self._model,
                                     self._model.coverage_ratio,
                                     num_images,
-                                    T.cast(int, self._config["mask_opacity"]),
-                                    T.cast(str, self._config["mask_color"]),
+                                    trn_cfg.mask_opacity(),
+                                    trn_cfg.mask_color(),
                                     self._feeder,
                                     self._images)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -116,31 +91,6 @@ class TrainerBase():
     def exit_early(self) -> bool:
         """ True if the trainer should exit early, without perfoming any training steps """
         return self._exit_early
-
-    def _get_config(self, configfile: str | None) -> dict[str, ConfigValueType]:
-        """ Get the saved training config options. Override any global settings with the setting
-        provided from the model's saved config.
-
-        Parameters
-        -----------
-        configfile: str
-            The path to a custom configuration file. If ``None`` is passed then configuration is
-            loaded from the default :file:`.config.train.ini` file.
-
-        Returns
-        -------
-        dict
-            The trainer configuration options
-        """
-        config = _get_config(".".join(self.__module__.split(".")[-2:]),
-                             configfile=configfile)
-        for key, val in config.items():
-            if key in self._model.config and val != self._model.config[key]:
-                new_val = self._model.config[key]
-                logger.debug("Updating global training config item for '%s' form '%s' to '%s'",
-                             key, val, new_val)
-                config[key] = new_val
-        return config
 
     def _handle_lr_finder(self) -> bool:
         """ Handle the learning rate finder.
@@ -169,9 +119,9 @@ class TrainerBase():
             return False
 
         if self._model.state.iterations == 0 and self._model.state.session_id == 1:
-            lrf = LearningRateFinder(self._model, self._config, self._feeder)
+            lrf = LearningRateFinder(self._model, self._feeder)
             success = lrf.find()
-            return self._config["lr_finder_mode"] == "graph_and_exit" or not success
+            return mod_cfg.lr_finder_mode() == "graph_and_exit" or not success
 
         logger.debug("No learning rate finder rate. Not setting")
         return False
@@ -363,7 +313,7 @@ class TrainerBase():
             If a NaN is detected, a :class:`FaceswapError` will be raised
         """
         # NaN protection
-        if self._config["nan_protection"] and not all(np.isfinite(val) for val in loss):
+        if mod_cfg.nan_protection() and not all(np.isfinite(val) for val in loss):
             logger.critical("NaN Detected. Loss: %s", loss)
             raise FaceswapError("A NaN was detected and you have NaN protection enabled. Training "
                                 "has been terminated.")

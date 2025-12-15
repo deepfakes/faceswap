@@ -27,7 +27,7 @@ from torch.cuda import OutOfMemoryError
 from lib.align import AlignedFace, DetectedFace, LandmarkType
 from lib.image import read_image_meta
 from lib.utils import FaceswapError
-from plugins.extract import ExtractMedia
+from plugins.extract import ExtractMedia, extract_config as cfg
 from plugins.extract._base import BatchType, ExtractorBatch, Extractor
 
 if T.TYPE_CHECKING:
@@ -84,7 +84,7 @@ class Identity(Extractor):  # pylint:disable=abstract-method
                  instance: int = 0,
                  **kwargs):
         logger.debug("Initializing %s", self.__class__.__name__)
-        super().__init__(git_model_id,
+        super().__init__(git_model_id,  # pylint:disable=duplicate-code
                          model_filename,
                          configfile=configfile,
                          instance=instance,
@@ -94,7 +94,7 @@ class Identity(Extractor):  # pylint:disable=abstract-method
         self.coverage_ratio = 1.0  # Override for model specific coverage_ratio
 
         self._info.plugin_type = "recognition"
-        self._filter = IdentityFilter(self.config["save_filtered"])
+        self._filter = IdentityFilter(cfg.save_filtered())
         logger.debug("Initialized _base %s", self.__class__.__name__)
 
     def _get_detected_from_aligned(self, item: ExtractMedia) -> None:
@@ -162,6 +162,7 @@ class Identity(Extractor):  # pylint:disable=abstract-method
         batch, :class:`~plugins.extract._base.ExtractorBatch`
             The batch object for the current batch
         """
+        # pylint:disable=duplicate-code
         exhausted = False
         batch = RecogBatch()
         idx = 0
@@ -223,6 +224,7 @@ class Identity(Extractor):  # pylint:disable=abstract-method
 
     def _predict(self, batch: BatchType) -> RecogBatch:
         """ Just return the recognition's predict function """
+        # pylint:disable=duplicate-code
         assert isinstance(batch, RecogBatch)
         # slightly hacky workaround to deal with landmarks based masks:
         try:

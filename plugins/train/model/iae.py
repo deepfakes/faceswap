@@ -4,8 +4,10 @@
 from keras import Input, layers, Model as KModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
+from plugins.train.train_config import Loss as cfg_loss
 
 from ._base import ModelBase
+# pylint:disable=duplicate-code
 
 
 class Model(ModelBase):
@@ -62,7 +64,7 @@ class Model(ModelBase):
         var_x = Conv2DOutput(3, 5, name="face_out")(var_x)
         outputs = [var_x]
 
-        if self.config.get("learn_mask", False):
+        if cfg_loss.learn_mask():
             var_y = input_
             var_y = UpscaleBlock(512, activation="leakyrelu")(var_y)
             var_y = UpscaleBlock(256, activation="leakyrelu")(var_y)

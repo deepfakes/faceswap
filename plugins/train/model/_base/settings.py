@@ -26,14 +26,14 @@ from lib.model.autoclip import AutoClipper
 from lib.model.nn_blocks import reset_naming
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
+from plugins.train.train_config import Loss as cfg_loss, Optimizer as cfg_opt
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
     from contextlib import AbstractContextManager as ContextManager
     from argparse import Namespace
     from keras import KerasTensor
-    from lib.config import ConfigValueType
-    from .model import State
+    from .state import State
 
 logger = logging.getLogger(__name__)
 
@@ -64,14 +64,11 @@ class Loss():
 
     Parameters
     ----------
-    config: dict
-        The configuration options for the current model plugin
     color_order: str
         Color order of the model. One of `"BGR"` or `"RGB"`
     """
-    def __init__(self, config: dict, color_order: T.Literal["bgr", "rgb"]) -> None:
-        logger.debug("Initializing %s: (color_order: %s)", self.__class__.__name__, color_order)
-        self._config = config
+    def __init__(self, color_order: T.Literal["bgr", "rgb"]) -> None:
+        logger.debug(parse_class_init(locals()))
         self._mask_channels = self._get_mask_channels()
         self._inputs: list[keras.layers.Layer] = []
         self._names: list[str] = []
@@ -193,15 +190,20 @@ class Loss():
         output_names: list[str]
             The output names from the model
         """
-        face_losses = [(lossname, self._config.get(f"loss_weight_{k[-1]}", 100))
-                       for k, lossname in sorted(self._config.items())
-                       if k.startswith("loss_function")
-                       and self._config.get(f"loss_weight_{k[-1]}", 100) != 0
-                       and lossname is not None]
+        loss_funcs = [cfg_loss.loss_function(),
+                      cfg_loss.loss_function_2(),
+                      cfg_loss.loss_function_3(),
+                      cfg_loss.loss_function_4()]
+        loss_amount = [100,
+                       cfg_loss.loss_weight_2(),
+                       cfg_loss.loss_weight_3(),
+                       cfg_loss.loss_weight_4()]
+        face_losses = [(name, weight) for name, weight in zip(loss_funcs, loss_amount)
+                       if name != "none" and weight > 0]
 
         for name, output_name in zip(self._names, output_names):
             if name.startswith("mask"):
-                loss_func = self._get_function(self._config["mask_loss_function"])
+                loss_func = self._get_function(cfg_loss.mask_loss_function())
             else:
                 loss_func = losses.LossWrapper()
                 for func, weight in face_losses:
@@ -233,9 +235,11 @@ class Loss():
                               mask_channel=self._mask_channels[0])
 
         channel_idx = 1
-        for section in ("eye_multiplier", "mouth_multiplier"):
+        for section, multiplier in zip(
+                ("eye_multiplier", "mouth_multiplier"),
+                (float(cfg_loss.eye_multiplier()), float(cfg_loss.mouth_multiplier()))):
             mask_channel = self._mask_channels[channel_idx]
-            multiplier = self._config[section] * 1.
+            multiplier *= 1.
             if multiplier > 1.:
                 logger.debug("Adding section loss %s: %s", section, multiplier)
                 loss_wrapper.add_loss(self._get_function(loss_function),
@@ -252,17 +256,14 @@ class Loss():
         list:
             A list of channel indices that contain the mask for the corresponding config item
         """
-        eye_multiplier = self._config["eye_multiplier"]
-        mouth_multiplier = self._config["mouth_multiplier"]
-        if not self._config["penalized_mask_loss"] and (eye_multiplier > 1 or
-                                                        mouth_multiplier > 1):
+        eye_multiplier = cfg_loss.eye_multiplier()
+        mouth_multiplier = cfg_loss.mouth_multiplier()
+        if not cfg_loss.penalized_mask_loss() and (eye_multiplier > 1 or mouth_multiplier > 1):
             logger.warning("You have selected eye/mouth loss multipliers greater than 1x, but "
                            "Penalized Mask Loss is disabled. Disabling all multipliers.")
             eye_multiplier = 1
             mouth_multiplier = 1
-        uses_masks = (self._config["penalized_mask_loss"],
-                      eye_multiplier > 1,
-                      mouth_multiplier > 1)
+        uses_masks = (cfg_loss.penalized_mask_loss(), eye_multiplier > 1, mouth_multiplier > 1)
         mask_channels = [-1 for _ in range(len(uses_masks))]
         current_channel = 3
         for idx, mask_required in enumerate(uses_masks):
@@ -274,14 +275,8 @@ class Loss():
 
 
 class Optimizer():
-    """ Obtain the selected optimizer with the appropriate keyword arguments.
-
-    Parameters
-    ----------
-    config: dict[str, ConfigValueType]:
-        The user settings configuration dictionary
-    """
-    def __init__(self, config: dict[str, ConfigValueType]) -> None:
+    """ Obtain the selected optimizer with the appropriate keyword arguments. """
+    def __init__(self) -> None:
         logger.debug(parse_class_init(locals()))
         betas = {"ada_beta_1": "beta_1", "ada_beta_2": "beta_2"}
         amsgrad = {"ada_amsgrad": "amsgrad"}
@@ -294,16 +289,12 @@ class Optimizer():
             "nadam": (optimizers.Nadam, betas),
             "rms-prop": (optimizers.RMSprop, {})}
 
-        assert isinstance(config["learning_rate"], float)
-        assert isinstance(config["optimizer"], str)
+        self._optimizer = self._valid[cfg_opt.optimizer()][0]
+        self._kwargs: dict[str, T.Any] = {"learning_rate": cfg_opt.learning_rate()}
+        if cfg_opt.optimizer() != "lion":
+            self._kwargs["epsilon"] = 10 ** int(cfg_opt.epsilon_exponent())
 
-        self._optimizer = self._valid[config["optimizer"]][0]
-        self._kwargs: dict[str, T.Any] = {"learning_rate": config["learning_rate"]}
-        if config["optimizer"] != "lion":
-            assert isinstance(config["epsilon_exponent"], int)
-            self._kwargs["epsilon"] = 10 ** int(config["epsilon_exponent"])
-
-        self._configure(config)
+        self._configure()
         logger.info("Using %s optimizer", self._optimizer.__name__)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
@@ -313,14 +304,14 @@ class Optimizer():
         return T.cast(optimizers.Optimizer, self._optimizer(**self._kwargs))
 
     def _configure_clipping(self,
-                            method: T.Literal["autoclip", "norm", "value"] | None,
+                            method: T.Literal["autoclip", "norm", "value", "none"],
                             value: float,
                             history: int) -> None:
         """ Configure optimizer clipping related kwargs, if selected
 
         Parameters
         ----------
-        method: Literal["autoclip", "norm", "value"] | None
+        method: Literal["autoclip", "norm", "value", "none"]
             The clipping method to use. ``None`` for no clipping
         value: float
             The value to clip by norm/value by. For autoclip, this is the clip percentile
@@ -329,7 +320,7 @@ class Optimizer():
             autoclip only: The number of iterations to keep for calculating the normalized value
         """
         logger.debug("method: '%s', value: %s, history: %s", method, value, history)
-        if method is None:
+        if method == "none":
             logger.debug("clipping disabled")
             return
 
@@ -399,57 +390,35 @@ class Optimizer():
         else:
             logger.debug("gradient accumulation disabled")
 
-    def _configure_specific(self, config: dict[str, ConfigValueType]) -> None:
-        """ Configure keyword optimizer specific keyword arguments based on user settings.
-
-        Parameters
-        ----------
-        config: dict[str, ConfigValueType]:
-            The user settings configuration dictionary
-        """
-        assert isinstance(config["optimizer"], str)
-        opts = self._valid[config["optimizer"]][1]
+    def _configure_specific(self) -> None:
+        """ Configure keyword optimizer specific keyword arguments based on user settings. """
+        opts = self._valid[cfg_opt.optimizer()][1]
         if not opts:
-            logger.debug("No additional kwargs to set for '%s'", config["optimizer"])
+            logger.debug("No additional kwargs to set for '%s'", cfg_opt.optimizer())
             return
 
         for key, val in opts.items():
-            logger.debug("Setting kwarg '%s' from '%s' to: %s", val, key, config[key])
-            self._kwargs[val] = config[key]
+            opt_val = getattr(cfg_opt, key)()
+            logger.debug("Setting kwarg '%s' from '%s' to: %s", val, key, opt_val)
+            self._kwargs[val] = opt_val
 
-    def _configure(self, config: dict[str, ConfigValueType]) -> None:
-        """ Process the user configuration options into Keras Optimizer kwargs.
+    def _configure(self) -> None:
+        """ Process the user configuration options into Keras Optimizer kwargs. """
+        self._configure_clipping(T.cast(T.Literal["autoclip", "norm", "value", "none"],
+                                        cfg_opt.gradient_clipping()),
+                                 cfg_opt.clipping_value(),
+                                 cfg_opt.autoclip_history())
 
-        Parameters
-        ----------
-        config: dict[str, ConfigValueType]:
-            The user settings configuration dictionary
-        """
-        clip_method = config["gradient_clipping"]
-        assert clip_method is None or (isinstance(clip_method, str)
-                                       and clip_method in ["autoclip", "norm", "value"])
-        assert isinstance(config["clipping_value"], float)
-        assert isinstance(config["autoclip_history"], int)
-        self._configure_clipping(T.cast(T.Literal["autoclip", "norm", "value"] | None,
-                                        clip_method),
-                                 config["clipping_value"],
-                                 config["autoclip_history"])
+        self._configure_ema(cfg_opt.use_ema(),
+                            cfg_opt.ema_momentum(),
+                            cfg_opt.ema_frequency())
 
-        assert isinstance(config["use_ema"], bool)
-        assert isinstance(config["ema_momentum"], float)
-        assert isinstance(config["ema_frequency"], int)
-        self._configure_ema(config["use_ema"],
-                            config["ema_momentum"],
-                            config["ema_frequency"])
+        self._configure_kwargs(cfg_opt.weight_decay(),
+                               cfg_opt.gradient_accumulation())
 
-        assert isinstance(config["weight_decay"], float)
-        assert isinstance(config["gradient_accumulation"], int)
-        self._configure_kwargs(config["weight_decay"],
-                               config["gradient_accumulation"])
+        self._configure_specific()
 
-        self._configure_specific(config)
-
-        logger.debug("Configured '%s' optimizer. kwargs: %s", config["optimizer"], self._kwargs)
+        logger.debug("Configured '%s' optimizer. kwargs: %s", cfg_opt.optimizer(), self._kwargs)
 
 
 class Settings():

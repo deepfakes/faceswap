@@ -7,6 +7,7 @@ import numpy as np
 
 from lib.utils import get_module_objects
 from ._base import Output, logger
+from . import pillow_defaults as cfg
 
 
 class Writer(Output):
@@ -25,18 +26,22 @@ class Writer(Output):
         self._check_transparency_format()
         # Correct format namings for writing to byte stream
         self._format_dict = {"jpg": "JPEG", "jp2": "JPEG 2000", "tif": "TIFF"}
-        self._separate_mask = self.config["draw_transparent"] and self.config["separate_mask"]
+        self._separate_mask = self.output_alpha and cfg.separate_mask()
         self._kwargs = self._get_save_kwargs()
+
+    @property
+    def output_alpha(self) -> bool:
+        """ bool : Pillow can output alpha channel. Returns ``True`` """
+        return cfg.draw_transparent()
 
     def _check_transparency_format(self) -> None:
         """ Make sure that the output format is correct if draw_transparent is selected """
         # pylint:disable=duplicate-code
-        transparent = self.config["draw_transparent"]
-        if not transparent or (transparent and self.config["format"] in ("png", "tif")):
+        if not self.output_alpha or (self.output_alpha and cfg.format() in ("png", "tif")):
             return
         logger.warning("Draw Transparent selected, but the requested format does not support "
                        "transparency. Changing output format to 'png'")
-        self.config["format"] = "png"
+        cfg.format.set("png")
 
     def _get_save_kwargs(self) -> dict[str, bool | int | str]:
         """ Return the save parameters for the file format
@@ -46,16 +51,16 @@ class Writer(Output):
         dict
             The specific keyword arguments for the selected file format
         """
-        filetype = self.config["format"]
-        kwargs = {}
+        filetype = cfg.format()
+        kwargs: dict[str, bool | int | str] = {}
         if filetype in ("gif", "jpg", "png"):
-            kwargs["optimize"] = self.config["optimize"]
+            kwargs["optimize"] = cfg.optimize()
         if filetype == "gif":
-            kwargs["interlace"] = self.config["gif_interlace"]
+            kwargs["interlace"] = cfg.gif_interlace()
         if filetype == "png":
-            kwargs["compress_level"] = self.config["png_compress_level"]
+            kwargs["compress_level"] = cfg.png_compress_level()
         if filetype == "tif":
-            kwargs["compression"] = self.config["tif_compression"]
+            kwargs["compression"] = cfg.tif_compression()
         logger.debug(kwargs)
         return kwargs
 
@@ -72,7 +77,7 @@ class Writer(Output):
             or length 2 (containing the image and mask to write out)
         """
         logger.trace("Outputting: (filename: '%s'", filename)  # type:ignore
-        filenames = self.output_filename(filename, self._separate_mask)
+        filenames = self.get_output_filename(filename, cfg.format(), self._separate_mask)
         try:
             for fname, img in zip(filenames, image):
                 with open(fname, "wb") as outfile:
@@ -124,7 +129,7 @@ class Writer(Output):
         :class:`BytesIO`
             The image as a bytes object ready for writing to disk
         """
-        fmt = self._format_dict.get(self.config["format"], self.config["format"].upper())
+        fmt = self._format_dict.get(cfg.format(), cfg.format().upper())
         encoded = BytesIO()
         out_image = Image.fromarray(image)
         out_image.save(encoded, fmt, **self._kwargs)

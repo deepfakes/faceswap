@@ -6,6 +6,7 @@ import numpy as np
 
 from lib.utils import get_module_objects
 from ._base import BatchType, cv2, Detector, DetectorBatch
+from . import cv2_dnn_defaults as cfg
 
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ class Detect(Detector):
         self.vram = 0  # CPU Only. Doesn't use VRAM
         self.vram_per_batch = 0
         self.batchsize = 1
-        self.confidence = self.config["confidence"] / 100
+        self.confidence = cfg.confidence() / 100
 
     def init_model(self) -> None:
         """ Initialize CV2 DNN Detector Model"""

@@ -14,6 +14,7 @@ from keras.saving import load_model
 
 from lib.utils import get_module_objects
 from ._base import Aligner, AlignerBatch, BatchType
+from . import fan_defaults as cfg
 
 if T.TYPE_CHECKING:
     from lib.align import DetectedFace
@@ -35,7 +36,7 @@ class Align(Aligner):
         self.vram = 896  # 810 in testing
         self.vram_per_batch = 768  # ~720 in testing
         self.realign_centering = "head"
-        self.batchsize: int = self.config["batch-size"]
+        self.batchsize: int = cfg.batch_size()
         self.reference_scale = 200. / 195.
 
     def init_model(self) -> None:
