@@ -166,13 +166,23 @@ class System:  # pylint:disable=too-many-instance-attributes
                      max_python,
                      retval)
         if not retval:
+            print()
             logger.error("Your Python version %s(%s) is unsupported. Please run with Python "
-                         "version %s to %s 64bit",
+                         "version %s to %s 64bit.",
                          self.python_version,
                          self.python_architecture,
                          ".".join(str(x) for x in VALID_PYTHON[0]),
                          ".".join(str(x) for x in max_python))
+            print()
+            logger.error("If you have recently upgraded faceswap, then you will need to create a "
+                         "new virtual environment.")
+            logger.error("The easiest way to do this is to run the latest version of the Faceswap "
+                         "installer from:")
+            logger.error("https://github.com/deepfakes/faceswap/releases")
+            print()
+            input("Press <Enter> to close")
             sys.exit(1)
+
         return retval
 
     def validate(self) -> None:
