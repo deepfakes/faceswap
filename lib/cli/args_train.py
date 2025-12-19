@@ -176,12 +176,13 @@ class TrainArgs(FaceSwapArgs):
                 "Learning rate warmup. Linearly increase the learning rate from 0 to the chosen "
                 "target rate over the number of iterations given here. 0 to disable.")})
         argument_list.append({
-             "opts": ("-d", "--distributed"),
-             "dest": "distributed",
-             "action": "store_true",
-             "backend": ("nvidia", "rocm"),
-             "group": _("training"),
-             "help": _("Use distibuted training on multi-gpu setups.")})
+            "opts": ("-d", "--distributed"),
+            "dest": "distributed",
+            "action": "store_true",
+            "default": False,
+            "backend": ("nvidia", "rocm"),
+            "group": _("training"),
+            "help": _("Use distibuted training on multi-gpu setups.")})
         argument_list.append({
             "opts": ("-n", "--no-logs"),
             "action": "store_true",

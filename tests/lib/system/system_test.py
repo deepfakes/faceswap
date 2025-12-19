@@ -126,6 +126,7 @@ def test_system_validate_python(system_instance: System,
     """ Test :class:`lib.system.System` _validate_python method """
     monkeypatch.setattr(system_mod, "VALID_PYTHON", (((3, 11), (3, 13))))
     monkeypatch.setattr(system_mod.sys, "version_info", (3, 12, 0))
+    monkeypatch.setattr("builtins.input", lambda _: "")
     system_instance.python_architecture = "64bit"
 
     assert system_instance.validate_python()
