@@ -226,20 +226,11 @@ class FaceSwapArgs():
             "help": _("Path to store the logfile. Leave blank to store in the faceswap folder")})
         # These are hidden arguments to indicate that the GUI/Colab is being used
         global_args.append({
-            "opts": ("-gui", "--gui"),
+            "opts": ("-G", "--gui"),
             "action": "store_true",
             "dest": "redirect_gui",
             "default": False,
             "help": argparse.SUPPRESS})
-        # Deprecated multi-character switches
-        global_args.append({
-            "opts": ("-LF",),
-            "action": SaveFileFullPaths,
-            "filetypes": 'log',
-            "type": str,
-            "dest": "depr_logfile_LF_F",
-            "help": argparse.SUPPRESS})
-
         return global_args
 
     @staticmethod

@@ -37,3 +37,7 @@ The training Package handles libraries to assist with training a model
 |
 .. automodapi:: lib.training.preview_tk
    :include-all-objects:
+
+|
+.. automodapi:: lib.training.tensorboard
+   :include-all-objects:

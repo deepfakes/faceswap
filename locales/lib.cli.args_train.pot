@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-11-21 17:32+0000\n"
+"POT-Creation-Date: 2025-12-15 20:02+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -111,8 +111,8 @@ msgid ""
 msgstr ""
 
 #: lib/cli/args_train.py:147 lib/cli/args_train.py:160
-#: lib/cli/args_train.py:174 lib/cli/args_train.py:186
-#: lib/cli/args_train.py:202 lib/cli/args_train.py:211
+#: lib/cli/args_train.py:174 lib/cli/args_train.py:183
+#: lib/cli/args_train.py:190 lib/cli/args_train.py:199
 msgid "training"
 msgstr ""
 
@@ -139,26 +139,17 @@ msgid ""
 "chosen target rate over the number of iterations given here. 0 to disable."
 msgstr ""
 
-#: lib/cli/args_train.py:188
-msgid ""
-"R|Select the distribution stategy to use.\n"
-"L|default: Use Tensorflow's default distribution strategy.\n"
-"L|central-storage: Centralizes variables on the CPU whilst operations are "
-"performed on 1 or more local GPUs. This can help save some VRAM at the cost "
-"of some speed by not storing variables on the GPU. Note: Mixed-Precision is "
-"not supported on multi-GPU setups.\n"
-"L|mirrored: Supports synchronous distributed training across multiple local "
-"GPUs. A copy of the model and all variables are loaded onto each GPU with "
-"batches distributed to each GPU at each iteration."
+#: lib/cli/args_train.py:184
+msgid "Use distibuted training on multi-gpu setups."
 msgstr ""
 
-#: lib/cli/args_train.py:204
+#: lib/cli/args_train.py:192
 msgid ""
 "Disables TensorBoard logging. NB: Disabling logs means that you will not be "
 "able to use the graph or analysis for this session in the GUI."
 msgstr ""
 
-#: lib/cli/args_train.py:213
+#: lib/cli/args_train.py:201
 msgid ""
 "Use the Learning Rate Finder to discover the optimal learning rate for "
 "training. For new models, this will calculate the optimal learning rate for "
@@ -167,26 +158,26 @@ msgid ""
 "the manually configured learning rate (configurable in train settings)."
 msgstr ""
 
-#: lib/cli/args_train.py:226 lib/cli/args_train.py:236
+#: lib/cli/args_train.py:214 lib/cli/args_train.py:224
 msgid "Saving"
 msgstr ""
 
-#: lib/cli/args_train.py:227
+#: lib/cli/args_train.py:215
 msgid "Sets the number of iterations between each model save."
 msgstr ""
 
-#: lib/cli/args_train.py:238
+#: lib/cli/args_train.py:226
 msgid ""
 "Sets the number of iterations before saving a backup snapshot of the model "
 "in it's current state. Set to 0 for off."
 msgstr ""
 
-#: lib/cli/args_train.py:245 lib/cli/args_train.py:257
-#: lib/cli/args_train.py:269
+#: lib/cli/args_train.py:233 lib/cli/args_train.py:245
+#: lib/cli/args_train.py:257
 msgid "timelapse"
 msgstr ""
 
-#: lib/cli/args_train.py:247
+#: lib/cli/args_train.py:235
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -195,7 +186,7 @@ msgid ""
 "timelapse-input-B parameter."
 msgstr ""
 
-#: lib/cli/args_train.py:259
+#: lib/cli/args_train.py:247
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -204,7 +195,7 @@ msgid ""
 "timelapse-input-A parameter."
 msgstr ""
 
-#: lib/cli/args_train.py:271
+#: lib/cli/args_train.py:259
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. If "
@@ -212,47 +203,47 @@ msgid ""
 "model folder/timelapse/"
 msgstr ""
 
-#: lib/cli/args_train.py:280 lib/cli/args_train.py:287
+#: lib/cli/args_train.py:268 lib/cli/args_train.py:275
 msgid "preview"
 msgstr ""
 
-#: lib/cli/args_train.py:281
+#: lib/cli/args_train.py:269
 msgid "Show training preview output. in a separate window."
 msgstr ""
 
-#: lib/cli/args_train.py:289
+#: lib/cli/args_train.py:277
 msgid ""
 "Writes the training result to a file. The image will be stored in the root "
 "of your FaceSwap folder."
 msgstr ""
 
-#: lib/cli/args_train.py:296 lib/cli/args_train.py:306
-#: lib/cli/args_train.py:316 lib/cli/args_train.py:326
+#: lib/cli/args_train.py:284 lib/cli/args_train.py:294
+#: lib/cli/args_train.py:304 lib/cli/args_train.py:314
 msgid "augmentation"
 msgstr ""
 
-#: lib/cli/args_train.py:298
+#: lib/cli/args_train.py:286
 msgid ""
 "Warps training faces to closely matched Landmarks from the opposite face-set "
 "rather than randomly warping the face. This is the 'dfaker' way of doing "
 "warping."
 msgstr ""
 
-#: lib/cli/args_train.py:308
+#: lib/cli/args_train.py:296
 msgid ""
 "To effectively learn, a random set of images are flipped horizontally. "
 "Sometimes it is desirable for this not to occur. Generally this should be "
 "left off except for during 'fit training'."
 msgstr ""
 
-#: lib/cli/args_train.py:318
+#: lib/cli/args_train.py:306
 msgid ""
 "Color augmentation helps make the model less susceptible to color "
 "differences between the A and B sets, at an increased training time cost. "
 "Enable this option to disable color augmentation."
 msgstr ""
 
-#: lib/cli/args_train.py:328
+#: lib/cli/args_train.py:316
 msgid ""
 "Warping is integral to training the Neural Network. This option should only "
 "be enabled towards the very end of training to try to bring out more detail. "

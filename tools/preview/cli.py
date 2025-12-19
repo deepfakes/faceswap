@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
-import argparse
 import gettext
 import typing as T
 
@@ -74,12 +73,6 @@ class PreviewArgs(FaceSwapArgs):
             "dest": "swap_model",
             "default": False,
             "help": _("Swap the model. Instead of A -> B, swap B -> A")})
-        # Deprecated multi-character switches
-        argument_list.append({
-            "opts": ("-al", ),
-            "type": str,
-            "dest": "depr_alignments_al_a",
-            "help": argparse.SUPPRESS})
         return argument_list
 
 

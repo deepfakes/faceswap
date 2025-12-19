@@ -52,7 +52,7 @@ class Align(Aligner):
         points by for different origins when 4 Point ROI landmarks are provided """
 
         centering = T.cast("CenteringType", cfg.four_point_centering)
-        self._adjustment: float = 1. if centering is None else 1. - EXTRACT_RATIOS[centering]
+        self._adjustment: float = 1. if centering == "none" else 1. - EXTRACT_RATIOS[centering]
         """float: The amount to adjust 4 point ROI landmarks to standardize the points for a
         'head' sized extracted face """
 

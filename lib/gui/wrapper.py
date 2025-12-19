@@ -170,7 +170,7 @@ class ProcessWrapper():
                 self._get_training_session_info(cliopt)
 
         if not generate:
-            args.append("-gui")  # Indicate to Faceswap that we are running the GUI
+            args.append("-G")  # Indicate to Faceswap that we are running the GUI
         if generate:
             # Delimit args with spaces
             args = [f'"{arg}"' if " " in arg and not arg.startswith(("[", "("))

@@ -23,6 +23,7 @@ from .state import State
 
 if T.TYPE_CHECKING:
     import argparse
+    import numpy as np
 
 
 logger = logging.getLogger(__name__)
@@ -50,11 +51,6 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         is the same for both sides of the model, then this can be a single 3 dimensional `tuple`.
         If the inputs have different sizes for `"A"` and `"B"` this should be a `list` of 2 3
         dimensional shape `tuples`, 1 for each side respectively.
-    trainer: str
-        Currently there is only one trainer available (`"original"`), so at present this attribute
-        can be ignored. If/when more trainers are added, then this attribute should be overridden
-        with the trainer name that a model requires in the model plugin's
-        :func:`__init__` function.
     """
     def __init__(self,
                  model_dir: str,
@@ -63,7 +59,6 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         logger.debug(parse_class_init(locals()))
         # Input shape must be set within the plugin after initializing
         self.input_shape: tuple[int, ...] = ()
-        self.trainer = "original"  # Override for plugin specific trainer
         self.color_order: T.Literal["bgr", "rgb"] = "bgr"  # Override for image color channel order
 
         self._args = arguments
@@ -225,28 +220,27 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         Finally, a model summary is outputted to the logger at verbose level.
         """
         is_summary = hasattr(self._args, "summary") and self._args.summary
-        with self._settings.strategy_scope():
-            if self._io.model_exists:
-                model = self.io.load()
-                if self._is_predict:
-                    inference = Inference(model, self._args.swap_model)
-                    self._model = inference.model
-                else:
-                    self._model = model
+        if self._io.model_exists:
+            model = self.io.load()
+            if self._is_predict:
+                inference = Inference(model, self._args.swap_model)
+                self._model = inference.model
             else:
-                self._validate_input_shape()
-                inputs = self._get_inputs()
-                if not self._settings.use_mixed_precision and not is_summary:
-                    # Store layer names which can be switched to mixed precision
-                    model, mp_layers = self._settings.get_mixed_precision_layers(self.build_model,
-                                                                                 inputs)
-                    self._state.add_mixed_precision_layers(mp_layers)
-                    self._model = model
-                else:
-                    self._model = self.build_model(inputs)
-            if not is_summary and not self._is_predict:
-                self._compile_model()
-            self._output_summary()
+                self._model = model
+        else:
+            self._validate_input_shape()
+            inputs = self._get_inputs()
+            if not self._settings.use_mixed_precision and not is_summary:
+                # Store layer names which can be switched to mixed precision
+                model, mp_layers = self._settings.get_mixed_precision_layers(self.build_model,
+                                                                             inputs)
+                self._state.add_mixed_precision_layers(mp_layers)
+                self._model = model
+            else:
+                self._model = self.build_model(inputs)
+        if not is_summary and not self._is_predict:
+            self._compile_model()
+        self._output_summary()
 
     def _validate_input_shape(self) -> None:
         """ Validate that the input shape is either a single shape tuple of 3 dimensions or
@@ -337,7 +331,7 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         self._state.add_session_loss_names(self._loss.names)
         logger.debug("Compiled Model: %s", self.model)
 
-    def add_history(self, loss: list[float]) -> None:
+    def add_history(self, loss: np.ndarray) -> None:
         """ Add the current iteration's loss history to :attr:`_io.history`.
 
         Called from the trainer after each iteration, for tracking loss drop over time between
@@ -345,11 +339,11 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
 
         Parameters
         ----------
-        loss: list[float]
+        loss : :class:`numpy.ndarray`
             The loss values for the A and B side for the current iteration. This should be the
             collated loss values for each side.
         """
-        self._io.history.append(sum(loss))
+        self._io.history.append(float(sum(loss)))
 
 
 __all__ = get_module_objects(__name__)

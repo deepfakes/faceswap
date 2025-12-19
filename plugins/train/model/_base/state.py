@@ -204,7 +204,6 @@ class State():  # pylint:disable=too-many-instance-attributes
 
     def save(self) -> None:
         """ Save the state values to the serialized state file. """
-        logger.debug("Saving State")
         state = {"name": self._name,
                  "sessions": {k: v for k, v in self._sessions.items()
                               if v.get("iterations", 0) > 0},
@@ -213,8 +212,9 @@ class State():  # pylint:disable=too-many-instance-attributes
                  "mixed_precision_layers": self._mixed_precision_layers,
                  "lr_finder": self._lr_finder,
                  "config": self._config}
+        logger.debug("Saving State: %s", state)
         self._serializer.save(self._filename, state)
-        logger.debug("Saved State")
+        logger.debug("Saved State: '%s'", self._filename)
 
     def _update_legacy_config(self) -> bool:
         """ Legacy updates for new config additions.

@@ -108,6 +108,9 @@ class PreviewBase():  # pylint:disable=too-few-public-methods
         :func:`_display_preview` function """
         logger.debug("Launching %s", self.__class__.__name__)
         while True:
+            if self._should_shutdown:
+                logger.debug("Shutdown received")
+                return
             if not self._buffer.is_updated:
                 logger.debug("Waiting for preview image")
                 sleep(1)

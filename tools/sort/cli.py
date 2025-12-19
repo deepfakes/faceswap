@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
-import argparse
 import gettext
 
 from lib.cli.args import FaceSwapArgs
@@ -223,12 +222,6 @@ class SortArgs(FaceSwapArgs):
                 "Specify a log file to use for saving the renaming or grouping information. If "
                 "specified extension isn't 'json' or 'yaml', then json will be used as the "
                 "serializer, with the supplied filename. Default: sort_log.json")})
-        # Deprecated multi-character switches
-        argument_list.append({
-            "opts": ("-lf", ),
-            "type": str,
-            "dest": "depr_log-file_lf_f",
-            "help": argparse.SUPPRESS})
         return argument_list
 
 

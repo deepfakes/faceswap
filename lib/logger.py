@@ -297,6 +297,7 @@ def _set_root_logger(loglevel: int = logging.INFO) -> logging.Logger:
     """
     rootlogger = logging.getLogger()
     rootlogger.setLevel(loglevel)
+    logging.captureWarnings(True)
     return rootlogger
 
 

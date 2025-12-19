@@ -60,9 +60,13 @@ This package contains the training loop for Faceswap
    :no-inheritance-diagram:
 
 |
-.. automodapi:: plugins.train.trainer._tensorboard
+.. automodapi:: plugins.train.trainer.distributed
    :include-all-objects:
 
 |
 .. automodapi:: plugins.train.trainer.original
+   :include-all-objects:
+
+|
+.. automodapi:: plugins.train.trainer.trainer_config
    :include-all-objects:

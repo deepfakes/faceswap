@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
-import argparse
 import gettext
 
 from lib.cli.args import FaceSwapArgs
@@ -238,12 +237,6 @@ class MaskArgs(FaceSwapArgs):
             "help": _(
                 "R|Whether to output the whole frame or only the face box when using "
                 "output processing. Only has an effect when using frames as input.")})
-        # Deprecated multi-character switches
-        argument_list.append({
-            "opts": ("-it", ),
-            "type": str,
-            "dest": "depr_input-type_it_I",
-            "help": argparse.SUPPRESS})
         return argument_list
 
 

@@ -16,15 +16,19 @@ from tests.lib.config.helpers import patch_config  # noqa:[F401]
 
 
 @pytest.fixture
-def model_feeder_mock(patch_config, mocker: pytest_mock.MockFixture):  # noqa:[F811]
+def _trainer_mock(patch_config, mocker: pytest_mock.MockFixture):  # noqa:[F811]
     """ Generate a mocked model and feeder object and patch user config items """
     def _apply_patch(iters=1000, mode="default", strength="default"):
         patch_config(cfg, {"lr_finder_iterations": iters})
         patch_config(cfg, {"lr_finder_mode": mode})
         patch_config(cfg, {"lr_finder_strength": strength})
+        trainer = mocker.MagicMock()
         model = mocker.MagicMock()
-        feeder = mocker.MagicMock()
-        return model, feeder
+        model.name = "TestModel"
+        optimizer = mocker.MagicMock()
+        trainer._plugin.model = model
+        trainer._plugin.model.model.optimizer = optimizer
+        return trainer, model, optimizer
     return _apply_patch
 
 
@@ -44,12 +48,13 @@ _LR_CMDS_IDS = [f"stop:{x[0]}|beta:{x[1]}" for x in _LR_CMDS]
 
 @pytest.mark.parametrize(_LR_CONF_PARAMS, _LR_CONF)
 @pytest.mark.parametrize(_LR_CMDS_PARAMS, _LR_CMDS, ids=_LR_CMDS_IDS)
-def test_LearningRateFinder_init(iters, mode, strength, stop_factor, beta, model_feeder_mock):
+def test_LearningRateFinder_init(iters, mode, strength, stop_factor, beta, _trainer_mock):
     """ Test lib.train.LearingRateFinder.__init__ """
-    model, feeder = model_feeder_mock(iters, mode, strength)
-    lrf = LearningRateFinder(model, feeder, stop_factor=stop_factor, beta=beta)
+    trainer, model, optimizer = _trainer_mock(iters, mode, strength)
+    lrf = LearningRateFinder(trainer, stop_factor=stop_factor, beta=beta)
+    assert lrf._trainer is trainer
     assert lrf._model is model
-    assert lrf._feeder is feeder
+    assert lrf._optimizer is optimizer
     assert lrf._start_lr == 1e-10
     assert lrf._stop_factor == stop_factor
     assert lrf._beta == beta
@@ -70,13 +75,13 @@ def test_LearningRateFinder_on_batch_end(iteration,
                                          best,
                                          stop_factor,
                                          beta,
-                                         model_feeder_mock,
+                                         _trainer_mock,
                                          mocker):
     """ Test lib.train.LearingRateFinder._on_batch_end """
-    model, feeder = model_feeder_mock()
-    lrf = LearningRateFinder(model, feeder, stop_factor=stop_factor, beta=beta)
-    model.model.optimizer.learning_rate.assign = mocker.MagicMock()
-    model.model.optimizer.learning_rate.numpy = mocker.MagicMock(return_value=learning_rate)
+    trainer, model, optimizer = _trainer_mock()
+    lrf = LearningRateFinder(trainer, stop_factor=stop_factor, beta=beta)
+    optimizer.learning_rate.assign = mocker.MagicMock()
+    optimizer.learning_rate.numpy = mocker.MagicMock(return_value=learning_rate)
 
     initial_avg = lrf._loss["avg"]
     lrf._loss["best"] = best
@@ -88,43 +93,38 @@ def test_LearningRateFinder_on_batch_end(iteration,
 
     if iteration > 1 and lrf._metrics["losses"][-1] > lrf._stop_factor * lrf._loss["best"]:
         assert model.model.stop_training is True
-        model.model.optimizer.learning_rate.assign.assert_not_called()
+        optimizer.learning_rate.assign.assert_not_called()
         return
 
     if iteration == 1:
         assert lrf._loss["best"] == lrf._metrics["losses"][-1]
 
     assert model.model.stop_training is not True
-    model.model.optimizer.learning_rate.assign.assert_called_with(
+    optimizer.learning_rate.assign.assert_called_with(
         learning_rate * lrf._lr_multiplier)
 
 
 @pytest.mark.parametrize(_LR_CONF_PARAMS, _LR_CONF)
-def test_LearningRateFinder_train(iters,
+def test_LearningRateFinder_train(iters,  # pylint:disable=too-many-locals
                                   mode,
                                   strength,
-                                  model_feeder_mock,
+                                  _trainer_mock,
                                   mocker):
     """ Test lib.train.LearingRateFinder._train """
-    model, feeder = model_feeder_mock(iters, mode, strength)
+    trainer, _, _ = _trainer_mock(iters, mode, strength)
 
-    test_input_targets = np.random.random((2, 1)).tolist()
-    feeder.get_batch = mocker.MagicMock(return_value=test_input_targets)
     mock_loss_return = np.random.rand(2).tolist()
-    model.model.train_on_batch = mocker.MagicMock(return_value=mock_loss_return)
+    trainer.train_one_batch = mocker.MagicMock(return_value=mock_loss_return)
 
-    lrf = LearningRateFinder(model, feeder)
+    lrf = LearningRateFinder(trainer)
 
     lrf._on_batch_end = mocker.MagicMock()
     lrf._update_description = mocker.MagicMock()
 
     lrf._train()
 
-    feeder.get_batch.assert_called()
-    assert feeder.get_batch.call_count == iters
-
-    model.model.train_on_batch.assert_called_with(test_input_targets[0], y=test_input_targets[1])
-    assert model.model.train_on_batch.call_count == iters
+    trainer.train_one_batch.assert_called()
+    assert trainer.train_one_batch.call_count == iters
 
     train_call_args = [mocker.call(x + 1, mock_loss_return[0]) for x in range(iters)]
     assert lrf._on_batch_end.call_args_list == train_call_args
@@ -134,29 +134,20 @@ def test_LearningRateFinder_train(iters,
 
     # NaN break
     mock_loss_return = (np.nan, np.nan)
-    model.model.train_on_batch = mocker.MagicMock(return_value=mock_loss_return)
+    trainer.train_one_batch = mocker.MagicMock(return_value=mock_loss_return)
 
     lrf._train()
 
-    assert feeder.get_batch.call_count == iters + 1  # Called once
-    assert model.model.train_on_batch.call_count == 1  # Called once
+    assert trainer.train_one_batch.call_count == 1  # Called once
 
     assert lrf._update_description.call_count == iters  # Not called
     assert lrf._on_batch_end.call_count == iters  # Not called
 
 
-_LR_FIND = (
-    (True,  [0.100, 0.050, 0.025], 0.025, [1e-5, 1e-4, 1e-3], "model_exist"),
-    (False, [0.100, 0.050, 0.025], 0.025, [1e-5, 1e-4, 1e-3], "no_model"),
-    (True, [0.100, 0.050, 0.025], 0.025, [1e-5, 1e-4, 1e-10], "low_lr"),
-            )
-_LR_PARAMS_FIND = ("exists", "losses", "best", "learning_rates")
-
-
-def test_LearningRateFinder_rebuild_optimizer(model_feeder_mock):
+def test_LearningRateFinder_rebuild_optimizer(_trainer_mock):
     """ Test lib.train.LearingRateFinder._rebuild_optimizer """
-    model, feeder = model_feeder_mock()
-    lrf = LearningRateFinder(model, feeder)
+    trainer, _, _ = _trainer_mock()
+    lrf = LearningRateFinder(trainer)
 
     class Dummy:
         """ Dummy Optimizer"""
@@ -173,14 +164,14 @@ def test_LearningRateFinder_rebuild_optimizer(model_feeder_mock):
 
 @pytest.mark.parametrize(_LR_CONF_PARAMS, _LR_CONF)
 @pytest.mark.parametrize("new_lr", (1e-4, 3.5e-5, 9.3e-6))
-def test_LearningRateFinder_reset_model(iters, mode, strength, new_lr, model_feeder_mock, mocker):
+def test_LearningRateFinder_reset_model(iters, mode, strength, new_lr, _trainer_mock, mocker):
     """ Test lib.train.LearingRateFinder._reset_model """
-    model, feeder = model_feeder_mock(iters, mode, strength)
+    trainer, model, optimizer = _trainer_mock(iters, mode, strength)
     model.state.add_lr_finder = mocker.MagicMock()
     model.state.save = mocker.MagicMock()
     model.model.load_weights = mocker.MagicMock()
-    model.model.optimizer = "OldOptimizer"
 
+    old_optimizer = optimizer
     new_optimizer = mocker.MagicMock()
 
     def compile_side_effect(*args, **kwargs):  # pylint:disable=unused-argument
@@ -189,7 +180,7 @@ def test_LearningRateFinder_reset_model(iters, mode, strength, new_lr, model_fee
 
     model.model.compile.side_effect = compile_side_effect
 
-    lrf = LearningRateFinder(model, feeder)
+    lrf = LearningRateFinder(trainer)
     lrf._rebuild_optimizer = mocker.MagicMock()
 
     lrf._reset_model(1e-5, new_lr)
@@ -201,14 +192,22 @@ def test_LearningRateFinder_reset_model(iters, mode, strength, new_lr, model_fee
         lrf._rebuild_optimizer.assert_not_called()
         model.model.compile.assert_not_called()
         model.model.load_weights.assert_not_called()
-        assert model.model.optimizer == "OldOptimizer"
+        assert model.model.optimizer is old_optimizer
         new_optimizer.learning_rate.assign.assert_not_called()
     else:
-        lrf._rebuild_optimizer.assert_called_once_with("OldOptimizer")
+        lrf._rebuild_optimizer.assert_called_once_with(old_optimizer)
         model.model.load_weights.assert_called_once()
         model.model.compile.assert_called_once()
         assert model.model.optimizer is new_optimizer
         new_optimizer.learning_rate.assign.assert_called_once_with(new_lr)
+
+
+_LR_FIND = (
+    (True,  [0.100, 0.050, 0.025], 0.025, [1e-5, 1e-4, 1e-3], "model_exist"),
+    (False, [0.100, 0.050, 0.025], 0.025, [1e-5, 1e-4, 1e-3], "no_model"),
+    (True, [0.100, 0.050, 0.025], 0.025, [1e-5, 1e-4, 1e-10], "low_lr"),
+            )
+_LR_PARAMS_FIND = ("exists", "losses", "best", "learning_rates")
 
 
 @pytest.mark.parametrize(_LR_PARAMS_FIND,
@@ -225,18 +224,19 @@ def test_LearningRateFinder_find(iters,  # pylint:disable=too-many-arguments,too
                                  losses,
                                  best,
                                  learning_rates,
-                                 model_feeder_mock,
+                                 _trainer_mock,
                                  mocker):
     """ Test lib.train.LearingRateFinder.find """
     # pylint:disable=too-many-locals
-    model, feeder = model_feeder_mock(iters, mode, strength)
+    trainer, model, optimizer = _trainer_mock(iters, mode, strength)
     model.io.model_exists = exists
     model.io.save = mocker.MagicMock()
-    model.model.optimizer.learning_rate.numpy = mocker.MagicMock(return_value="TestOriginalLR")
-    model.model.optimizer.learning_rate.assign = mocker.MagicMock()
+    original_lr = float(np.random.rand())
+    optimizer.learning_rate.numpy = mocker.MagicMock(return_value=original_lr)
+    optimizer.learning_rate.assign = mocker.MagicMock()
     mocker.patch("shutil.rmtree")
 
-    lrf = LearningRateFinder(model, feeder, stop_factor=stop_factor, beta=beta)
+    lrf = LearningRateFinder(trainer, stop_factor=stop_factor, beta=beta)
 
     train_mock = mocker.MagicMock()
     plot_mock = mocker.MagicMock()
@@ -255,7 +255,7 @@ def test_LearningRateFinder_find(iters,  # pylint:disable=too-many-arguments,too
     else:
         model.io.save.assert_called_once()
 
-    model.model.optimizer.learning_rate.assign.assert_called_with(lrf._start_lr)
+    optimizer.learning_rate.assign.assert_called_with(lrf._start_lr)
     train_mock.assert_called_once()
 
     new_lr = learning_rates[losses.index(best)] / _STRENGTH_LOOKUP[strength]
@@ -266,5 +266,5 @@ def test_LearningRateFinder_find(iters,  # pylint:disable=too-many-arguments,too
         return
 
     plot_mock.assert_called_once()
-    reset_mock.assert_called_once_with("TestOriginalLR", new_lr)
+    reset_mock.assert_called_once_with(original_lr, new_lr)
     assert result

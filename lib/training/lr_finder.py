@@ -19,8 +19,7 @@ from plugins.train import train_config as cfg
 
 if T.TYPE_CHECKING:
     from keras import optimizers
-    from lib.training import Feeder
-    from plugins.train.model._base import ModelBase
+    from plugins.train import training
 
 logger = logging.getLogger(__name__)
 
@@ -37,18 +36,15 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
 
     Parameters
     ----------
-    model: :class:`keras.models.Model`
-        The keras model to find the optimal learning rate for
-    feeder: :class:`~lib.training.generator.Feeder`
-        The feeder for training the model
-    stop_factor: int
+    trainer : :class:`plugins.train.run_trainer.Trainer`
+        The training loop with the loaded training plugin
+    stop_factor : int
         When to stop finding the optimal learning rate
-    beta: float
+    beta : float
         Amount to smooth loss by, for graphing purposes
     """
     def __init__(self,  # pylint:disable=too-many-positional-arguments
-                 model: ModelBase,
-                 feeder: Feeder,
+                 trainer: training.Trainer,
                  stop_factor: int = 4,
                  beta: float = 0.98) -> None:
         logger.debug(parse_class_init(locals()))
@@ -59,8 +55,11 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
         self._start_lr = 1e-10
         end_lr = 1e+1
 
-        self._model = model
-        self._feeder = feeder
+        self._trainer = trainer
+
+        self._model = trainer._plugin.model
+        self._optimizer = trainer._plugin.model.model.optimizer
+
         self._stop_factor = stop_factor
         self._beta = beta
         self._lr_multiplier: float = (end_lr / self._start_lr) ** (1.0 / self._iterations)
@@ -82,7 +81,7 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
         loss: float
             The loss value for the current batch
         """
-        learning_rate = self._model.model.optimizer.learning_rate.numpy()
+        learning_rate = float(self._optimizer.learning_rate.numpy())
         self._metrics["learning_rates"].append(learning_rate)
 
         self._loss["avg"] = (self._beta * self._loss["avg"]) + ((1 - self._beta) * loss)
@@ -100,7 +99,7 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
 
         learning_rate *= self._lr_multiplier
 
-        self._model.model.optimizer.learning_rate.assign(learning_rate)
+        self._optimizer.learning_rate.assign(learning_rate)
 
     def _update_description(self, progress_bar: tqdm) -> None:
         """ Update the description of the progress bar for the current iteration
@@ -123,8 +122,8 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
                     desc="Current: N/A      Best: N/A    ",
                     leave=False)
         for idx in pbar:
-            model_inputs, model_targets = self._feeder.get_batch()
-            loss: list[float] = self._model.model.train_on_batch(model_inputs, y=model_targets)
+            loss = self._trainer.train_one_batch()
+
             if any(np.isnan(x) for x in loss):
                 logger.warning("NaN detected! Exiting early")
                 break
@@ -167,7 +166,8 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
             return
 
         logger.debug("Resetting optimizer")
-        optimizer = self._rebuild_optimizer(self._model.model.optimizer)
+        optimizer = self._rebuild_optimizer(self._optimizer)
+        del self._optimizer
         del self._model.model.optimizer
 
         logger.info("Loading initial weights")
@@ -179,6 +179,7 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
 
         logger.info("Updating Learning Rate from %s to %s", f"{original_lr:.1e}", f"{new_lr:.1e}")
         self._model.model.optimizer.learning_rate.assign(new_lr)
+        self._optimizer = self._model.model.optimizer
 
     def find(self) -> bool:
         """ Find the optimal learning rate
@@ -191,7 +192,7 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
         if not self._model.io.model_exists:
             self._model.io.save()
 
-        original_lr = self._model.model.optimizer.learning_rate.numpy()
+        original_lr = float(self._model.model.optimizer.learning_rate.numpy())
         self._model.model.optimizer.learning_rate.assign(self._start_lr)
 
         self._train()
