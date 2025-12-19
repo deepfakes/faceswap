@@ -9,11 +9,9 @@ import typing as T
 from tkinter import ttk
 import webbrowser
 
-from lib.git import git
 from lib.multithreading import MultiThread
 from lib.serializer import get_serializer, Serializer
 from lib.utils import FaceswapError
-import update_deps
 
 from .popup_configure import open_popup
 from .custom_widgets import Tooltip
@@ -268,117 +266,11 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         print(info)
         self.root.config(cursor="")
 
-    @classmethod
-    def _process_status_output(cls, status: list[str]) -> bool:
-        """ Process the output of a git status call and output information
-
-        Parameters
-        ----------
-        status : list[str]
-            The lines returned from a git status call
-
-        Returns
-        -------
-        bool
-            ``True`` if the repo can be updated otherwise ``False``
-        """
-        for line in status:
-            if line.lower().startswith("your branch is ahead"):
-                logger.warning("Your branch is ahead of the remote repo. Not updating")
-                return False
-            if line.lower().startswith("your branch is up to date"):
-                logger.info("Faceswap is up to date.")
-                return False
-            if "have diverged" in line.lower():
-                logger.warning("Your branch has diverged from the remote repo. Not updating")
-                return False
-            if line.lower().startswith("your branch is behind"):
-                return True
-
-        logger.warning("Unable to retrieve status of branch")
-        return False
-
-    def _check_for_updates(self, check: bool = False) -> bool:
-        """ Check whether an update is required
-
-        Parameters
-        ----------
-        check: bool
-            ``True`` if we are just checking for updates ``False`` if a check and update is to be
-            performed. Default: ``False``
-
-        Returns
-        -------
-        bool
-            ``True`` if an update is required
-        """
-        # Do the check
-        logger.info("Checking for updates...")
-        msg = ("Git is not installed or you are not running a cloned repo. "
-               "Unable to check for updates")
-
-        sync = git.update_remote()
-        if not sync:
-            logger.warning(msg)
-            return False
-
-        status = git.status
-        if not status:
-            logger.warning(msg)
-            return False
-
-        retval = self._process_status_output(status)
-        if retval and check:
-            logger.info("There are updates available")
-        return retval
-
-    def _check(self) -> None:
-        """ Check for updates and clone repository """
-        logger.debug("Checking for updates...")
-        self.root.config(cursor="watch")
-        self._check_for_updates(check=True)
-        self.root.config(cursor="")
-
-    def _do_update(self) -> bool:
-        """ Update Faceswap
-
-        Returns
-        -------
-        bool
-            ``True`` if update was successful
-        """
-        logger.info("A new version is available. Updating...")
-        success = git.pull()
-        if not success:
-            logger.info("An error occurred during update")
-        return success
-
-    def _update(self) -> None:
-        """ Check for updates and clone repository """
-        logger.debug("Updating Faceswap...")
-        self.root.config(cursor="watch")
-        success = False
-        if self._check_for_updates():
-            success = self._do_update()
-        update_deps.main(is_gui=True)
-        if success:
-            logger.info("Please restart Faceswap to complete the update.")
-        self.root.config(cursor="")
-
     def _build(self) -> None:
         """ Build the help menu """
         logger.debug("Building Help menu")
 
-        self.add_command(label=_("Check for updates..."),
-                         underline=0,
-                         command=lambda action="_check": self._in_thread(action))  # type:ignore
-        self.add_command(label=_("Update Faceswap..."),
-                         underline=0,
-                         command=lambda action="_update": self._in_thread(action))  # type:ignore
-        if self._build_branches_menu():
-            self.add_cascade(label=_("Switch Branch"), underline=7, menu=self._branches_menu)
-        self.add_separator()
-        self._build_recources_menu()
+        self._build_resources_menu()
         self.add_cascade(label=_("Resources"), underline=0, menu=self.recources_menu)
         self.add_separator()
         self.add_command(
@@ -387,82 +279,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
             command=lambda action="_output_sysinfo": self._in_thread(action))  # type:ignore
         logger.debug("Built help menu")
 
-    def _build_branches_menu(self) -> bool:
-        """ Build branch selection menu.
-
-        Queries git for available branches and builds a menu based on output.
-
-        Returns
-        -------
-        bool
-            ``True`` if menu was successfully built otherwise ``False``
-        """
-        branches = git.branches
-        if not branches:
-            return False
-
-        branches = self._filter_branches(branches)
-        if not branches:
-            return False
-
-        for branch in branches:
-            self._branches_menu.add_command(
-                label=branch,
-                command=lambda b=branch: self._switch_branch(b))  # type:ignore
-        return True
-
-    @classmethod
-    def _filter_branches(cls, branches: list[str]) -> list[str]:
-        """ Filter the branches, remove any non-local branches
-
-        Parameters
-        ----------
-        branches: list[str]
-            list of available git branches
-
-        Returns
-        -------
-        list[str]
-            Unique list of available branches sorted in alphabetical order
-        """
-        current = None
-        unique = set()
-        for line in branches:
-            branch = line.strip()
-            if branch.startswith("remotes"):
-                continue
-            if branch.startswith("*"):
-                branch = branch.replace("*", "").strip()
-                current = branch
-                continue
-            unique.add(branch)
-        logger.debug("Found branches: %s", unique)
-        if current in unique:
-            logger.debug("Removing current branch from output: %s", current)
-            unique.remove(current)
-
-        retval = sorted(list(unique), key=str.casefold)
-        logger.debug("Final branches: %s", retval)
-        return retval
-
-    @classmethod
-    def _switch_branch(cls, branch: str) -> None:
-        """ Change the currently checked out branch, and return a notification.
-
-        Parameters
-        ----------
-        str
-            The branch to switch to
-        """
-        logger.info("Switching branch to '%s'...", branch)
-        if not git.checkout(branch):
-            logger.error("Unable to switch branch to '%s'", branch)
-            return
-        logger.info("Succesfully switched to '%s'. You may want to check for updates to make sure "
-                    "that you have the latest code.", branch)
-        logger.info("Please restart Faceswap to complete the switch.")
-
-    def _build_recources_menu(self) -> None:
+    def _build_resources_menu(self) -> None:
         """ Build resources menu """
         # pylint:disable=cell-var-from-loop
         logger.debug("Building Resources Files menu")

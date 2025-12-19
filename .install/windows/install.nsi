@@ -10,9 +10,7 @@ OutFile "faceswap_setup_x64.exe"
 Name "Faceswap"
 InstallDir $PROFILE\faceswap
 
-# Sometimes miniconda breaks. Uncomment/comment the following 2 lines to pin
-!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
-#!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-4.5.12-Windows-x86_64.exe"
+!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-py310_25.11.1-1-Windows-x86_64.exe"
 !define wwwRepo "https://github.com/deepfakes/faceswap.git"
 !define wwwFaceswap "https://www.faceswap.dev"
 
@@ -21,7 +19,7 @@ InstallDir $PROFILE\faceswap
 
 # Install cli flags
 !define flagsConda "/S /RegisterPython=0 /AddToPath=0 /D=$PROFILE\MiniConda3"
-!define flagsRepo "--depth 1 --no-single-branch ${wwwRepo}"
+!define flagsRepo "--depth 1 --branch r2.3 ${wwwRepo}"
 !define flagsEnv "-y python=3.10"
 
 # Folders

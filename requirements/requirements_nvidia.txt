@@ -1,5 +1,4 @@
 -r _requirements_base.txt
-# Exclude badly numbered Python2 version of nvidia-ml-py
-nvidia-ml-py>=12.535,<300
+nvidia-ml-py==13.590.44
 pynvx==1.0.0 ; sys_platform == "darwin"
 tensorflow>=2.10.0,<2.11.0

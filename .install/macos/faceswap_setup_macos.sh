@@ -2,7 +2,7 @@
 
 TMP_DIR="/tmp/faceswap_install"
 
-URL_CONDA="https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-"
+URL_CONDA="https://repo.anaconda.com/miniconda/Miniconda3-py310_25.11.1-1-MacOSX-"
 DL_CONDA="${URL_CONDA}x86_64.sh"
 DL_FACESWAP="https://github.com/deepfakes/faceswap.git"
 DL_XQUARTZ="https://github.com/XQuartz/XQuartz/releases/latest/download/XQuartz-2.8.5.pkg"
@@ -431,7 +431,7 @@ clone_faceswap() {
     # Clone the faceswap repo
     delete_faceswap
     info "Downloading Faceswap..."
-    yellow ; git clone --depth 1 --no-single-branch "$DL_FACESWAP" "$DIR_FACESWAP"
+    yellow ; git clone --depth 1 --branch r2.3 "$DL_FACESWAP" "$DIR_FACESWAP"
 }
 
 setup_faceswap() {

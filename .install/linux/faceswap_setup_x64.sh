@@ -1,7 +1,7 @@
 #!/bin/bash
 
 TMP_DIR="/tmp/faceswap_install"
-DL_CONDA="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"
+DL_CONDA="https://repo.anaconda.com/miniconda/Miniconda3-py310_25.11.1-1-Linux-x86_64.sh"
 DL_FACESWAP="https://github.com/deepfakes/faceswap.git"
 
 CONDA_PATHS=("/opt" "$HOME")
@@ -398,7 +398,7 @@ clone_faceswap() {
     # Clone the faceswap repo
     delete_faceswap
     info "Downloading Faceswap..."
-    yellow ; git clone --depth 1 --no-single-branch "$DL_FACESWAP" "$DIR_FACESWAP"
+    yellow ; git clone --depth 1 --branch r2.3 "$DL_FACESWAP" "$DIR_FACESWAP"
 }
 
 setup_faceswap() {

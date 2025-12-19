@@ -24,7 +24,8 @@ backend_type: T.TypeAlias = T.Literal['nvidia', 'apple_silicon', 'directml', 'cp
 
 _INSTALL_FAILED = False
 # Packages that are explicitly required for setup.py
-_INSTALLER_REQUIREMENTS: list[tuple[str, str]] = [("pexpect>=4.8.0", "!Windows"),
+_INSTALLER_REQUIREMENTS: list[tuple[str, str]] = [("setuptools<81.0", ""),
+                                                  ("pexpect==4.9.0", "!Windows"),
                                                   ("pywinpty==2.0.2", "Windows")]
 # Conda packages that are required for a specific backend
 # TODO zlib-wapi is required on some Windows installs where cuDNN complains:
@@ -41,7 +42,7 @@ _FORCE_PIP: dict[backend_type, list[str]] = {
         "imageio-ffmpeg"]}  # 17/11/23 Conda forge uses incorrect ffmpeg, so fallback to pip
 # Revisions of tensorflow GPU and cuda/cudnn requirements. These relate specifically to the
 # Tensorflow builds available from pypi
-_TENSORFLOW_REQUIREMENTS = {">=2.10.0,<2.11.0": [">=11.2,<11.3", ">=8.1,<8.2"]}
+_TENSORFLOW_REQUIREMENTS = {">=2.10.0,<2.11.0": ["==11.2.2", "==8.1.0.77"]}
 # ROCm min/max version requirements for Tensorflow
 _TENSORFLOW_ROCM_REQUIREMENTS = {">=2.10.0,<2.11.0": ((5, 2, 0), (5, 4, 0))}
 # TODO tensorflow-metal versioning
@@ -56,11 +57,12 @@ _CONDA_MAPPING: dict[str, tuple[str, str]] = {
     "nvidia-ml-py": ("nvidia-ml-py", "conda-forge"),
     "tensorflow-deps": ("tensorflow-deps", "apple"),
     "libblas": ("libblas", "conda-forge"),
-    "zlib-wapi": ("zlib-wapi", "conda-forge"),
-    "xorg-libxft": ("xorg-libxft", "conda-forge")}
+    "zlib-wapi": ("zlib-wapi==1.3.1", "conda-forge"),
+    "xorg-libxft": ("xorg-libxft==2.3.9", "conda-forge")}
 
 # Force output to utf-8
-sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type:ignore[attr-defined]
+if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type:ignore[attr-defined]
 
 
 class Environment():
