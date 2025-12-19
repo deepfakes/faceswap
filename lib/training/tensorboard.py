@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """ Tensorboard call back for PyTorch logging. Hopefully temporary until a native Keras version
 is implemented """
+from __future__ import annotations
 
 import logging
 import os
+import struct
 import typing as T
 
 import keras
@@ -13,6 +15,81 @@ from lib.logger import parse_class_init
 from lib.utils import get_module_objects
 
 logger = logging.getLogger(__name__)
+
+
+class RecordIterator:
+    """ A replacement for tensorflow's :func:`compat.v1.io.tf_record_iterator`
+
+    Parameters
+    ----------
+    log_file : str
+        The event log file to obtain records from
+    is_live : bool, optional
+        ``True`` if the log file is for a live training session that will constantly provide data.
+        Default: ``False``
+    """
+    def __init__(self, log_file, is_live: bool = False) -> None:
+        logger.debug(parse_class_init(locals()))
+        self._file_path = log_file
+        self._log_file = open(self._file_path, "rb")  # pylint:disable=consider-using-with
+        self._is_live = is_live
+        self._position = 0
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def __iter__(self) -> RecordIterator:
+        """ Iterate over a Tensorboard event file"""
+        return self
+
+    def _on_file_read(self) -> None:
+        """ If the file is closed and we are reading live data, re-open the file and seek to the
+        correct position """
+        if not self._is_live or not self._log_file.closed:
+            return
+
+        logger.trace("Re-opening '%s' and Seeking to %s",  # type:ignore[attr-defined]
+                     self._file_path, self._position)
+        self._log_file = open(self._file_path, "rb")  # pylint:disable=consider-using-with
+        self._log_file.seek(self._position, 0)
+
+    def _on_file_end(self) -> None:
+        """ Close the event file. If live data, record the current position"""
+        if self._is_live:
+            self._position = self._log_file.tell()
+            logger.trace("Setting live position to %s",  # type:ignore[attr-defined]
+                         self._position)
+
+        logger.trace("EOF. Closing '%s'", self._file_path)  # type:ignore[attr-defined]
+        self._log_file.close()
+
+    def __next__(self) -> bytes:
+        """ Get the next event log from a Tensorboard event file
+
+        Returns
+        -------
+        bytes
+            A Tensorboard event log
+
+        Raises
+        ------
+        StopIteration
+            When the event log is fully consumed
+        """
+        self._on_file_read()
+
+        b_header = self._log_file.read(8)
+
+        if not b_header:
+            self._on_file_end()
+            raise StopIteration
+
+        read_len = int(struct.unpack('Q', b_header)[0])
+        self._log_file.seek(4, 1)
+        data = self._log_file.read(read_len)
+
+        self._log_file.seek(4, 1)
+        logger.trace("Returning event data of len %s", read_len)  # type:ignore[attr-defined]
+
+        return data
 
 
 class TorchTensorBoard(keras.callbacks.Callback):

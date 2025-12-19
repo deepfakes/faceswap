@@ -622,6 +622,8 @@ class CliOptions():
             The generated command line arguments
         """
         output_dir = None
+        switches = ""
+        args = []
         for _, option in self._gen_command_options(command):
             str_val = str(option.cpanel_option.get())
             switch = option.opts[0]
@@ -633,7 +635,7 @@ class CliOptions():
                 continue
 
             if str_val == "True":  # store_true just output the switch
-                yield (switch, )
+                switches += switch[1:]
                 continue
 
             if option.nargs is not None:
@@ -641,10 +643,13 @@ class CliOptions():
                     val = [arg[1:-1] for arg in re.findall(r"\".+?\"", str_val)]
                 else:
                     val = str_val.split(" ")
-                retval = (switch, *val)
+                arg = (switch, *val)
             else:
-                retval = (switch, str_val)
-            yield retval
+                arg = (switch, str_val)
+            args.append(arg)
+
+        switch_args = [] if not switches else [(f"-{switches}", )]
+        yield from switch_args + args
 
         if command in ("extract", "convert") and output_dir is not None:
             get_images().preview_extract.set_faceswap_output_path(output_dir,

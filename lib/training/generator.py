@@ -818,20 +818,23 @@ class Feeder():
                                                 batch_size=batchsize).minibatch_ab()
         return retval
 
-    def get_batch(self) -> tuple[tuple[np.ndarray, np.ndarray], list[list[np.ndarray]]]:
+    def get_batch(self) -> tuple[np.ndarray, list[np.ndarray]]:
         """ Get the feed data and the targets for each training side for feeding into the model's
         train function.
 
         Returns
         -------
-        model_inputs : tuple[:class:`numpy.ndarray`, :class:`numpy.ndarray`]
-            The inputs to the model for each side A and B
-        model_targets : list[list[:class:`numpy.ndarray`]]
-            The targets for the model for each side A and B
+        model_inputs : :class:`numpy.ndarray`
+            The inputs to the model for each side A and B. The array is returned in `(side,
+            batch_size, *dims)` where `side` 0 is "A" and `side` 1 is "B"
+        model_targets : list[:class:`numpy.ndarray`]
+            The targets for the model for each side A and B. For each target resolution output
+            required an array is inserted to the list in format `(side, batch_size, *dims)
+            where `side` 0 is "A" and `side` 1 is "B"
         """
         model_inputs: list[np.ndarray] = []
-        model_targets: list[list[np.ndarray]] = []
-        for side in ("a", "b"):
+        model_targets: tuple[list[np.ndarray], list[np.ndarray]] = ([], [])
+        for idx, side in enumerate(("a", "b")):
             side_feed, side_targets = next(self._feeds[side])
             if mod_cfg.Loss.learn_mask():  # Add the face mask as it's own target
                 side_targets += [side_targets[-1][..., 3][..., None]]
@@ -839,11 +842,17 @@ class Feeder():
                 "side: %s, input_shapes: %s, target_shapes: %s",
                 side, side_feed.shape, [i.shape for i in side_targets])
             model_inputs.append(side_feed)
-            model_targets.append(side_targets)
+            model_targets[idx].extend(side_targets)
 
-        inputs = tuple(model_inputs)
-        assert len(inputs) == 2
-        return inputs, model_targets
+        grouped_targets = []
+
+        for tgt_a, tgt_b in zip(*model_targets):
+            grouped_targets.append(np.stack([tgt_a, tgt_b], axis=0))
+        inputs = np.stack(model_inputs, axis=0)
+        assert inputs.shape[0] == 2,  "1st dimension should represent side A/B"
+        assert all(x.shape[0] == 2 for x in grouped_targets),  ("1st dimension should represent "
+                                                                "side A/B")
+        return inputs, grouped_targets
 
     def generate_preview(self, is_timelapse: bool = False
                          ) -> dict[T.Literal["a", "b"], list[np.ndarray]]:

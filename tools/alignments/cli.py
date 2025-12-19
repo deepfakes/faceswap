@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
-import argparse
 import sys
 import gettext
 import typing as T
@@ -205,27 +204,6 @@ class AlignmentsArgs(FaceSwapArgs):
                 "that have been resized from 256px or above. Setting to 100 will only extract "
                 "faces that have been resized from 512px or above. A setting of 200 will only "
                 "extract faces that have been downscaled from 1024px or above.")})
-        # Deprecated multi-character switches
-        argument_list.append({
-            "opts": ("-fc", ),
-            "type": str,
-            "dest": "depr_faces_folder_fc_c",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-fr", ),
-            "type": str,
-            "dest": "depr_extract-every-n_een_N",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-een", ),
-            "type": int,
-            "dest": "depr_faces_folder_fr_r",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-sz", ),
-            "type": int,
-            "dest": "depr_size_sz_z",
-            "help": argparse.SUPPRESS})
         return argument_list
 
 

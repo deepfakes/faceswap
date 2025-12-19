@@ -15,8 +15,6 @@ from dataclasses import dataclass, field
 import logging
 import typing as T
 
-from contextlib import nullcontext
-
 import keras
 from keras import config as k_config, dtype_policies, losses as k_losses, optimizers
 
@@ -30,7 +28,6 @@ from plugins.train.train_config import Loss as cfg_loss, Optimizer as cfg_opt
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
-    from contextlib import AbstractContextManager as ContextManager
     from argparse import Namespace
     from keras import KerasTensor
     from .state import State
@@ -452,15 +449,6 @@ class Settings():
             logger.info("Enabling Mixed Precision Training.")
 
         self._set_keras_mixed_precision(use_mixed_precision)
-
-        # TODO
-        # if hasattr(arguments, "distribution_strategy"):
-        #     strategy = arguments.distribution_strategy
-        # else:
-        #     strategy = "default"
-
-        # self._strategy = self._get_strategy(strategy)
-        self._strategy = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -774,20 +762,6 @@ class Settings():
         logger.info("Mixed precision has been %s",
                     "enabled" if self.use_mixed_precision else "disabled")
         return new_model
-
-    def strategy_scope(self) -> ContextManager:
-        """ Return the strategy scope if we have set a strategy, otherwise return a null
-        context.
-
-        Returns
-        -------
-        :func:`tensorflow.python.distribute.Strategy.scope` or :func:`contextlib.nullcontext`
-            The tensorflow strategy scope if a strategy is valid in the current scenario. A null
-            context manager if the strategy is not valid in the current scenario
-        """
-        retval = nullcontext() if self._strategy is None else self._strategy.scope()
-        logger.debug("Using strategy scope: %s", retval)
-        return retval
 
 
 __all__ = get_module_objects(__name__)

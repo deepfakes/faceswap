@@ -4,6 +4,7 @@ import gettext
 import logging
 
 from lib.config import ConfigItem
+from lib.utils import get_module_objects
 
 logger = logging.getLogger(__name__)
 
@@ -136,3 +137,6 @@ color_clahe_max_size = ConfigItem(
            "'no-augment-color' option is enabled"),
     rounding=1,
     min_max=(1, 8))
+
+
+__all__ = get_module_objects(__name__)

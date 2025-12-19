@@ -206,12 +206,11 @@ class Model(ModelBase):
                          self._io.model_exists, self._is_predict, is_summary)
             super().build()
             return
-        with self._settings.strategy_scope():
-            model = self.io.load()
-            model = self._update_dropouts(model)
-            self._model = model
-            self._compile_model()
-            self._output_summary()
+        model = self.io.load()
+        model = self._update_dropouts(model)
+        self._model = model
+        self._compile_model()
+        self._output_summary()
 
     def _update_dropouts(self, model: keras.models.Model) -> keras.models.Model:
         """ Update the saved model with new dropout rates.
@@ -1099,7 +1098,7 @@ class UpscaleBlocks():
         :class:`keras.KerasTensor`
             The tensor with any normalization applied
         """
-        dec_norm = cfg.dec_norm()
+        dec_norm: str | None = cfg.dec_norm()
         dec_norm = None if dec_norm == "none" else dec_norm
         if not dec_norm:
             return inputs
