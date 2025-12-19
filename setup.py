@@ -325,8 +325,9 @@ class Packages():
         all_installed = self._all_installed_packages
         candidates = self._format_requirements(
             [pkg for pkg, plat in _INSTALLER_REQUIREMENTS
-             if self._env.os_version[0] == plat or (plat[0] == "!" and
-                                                    self._env.os_version[0] != plat[1:])])
+             if not plat
+             or self._env.os_version[0] == plat
+             or (plat[0] == "!" and self._env.os_version[0] != plat[1:])])
         retval = [(pkg, spec) for pkg, spec in candidates
                   if pkg not in all_installed or (
                     pkg in all_installed and
