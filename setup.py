@@ -16,7 +16,7 @@ from subprocess import PIPE, Popen
 
 from lib.logger import log_setup
 from lib.system import Cuda, Packages, ROCm, System
-from lib.utils import get_module_objects
+from lib.utils import get_module_objects, PROJECT_ROOT
 from requirements.requirements import Requirements, PYTHON_VERSIONS
 
 if T.TYPE_CHECKING:
@@ -129,7 +129,7 @@ class Environment():
         # Get Cuda/ROCm requirements file
         assert self.backend is not None
         req_files = sorted([os.path.splitext(f)[0].replace("requirements_", "")
-                            for f in os.listdir("requirements")
+                            for f in os.listdir(os.path.join(PROJECT_ROOT, "requirements"))
                             if os.path.splitext(f)[-1] == ".txt"
                             and f.startswith("requirements_")
                             and self.backend in f])

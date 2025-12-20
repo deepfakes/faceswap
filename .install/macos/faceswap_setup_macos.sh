@@ -408,7 +408,7 @@ create_env() {
     # Create Python 3.13 env for faceswap
     delete_env
     info "Creating Conda Virtual Environment..."
-    yellow ; "$CONDA_EXECUTABLE" create -n "$ENV_NAME" -c defaults -q python="$PYENV_VERSION" -y
+    yellow ; "$CONDA_EXECUTABLE" create -n "$ENV_NAME" -c conda-forge -q python="$PYENV_VERSION" -y
 }
 
 

@@ -120,7 +120,7 @@ Function pgPrereqCreate
 
     StrCpy $lblPos 14
     # Info Installing applications
-    ${NSD_CreateGroupBox} 5% 5% 90% 35% "The following applications will be installed"
+    ${NSD_CreateGroupBox} 1% 1% 98% 30% "The following applications will be installed"
     Pop $0
 
         ${If} $InstallConda == 1
@@ -131,43 +131,47 @@ Function pgPrereqCreate
         ${NSD_CreateLabel} 10% $lblPos% 80% 14u "Faceswap"
         Pop $0
 
-        StrCpy $lblPos 46
+        intOp $lblPos $lblPos + 31
     # Info Custom Options
-    ${NSD_CreateGroupBox} 5% 40% 90% 60% "Custom Items"
+    ${NSD_CreateGroupBox} 1% 35% 98% 65% "GPU and Location"
     Pop $0
-        ${NSD_CreateRadioButton} 10% $lblPos% 27% 11u "Setup for NVIDIA GPU"
+        ${NSD_CreateRadioButton} 4% $lblPos% 27% 20u "NVIDIA RTX 20xx +"
             Pop $ctlRadio
 		    ${NSD_AddStyle} $ctlRadio ${WS_GROUP}
-            nsDialogs::SetUserData $ctlRadio "nvidia"
+            nsDialogs::SetUserData $ctlRadio "nvidia13"
             ${NSD_OnClick} $ctlRadio RadioClick
-        ${NSD_CreateRadioButton} 40% $lblPos% 25% 11u "Setup for DirectML"
+        ${NSD_CreateRadioButton} 32% $lblPos% 25% 20u "Nvidia GTX 9xx - GTX 10xx"
             Pop $ctlRadio
-            nsDialogs::SetUserData $ctlRadio "directml"
+            nsDialogs::SetUserData $ctlRadio "nvidia12"
             ${NSD_OnClick} $ctlRadio RadioClick
-        ${NSD_CreateRadioButton} 70% $lblPos% 20% 11u "Setup for CPU"
+        ${NSD_CreateRadioButton} 60% $lblPos% 25% 20u "Nvidia GTX 7xx - GTX 8xx"
+            Pop $ctlRadio
+            nsDialogs::SetUserData $ctlRadio "nvidia11"
+            ${NSD_OnClick} $ctlRadio RadioClick
+        ${NSD_CreateRadioButton} 88% $lblPos% 25% 20u "CPU"
             Pop $ctlRadio
             nsDialogs::SetUserData $ctlRadio "cpu"
             ${NSD_OnClick} $ctlRadio RadioClick
 
-        intOp $lblPos $lblPos + 10
+        intOp $lblPos $lblPos + 20
 
-        ${NSD_CreateLabel} 10% $lblPos% 80% 10u "Environment Name (NB: Existing envs with this name will be deleted):"
+        ${NSD_CreateLabel} 4% $lblPos% 90% 10u "Environment Name (NB: Existing envs with this name will be deleted):"
         pop $0
         intOp $lblPos $lblPos + 7
-        ${NSD_CreateText} 10% $lblPos% 80% 11u "$envName"
+        ${NSD_CreateText} 4% $lblPos% 90% 11u "$envName"
         Pop $envName
         intOp $lblPos $lblPos + 11
 
 
         ${If} $InstallConda == 1
-            ${NSD_CreateLabel} 10% $lblPos% 80% 18u "Conda is required but could not be detected. If you have Conda already installed specify the location below, otherwise leave blank:"
+            ${NSD_CreateLabel} 4% $lblPos% 90% 18u "Conda is required but could not be detected. If you have Conda already installed specify the location below, otherwise leave blank:"
             Pop $0
             intOp $lblPos $lblPos + 13
 
-            ${NSD_CreateText} 10% $lblPos% 73% 12u ""
+            ${NSD_CreateText} 4% $lblPos% 73% 12u ""
             Pop $ctlCondaText
 
-            ${NSD_CreateButton} 83% $lblPos% 7% 12u "..."
+            ${NSD_CreateButton} 77% $lblPos% 13% 12u "..."
             Pop $ctlCondaButton
             ${NSD_OnClick} $ctlCondaButton fnc_hCtl_test_DirRequest1_Click
         ${EndIf}
@@ -202,7 +206,7 @@ FunctionEnd
 
 Function CheckSetupType
     ${If} $setupType == ""
-	    MessageBox MB_OK "Please specify whether to setup for Nvidia, DirectML or CPU."
+	    MessageBox MB_OK "Please specify whether to setup for Nvidia or CPU."
 	    Abort
 	${EndIf}
     StrCpy $Log "$log(check) Setting up for: $setupType$\n"
@@ -402,7 +406,7 @@ Function SetEnvironment
     CreateEnv:
         SetDetailsPrint listonly
         StrCpy $0 "${flagsEnv}"
-        ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda create $0 -c defaults -n  $\"$envName$\" && conda deactivate"
+        ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda create $0 -c conda-forge -n  $\"$envName$\" && conda deactivate"
         pop $0
         ExecDos::wait $0
         pop $0

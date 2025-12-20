@@ -17,6 +17,7 @@ PYENV_VERSION="3.13"
 
 DIR_FACESWAP="$HOME/faceswap"
 VERSION="nvidia"
+LIB_VERSION="13"
 
 DESKTOP=false
 
@@ -141,6 +142,40 @@ ask_version() {
             1) VERSION="nvidia" ; break ;;
             2) VERSION="rocm" ; break ;;
             3) VERSION="cpu" ; break ;;
+            * ) echo "Invalid selection." ;;
+        esac
+    done
+}
+
+
+ask_cuda_version() {
+    # Ask which Cuda Version to install
+    while true; do
+        default=1
+        read -rp $'\e[36mSelect:\t1: RTX 20xx ->\n\t2: GTX 9xx - GTX 10xx\n\t3: GTX 7xx - GTX 9xx\n'"[default: $default]: "$'\e[97m' vers
+        vers="${vers:-${default}}"
+        case $vers in
+            1) LIB_VERSION="13" ; break ;;
+            2) LIB_VERSION="12" ; break ;;
+            3) LIB_VERSION="11" ; break ;;
+            * ) echo "Invalid selection." ;;
+        esac
+    done
+}
+
+
+ask_rocm_version() {
+    # Ask which Cuda Version to install
+    while true; do
+        default=1
+        read -rp $'\e[36mSelect:\t1: ROCm 6.4\n\t2: ROCm 6.3\n\t3: ROCm 6.2\n\t4: ROCm 6.1\n\t5: ROCm 6.0\n'"[default: $default]: "$'\e[97m' vers
+        vers="${vers:-${default}}"
+        case $vers in
+            1) LIB_VERSION="64" ; break ;;
+            2) LIB_VERSION="63" ; break ;;
+            3) LIB_VERSION="62" ; break ;;
+            4) LIB_VERSION="61" ; break ;;
+            5) LIB_VERSION="60" ; break ;;
             * ) echo "Invalid selection." ;;
         esac
     done
@@ -281,7 +316,15 @@ faceswap_opts () {
     latest graphics card drivers installed from the relevant vendor. Please select the version\
     of Faceswap you wish to install."
     ask_version
+    if [ $VERSION == "nvidia" ] ; then
+        info "Depending on your GPU a different version of Cuda may be required. Please select the \
+        generation of Nvidia GPU you use below."
+        ask_cuda_version
+    fi
     if [ $VERSION == "rocm" ] ; then
+        info "Depending on your installed version of ROCm a different version of PyTorch may be required. \
+        Please select the ROCm version you use below."
+        ask_rocm_version
         warn "ROCm support is experimental. Please make sure that your GPU is supported by ROCm and that \
         ROCm has been installed on your system before proceeding. Installation instructions: \
         https://docs.amd.com/bundle/ROCm_Installation_Guidev5.0/page/Overview_of_ROCm_Installation_Methods.html"
@@ -323,7 +366,11 @@ review() {
     fi
     echo "        - Faceswap will be installed in '$DIR_FACESWAP'"
     echo "        - Installing for '$VERSION'"
+    if [ $VERSION == "nvidia" ] ; then
+        echo "        - Cuda version $LIB_VERSION will be used"
+    fi
     if [ $VERSION == "rocm" ] ; then
+        echo "        - ROCm version '$LIB_VERSION' will be used"
         echo -e "          \e[33m- Note: Please ensure that ROCm is supported by your GPU\e[97m"
         echo -e "          \e[33m  and is installed prior to proceeding.\e[97m"
     fi
@@ -368,7 +415,7 @@ create_env() {
     # Create Python 3.13 env for faceswap
     delete_env
     info "Creating Conda Virtual Environment..."
-    yellow ; "$CONDA_EXECUTABLE" create -n "$ENV_NAME" -c defaults -q python="$PYENV_VERSION" -y
+    yellow ; "$CONDA_EXECUTABLE" create -n "$ENV_NAME" -c conda-forge -q python="$PYENV_VERSION" -y
 }
 
 
@@ -405,7 +452,7 @@ clone_faceswap() {
 setup_faceswap() {
     # Run faceswap setup script
     info "Setting up Faceswap..."
-    python -u "$DIR_FACESWAP/setup.py" --installer --$VERSION
+    python -u "$DIR_FACESWAP/setup.py" --installer --$VERSION$LIB_VERSION
 }
 
 create_gui_launcher () {
