@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.abspath('../'))
 sys.setrecursionlimit(1500)
 
 
-MOCK_MODULES = ["pynvml", "ctypes.windll", "comtypes"]
+MOCK_MODULES = ["pynvml", "ctypes.windll", "comtypes", "tensorflow"]
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.Mock()
 
