@@ -11,6 +11,7 @@ from tkinter import ttk
 
 from lib.logger import parse_class_init
 from lib.training.preview_tk import PreviewTk
+from lib.utils import get_module_objects
 
 from .display_graph import TrainingGraph
 from .display_page import DisplayOptionalPage
@@ -58,7 +59,7 @@ class PreviewExtract(DisplayOptionalPage):  # pylint:disable=too-many-ancestors
         """ Add the preview label child """
         logger.debug("Adding child")
         preview = self.subnotebook_add_page(self.tabname, widget=None)
-        lblpreview = ttk.Label(preview, image=self._preview.image)
+        lblpreview = ttk.Label(preview, image=self._preview.image)  # type:ignore[arg-type]
         lblpreview.pack(side=tk.TOP, anchor=tk.NW)
         Tooltip(lblpreview, text=self.helptext, wrap_length=200)
 
@@ -110,9 +111,10 @@ class PreviewTrain(DisplayOptionalPage):  # pylint:disable=too-many-ancestors
     def _add_option_refresh(self) -> None:
         """ Add refresh button to refresh preview immediately """
         logger.debug("Adding refresh option")
-        btnrefresh = ttk.Button(self.optsframe,
-                                image=get_images().icons["reload"],
-                                command=lambda x="update": preview_trigger().set(x))  # type:ignore
+        btnrefresh = ttk.Button(
+            self.optsframe,
+            image=get_images().icons["reload"],  # type:ignore[arg-type]
+            command=lambda x="update": preview_trigger().set(x))  # type:ignore[misc]
         btnrefresh.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnrefresh,
                 text=_("Preview updates at every model save. Click to refresh now."),
@@ -124,8 +126,8 @@ class PreviewTrain(DisplayOptionalPage):  # pylint:disable=too-many-ancestors
         logger.debug("Adding mask toggle option")
         btntoggle = ttk.Button(
             self.optsframe,
-            image=get_images().icons["mask2"],
-            command=lambda x="mask_toggle": preview_trigger().set(x))  # type:ignore
+            image=get_images().icons["mask2"],  # type:ignore[arg-type]
+            command=lambda x="mask_toggle": preview_trigger().set(x))  # type:ignore[misc]
         btntoggle.pack(padx=2, side=tk.RIGHT)
         Tooltip(btntoggle,
                 text=_("Click to toggle mask overlay on and off."),
@@ -233,7 +235,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint:disable=too-many-ancestors
         logger.debug("Adding refresh option")
         tk_var = get_config().tk_vars.refresh_graph
         btnrefresh = ttk.Button(self.optsframe,
-                                image=get_images().icons["reload"],
+                                image=get_images().icons["reload"],  # type:ignore[arg-type]
                                 command=lambda: tk_var.set(True))
         btnrefresh.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnrefresh,
@@ -467,3 +469,6 @@ class GraphDisplay(DisplayOptionalPage):  # pylint:disable=too-many-ancestors
             logger.debug("Clearing: %s", name)
             graph.clear()
         super().close()
+
+
+__all__ = get_module_objects(__name__)

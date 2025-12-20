@@ -1,0 +1,5 @@
+-r _requirements_base.txt
+# These next 2 should have been installed, but some users complain of errors
+decorator
+cloudpickle
+torch>=2.3.0,<2.10.0

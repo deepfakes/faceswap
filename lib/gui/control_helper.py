@@ -1,19 +1,29 @@
 #!/usr/bin/env python3
 """ Helper functions and classes for GUI controls """
+from __future__ import annotations
 import gettext
 import logging
 import re
-
 import tkinter as tk
-import typing as T
+import types
+
 from tkinter import colorchooser, ttk
 from itertools import zip_longest
 from functools import partial
+from typing import Any, cast, get_args, Literal, Self, TYPE_CHECKING
 
 from _tkinter import Tcl_Obj, TclError
 
+from lib.logger import parse_class_init
+from lib.utils import get_module_objects
+
 from .custom_widgets import ContextMenu, MultiOption, ToggledFrame, Tooltip
 from .utils import FileHandler, get_config, get_images
+from . import gui_config as cfg
+
+if TYPE_CHECKING:
+    from lib.config import ConfigItem
+
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +34,9 @@ _ = _LANG.gettext
 # We store Tooltips, ContextMenus and Commands globally when they are created
 # Because we need to add them back to newly cloned widgets (they are not easily accessible from
 # original config or are prone to getting destroyed when the original widget is destroyed)
-_RECREATE_OBJECTS: dict[str, dict[str, T.Any]] = {"tooltips": {},
-                                                  "commands": {},
-                                                  "contextmenus": {}}
+_RECREATE_OBJECTS: dict[str, dict[str, Any]] = {"tooltips": {},
+                                                "commands": {},
+                                                "contextmenus": {}}
 
 
 def _get_tooltip(widget, text=None, text_variable=None):
@@ -97,65 +107,74 @@ def set_slider_rounding(value, var, d_type, round_to, min_max):
 
 
 class ControlPanelOption():
-    """
-    A class to hold a control panel option. A list of these is expected
-    to be passed to the ControlPanel object.
+    """ A class to hold a control panel option. A list of these is expected to be passed to the
+    ControlPanel object.
 
     Parameters
     ----------
-    title: str
+    title : str
         Title of the control. Will be used for label text and control naming
-    dtype: datatype object
+    dtype : type
         Datatype of the control.
-    group: str, optional
+    group : str | None, optional
         The group that this control should sit with. If provided, all controls in the same
-        group will be placed together. Default: None
-    subgroup: str, optional
+        group will be placed together. Default: ``None``
+    subgroup : str | None, optional
         The subgroup that this option belongs to. If provided, will group options in the same
         subgroups together for the same layout as option/check boxes. Default: ``None``
-    default: str, optional
+    default : str | bool | float | int | list[str] | None, optional
         Default value for the control. If None is provided, then action will be dictated by
-        whether "blank_nones" is set in ControlPanel
-    initial_value: str, optional
-        Initial value for the control. If None, default will be used
-    choices: list or tuple, object
+        whether "blank_nones" is set in ControlPanel. Default: ``None``
+    initial_value : str | bool | float | int | list[str] | None, optional
+        Initial value for the control. If ``None``, default will be used. Default: ``None``
+    choices : list[str] | tuple[str, ...] | Literal["colorchooser"] | None, optional
         Used for combo boxes and radio control option setting. Set to `"colorchooser"` for a color
-        selection dialog.
-    is_radio: bool, optional
-        Specifies to use a Radio control instead of combobox if choices are passed
-    is_multi_option:
-        Specifies to use a Multi Check Button option group for the specified control
-    rounding: int or float, optional
-        For slider controls. Sets the stepping
-    min_max: int or float, optional
-        For slider controls. Sets the min and max values
-    sysbrowser: dict, optional
-        Adds Filesystem browser buttons to ttk.Entry options.
-        Expects a dict: {sysbrowser: str, filetypes: str}
-    helptext: str, optional
-        Sets the tooltip text
-    track_modified: bool, optional
+        selection dialog. Default: ``None``
+    is_radio : bool, optional
+        Specifies to use a Radio control instead of combobox if choices are passed.
+        Default: ``False``
+    is_multi_option : bool, optional
+        Specifies to use a Multi Check Button option group for the specified control.
+        Default: ``False``
+    rounding : int | float | None, optional
+        For slider controls. Sets the stepping. Default: ``None``
+    min_max : tuple[int, int] | tuple[float, float] | None, optional
+        For slider controls. Sets the min and max values. Default: ``None``
+    sysbrowser : dict[Literal["filetypes", "browser", "command", "destination", "action_option"], str | list[str]] | None, optional
+        Adds Filesystem browser buttons to ttk.Entry options. Default: ``None``
+    helptext : str | None, optional
+        Sets the tooltip text. Default: ``None``
+    track_modified : bool, optional
         Set whether to set a callback trace indicating that the parameter has been modified.
-        Default: False
-    command: str, optional
-        Required if tracking modified. The command that this option belongs to. Default: None
-    """
-
-    def __init__(self, title, dtype,  # pylint:disable=too-many-arguments
-                 group=None, subgroup=None, default=None, initial_value=None, choices=None,
-                 is_radio=False, is_multi_option=False, rounding=None, min_max=None,
-                 sysbrowser=None, helptext=None, track_modified=False, command=None):
-        logger.debug("Initializing %s: (title: '%s', dtype: %s, group: %s, subgroup: %s, "
-                     "default: %s, initial_value: %s, choices: %s, is_radio: %s, "
-                     "is_multi_option: %s, rounding: %s, min_max: %s, sysbrowser: %s, "
-                     "helptext: '%s', track_modified: %s, command: '%s')", self.__class__.__name__,
-                     title, dtype, group, subgroup, default, initial_value, choices, is_radio,
-                     is_multi_option, rounding, min_max, sysbrowser, helptext, track_modified,
-                     command)
-
+        Default: ``False``
+    command : str | None, optional
+        Required if tracking modified. The command that this option belongs to. Default: ``None``
+    """  # noqa[E501]  # pylint:disable=line-too-long
+    def __init__(self,  # pylint:disable=too-many-arguments,too-many-positional-arguments,too-many-locals  # noqa[E501]
+                 title: str,
+                 dtype: type,
+                 group: str | None = None,
+                 subgroup: str | None = None,
+                 default: str | bool | float | int | None = None,
+                 initial_value: str | bool | float | int | None = None,
+                 choices: list[str] | tuple[str, ...] | Literal["colorchooser"] | None = None,
+                 is_radio: bool = False,
+                 is_multi_option: bool = False,
+                 rounding: int | float | None = None,
+                 min_max: tuple[int, int] | tuple[float, float] | None = None,
+                 sysbrowser: dict[Literal["filetypes",
+                                          "browser",
+                                          "command",
+                                          "destination",
+                                          "action_option"], str | list[str]] | None = None,
+                 helptext: str | None = None,
+                 track_modified: bool = False,
+                 command: str | None = None) -> None:
+        logger.debug(parse_class_init(locals()))
         self.dtype = dtype
         self.sysbrowser = sysbrowser
         self._command = command
+        self._track_modified = track_modified
         self._options = {"title": title,
                          "subgroup": subgroup,
                          "group": group,
@@ -168,75 +187,119 @@ class ControlPanelOption():
                          "min_max": min_max,
                          "helptext": helptext}
         self.control = self.get_control()
-        self.tk_var = self.get_tk_var(initial_value, track_modified)
+        initial_value = default if initial_value is None else initial_value
+        initial_value = "" if initial_value is None else initial_value
+        self.tk_var = self.get_tk_var(initial_value)
         logger.debug("Initialized %s", self.__class__.__name__)
 
+    def __repr__(self) -> str:
+        """ Pretty printed representation for logging """
+        non_opts = {"dtype": self.dtype,
+                    "sysbrowser": self.sysbrowser,
+                    "track_modified": self._track_modified}
+        params = non_opts | self._options
+        str_params = ", ".join(f"{k}={repr(v)}" for k, v in params.items())
+        return f"{self.__class__.__name__}({str_params})"
+
     @property
-    def name(self):
-        """ Lowered title for naming """
-        return self._options["title"].lower()
+    def name(self) -> str:
+        """ str : Lowered title for naming """
+        title = self._options["title"]
+        assert isinstance(title, str)
+        return title.lower()
 
     @property
     def title(self):
-        """ Title case title for naming with underscores removed """
-        return self._options["title"].replace("_", " ").title()
+        """ str : Title case title for naming with underscores removed """
+        title = self._options["title"]
+        assert isinstance(title, str)
+        return title.replace("_", " ").title()
 
     @property
-    def group(self):
-        """ Return group or _master if no group set """
+    def group(self) -> str:
+        """ str : Option group or "_master" if no group set """
         group = self._options["group"]
-        group = "_master" if group is None else group
+        if group is None:
+            group = "_master"
+        assert isinstance(group, str)
         return group
 
     @property
-    def subgroup(self):
-        """ str: The subgroup for the option, or ``None`` if none provided. """
-        return self._options["subgroup"]
+    def subgroup(self) -> str | None:
+        """ str | None : Option subgroup, or ``None`` if none provided. """
+        retval = self._options["subgroup"]
+        if retval is not None:
+            assert isinstance(retval, str)
+        return retval
 
     @property
-    def default(self):
-        """ Return either selected value or default """
-        return self._options["default"]
+    def default(self) -> str | bool | float | int | None:
+        """ str | bool | float | int | list[str] : Either the currently selected value or the
+        default """
+        retval = self._options["default"]
+        assert isinstance(retval, (str, bool, float, int, types.NoneType))
+        return retval
 
     @property
-    def value(self):
-        """ Return either initial value or default """
-        val = self._options["initial_value"]
-        val = self.default if val is None else val
-        return val
+    def value(self) -> str | bool | float | int | None:
+        """ str | bool | float | int | list[str] : Either the initial value or default """
+        retval = self._options["initial_value"]
+        retval = self.default if retval is None else retval
+        assert isinstance(retval, (str, bool, float, int, types.NoneType))
+        return retval
 
     @property
-    def choices(self):
-        """ Return choices """
-        return self._options["choices"]
+    def choices(self) -> list[str] | tuple[str, ...] | Literal["colorchooser"] | None:
+        """ list[str] | tuple[str, ...] | Literal["colorchooser"] : The option choices """
+        retval = self._options["choices"]
+        if retval is not None:
+            assert isinstance(retval, (list, tuple, str))
+            if isinstance(retval, str):
+                assert retval in get_args(Literal["colorchooser"])
+            else:
+                assert all(isinstance(x, str) for x in retval)
+        return cast(list[str] | tuple[str, ...] | Literal["colorchooser"] | None, retval)
 
     @property
-    def is_radio(self):
-        """ Return is_radio """
-        return self._options["is_radio"]
+    def is_radio(self) -> bool:
+        """ bool : If the option should be a radio control """
+        retval = self._options["is_radio"]
+        assert isinstance(retval, bool)
+        return retval
 
     @property
-    def is_multi_option(self):
-        """ bool: ``True`` if the control should be contained in a multi check button group,
+    def is_multi_option(self) -> bool:
+        """ bool : ``True`` if the control should be contained in a multi check button group,
         otherwise ``False``. """
-        return self._options["is_multi_option"]
+        retval = self._options["is_multi_option"]
+        assert isinstance(retval, bool)
+        return retval
 
     @property
-    def rounding(self):
-        """ Return rounding """
-        return self._options["rounding"]
+    def rounding(self) -> int | float | None:
+        """ int | float | None : Rounding for numeric controls """
+        retval = self._options["rounding"]
+        assert retval is None or isinstance(retval, (int, float))
+        return retval
 
     @property
-    def min_max(self):
-        """ Return min_max """
-        return self._options["min_max"]
+    def min_max(self) -> tuple[int, int] | tuple[float, float] | None:
+        """ tuple[int, int] | tuple[float, float] | None : minimum and maximum values for numeric
+        controls """
+        retval = self._options["min_max"]
+        if retval is not None:
+            assert isinstance(retval, tuple)
+            assert len(retval) == 2
+            assert isinstance(retval[0], (int, float)) and isinstance(retval[1], (int, float))
+        return retval
 
     @property
-    def helptext(self):
-        """ Format and return help text for tooltips """
+    def helptext(self) -> str | None:
+        """ str | None : The formatted option help text for tooltips """
         helptext = self._options["helptext"]
         if helptext is None:
             return helptext
+        assert isinstance(helptext, str)
         logger.debug("Format control help: '%s'", self.name)
         if helptext.startswith("R|"):
             helptext = helptext[2:].replace("\nL|", "\n - ").replace("\n", "\n\n")
@@ -246,8 +309,13 @@ class ControlPanelOption():
         logger.debug("Formatted control help: (name: '%s', help: '%s'", self.name, helptext)
         return helptext
 
-    def get(self):
-        """ Return the value from the tk_var
+    def get(self) -> str | bool | int | float:
+        """ Return the option value from the tk_var
+
+        Returns
+        -------
+        str | bool | float | int
+            The value selected for this option
 
         Notes
         -----
@@ -267,23 +335,34 @@ class ControlPanelOption():
                 raise
         return val
 
-    def set(self, value):
-        """ Set the tk_var to a new value """
+    def set(self, value: str | bool | int | float | None) -> None:
+        """ Set the variable for the config option with the given value
+
+        Parameters
+        ----------
+        value : str | bool | float | int | None
+            The value to set the config option variable to
+        """
         self.tk_var.set(value)
 
-    def set_initial_value(self, value):
+    def set_initial_value(self, value: str | bool | int | float):
         """ Set the initial_value to the given value
 
         Parameters
         ----------
-        value: varies
+        value : str | bool | int | float
             The value to set the initial value attribute to
         """
         logger.debug("Setting inital value for %s to %s", self.name, value)
         self._options["initial_value"] = value
 
-    def get_control(self):
+    def get_control(self) -> Literal["radio", "multi", "colorchooser", "scale"] | type[
+            ttk.Combobox] | type[ttk.Checkbutton] | type[tk.Entry]:
         """ Set the correct control type based on the datatype or for this option """
+        control: Literal["radio",
+                         "multi",
+                         "colorchooser",
+                         "scale"] | type[ttk.Combobox] | type[ttk.Checkbutton] | type[tk.Entry]
         if self.choices and self.is_radio:
             control = "radio"
         elif self.choices and self.is_multi_option:
@@ -301,36 +380,58 @@ class ControlPanelOption():
         logger.debug("Setting control '%s' to %s", self.title, control)
         return control
 
-    def get_tk_var(self, initial_value, track_modified):
-        """ Correct variable type for control """
+    def get_tk_var(self, initial_value: str | bool | int | float) -> tk.Variable:
+        """ Correct variable type for control
+
+        Parameters
+        ----------
+        initial value : str | bool | int | float
+            The initial value to set the tk.Variable to
+
+        Returns
+        -------
+        :class:`tk.BooleanVar` | :class:`tk.IntVar` | :class:`tk.DoubleVar` | :class:`tk.StringVar`
+            The correct tk.Variable for the given initial value
+        """
+        var: tk.Variable
         if self.dtype == bool:
+            assert isinstance(initial_value, bool)
             var = tk.BooleanVar()
+            var.set(initial_value)
         elif self.dtype == int:
+            assert isinstance(initial_value, int)
             var = tk.IntVar()
+            var.set(initial_value)
         elif self.dtype == float:
+            assert isinstance(initial_value, float)
             var = tk.DoubleVar()
+            var.set(initial_value)
         else:
             var = tk.StringVar()
-        if initial_value is not None:
-            var.set(initial_value)
+            var.set(cast(str, initial_value))
         logger.debug("Setting tk variable: (name: '%s', dtype: %s, tk_var: %s, initial_value: %s)",
                      self.name, self.dtype, var, initial_value)
-        if track_modified and self._command is not None:
+        if self._track_modified and self._command is not None:
             logger.debug("Tracking variable modification: %s", self.name)
             var.trace("w",
                       lambda name, index, mode, cmd=self._command: self._modified_callback(cmd))
 
-        if track_modified and self._command == "train" and self.title == "Model Dir":
+        if self._track_modified and self._command == "train" and self.title == "Model Dir":
             var.trace("w", lambda name, index, mode, v=var: self._model_callback(v))
 
         return var
 
     @staticmethod
-    def _modified_callback(command):
+    def _modified_callback(command: str) -> None:
         """ Set the modified variable for this tab to TRUE
 
         On initial setup the notebook won't yet exist, and we don't want to track the changes
         for initial variables anyway, so make sure notebook exists prior to performing the callback
+
+        Parameters
+        ----------
+        command : str
+            The command to set the modified variable callback for
         """
         config = get_config()
         if config.command_notebook is None:
@@ -338,22 +439,67 @@ class ControlPanelOption():
         config.set_modified_true(command)
 
     @staticmethod
-    def _model_callback(var):
-        """ Set a callback to load model stats for existing models when a model
-        folder is selected """
+    def _model_callback(tk_var: tk.StringVar) -> None:
+        """ Set a callback to load model stats for existing models when a model folder is selected
+
+        Parameters
+        ----------
+        tk_var : :class:`tkinter.StringVar`
+            The Tk variable to set the callback on
+        """
         config = get_config()
-        if not config.user_config_dict["auto_load_model_stats"]:
+        if not cfg.auto_load_model_stats():
             logger.debug("Session updating disabled by user config")
             return
         if config.tk_vars.running_task.get():
             logger.debug("Task running. Not updating session")
             return
-        folder = var.get()
+        folder = tk_var.get()
         logger.debug("Setting analysis model folder callback: '%s'", folder)
         get_config().tk_vars.analysis_folder.set(folder)
 
+    @classmethod
+    def from_config_object(cls, title: str, option: ConfigItem) -> Self:
+        """ Create a GUI control panel option from a Faceswap ConfigItem
 
-class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
+        Parameters
+        ----------
+        title : str
+            The option title (that displays as a label in the GUI)
+        option : :class:`~lib.config.ConfigItem`
+            The faceswap object to create the Control Panel option from
+
+        Returns
+        -------
+        :class:`ControlPanelOption`
+            A GUI ControlPanelOption instance
+        """
+        initial_value = option.value
+        if option.datatype == list and isinstance(initial_value, list):
+            # Split multi-select lists into space separated strings for tk variables
+            initial_value = " ".join(initial_value)
+
+        default = ", ".join(option.default) if isinstance(option.default, list) else option.default
+
+        logger.debug("Creating Gui Option '%s' from: %s", title, option)
+
+        retval = cls(
+            title=title,
+            dtype=option.datatype,
+            group=option.group,
+            default=default,
+            initial_value=initial_value,
+            choices=option.choices,
+            is_radio=option.gui_radio,
+            is_multi_option=option.datatype == list,
+            rounding=option.rounding,
+            min_max=option.min_max,
+            helptext=option.helptext)
+        logger.debug("Created GUI option '%s': %s", title, retval)
+        return retval
+
+
+class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors,too-many-instance-attributes
     """
     A Control Panel to hold control panel options.
     This class handles all of the formatting, placing and TK_Variables
@@ -395,7 +541,7 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         Default: ``True``
     """
 
-    def __init__(self, parent, options,  # pylint:disable=too-many-arguments
+    def __init__(self, parent, options,  # pylint:disable=too-many-arguments,too-many-positional-arguments  # noqa[E501]
                  label_width=20, columns=1, max_columns=4, option_columns=4, header_text=None,
                  style=None, blank_nones=True, scrollbar=True):
         logger.debug("Initializing %s: (parent: '%s', options: %s, label_width: %s, columns: %s, "
@@ -617,7 +763,7 @@ class AutoFillContainer():
     @staticmethod
     def scale_column_width(original_size, original_fontsize):
         """ Scale the column width based on selected font size """
-        font_size = get_config().user_config_dict["font_size"]
+        font_size = cfg.font_size()
         if font_size == original_fontsize:
             return original_size
         scale = 1 + (((font_size / original_fontsize) - 1) / 2)
@@ -865,7 +1011,7 @@ class AutoFillContainer():
             rc_menu = widget_dict["rc_menu"]
             if rc_menu is not None:
                 # Re-initialize for new widget and bind
-                rc_menu.__init__(widget=clone)
+                rc_menu.__init__(widget=clone)  # pylint:disable=unnecessary-dunder-call
                 rc_menu.cm_bind()
             clone.pack(**widget_dict["pack_info"])
 
@@ -1370,3 +1516,6 @@ class FileBrowser():
         if filename:
             logger.debug(filename)
             filepath.set(filename)
+
+
+__all__ = get_module_objects(__name__)

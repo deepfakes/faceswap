@@ -1,84 +1,75 @@
-**************
-manual package
-**************
+********************
+tools.manual package
+********************
 
 .. contents:: Contents
    :local:
+   :depth: 2
 
-Subpackages
-===========
-The following subpackages handle the main two display areas of the Manual Tool's GUI.
+manual.faceviewer package
+=========================
 
-.. toctree::
-   :maxdepth: 4
+.. automodapi:: tools.manual.faceviewer.frame
+   :include-all-objects:
 
-   manual.faceviewer
-   manual.frameviewer
+|
+.. automodapi:: tools.manual.faceviewer.interact
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-manual module
-=============
-The Manual Module is the main entry point into the Manual Editor Tool.
+|
+.. automodapi:: tools.manual.faceviewer.viewport
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-.. rubric:: Module Summary
+manual.frameviewer package
+==========================
 
-.. autosummary::
-   :nosignatures:
+.. automodapi:: tools.manual.frameviewer.control
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-   ~tools.manual.manual.Aligner
-   ~tools.manual.manual.FrameLoader
-   ~tools.manual.manual.Manual
+|
+.. automodapi:: tools.manual.frameviewer.frame
+   :include-all-objects:
 
-.. rubric:: Module
+|
+.. automodapi:: tools.manual.frameviewer.editor.bounding_box
+   :include-all-objects:
 
-.. automodule:: tools.manual.manual
-   :members:
-   :undoc-members:
-   :show-inheritance:
+|
+.. automodapi:: tools.manual.frameviewer.editor.extract_box
+   :include-all-objects:
 
-detected_faces module
-=====================
+|
+.. automodapi:: tools.manual.frameviewer.editor.landmarks
+   :include-all-objects:
 
-.. rubric:: Module Summary
+|
+.. automodapi:: tools.manual.frameviewer.editor.mask
+   :include-all-objects:
 
-.. autosummary::
-   :nosignatures:
+manual package
+==========================
 
-   ~tools.manual.detected_faces.DetectedFaces
-   ~tools.manual.detected_faces.FaceUpdate
-   ~tools.manual.detected_faces.Filter
+.. automodapi:: tools.manual.cli
+   :include-all-objects:
 
-.. rubric:: Module
+|
+.. automodapi:: tools.manual.detected_faces
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-.. automodule:: tools.manual.detected_faces
-   :members:
-   :undoc-members:
-   :show-inheritance:
+|
+.. automodapi:: tools.manual.globals
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-globals module
-==============
+|
+.. automodapi:: tools.manual.manual
+   :include-all-objects:
 
-.. rubric:: Module Summary
-
-.. autosummary::
-   :nosignatures:
-
-   ~tools.manual.globals.CurrentFrame
-   ~tools.manual.globals.TkGlobals
-   ~tools.manual.globals.TKVars
-
-.. rubric:: Module
-
-.. automodule:: tools.manual.globals
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-thumbnails module
-==================
-
-.. automodule:: tools.manual.thumbnails
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
+|
+.. automodapi:: tools.manual.thumbnails
+   :include-all-objects:
+   :no-inheritance-diagram:

@@ -1,0 +1,110 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-12-12 20:45+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: plugins/train/trainer/trainer_config.py:30
+#, python-format
+msgid ""
+"Data Augmentation Options.\n"
+"WARNING: The defaults for augmentation will be fine for 99.9% of use cases. "
+"Only change them if you absolutely know what you are doing!"
+msgstr ""
+
+#: plugins/train/trainer/trainer_config.py:42
+#: plugins/train/trainer/trainer_config.py:50
+#: plugins/train/trainer/trainer_config.py:60
+msgid "evaluation"
+msgstr ""
+
+#: plugins/train/trainer/trainer_config.py:43
+msgid ""
+"Number of sample faces to display for each side in the preview when training."
+msgstr ""
+
+#: plugins/train/trainer/trainer_config.py:51
+msgid ""
+"The opacity of the mask overlay in the training preview. Lower values are "
+"more transparent."
+msgstr ""
+
+#: plugins/train/trainer/trainer_config.py:61
+msgid "The RGB hex color to use for the mask overlay in the training preview."
+msgstr ""
+
+#: plugins/train/trainer/trainer_config.py:66
+#: plugins/train/trainer/trainer_config.py:74
+#: plugins/train/trainer/trainer_config.py:82
+#: plugins/train/trainer/trainer_config.py:91
+msgid "image augmentation"
+msgstr ""
+
+#: plugins/train/trainer/trainer_config.py:67
+msgid "Percentage amount to randomly zoom each training image in and out."
+msgstr ""
+
+#: plugins/train/trainer/trainer_config.py:75
+msgid "Percentage amount to randomly rotate each training image."
+msgstr ""
+
+#: plugins/train/trainer/trainer_config.py:83
+msgid ""
+"Percentage amount to randomly shift each training image horizontally and "
+"vertically."
+msgstr ""
+
+#: plugins/train/trainer/trainer_config.py:92
+msgid ""
+"Percentage chance to randomly flip each training image horizontally.\n"
+"NB: This is ignored if the 'no-flip' option is enabled"
+msgstr ""
+
+#: plugins/train/trainer/trainer_config.py:100
+#: plugins/train/trainer/trainer_config.py:109
+#: plugins/train/trainer/trainer_config.py:119
+#: plugins/train/trainer/trainer_config.py:130
+msgid "color augmentation"
+msgstr ""
+
+#: plugins/train/trainer/trainer_config.py:101
+msgid ""
+"Percentage amount to randomly alter the lightness of each training image.\n"
+"NB: This is ignored if the 'no-augment-color' option is enabled"
+msgstr ""
+
+#: plugins/train/trainer/trainer_config.py:110
+msgid ""
+"Percentage amount to randomly alter the 'a' and 'b' colors of the L*a*b* "
+"color space of each training image.\n"
+"NB: This is ignored if the 'no-augment-color' optionis enabled"
+msgstr ""
+
+#: plugins/train/trainer/trainer_config.py:120
+msgid ""
+"Percentage chance to perform Contrast Limited Adaptive Histogram "
+"Equalization on each training image.\n"
+"NB: This is ignored if the 'no-augment-color' option is enabled"
+msgstr ""
+
+#: plugins/train/trainer/trainer_config.py:131
+msgid ""
+"The grid size dictates how much Contrast Limited Adaptive Histogram "
+"Equalization is performed on any training image selected for clahe. Contrast "
+"will be applied randomly with a gridsize of 0 up to the maximum. This value "
+"is a multiplier calculated from the training image size.\n"
+"NB: This is ignored if the 'no-augment-color' option is enabled"
+msgstr ""

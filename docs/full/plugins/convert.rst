@@ -6,65 +6,61 @@ The Convert Package handles the various plugins available for performing convers
 
 .. contents:: Contents
    :local:
+   :depth: 2
+
+colour package
+==============
+
+.. automodapi:: plugins.convert.color.avg_color
+   :include-all-objects:
+
+|
+.. automodapi:: plugins.convert.color.color_transfer
+   :include-all-objects:
+
+|
+.. automodapi:: plugins.convert.color.manual_balance
+   :include-all-objects:
+
+|
+.. automodapi:: plugins.convert.color.match_hist
+   :include-all-objects:
+
+|
+.. automodapi:: plugins.convert.color.seamless_clone
+   :include-all-objects:
 
 mask package
 ============
 
-mask.mask_blend module
-----------------------
+.. automodapi:: plugins.convert.mask.mask_blend
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-.. automodule:: plugins.convert.mask.mask_blend
-   :members:
-   :undoc-members:
-   :show-inheritance:
+scaling package
+===============
+
+.. automodapi:: plugins.convert.scaling.sharpen
+   :include-all-objects:
 
 writer package
 ==============
 
-writer._base module
--------------------
+.. automodapi:: plugins.convert.writer.ffmpeg
+   :include-all-objects:
 
-.. automodule:: plugins.convert.writer._base
-   :members:
-   :undoc-members:
-   :show-inheritance:
+|
+.. automodapi:: plugins.convert.writer.gif
+   :include-all-objects:
 
-writer.ffmpeg module
---------------------
+|
+.. automodapi:: plugins.convert.writer.opencv
+   :include-all-objects:
 
-.. automodule:: plugins.convert.writer.ffmpeg
-   :members:
-   :undoc-members:
-   :show-inheritance:
+|
+.. automodapi:: plugins.convert.writer.patch
+   :include-all-objects:
 
-writer.gif module
------------------
-
-.. automodule:: plugins.convert.writer.gif
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-writer.opencv module
---------------------
-
-.. automodule:: plugins.convert.writer.opencv
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-writer.patch module
---------------------
-
-.. automodule:: plugins.convert.writer.patch
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-writer.pillow module
---------------------
-
-.. automodule:: plugins.convert.writer.pillow
-   :members:
-   :undoc-members:
-   :show-inheritance:
+|
+.. automodapi:: plugins.convert.writer.pillow
+   :include-all-objects:

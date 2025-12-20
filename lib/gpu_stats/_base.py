@@ -56,26 +56,6 @@ class BiggestGPUInfo():
     total: float
 
 
-def set_exclude_devices(devices: list[int]) -> None:
-    """ Add any explicitly selected GPU devices to the global list of devices to be excluded
-    from use by Faceswap.
-
-    Parameters
-    ----------
-    devices: list[int]
-        list of GPU device indices to exclude
-
-    Example
-    -------
-    >>> set_exclude_devices([0, 1]) # Exclude the first two GPU devices
-    """
-    logger = logging.getLogger(__name__)
-    logger.debug("Excluding GPU indicies: %s", devices)
-    if not devices:
-        return
-    _EXCLUDE_DEVICES.extend(devices)
-
-
 class _GPUStats():
     """ Parent class for collecting GPU device information.
 
@@ -263,3 +243,13 @@ class _GPUStats():
                                     total=self._vram[card_id])
         self._log("debug", f"Active GPU Card with most free VRAM: {retval}")
         return retval
+
+    def exclude_devices(self, devices: list[int]) -> None:
+        """ Exclude GPU devices from being used by Faceswap. Override for backend specific logic
+
+        Parameters
+        ----------
+        devices: list[int]
+            The GPU device IDS to be excluded
+        """
+        raise NotImplementedError

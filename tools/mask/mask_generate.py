@@ -8,13 +8,15 @@ import typing as T
 
 from lib.image import encode_image, ImagesSaver
 from lib.multithreading import MultiThread
+from lib.utils import get_module_objects
 from plugins.extract import Extractor
 
 if T.TYPE_CHECKING:
-    from lib.align import Alignments, DetectedFace
-    from lib.align.alignments import PNGHeaderDict
+    from lib import align
+    from lib.align import DetectedFace
     from lib.queue_manager import EventQueue
     from plugins.extract import ExtractMedia
+    from plugins.extract.mask.bisenet_fp import Mask as bfp_mask
     from .loader import Loader
 
 
@@ -33,8 +35,6 @@ class MaskGenerator:
         ``True`` to update all faces, ``False`` to only update faces missing masks
     input_is_faces: bool
         ``True`` if the input are faceswap extracted faces otherwise ``False``
-    exclude_gpus: list[int]
-        List of any GPU IDs that should be excluded
     loader: :class:`tools.mask.loader.Loader`
         The loader for loading source images/video from disk
     """
@@ -43,19 +43,18 @@ class MaskGenerator:
                  update_all: bool,
                  input_is_faces: bool,
                  loader: Loader,
-                 alignments: Alignments | None,
-                 input_location: str,
-                 exclude_gpus: list[int]) -> None:
+                 alignments: align.alignments.Alignments | None,
+                 input_location: str) -> None:
         logger.debug("Initializing %s (mask_type: %s, update_all: %s, input_is_faces: %s, "
-                     "loader: %s, alignments: %s, input_location: %s, exclude_gpus: %s)",
+                     "loader: %s, alignments: %s, input_location: %s)",
                      self.__class__.__name__, mask_type, update_all, input_is_faces, loader,
-                     alignments, input_location, exclude_gpus)
+                     alignments, input_location)
 
         self._update_all = update_all
         self._is_faces = input_is_faces
         self._alignments = alignments
 
-        self._extractor = self._get_extractor(mask_type, exclude_gpus)
+        self._extractor = self._get_extractor(mask_type)
         self._mask_type = self._set_correct_mask_type(mask_type)
         self._input_thread = self._set_loader_thread(loader)
         self._saver = ImagesSaver(input_location, as_bytes=True) if input_is_faces else None
@@ -64,16 +63,13 @@ class MaskGenerator:
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _get_extractor(self, mask_type, exclude_gpus: list[int]) -> Extractor:
+    def _get_extractor(self, mask_type) -> Extractor:
         """ Obtain a Mask extractor plugin and launch it
 
         Parameters
         ----------
         mask_type: str
             The mask type to generate
-        exclude_gpus: list or ``None``
-            A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
-            ``None`` to not exclude any GPUs.
 
         Returns
         -------
@@ -81,13 +77,13 @@ class MaskGenerator:
             The launched Extractor
         """
         logger.debug("masker: %s", mask_type)
-        extractor = Extractor(None, None, mask_type, exclude_gpus=exclude_gpus)
+        extractor = Extractor(None, None, mask_type)
         extractor.launch()
         logger.debug(extractor)
         return extractor
 
     def _set_correct_mask_type(self, mask_type: str) -> str:
-        """ Some masks have multiple variants that they can be saved as depending on config options
+        """ Some masks have multiple variants that they can be saved depending on config options
 
         Parameters
         ----------
@@ -103,10 +99,10 @@ class MaskGenerator:
             return mask_type
 
         # Hacky look up into masker to get the type of mask
-        mask_plugin = self._extractor._mask[0]  # pylint:disable=protected-access
+        mask_plugin = T.cast("bfp_mask | None",
+                             self._extractor._mask[0])  # pylint:disable=protected-access
         assert mask_plugin is not None
-        mtype = "head" if mask_plugin.config.get("include_hair", False) else "face"
-        new_type = f"{mask_type}_{mtype}"
+        new_type = f"{mask_type}_{mask_plugin.storage_centering}"
         logger.debug("Updating '%s' to '%s'", mask_type, new_type)
         return new_type
 
@@ -208,7 +204,8 @@ class MaskGenerator:
             self._alignments.update_face(fname, idx, face.to_alignment())
 
         logger.trace("Updating extracted face: '%s'", media.filename)  # type:ignore[attr-defined]
-        meta: PNGHeaderDict = {"alignments": face.to_png_meta(), "source": media.frame_metadata}
+        meta: align.alignments.PNGHeaderDict = {"alignments": face.to_png_meta(),
+                                                "source": media.frame_metadata}
         self._saver.save(media.filename, encode_image(media.image, ".png", metadata=meta))
 
     def _update_from_frame(self, media: ExtractMedia) -> None:
@@ -267,3 +264,6 @@ class MaskGenerator:
 
         self._finalize()
         logger.debug("Completed MaskGenerator process")
+
+
+__all__ = get_module_objects(__name__)

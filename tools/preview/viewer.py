@@ -15,6 +15,7 @@ from PIL import Image, ImageTk
 
 from lib.align import transform_image
 from lib.align.aligned_face import CenteringType
+from lib.utils import get_module_objects
 from scripts.convert import ConvertItem
 
 
@@ -33,7 +34,7 @@ class _Faces:
     dst: list[np.ndarray] = field(default_factory=list)
 
 
-class FacesDisplay():
+class FacesDisplay():  # pylint:disable=too-many-instance-attributes
     """ Compiles the 2 rows of sample faces (original and swapped) into a single image
 
     Parameters
@@ -118,7 +119,7 @@ class FacesDisplay():
         size = self._get_scale_size(img)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         pilimg = Image.fromarray(img)
-        pilimg = pilimg.resize(size, Image.ANTIALIAS)
+        pilimg = pilimg.resize(size, Image.Resampling.BICUBIC)
         self._tk_image = ImageTk.PhotoImage(pilimg)
         logger.trace("Updated tk image")  # type: ignore
 
@@ -294,3 +295,6 @@ class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._display.update_tk_image()
         self._canvas.itemconfig(self._displaycanvas, image=self._display.tk_image)
         logger.debug("Reloaded preview image")
+
+
+__all__ = get_module_objects(__name__)

@@ -14,16 +14,7 @@ import traceback
 
 from datetime import datetime
 
-
-# TODO - Remove this monkey patch when TF autograph fixed to handle newer logging lib
-def _patched_format(self, record):
-    """ Autograph tf-2.10 has a bug with the 3.10 version of logging.PercentStyle._format(). It is
-    non-critical but spits out warnings. This is the Python 3.9 version of the function and should
-    be removed once fixed """
-    return self._fmt % record.__dict__  # pylint:disable=protected-access
-
-
-setattr(logging.PercentStyle, "_format", _patched_format)
+from lib.utils import get_module_objects
 
 
 class FaceswapLogger(logging.Logger):
@@ -208,7 +199,6 @@ class FaceswapFormatter(logging.Formatter):
             The formatted log message
         """
         record.message = record.getMessage()
-        record = self._rewrite_warnings(record)
         record = self._lower_external(record)
         # strip newlines
         if record.levelno < 30 and ("\n" in record.message or "\r" in record.message):
@@ -231,37 +221,6 @@ class FaceswapFormatter(logging.Formatter):
                 msg = msg + "\n"
             msg = msg + self.formatStack(record.stack_info)
         return msg
-
-    @classmethod
-    def _rewrite_warnings(cls, record: logging.LogRecord) -> logging.LogRecord:
-        """ Change certain warning messages from WARNING to DEBUG to avoid passing non-important
-        information to output.
-
-        Parameters
-        ----------
-        record: :class:`logging.LogRecord`
-            The log record to check for rewriting
-
-        Returns
-        -------
-        :class:`logging.LogRecord`
-            The log rewritten or untouched record
-
-        """
-        if record.levelno == 30 and record.funcName == "warn" and record.module == "ag_logging":
-            # TF 2.3 in Conda is imported with the wrong gast(0.4 when 0.3.3 should be used). This
-            # causes warnings in autograph. They don't appear to impact performance so de-elevate
-            # warning to debug
-            record.levelno = 10
-            record.levelname = "DEBUG"
-
-        if record.levelno == 30 and (record.funcName == "_tfmw_add_deprecation_warning" or
-                                     record.module in ("deprecation", "deprecation_wrapper")):
-            # Keras Deprecations.
-            record.levelno = 10
-            record.levelname = "DEBUG"
-
-        return record
 
     @classmethod
     def _lower_external(cls, record: logging.LogRecord) -> logging.LogRecord:
@@ -338,6 +297,7 @@ def _set_root_logger(loglevel: int = logging.INFO) -> logging.Logger:
     """
     rootlogger = logging.getLogger()
     rootlogger.setLevel(loglevel)
+    logging.captureWarnings(True)
     return rootlogger
 
 
@@ -534,7 +494,7 @@ def crash_log() -> str:
     filename = os.path.join(path, datetime.now().strftime("crash_report.%Y.%m.%d.%H%M%S%f.log"))
     freeze_log = [line.encode("utf-8") for line in _DEBUG_BUFFER]
     try:
-        from lib.sysinfo import sysinfo  # pylint:disable=import-outside-toplevel
+        from lib.system.sysinfo import sysinfo  # pylint:disable=import-outside-toplevel
     except Exception:  # pylint:disable=broad-except
         sysinfo = ("\n\nThere was an error importing System Information from lib.sysinfo. This is "
                    f"probably a bug which should be fixed:\n{traceback.format_exc()}")
@@ -558,19 +518,18 @@ def _process_value(value: T.Any) -> T.Any:
     Any
         The original or ammended value
     """
-    if isinstance(value, str):
-        return f'"{value}"'
     if isinstance(value, (list, tuple, set)) and len(value) > 10:
         return f'[type: "{type(value).__name__}" len: {len(value)}'
 
     try:
         import numpy as np  # pylint:disable=import-outside-toplevel
     except ImportError:
-        return value
+        return repr(value)
 
     if isinstance(value, np.ndarray) and np.prod(value.shape) > 10:
         return f'[type: "{type(value).__name__}" shape: {value.shape}, dtype: "{value.dtype}"]'
-    return value
+
+    return repr(value)
 
 
 def parse_class_init(locals_dict: dict[str, T.Any]) -> str:
@@ -579,6 +538,7 @@ def parse_class_init(locals_dict: dict[str, T.Any]) -> str:
     ----------
     locals_dict: dict[str, T.Any]
         A locals() dictionary from a newly initialized class
+
     Returns
     -------
     str
@@ -586,8 +546,8 @@ def parse_class_init(locals_dict: dict[str, T.Any]) -> str:
     """
     delimit = {k: _process_value(v)
                for k, v in locals_dict.items() if k != "self"}
-    dsp = ", ".join(f"{k}: {v}" for k, v in delimit.items())
-    dsp = f" ({dsp})" if dsp else ""
+    dsp = ", ".join(f"{k}={v}" for k, v in delimit.items())
+    dsp = f"({dsp})" if dsp else ""
     return f"Initializing {locals_dict['self'].__class__.__name__}{dsp}"
 
 
@@ -609,3 +569,6 @@ logging.setLoggerClass(FaceswapLogger)
 
 # Stores the last 100 debug messages
 _DEBUG_BUFFER = RollingBuffer(maxlen=100)
+
+
+__all__ = get_module_objects(__name__)

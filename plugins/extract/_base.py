@@ -5,52 +5,30 @@
 from __future__ import annotations
 import logging
 import typing as T
-
 from dataclasses import dataclass, field
 
 import numpy as np
-from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module  # noqa
+import torch
+from keras import device
 
+from lib.logger import parse_class_init
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
-from lib.utils import GetModel, FaceswapError
-from ._config import Config
+from lib.utils import GetModel
+from lib.utils import get_backend
+from . import extract_config as cfg
 from . import ExtractMedia
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
     from queue import Queue
-    import cv2
     from lib.align import DetectedFace
-    from lib.model.session import KSession
     from .align._base import AlignerBatch
     from .detect._base import DetectorBatch
     from .mask._base import MaskerBatch
     from .recognition._base import RecogBatch
 
 logger = logging.getLogger(__name__)
-# TODO Run with warnings mode
-
-
-def _get_config(plugin_name: str, configfile: str | None = None) -> dict[str, T.Any]:
-    """ Return the configuration for the requested model
-
-    Parameters
-    ----------
-    plugin_name: str
-        The module name of the child plugin.
-    configfile: str, optional
-        Path to a :file:`./config/<plugin_type>.ini` file for this plugin. Default: use system
-        configuration.
-
-    Returns
-    -------
-    config_dict, dict
-       A dictionary of configuration items from the configuration file
-    """
-    return Config(plugin_name, configfile=configfile).config_dict
-
-
 BatchType = T.Union["DetectorBatch", "AlignerBatch", "MaskerBatch", "RecogBatch"]
 
 
@@ -82,8 +60,8 @@ class ExtractorBatch:
     image: list[np.ndarray] = field(default_factory=list)
     detected_faces: Sequence[DetectedFace | list[DetectedFace]] = field(default_factory=list)
     filename: list[str] = field(default_factory=list)
-    feed: np.ndarray = np.array([])
-    prediction: np.ndarray = np.array([])
+    feed: np.ndarray = field(default_factory=lambda: np.array([]))
+    prediction: np.ndarray = field(default_factory=lambda: np.array([]))
     data: list[dict[str, T.Any]] = field(default_factory=list)
 
     def __repr__(self) -> str:
@@ -99,7 +77,44 @@ class ExtractorBatch:
                 f"data={data}")
 
 
-class Extractor():
+@dataclass
+class PluginInfo:
+    """ Dataclass to hold information about a plugin instance
+
+    Parameters
+    ----------
+    instance: int
+        The instance id of the plugin
+    plugin_type: Literal["align", "detect", "mask", "recognition"] | None, optional
+        The plugin type that the plugin instance is. Default: ``None``
+    is_initialized: bool, optional
+        ``True`` if the plugin is initialized. Default: ``False``
+    """
+    instance: int
+    plugin_type: T.Literal["align", "detect", "mask", "recognition"] | None = None
+    is_initialized: bool = False
+
+
+@dataclass
+class SplitTracker:
+    """ Dataclass to hold objects for splitting frame's detected faces and rejoining them for
+    post-detector pliugins
+
+    Parameters
+    ----------
+    faces_per_filename: dict[str, int]
+        Tracking of faces per filename for recompiling batches
+    rollover: :class:`ExtractMedia` | None
+        Batch rollover items
+    output_faces: list[:class:`~lib.align.detected_face.DetectedFace`]
+        Recompiled output faces from the plugin
+    """
+    faces_per_filename: dict[str, int]
+    rollover: ExtractMedia | None
+    output_faces: list[DetectedFace]
+
+
+class Extractor():  # pylint:disable=too-many-instance-attributes
     """ Extractor Plugin Object
 
     All ``_base`` classes for Aligners, Detectors and Maskers inherit from this class.
@@ -120,9 +135,6 @@ class Extractor():
         https://github.com/deepfakes-models/faceswap-models for more information
     model_filename: str
         The name of the model file to be loaded
-    exclude_gpus: list, optional
-        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
-        ``None`` to not exclude any GPUs. Default: ``None``
     configfile: str, optional
         Path to a custom configuration ``ini`` file. Default: Use system configfile
     instance: int, optional
@@ -147,9 +159,6 @@ class Extractor():
     vram: int
         Approximate VRAM used by the model at :attr:`input_size`. Used to calculate the
         :attr:`batchsize`. Be conservative to avoid OOM.
-    vram_warnings: int
-        Approximate VRAM used by the model at :attr:`input_size` that will still run, but generates
-        warnings. Used to calculate the :attr:`batchsize`. Be conservative to avoid OOM.
     vram_per_batch: int
         Approximate additional VRAM used by the model for each additional batch. Used to calculate
         the :attr:`batchsize`. Be conservative to avoid OOM.
@@ -165,17 +174,13 @@ class Extractor():
     def __init__(self,
                  git_model_id: int | None = None,
                  model_filename: str | list[str] | None = None,
-                 exclude_gpus: list[int] | None = None,
                  configfile: str | None = None,
                  instance: int = 0) -> None:
-        logger.debug("Initializing %s: (git_model_id: %s, model_filename: %s, exclude_gpus: %s, "
-                     "configfile: %s, instance: %s, )", self.__class__.__name__, git_model_id,
-                     model_filename, exclude_gpus, configfile, instance)
-        self._is_initialized = False
-        self._instance = instance
-        self._exclude_gpus = exclude_gpus
-        self.config = _get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
-        """ dict: Config for this plugin, loaded from ``extract.ini`` configfile """
+        logger.debug(parse_class_init(locals()))
+        cfg.load_config(configfile)
+
+        self._info = PluginInfo(instance=instance)
+        """:class:`PluginInfo`: holds information about the plugin instance"""
 
         self.model_path = self._get_model(git_model_id, model_filename)
         """ str or list: Path to the model file(s) (if required). Multiple model files should
@@ -186,14 +191,10 @@ class Extractor():
         self.input_size = 0
         self.color_format: T.Literal["BGR", "RGB", "GRAY"] = "BGR"
         self.vram = 0
-        self.vram_warnings = 0  # Will run at this with warnings
         self.vram_per_batch = 0
 
         # << THE FOLLOWING ARE SET IN self.initialize METHOD >> #
-        self.queue_size = 1
-        """ int: Queue size for all internal queues. Set in :func:`initialize()` """
-
-        self.model: KSession | cv2.dnn.Net | None = None
+        self.model: T.Any = None
         """varies: The model for this plugin. Set in the plugin's :func:`init_model()` method """
 
         # For detectors that support batching, this should be set to  the calculated batch size
@@ -213,15 +214,9 @@ class Extractor():
         processed. Stored at input for pairing back up on output of extractor process """
 
         # << THE FOLLOWING PROTECTED ATTRIBUTES ARE SET IN PLUGIN TYPE _base.py >>> #
-        self._plugin_type: T.Literal["align", "detect", "recognition", "mask"] | None = None
-        """ str: Plugin type. ``detect`, ``align``, ``recognise`` or ``mask`` set in
-        ``<plugin_type>._base`` """
-
-        # << Objects for splitting frame's detected faces and rejoining them >>
-        # << for post-detector pliugins                                      >>
-        self._faces_per_filename: dict[str, int] = {}  # Tracking for recompiling batches
-        self._rollover: ExtractMedia | None = None  # batch rollover items
-        self._output_faces: list[DetectedFace] = []  # Recompiled output faces from plugin
+        self._tracker = SplitTracker({}, None, [])
+        """:class:`SplitTracker`: Holds objects for splitting frame's detected faces and
+        rejoining them for post-detector pliugins """
 
         logger.debug("Initialized _base %s", self.__class__.__name__)
 
@@ -389,6 +384,36 @@ class Extractor():
         """
         raise NotImplementedError
 
+    @classmethod
+    def get_device_context(cls, cpu: bool) -> T.ContextManager:
+        """ Get a device context manager for running inference on the CPU
+
+        Parameters
+        ----------
+        cpu: bool
+            ``True`` to get a context manager for running on the CPU. ``False`` to get a
+            context manager for the default device
+
+        Returns
+        -------
+        ContextManager
+            The context manager for running ops on the selected device
+        """
+        if cpu:
+            logger.debug("CPU mode selected. Returning CPU device context")
+            return device("cpu")
+
+        # TODO apple_silicon
+        if get_backend() == "apple_silicon":
+            pass
+
+        if torch.cuda.is_available():
+            logger.debug("Cuda available. Returning Cuda device context")
+            return device("cuda")
+
+        logger.debug("Cuda not available. Returning CPU device context")
+        return device("cpu")
+
     # <<< THREADING METHODS >>> #
     def start(self) -> None:
         """ Start all threads
@@ -419,8 +444,8 @@ class Extractor():
         batch size mean that faces will need to be split/re-joined with frames. The rollover
         collector can be used to rollover items that don't fit in a batch.
 
-        Collect the item from the :attr:`_rollover` dict or from the queue. Add face count per
-        frame to self._faces_per_filename for joining batches back up in finalize
+        Collect the item from the :attr:`_tracker.rollover` dict or from the queue. Add face count
+        per frame to :attr:`_tracker.faces_per_filename` for joining batches back up in finalize
 
         Parameters
         ----------
@@ -433,20 +458,23 @@ class Extractor():
         :class:`~plugins.extract.extract_media.ExtractMedia` or EOF
             The next extract media object, or EOF if pipe has ended
         """
-        if self._rollover is not None:
-            logger.trace("Getting from _rollover: (filename: `%s`, faces: %s)",  # type:ignore
-                         self._rollover.filename, len(self._rollover.detected_faces))
-            item: T.Literal["EOF"] | ExtractMedia = self._rollover
-            self._rollover = None
+        if self._tracker.rollover is not None:
+            logger.trace("Getting from _tracker.rollover: "  # type:ignore[attr-defined]
+                         "(filename: `%s`, faces: %s)",
+                         self._tracker.rollover.filename,
+                         len(self._tracker.rollover.detected_faces))
+            item: T.Literal["EOF"] | ExtractMedia = self._tracker.rollover
+            self._tracker.rollover = None
         else:
             next_item = self._get_item(queue)
             # Rollover collector should only be used at entry to plugin
             assert isinstance(next_item, (ExtractMedia, str))
             item = next_item
             if item != "EOF":
-                logger.trace("Getting from queue: (filename: %s, faces: %s)",  # type:ignore
+                logger.trace("Getting from queue: (filename: %s, "  # type:ignore[attr-defined]
+                             "faces: %s)",
                              item.filename, len(item.detected_faces))
-                self._faces_per_filename[item.filename] = len(item.detected_faces)
+                self._tracker.faces_per_filename[item.filename] = len(item.detected_faces)
         return item
 
     # <<< PROTECTED ACCESS METHODS >>> #
@@ -473,37 +501,23 @@ class Extractor():
         """
         logger.debug("initialize %s: (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
-        assert self._plugin_type is not None and self.name is not None
-        if self._is_initialized:
+        assert self._info.plugin_type is not None and self.name is not None
+        if self._info.is_initialized:
             # When batch processing, plugins will be initialized on first job in batch
             logger.debug("Plugin already initialized: %s (%s)",
-                         self.name, self._plugin_type.title())
+                         self.name, self._info.plugin_type.title())
             return
 
-        logger.info("Initializing %s (%s)...", self.name, self._plugin_type.title())
-        self.queue_size = 1
+        logger.info("Initializing %s (%s)...", self.name, self._info.plugin_type.title())
         name = self.name.replace(" ", "_").lower()
         self._add_queues(kwargs["in_queue"],
                          kwargs["out_queue"],
                          [f"predict_{name}", f"post_{name}"])
         self._compile_threads()
-        try:
-            self.init_model()
-        except tf_errors.UnknownError as err:
-            if "failed to get convolution algorithm" in str(err).lower():
-                msg = ("Tensorflow raised an unknown error. This is most likely caused by a "
-                       "failure to launch cuDNN which can occur for some GPU/Tensorflow "
-                       "combinations. You should enable `allow_growth` to attempt to resolve this "
-                       "issue:"
-                       "\nGUI: Go to Settings > Extract Plugins > Global and enable the "
-                       "`allow_growth` option."
-                       "\nCLI: Go to `faceswap/config/extract.ini` and change the `allow_growth "
-                       "option to `True`.")
-                raise FaceswapError(msg) from err
-            raise err
-        self._is_initialized = True
+        self.init_model()
+        self._info.is_initialized = True
         logger.info("Initialized %s (%s) with batchsize of %s",
-                    self.name, self._plugin_type.title(), self.batchsize)
+                    self.name, self._info.plugin_type.title(), self.batchsize)
 
     def _add_queues(self,
                     in_queue: Queue,
@@ -516,16 +530,16 @@ class Extractor():
         self._queues["out"] = out_queue
         for q_name in queues:
             self._queues[q_name] = queue_manager.get_queue(
-                name=f"{self._plugin_type}{self._instance}_{q_name}",
-                maxsize=self.queue_size)
+                name=f"{self._info.plugin_type}{self._info.instance}_{q_name}",
+                maxsize=1)
 
     # <<< THREAD METHODS >>> #
     def _compile_threads(self) -> None:
         """ Compile the threads into self._threads list """
         assert self.name is not None
-        logger.debug("Compiling %s threads", self._plugin_type)
+        logger.debug("Compiling %s threads", self._info.plugin_type)
         name = self.name.replace(" ", "_").lower()
-        base_name = f"{self._plugin_type}_{name}"
+        base_name = f"{self._info.plugin_type}_{name}"
         self._add_thread(f"{base_name}_input",
                          self._process_input,
                          self._queues["in"],
@@ -538,7 +552,7 @@ class Extractor():
                          self._process_output,
                          self._queues[f"post_{name}"],
                          self._queues["out"])
-        logger.debug("Compiled %s threads: %s", self._plugin_type, self._threads)
+        logger.debug("Compiled %s threads: %s", self._info.plugin_type, self._threads)
 
     def _add_thread(self,
                     name: str,
@@ -615,20 +629,7 @@ class Extractor():
                 break
             if not batch.filename:  # Batch not populated. Possible during re-aligns
                 continue
-            try:
-                batch = function(batch)
-            except tf_errors.UnknownError as err:
-                if "failed to get convolution algorithm" in str(err).lower():
-                    msg = ("Tensorflow raised an unknown error. This is most likely caused by a "
-                           "failure to launch cuDNN which can occur for some GPU/Tensorflow "
-                           "combinations. You should enable `allow_growth` to attempt to resolve "
-                           "this issue:"
-                           "\nGUI: Go to Settings > Extract Plugins > Global and enable the "
-                           "`allow_growth` option."
-                           "\nCLI: Go to `faceswap/config/extract.ini` and change the "
-                           "`allow_growth option to `True`.")
-                    raise FaceswapError(msg) from err
-                raise err
+            batch = function(batch)
             if function.__name__ == "_process_output":
                 # Process output items to individual items from batch
                 for item in self.finalize(batch):
@@ -643,10 +644,10 @@ class Extractor():
         """ Yield one item from a queue """
         item = queue.get()
         if isinstance(item, ExtractMedia):
-            logger.trace("filename: '%s', image shape: %s, detected_faces: %s, "  # type:ignore
-                         "queue: %s, item: %s",
+            logger.trace("filename: '%s', image shape: %s, "  # type:ignore[attr-defined]
+                         "detected_faces: %s, queue: %s, item: %s",
                          item.filename, item.image_shape, item.detected_faces, queue, item)
             self._extract_media[item.filename] = item
         else:
-            logger.trace("item: %s, queue: %s", item, queue)  # type:ignore
+            logger.trace("item: %s, queue: %s", item, queue)  # type:ignore[attr-defined]
         return item

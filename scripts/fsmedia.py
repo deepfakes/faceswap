@@ -19,7 +19,7 @@ import imageio
 
 from lib.align import Alignments as AlignmentsBase, get_centered_size
 from lib.image import count_frames, read_image
-from lib.utils import (camel_case_split, get_image_paths, VIDEO_EXTENSIONS)
+from lib.utils import camel_case_split, get_image_paths, get_module_objects, VIDEO_EXTENSIONS
 
 if T.TYPE_CHECKING:
     from collections.abc import Generator
@@ -616,3 +616,6 @@ class DebugLandmarks(PostProcessAction):
             roi = face.aligned.get_cropped_roi(face.aligned.size, self._legacy_size, "legacy")
             cv2.rectangle(face.aligned.face, tuple(roi[:2]), tuple(roi[2:]), (0, 0, 255), 1)
             self._print_stats(face.aligned)
+
+
+__all__ = get_module_objects(__name__)

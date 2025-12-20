@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """ The Command Line Argument options for training with faceswap.py """
-import argparse
 import gettext
 import typing as T
 
+from lib.utils import get_module_objects
 from plugins.plugin_loader import PluginLoader
 
 from .actions import DirFullPaths, FileFullPaths, Radio, Slider
@@ -176,24 +176,13 @@ class TrainArgs(FaceSwapArgs):
                 "Learning rate warmup. Linearly increase the learning rate from 0 to the chosen "
                 "target rate over the number of iterations given here. 0 to disable.")})
         argument_list.append({
-            "opts": ("-D", "--distribution-strategy"),
-            "dest": "distribution_strategy",
-            "action": Radio,
-            "type": str.lower,
-            "choices": ["default", "central-storage", "mirrored"],
-            "default": "default",
-            "backend": ("nvidia", "directml", "rocm", "apple_silicon"),
+            "opts": ("-d", "--distributed"),
+            "dest": "distributed",
+            "action": "store_true",
+            "default": False,
+            "backend": ("nvidia", "rocm"),
             "group": _("training"),
-            "help": _(
-                "R|Select the distribution stategy to use."
-                "\nL|default: Use Tensorflow's default distribution strategy."
-                "\nL|central-storage: Centralizes variables on the CPU whilst operations are "
-                "performed on 1 or more local GPUs. This can help save some VRAM at the cost of "
-                "some speed by not storing variables on the GPU. Note: Mixed-Precision is not "
-                "supported on multi-GPU setups."
-                "\nL|mirrored: Supports synchronous distributed training across multiple local "
-                "GPUs. A copy of the model and all variables are loaded onto each GPU with "
-                "batches distributed to each GPU at each iteration.")})
+            "help": _("Use distibuted training on multi-gpu setups.")})
         argument_list.append({
             "opts": ("-n", "--no-logs"),
             "action": "store_true",
@@ -329,65 +318,7 @@ class TrainArgs(FaceSwapArgs):
                 "enabled towards the very end of training to try to bring out more detail. Think "
                 "of it as 'fine-tuning'. Enabling this option from the beginning is likely to "
                 "kill a model and lead to terrible results.")})
-        # Deprecated multi-character switches
-        argument_list.append({
-            "opts": ("-su", ),
-            "action": "store_true",
-            "dest": "depr_summary_su_u",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-bs", ),
-            "type": int,
-            "dest": "depr_batch-size_bs_b",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-it", ),
-            "type": int,
-            "dest": "depr_iterations_it_i",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-nl", ),
-            "action": "store_true",
-            "dest": "depr_no-logs_nl_n",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-ss", ),
-            "type": int,
-            "dest": "depr_snapshot-interval_ss_I",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-tia", ),
-            "type": str,
-            "dest": "depr_timelapse-input-A_tia_x",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-tib", ),
-            "type": str,
-            "dest": "depr_timelapse-input-B_tib_y",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-to", ),
-            "type": str,
-            "dest": "depr_timelapse-output_to_z",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-wl", ),
-            "action": "store_true",
-            "dest": "depr_warp-to-landmarks_wl_M",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-nf", ),
-            "action": "store_true",
-            "dest": "depr_no-flip_nf_P",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-nac", ),
-            "action": "store_true",
-            "dest": "depr_no-augment-color_nac_c",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-nw", ),
-            "action": "store_true",
-            "dest": "depr_no-warp_nw_W",
-            "help": argparse.SUPPRESS})
         return argument_list
+
+
+__all__ = get_module_objects(__name__)

@@ -10,6 +10,8 @@ import threading
 from queue import Queue, Empty as QueueEmpty  # pylint:disable=unused-import; # noqa
 from time import sleep
 
+from lib.utils import get_module_objects
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,7 +31,7 @@ class EventQueue(Queue):
         self._shutdown = shutdown_event
 
     @property
-    def shutdown(self) -> threading.Event:
+    def shutdown_event(self) -> threading.Event:
         """ :class:`threading.Event`: The global shutdown event """
         return self._shutdown
 
@@ -175,3 +177,6 @@ class _QueueManager():
 
 
 queue_manager = _QueueManager()  # pylint:disable=invalid-name
+
+
+__all__ = get_module_objects(__name__)

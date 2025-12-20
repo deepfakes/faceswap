@@ -1,107 +1,87 @@
 #!/usr/bin/env python3
+""" The default options for the faceswap BiSeNet Face Parsing plugin.
+
+Defaults files should be named `<plugin_name>_defaults.py`
+
+Any qualifying items placed into this file will automatically get added to the relevant config
+.ini files within the faceswap/config folder and added to the relevant GUI settings page.
+
+The following variable should be defined:
+
+    Parameters
+    ----------
+    HELPTEXT: str
+        A string describing what this plugin does
+
+Further plugin configuration options are assigned using:
+>>> <config_item> = ConfigItem(...)
+
+where <config_item> is the name of the configuration option to be added (lower-case, alpha-numeric
++ underscore only) and ConfigItem(...) is the [`~lib.config.objects.ConfigItem`] data for the
+option.
+
+See the docstring/ReadtheDocs documentation required parameters for the ConfigItem object.
+Items will be grouped together as per their `group` parameter, but otherwise will be processed in
+the order that they are added to this module.
+from lib.config import ConfigItem
 """
-    The default options for the faceswap BiSeNet Face Parsing plugin.
-
-    Defaults files should be named <plugin_name>_defaults.py
-    Any items placed into this file will automatically get added to the relevant config .ini files
-    within the faceswap/config folder.
-
-    The following variables should be defined:
-        _HELPTEXT: A string describing what this plugin does
-        _DEFAULTS: A dictionary containing the options, defaults and meta information. The
-                   dictionary should be defined as:
-                       {<option_name>: {<metadata>}}
-
-                   <option_name> should always be lower text.
-                   <metadata> dictionary requirements are listed below.
-
-    The following keys are expected for the _DEFAULTS <metadata> dict:
-        datatype:  [required] A python type class. This limits the type of data that can be
-                   provided in the .ini file and ensures that the value is returned in the
-                   correct type to faceswap. Valid data types are: <class 'int'>, <class 'float'>,
-                   <class 'str'>, <class 'bool'>.
-        default:   [required] The default value for this option.
-        info:      [required] A string describing what this option does.
-        group:     [optional]. A group for grouping options together in the GUI. If not
-                   provided this will not group this option with any others.
-        choices:   [optional] If this option's datatype is of <class 'str'> then valid
-                   selections can be defined here. This validates the option and also enables
-                   a combobox / radio option in the GUI.
-        gui_radio: [optional] If <choices> are defined, this indicates that the GUI should use
-                   radio buttons rather than a combobox to display this option.
-        min_max:   [partial] For <class 'int'> and <class 'float'> data types this is required
-                   otherwise it is ignored. Should be a tuple of min and max accepted values.
-                   This is used for controlling the GUI slider range. Values are not enforced.
-        rounding:  [partial] For <class 'int'> and <class 'float'> data types this is
-                   required otherwise it is ignored. Used for the GUI slider. For floats, this
-                   is the number of decimal places to display. For ints this is the step size.
-        fixed:     [optional] [train only]. Training configurations are fixed when the model is
-                   created, and then reloaded from the state file. Marking an item as fixed=False
-                   indicates that this value can be changed for existing models, and will override
-                   the value saved in the state file with the updated value in config. If not
-                   provided this will default to True.
-"""
+# pylint:disable=duplicate-code
+from lib.config import ConfigItem
 
 
-_HELPTEXT = (
+HELPTEXT = (
     "BiSeNet Face Parsing options.\n"
     "Mask ported from https://github.com/zllrunning/face-parsing.PyTorch."
     )
 
 
-_DEFAULTS = {
-    "batch-size": {
-        "default": 8,
-        "info": "The batch size to use. To a point, higher batch sizes equal better performance, "
-                "but setting it too high can harm performance.\n"
-                "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
-                "accomodate then this will automatically be lowered.",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (1, 64),
-        "choices": [],
-        "group": "settings",
-        "gui_radio": False,
-        "fixed": True
-    },
-    "cpu": {
-        "default": False,
-        "info": "BiseNet mask still runs fairly quickly on CPU on some setups. Enable "
-                "CPU mode here to use the CPU for this masker to save some VRAM at a speed cost.",
-        "datatype": bool,
-        "group": "settings"
-    },
-    "weights": {
-        "default": "faceswap",
-        "info": "The trained weights to use.\n"
-                "\n\tfaceswap - Weights trained on wildly varied Faceswap extracted data to "
-                "better handle varying conditions, obstructions, glasses and multiple targets "
-                "within a single extracted image."
-                "\n\toriginal - The original weights trained on the CelebAMask-HQ dataset.",
-        "choices": ["faceswap", "original"],
-        "datatype": str,
-        "group": "settings",
-        "gui_radio": True,
-    },
-    "include_ears": {
-        "default": False,
-        "info": "Whether to include ears within the face mask.",
-        "datatype": bool,
-        "group": "settings"
-    },
-    "include_hair": {
-        "default": False,
-        "info": "Whether to include hair within the face mask.",
-        "datatype": bool,
-        "group": "settings"
-    },
-    "include_glasses": {
-        "default": True,
-        "info": "Whether to include glasses within the face mask.\n\tFor 'original' weights "
-                "excluding glasses will mask out the lenses as well as the frames.\n\tFor "
-                "'faceswap' weights, the model has been trained to mask out lenses if eyes cannot "
-                "be seen (i.e. dark sunglasses) or just the frames if the eyes can be seen.",
-        "datatype": bool,
-        "group": "settings"
-    },
-}
+batch_size = ConfigItem(
+    datatype=int,
+    default=8,
+    group="settings",
+    info="The batch size to use. To a point, higher batch sizes equal better performance, "
+         "but setting it too high can harm performance.\n"
+         "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
+         "accomodate then this will automatically be lowered.",
+    rounding=1,
+    min_max=(1, 64))
+
+cpu = ConfigItem(
+    datatype=bool,
+    default=False,
+    group="settings",
+    info="BiseNet mask still runs fairly quickly on CPU on some setups. Enable "
+         "CPU mode here to use the CPU for this masker to save some VRAM at a speed cost.")
+
+weights = ConfigItem(
+    datatype=str,
+    default="faceswap",
+    group="settings",
+    info="The trained weights to use.\n"
+         "\n\tfaceswap - Weights trained on wildly varied Faceswap extracted data to "
+         "better handle varying conditions, obstructions, glasses and multiple targets "
+         "within a single extracted image."
+         "\n\toriginal - The original weights trained on the CelebAMask-HQ dataset.",
+    choices=["faceswap", "original"],
+    gui_radio=True)
+
+include_ears = ConfigItem(
+    datatype=bool,
+    default=False,
+    group="settings",
+    info="Whether to include ears within the face mask.")
+
+include_hair = ConfigItem(
+    datatype=bool,
+    default=False,
+    group="settings",
+    info="Whether to include hair within the face mask.")
+
+include_glasses = ConfigItem(
+    datatype=bool,
+    default=True,
+    group="settings",
+    info="Whether to include glasses within the face mask.\n\tFor 'original' weights "
+         "excluding glasses will mask out the lenses as well as the frames.\n\tFor "
+         "'faceswap' weights, the model has been trained to mask out lenses if eyes cannot "
+         "be seen (i.e. dark sunglasses) or just the frames if the eyes can be seen.")

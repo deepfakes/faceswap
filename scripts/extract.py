@@ -12,11 +12,13 @@ from multiprocessing import Process
 
 import numpy as np
 from tqdm import tqdm
+import torch
 from lib.align.alignments import PNGHeaderDict
 
 from lib.image import encode_image, generate_thumbnail, ImagesLoader, ImagesSaver, read_image_meta
 from lib.multithreading import MultiThread
-from lib.utils import get_folder, handle_deprecated_cliopts, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS
+from lib.utils import (get_folder, get_module_objects, handle_deprecated_cliopts,
+                       IMAGE_EXTENSIONS, VIDEO_EXTENSIONS)
 from plugins.extract import ExtractMedia, Extractor
 from scripts.fsmedia import Alignments, PostProcess, finalize
 
@@ -64,7 +66,6 @@ class Extract():
                                     recognition=recognition,
                                     configfile=configfile,
                                     multiprocess=not self._args.singleprocess,
-                                    exclude_gpus=self._args.exclude_gpus,
                                     rotate_images=self._args.rotate_images,
                                     min_size=self._args.min_size,
                                     normalize_method=normalization,
@@ -429,7 +430,7 @@ class Filter():
             self._extractor.launch()
             desc = "Obtaining reference face Identity"
             if self._extractor.passes > 1:
-                desc = (f"{desc } pass {phase + 1} of {self._extractor.passes}: "
+                desc = (f"{desc} pass {phase + 1} of {self._extractor.passes}: "
                         f"{self._extractor.phase_text}")
             for extract_media in tqdm(self._extractor.detected_faces(),
                                       total=len(file_list),
@@ -578,7 +579,7 @@ class PipelineLoader():
         logger.debug("Load Images: Start")
         load_queue = self._extractor.input_queue
         for filename, image in self._images.load():
-            if load_queue.shutdown.is_set():
+            if load_queue.shutdown_event.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
             is_aligned = filename in self._aligned_filenames
@@ -602,7 +603,7 @@ class PipelineLoader():
         logger.debug("Reload Images: Start. Detected Faces Count: %s", len(detected_faces))
         load_queue = self._extractor.input_queue
         for filename, image in self._images.load():
-            if load_queue.shutdown.is_set():
+            if load_queue.shutdown_event.is_set():
                 logger.debug("Reload Queue: Stop signal received. Terminating")
                 break
             logger.trace("Reloading image: '%s'", filename)  # type: ignore
@@ -741,7 +742,8 @@ class _Extract():
                     detected_faces[extract_media.filename] = extract_media
 
             if not is_final:
-                logger.debug("Reloading images")
+                logger.debug("Reloading images and resetting PyTorch memory cache")
+                torch.cuda.empty_cache()
                 self._loader.reload(detected_faces)
         if saver is not None:
             saver.close()
@@ -824,3 +826,6 @@ class _Extract():
         self._alignments.data[os.path.basename(extract_media.filename)] = {"faces": final_faces,
                                                                            "video_meta": {}}
         del extract_media
+
+
+__all__ = get_module_objects(__name__)

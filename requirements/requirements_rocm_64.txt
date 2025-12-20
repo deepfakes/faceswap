@@ -1,0 +1,3 @@
+-r _requirements_base.txt
+--extra-index-url https://download.pytorch.org/whl/rocm6.4
+torch>=2.8.0,<2.10.0

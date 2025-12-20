@@ -1,6 +1,19 @@
 """ Auto clipper for clipping gradients. """
+from __future__ import annotations
+
+import logging
+import typing as T
+
 import numpy as np
-import tensorflow as tf
+import torch
+
+from lib.logger import parse_class_init
+from lib.utils import get_module_objects
+
+if T.TYPE_CHECKING:
+    from keras import KerasTensor
+
+logger = logging.getLogger(__name__)
 
 
 class AutoClipper():
@@ -11,101 +24,41 @@ class AutoClipper():
     clip_percentile: int
         The percentile to clip the gradients at
     history_size: int, optional
-        The number of iterations of data to use to calculate the norm
-    Default: ``10000``
+        The number of iterations of data to use to calculate the norm Default: ``10000``
 
     References
     ----------
-    tf implementation: https://github.com/pseeth/autoclip
+    Adapted from: https://github.com/pseeth/autoclip
     original paper: https://arxiv.org/abs/2007.14469
     """
-    def __init__(self, clip_percentile: int, history_size: int = 10000):
-        self._clip_percentile = tf.cast(clip_percentile, tf.float64)
-        self._grad_history = tf.Variable(tf.zeros(history_size), trainable=False)
-        self._index = tf.Variable(0, trainable=False)
+    def __init__(self, clip_percentile: int, history_size: int = 10000) -> None:
+        logger.debug(parse_class_init(locals()))
+
+        self._clip_percentile = clip_percentile
         self._history_size = history_size
+        self._grad_history: list[float] = []
 
-    def _percentile(self, grad_history: tf.Tensor) -> tf.Tensor:
-        """ Compute the clip percentile of the gradient history
+        logger.debug("Initialized %s", self.__class__.__name__)
 
-        Parameters
-        ----------
-        grad_history: :class:`tensorflow.Tensor`
-            Tge gradient history to calculate the clip percentile for
-
-        Returns
-        -------
-        :class:`tensorflow.Tensor`
-            A rank(:attr:`clip_percentile`) `Tensor`
-
-        Notes
-        -----
-        Adapted from
-        https://github.com/tensorflow/probability/blob/r0.14/tensorflow_probability/python/stats/quantiles.py
-        to remove reliance on full tensorflow_probability libraray
-        """
-        with tf.name_scope("percentile"):
-            frac_at_q_or_below = self._clip_percentile / 100.
-            sorted_hist = tf.sort(grad_history, axis=-1, direction="ASCENDING")
-
-            num = tf.cast(tf.shape(grad_history)[-1], tf.float64)
-
-            # get indices
-            indices = tf.round((num - 1) * frac_at_q_or_below)
-            indices = tf.clip_by_value(tf.cast(indices, tf.int32),
-                                       0,
-                                       tf.shape(grad_history)[-1] - 1)
-            gathered_hist = tf.gather(sorted_hist, indices, axis=-1)
-
-            # Propagate NaNs. Apparently tf.is_nan doesn't like other dtypes
-            nan_batch_members = tf.reduce_any(tf.math.is_nan(grad_history), axis=None)
-            right_rank_matched_shape = tf.pad(tf.shape(nan_batch_members),
-                                              paddings=[[0, tf.rank(self._clip_percentile)]],
-                                              constant_values=1)
-            nan_batch_members = tf.reshape(nan_batch_members, shape=right_rank_matched_shape)
-
-            nan = np.array(np.nan, gathered_hist.dtype.as_numpy_dtype)
-            gathered_hist = tf.where(nan_batch_members, nan, gathered_hist)
-
-            return gathered_hist
-
-    def __call__(self, grads_and_vars: list[tf.Tensor]) -> list[tf.Tensor]:
+    def __call__(self, gradients: list[KerasTensor]) -> list[KerasTensor]:
         """ Call the AutoClip function.
 
         Parameters
         ----------
-        grads_and_vars: list
-            The list of gradient tensors and variables for the optimizer
-        """
-        grad_norms = [self._get_grad_norm(g) for g, _ in grads_and_vars]
-        total_norm = tf.norm(grad_norms)
-        assign_idx = tf.math.mod(self._index, self._history_size)
-        self._grad_history = self._grad_history[assign_idx].assign(total_norm)
-        self._index = self._index.assign_add(1)
-        clip_value = self._percentile(self._grad_history[: self._index])
-        return [(tf.clip_by_norm(g, clip_value), v) for g, v in grads_and_vars]
-
-    @classmethod
-    def _get_grad_norm(cls, gradients: tf.Tensor) -> tf.Tensor:
-        """ Obtain the L2 Norm for the gradients
-
-        Parameters
-        ----------
-        gradients: :class:`tensorflow.Tensor`
-            The gradients to calculate the L2 norm for
+        gradients: list[:class:`keras.KerasTensor`]
+            The list of gradient tensors for the optimizer
 
         Returns
-        -------
-        :class:`tensorflow.Tensor`
-            The L2 Norm of the given gradients
+        ----------
+        list[:class:`keras.KerasTensor`]
+            The autoclipped gradients
         """
-        values = tf.convert_to_tensor(gradients.values
-                                      if isinstance(gradients, tf.IndexedSlices)
-                                      else gradients, name="t")
+        self._grad_history.append(sum(g.data.norm(2).item() ** 2
+                                      for g in gradients if g is not None) ** (1. / 2))
+        self._grad_history = self._grad_history[-self._history_size:]
+        clip_value = np.percentile(self._grad_history, self._clip_percentile)
+        torch.nn.utils.clip_grad_norm_(gradients, T.cast(float, clip_value))
+        return gradients
 
-        # Calculate L2-norm, clip elements by ratio of clip_norm to L2-norm
-        l2sum = tf.math.reduce_sum(values * values, axis=None, keepdims=True)
-        pred = l2sum > 0
-        # Two-tap tf.where trick to bypass NaN gradients
-        l2sum_safe = tf.where(pred, l2sum, tf.ones_like(l2sum))
-        return tf.squeeze(tf.where(pred, tf.math.sqrt(l2sum_safe), l2sum))
+
+__all__ = get_module_objects(__name__)

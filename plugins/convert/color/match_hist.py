@@ -3,7 +3,9 @@
     for faceswap.py converter """
 
 import numpy as np
+from lib.utils import get_module_objects
 from ._base import Adjustment
+from . import match_hist_defaults as cfg
 
 
 class Color(Adjustment):
@@ -14,7 +16,7 @@ class Color(Adjustment):
         new_face = [self.hist_match(old_face[:, :, c],
                                     new_face[:, :, c],
                                     mask_indices,
-                                    self.config["threshold"] / 100)
+                                    cfg.threshold() / 100)
                     for c in range(3)]
         new_face = np.stack(new_face, axis=-1)
         return new_face
@@ -39,3 +41,6 @@ class Color(Adjustment):
         interp_s_values = np.interp(s_quants, t_quants, t_values)
         new_channel[mask_indices] = interp_s_values[bin_idx]
         return new_channel
+
+
+__all__ = get_module_objects(__name__)

@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .custom_widgets import Tooltip
 from .display_page import DisplayPage
@@ -71,11 +72,8 @@ class Analysis(DisplayPage):  # pylint:disable=too-many-ancestors
     def on_tab_select(self):
         """ Callback for when the analysis tab is selected.
 
-        If Faceswap is currently training a model, then update the statistics with the latest
-        values.
+        Update the statistics with the latest values.
         """
-        if not self.vars["is_training"].get():
-            return
         logger.debug("Analysis update callback received")
         self._reset_session()
 
@@ -587,3 +585,6 @@ class StatsData(ttk.Frame):  # pylint:disable=too-many-ancestors
             title = f"{model_name.title()} Model: Session #{selected_id}"
         logger.debug("Title: '%s'", title)
         return f"{title} - {model_dir}"
+
+
+__all__ = get_module_objects(__name__)

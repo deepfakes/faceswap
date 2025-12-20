@@ -19,7 +19,7 @@ from lib.gui.custom_widgets import PopupProgress
 from lib.gui.utils import FileHandler
 from lib.image import ImagesLoader, ImagesSaver, encode_image, generate_thumbnail
 from lib.multithreading import MultiThread
-from lib.utils import get_folder
+from lib.utils import get_folder, get_module_objects
 
 if T.TYPE_CHECKING:
     from . import manual
@@ -934,3 +934,6 @@ class FaceUpdate():
         if self._globals.var_filter_mode.get() == "Misaligned Faces":
             self._detected_faces.tk_face_count_changed.set(True)
         self._tk_edited.set(True)
+
+
+__all__ = get_module_objects(__name__)

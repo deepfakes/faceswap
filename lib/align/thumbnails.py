@@ -8,9 +8,10 @@ import typing as T
 import numpy as np
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
-    from .alignments import Alignments
+    from lib import align
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ class Thumbnails():
     alignments: :class:'~lib.align.alignments.Alignments`
         The parent alignments class that these thumbs belong to
     """
-    def __init__(self, alignments: Alignments) -> None:
+    def __init__(self, alignments: align.alignments.Alignments) -> None:
         logger.debug(parse_class_init(locals()))
         self._alignments_dict = alignments.data
         self._frame_list = list(sorted(self._alignments_dict))
@@ -79,3 +80,6 @@ class Thumbnails():
         logger.debug("frame: %s, face_index: %s, thumb shape: %s thumb dtype: %s",
                      frame, face_index, thumb.shape, thumb.dtype)
         self._alignments_dict[frame]["faces"][face_index]["thumb"] = thumb
+
+
+__all__ = get_module_objects(__name__)

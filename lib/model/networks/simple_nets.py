@@ -4,16 +4,14 @@ from __future__ import annotations
 import logging
 import typing as T
 
-import tensorflow as tf
+from keras import layers
+from keras.models import Model
 
-# Fix intellisense/linting for tf.keras' thoroughly broken import system
-keras = tf.keras
-layers = keras.layers
-Model = keras.models.Model
+from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
-    from tensorflow import Tensor
-
+    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +30,7 @@ class _net():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  input_shape: tuple[int, int, int] | None = None) -> None:
-        logger.debug("Initializing: %s (input_shape: %s)", self.__class__.__name__, input_shape)
+        logger.debug(parse_class_init(locals()))
         self._input_shape = (None, None, 3) if input_shape is None else input_shape
         assert len(self._input_shape) == 3 and self._input_shape[-1] == 3, (
             "Input shape must be in the format (height, width, channels) and the number of "
@@ -63,19 +61,19 @@ class AlexNet(_net):
 
     @classmethod
     def _conv_block(cls,
-                    inputs: Tensor,
+                    inputs: KerasTensor,
                     padding: int,
                     filters: int,
                     kernel_size: int,
                     strides: int,
                     block_idx: int,
-                    max_pool: bool) -> Tensor:
+                    max_pool: bool) -> KerasTensor:
         """
         The Convolutional block for AlexNet
 
         Parameters
         ----------
-        inputs: :class:`tf.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input tensor to the block
         padding: int
             The amount of zero paddin to apply prior to convolution
@@ -92,14 +90,14 @@ class AlexNet(_net):
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`keras.KerasTensor`
             The output of the Convolutional block
         """
-        name = f"features.{block_idx}"
+        name = f"features_{block_idx}"
         var_x = inputs
         if max_pool:
-            var_x = layers.MaxPool2D(pool_size=3, strides=2, name=f"{name}.pool")(var_x)
-        var_x = layers.ZeroPadding2D(padding=padding, name=f"{name}.pad")(var_x)
+            var_x = layers.MaxPooling2D(pool_size=3, strides=2, name=f"{name}_pool")(var_x)
+        var_x = layers.ZeroPadding2D(padding=padding, name=f"{name}_pad")(var_x)
         var_x = layers.Conv2D(filters,
                               kernel_size=kernel_size,
                               strides=strides,
@@ -108,7 +106,7 @@ class AlexNet(_net):
                               name=name)(var_x)
         return var_x
 
-    def __call__(self) -> tf.keras.models.Model:
+    def __call__(self) -> Model:
         """ Create the AlexNet Model
 
         Returns
@@ -117,7 +115,7 @@ class AlexNet(_net):
             The compiled AlexNet model
         """
         inputs = layers.Input(self._input_shape)
-        var_x = inputs
+        var_x = T.cast("KerasTensor", inputs)
         kernel_size = 11
         strides = 4
 
@@ -155,15 +153,15 @@ class SqueezeNet(_net):
 
     @classmethod
     def _fire(cls,
-              inputs: Tensor,
+              inputs: KerasTensor,
               squeeze_planes: int,
               expand_planes: int,
-              block_idx: int) -> Tensor:
+              block_idx: int) -> KerasTensor:
         """ The fire block for SqueezeNet.
 
         Parameters
         ----------
-        inputs: :class:`tf.Tensor`
+        inputs: :class:`keras.KerasTensor`
             The input to the fire block
         squeeze_planes: int
             The number of filters for the squeeze convolution
@@ -174,22 +172,22 @@ class SqueezeNet(_net):
 
         Returns
         -------
-        :class:`tf.Tensor`
+        :class:`keras.KerasTensor`
             The output of the SqueezeNet fire block
         """
-        name = f"features.{block_idx}"
+        name = f"features_{block_idx}"
         squeezed = layers.Conv2D(squeeze_planes, 1,
-                                 activation="relu", name=f"{name}.squeeze")(inputs)
+                                 activation="relu", name=f"{name}_squeeze")(inputs)
         expand1 = layers.Conv2D(expand_planes, 1,
-                                activation="relu", name=f"{name}.expand1x1")(squeezed)
+                                activation="relu", name=f"{name}_expand1x1")(squeezed)
         expand3 = layers.Conv2D(expand_planes,
                                 3,
                                 activation="relu",
                                 padding="same",
-                                name=f"{name}.expand3x3")(squeezed)
+                                name=f"{name}_expand3x3")(squeezed)
         return layers.Concatenate(axis=-1, name=name)([expand1, expand3])
 
-    def __call__(self) -> tf.keras.models.Model:
+    def __call__(self) -> Model:
         """ Create the SqueezeNet Model
 
         Returns
@@ -198,14 +196,14 @@ class SqueezeNet(_net):
             The compiled SqueezeNet model
         """
         inputs = layers.Input(self._input_shape)
-        var_x = layers.Conv2D(64, 3, strides=2, activation="relu", name="features.0")(inputs)
+        var_x = layers.Conv2D(64, 3, strides=2, activation="relu", name="features_0")(inputs)
 
         block_idx = 2
         squeeze = 16
         expand = 64
         for idx in range(4):
             if idx < 3:
-                var_x = layers.MaxPool2D(pool_size=3, strides=2)(var_x)
+                var_x = layers.MaxPooling2D(pool_size=3, strides=2)(var_x)
                 block_idx += 1
             var_x = self._fire(var_x, squeeze, expand, block_idx)
             block_idx += 1
@@ -214,3 +212,6 @@ class SqueezeNet(_net):
             squeeze += 16
             expand += 64
         return Model(inputs=inputs, outputs=[var_x])
+
+
+__all__ = get_module_objects(__name__)

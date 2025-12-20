@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .alignments import MaskAlignmentsFileDict
 from . import get_adjusted_center, get_centered_size
@@ -22,7 +23,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Mask():
+class Mask():  # pylint:disable=too-many-instance-attributes
     """ Face Mask information and convenience methods
 
     Holds a Faceswap mask as generated from :mod:`plugins.extract.mask` and the information
@@ -50,7 +51,7 @@ class Mask():
                  storage_centering: CenteringType = "face") -> None:
         logger.trace(parse_class_init(locals()))  # type:ignore[attr-defined]
         self.stored_size = storage_size
-        self.stored_centering = storage_centering
+        self.stored_centering: CenteringType = storage_centering
 
         self._mask: bytes | None = None
         self._affine_matrix: np.ndarray | None = None
@@ -258,7 +259,8 @@ class Mask():
                      source_offset: np.ndarray,
                      target_offset: np.ndarray,
                      centering: CenteringType,
-                     coverage_ratio: float = 1.0) -> None:
+                     coverage_ratio: float = 1.0,
+                     y_offset: float = 0.0) -> None:
         """ Set the internal crop area of the mask to be returned.
 
         This impacts the returned mask from :attr:`mask` if the requested mask is required for
@@ -275,6 +277,8 @@ class Mask():
         coverage_ratio: float, optional
             The coverage ratio to be applied to the target image. ``None`` for default (1.0).
             Default: ``None``
+        y_offset: float, optional
+            Amount to additionally adjust the masks's offset along the y-axis. Default: 0.0
         """
         if centering == self.stored_centering and coverage_ratio == 1.0:
             return
@@ -282,7 +286,8 @@ class Mask():
         center = get_adjusted_center(self.stored_size,
                                      source_offset,
                                      target_offset,
-                                     self.stored_centering)
+                                     self.stored_centering,
+                                     y_offset)
         crop_size = get_centered_size(self.stored_centering,
                                       centering,
                                       self.stored_size,
@@ -397,16 +402,16 @@ class LandmarksMask(Mask):
 
     Parameters
     ----------
-    points: list
+    points : list[:class:`numpy.ndarray`]
         A list of landmark points that correspond to the given storage_size to create
         the mask. Each item in the list should be a :class:`numpy.ndarray` that a filled
         convex polygon will be created from
-    storage_size: int, optional
+    storage_size : int, optional
         The size (in pixels) that the compressed mask should be stored at. Default: 128.
-    storage_centering, str (optional):
+    storage_centering : str, optional:
         The centering to store the mask at. One of `"legacy"`, `"face"`, `"head"`.
         Default: `"face"`
-    dilation: float, optional
+    dilation : float, optional
         The amount of dilation to apply to the mask. as a percentage of the mask size. Default: 0.0
     """
     def __init__(self,
@@ -597,3 +602,6 @@ class BlurMask():
                   for kword in self._kwarg_requirements[self._blur_type]}
         logger.trace("BlurMask kwargs: %s", retval)  # type:ignore[attr-defined]
         return retval
+
+
+__all__ = get_module_objects(__name__)

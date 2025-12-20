@@ -9,9 +9,11 @@ import typing as T
 
 from dataclasses import dataclass, field
 
-from lib.gui._config import Config as UserConfig
+from lib.gui import gui_config as cfg
 from lib.gui.project import Project, Tasks
 from lib.gui.theme import Style
+from lib.utils import get_module_objects, PROJECT_ROOT
+
 from .file_handler import FileHandler
 
 if T.TYPE_CHECKING:
@@ -22,7 +24,7 @@ if T.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-PATHCACHE = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])), "lib", "gui", ".cache")
+PATHCACHE = os.path.join(PROJECT_ROOT, "lib", "gui", ".cache")
 _CONFIG: Config | None = None
 
 
@@ -155,7 +157,7 @@ class _GuiObjects:
     command_notebook: CommandNotebook | None = None
 
 
-class Config():
+class Config():  # pylint:disable=too-many-public-methods
     """ The centralized configuration class for holding items that should be made available to all
     parts of the GUI.
 
@@ -189,7 +191,6 @@ class Config():
             tasks=Tasks(self, FileHandler),
             status_bar=statusbar)
 
-        self._user_config = UserConfig(None)
         self._style = Style(self.default_font, root, PATHCACHE)
         self._user_theme = self._style.user_theme
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -278,17 +279,6 @@ class Config():
         assert self.command_notebook is not None
         return self.command_notebook.tools_tab_names
 
-    # Config
-    @property
-    def user_config(self) -> UserConfig:
-        """ dict: The GUI config in dict form. """
-        return self._user_config
-
-    @property
-    def user_config_dict(self) -> dict[str, T.Any]:  # TODO Dataclass
-        """ dict: The GUI config in dict form. """
-        return self._user_config.config_dict
-
     @property
     def user_theme(self) -> dict[str, T.Any]:  # TODO Dataclass
         """ dict: The GUI theme selection options. """
@@ -298,9 +288,9 @@ class Config():
     def default_font(self) -> tuple[str, int]:
         """ tuple: The selected font as configured in user settings. First item is the font (`str`)
         second item the font size (`int`). """
-        font = self.user_config_dict["font"]
+        font = cfg.font()
         font = self._default_font if font == "default" else font
-        return (font, self.user_config_dict["font_size"])
+        return (font, cfg.font_size())
 
     @staticmethod
     def _get_scaling(root) -> float:
@@ -382,10 +372,6 @@ class Config():
         tkvar.set(True)
         logger.debug("Set modified var to True for: '%s'", command)
 
-    def refresh_config(self) -> None:
-        """ Reload the user config from file. """
-        self._user_config = UserConfig(None)
-
     def set_cursor_busy(self, widget: tk.Widget | None = None) -> None:
         """ Set the root or widget cursor to busy.
 
@@ -455,3 +441,6 @@ class Config():
         else:
             self.root.geometry(f"{str(initial_dimensions[0])}x{str(initial_dimensions[1])}+80+80")
         logger.debug("Geometry: %sx%s", *initial_dimensions)
+
+
+__all__ = get_module_objects(__name__)

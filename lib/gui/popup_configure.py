@@ -1,19 +1,17 @@
 #!/usr/bin python3
-""" The pop-up window of the Faceswap GUI for the setting of configuration options. """
+"""The pop-up window of the Faceswap GUI for the setting of configuration options."""
 from __future__ import annotations
-from collections import OrderedDict
-from configparser import ConfigParser
 import gettext
 import logging
 import os
-import sys
 import tkinter as tk
 from tkinter import ttk
 import typing as T
 
-from importlib import import_module
-
+from lib.config import get_configs
+from lib.logger import parse_class_init
 from lib.serializer import get_serializer
+from lib.utils import get_module_objects
 
 from .control_helper import ControlPanel, ControlPanelOption
 from .custom_widgets import Tooltip
@@ -30,23 +28,22 @@ _ = _LANG.gettext
 
 
 class _State():
-    """ Holds the existing config files and the current state of the popup window. """
-    def __init__(self):
-        self._popup = None
-        # The GUI Config cannot be scanned until GUI is launched, so this is populated
-        # on the first call to load the settings
-        self._configs = {}
+    """
+    Holds the current state of the popup window, ensuring that only 1 instance can ever exist
+    """
+    def __init__(self) -> None:
+        logger.debug(parse_class_init(locals()))
+        self._popup: _ConfigurePlugins | None = None
 
-    def open_popup(self, name=None):
-        """ Launch the popup, ensuring only one instance is ever open
+    def open_popup(self, name: str | None = None) -> None:
+        """Launch the popup, ensuring only one instance is ever open
 
         Parameters
         ----------
-        name: str, Optional
+        name : str | None, Optional
             The name of the configuration file. Used for selecting the correct section if required.
             Set to ``None`` if no initial section should be selected. Default: ``None``
         """
-        self._scan_for_configs()
         logger.debug("name: %s", name)
         if self._popup is not None:
             logger.debug("Restoring existing popup")
@@ -54,74 +51,34 @@ class _State():
             self._popup.deiconify()
             self._popup.lift()
             return
-        self._popup = _ConfigurePlugins(name, self._configs)
+        self._popup = _ConfigurePlugins(name)
 
-    def close_popup(self):
-        """ Destroy the open popup and remove it from tracking. """
+    def close_popup(self) -> None:
+        """Destroy the open popup and remove it from tracking."""
         if self._popup is None:
-            logger.info("No popup to close. Returning")
+            logger.debug("No popup to close. Returning")
             return
+        logger.debug("Destroying popup")
         self._popup.destroy()
         del self._popup
         self._popup = None
 
-    def _scan_for_configs(self):
-        """ Scan the plugin folders for configuration settings. Add in the GUI configuration also.
-
-        Populates the attribute :attr:`_configs`.
-        """
-        root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
-        plugins_path = os.path.join(root_path, "plugins")
-        logger.debug("Scanning path: '%s'", plugins_path)
-        for dirpath, _, filenames in os.walk(plugins_path):
-            if "_config.py" in filenames:
-                plugin_type = os.path.split(dirpath)[-1]
-                config = self._load_config(plugin_type)
-                self._configs[plugin_type] = config
-        self._configs["gui"] = get_config().user_config
-        logger.debug("Configs loaded: %s", sorted(list(self._configs.keys())))
-
-    @classmethod
-    def _load_config(cls, plugin_type):
-        """ Load the config from disk. If the file doesn't exist, then it will be generated.
-
-        Parameters
-        ----------
-        plugin_type: str
-            The plugin type (i.e. extract, train convert) that the config should be loaded for
-
-        Returns
-        -------
-        :class:`lib.config.FaceswapConfig`
-            The Configuration for the selected plugin
-        """
-        # Load config to generate default if doesn't exist
-        mod = ".".join(("plugins", plugin_type, "_config"))
-        module = import_module(mod)
-        config = module.Config(None)
-        logger.debug("Found '%s' config at '%s'", plugin_type, config.configfile)
-        return config
-
 
 _STATE = _State()
-open_popup = _STATE.open_popup  # pylint:disable=invalid-name
+open_popup = _STATE.open_popup
 
 
 class _ConfigurePlugins(tk.Toplevel):
-    """ Pop-up window for the setting of Faceswap Configuration Options.
+    """Pop-up window for the setting of Faceswap Configuration Options.
 
     Parameters
     ----------
-    name: str
+    name : str | None
         The name of the section that is being navigated to. Used for opening on the correct
-        page in the Tree View.
-    configurations: dict
-        Dictionary containing the :class:`~lib.config.FaceswapConfig` object for each
-        configuration section for the requested pop-up window
+        page in the Tree View. ``None`` to open on the first page
     """
-    def __init__(self, name, configurations):
-        logger.debug("Initializing %s: (name: %s, configurations: %s)",
-                     self.__class__.__name__, name, configurations)
+    def __init__(self, name: str | None) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__()
         self._root = get_config().root
         self._set_geometry()
@@ -132,10 +89,10 @@ class _ConfigurePlugins(tk.Toplevel):
         header_frame = self._build_header()
         content_frame = ttk.Frame(self)
 
-        self._tree = _Tree(content_frame, configurations, name, theme).tree
+        self._tree = _Tree(content_frame, name, theme).tree
         self._tree.bind("<ButtonRelease-1>", self._select_item)
 
-        self._opts_frame = DisplayArea(self, content_frame, configurations, self._tree, theme)
+        self._opts_frame = DisplayArea(self, content_frame, self._tree, theme)
         self._opts_frame.pack(fill=tk.BOTH, expand=True, side=tk.RIGHT)
         footer_frame = self._build_footer()
 
@@ -146,16 +103,19 @@ class _ConfigurePlugins(tk.Toplevel):
         select = name if name else self._tree.get_children()[0]
         self._tree.selection_set(select)
         self._tree.focus(select)
-        self._select_item(0)
+        self._select_item(0)  # type:ignore[arg-type]
 
         self.title("Configure Settings")
-        self.tk.call('wm', 'iconphoto', self._w, get_images().icons["favicon"])
+        self.tk.call('wm',
+                     'iconphoto',
+                     self._w,  # type:ignore[attr-defined]
+                     get_images().icons["favicon"])
         self.protocol("WM_DELETE_WINDOW", _STATE.close_popup)
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _set_geometry(self):
-        """ Set the geometry of the pop-up window """
+    def _set_geometry(self) -> None:
+        """Set the geometry of the pop-up window"""
         scaling_factor = get_config().scaling_factor
         pos_x = self._root.winfo_x() + 80
         pos_y = self._root.winfo_y() + 80
@@ -164,8 +124,14 @@ class _ConfigurePlugins(tk.Toplevel):
         logger.debug("Pop up Geometry: %sx%s, %s+%s", width, height, pos_x, pos_y)
         self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
 
-    def _build_header(self):
-        """ Build the main header text and separator. """
+    def _build_header(self) -> ttk.Frame:
+        """Build the main header text and separator.
+
+        Returns
+        -------
+        :class:`tkinter.ttk.Frame`
+            The header of the popup configuration window
+        """
         header_frame = ttk.Frame(self)
         lbl_frame = ttk.Frame(header_frame)
 
@@ -182,8 +148,14 @@ class _ConfigurePlugins(tk.Toplevel):
         sep.pack(fill=tk.X, pady=(1, 0), side=tk.BOTTOM)
         return header_frame
 
-    def _build_footer(self):
-        """ Build the main footer buttons and separator. """
+    def _build_footer(self) -> ttk.Frame:
+        """Build the main footer buttons and separator.
+
+        Returns
+        -------
+        :class:`ttk.Frame`
+            The footer of the popup configuration window
+        """
         logger.debug("Adding action buttons")
         frame = ttk.Frame(self)
         left_frame = ttk.Frame(frame)
@@ -229,15 +201,15 @@ class _ConfigurePlugins(tk.Toplevel):
         logger.debug("Added action buttons")
         return frame
 
-    def _select_item(self, event):  # pylint:disable=unused-argument
-        """ Update the session summary info with the selected item or launch graph.
+    def _select_item(self, event: tk.Event) -> None:  # pylint:disable=unused-argument
+        """Update the session summary info with the selected item or launch graph.
 
         If the mouse is clicked on the graph icon, then the session summary pop-up graph is
         launched. Otherwise the selected ID is stored.
 
         Parameters
         ----------
-        event: :class:`tkinter.Event`
+        event : :class:`tkinter.Event`
             The tkinter mouse button release event. Unused.
         """
         selection = self._tree.focus()
@@ -248,27 +220,25 @@ class _ConfigurePlugins(tk.Toplevel):
 
 
 class _Tree(ttk.Frame):  # pylint:disable=too-many-ancestors
-    """ Frame that holds the Tree View Navigator and scroll bar for the configuration pop-up.
+    """Frame that holds the Tree View Navigator and scroll bar for the configuration pop-up.
 
     Parameters
     ----------
-    parent: :class:`tkinter.ttk.Frame`
+    parent : :class:`tkinter.ttk.Frame`
         The parent frame to the Tree View area
-    configurations: dict
-        Dictionary containing the :class:`~lib.config.FaceswapConfig` object for each
-        configuration section for the requested pop-up window
-    name: str
+    name : str | None
         The name of the section that is being navigated to. Used for opening on the correct
         page in the Tree View. ``None`` if no specific area is being navigated to
-    theme: dict
+    theme : dict[str, Any]
         The color mapping for the settings pop-up theme
     """
-    def __init__(self, parent, configurations, name, theme):
+    def __init__(self, parent: ttk.Frame, name: str | None, theme: dict[str, T.Any]):
+        logger.debug(parse_class_init(locals()))
         super().__init__(parent)
         self._fix_styles(theme)
 
         frame = ttk.Frame(self, relief=tk.SOLID, borderwidth=1)
-        self._tree = self._build_tree(frame, configurations, name)
+        self._tree = self._build_tree(frame, name)
         scrollbar = ttk.Scrollbar(frame, orient="vertical", command=self._tree.yview)
 
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -278,20 +248,20 @@ class _Tree(ttk.Frame):  # pylint:disable=too-many-ancestors
         self.pack(side=tk.LEFT, fill=tk.Y)
 
     @property
-    def tree(self):
-        """ :class:`tkinter.ttk.TreeView` The Tree View held within the frame """
+    def tree(self) -> ttk.Treeview:
+        """:class:`tkinter.ttk.Treeview` The Tree View held within the frame"""
         return self._tree
 
     @classmethod
-    def _fix_styles(cls, theme):
-        """ Tkinter has a bug when setting the background style on certain OSes. This fixes the
+    def _fix_styles(cls, theme: dict[str, T.Any]) -> None:
+        """Tkinter has a bug when setting the background style on certain OSes. This fixes the
         issue so we can set different colored backgrounds.
 
         We also set some default styles for our tree view.
 
         Parameters
         ----------
-        theme: dict
+        theme: dict[str, Any]
             The color mapping for the settings pop-up theme
         """
         style = ttk.Style()
@@ -306,60 +276,25 @@ class _Tree(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         # Set colors
         style.map("ConfigNav.Treeview",
-                  foreground=fix_map("foreground"),
-                  background=fix_map("background"))
+                  foreground=fix_map("foreground"),  # type:ignore[arg-type]
+                  background=fix_map("background"))  # type:ignore[arg-type]
         style.map('ConfigNav.Treeview', background=[('selected', theme["tree_select"])])
 
-    def _build_tree(self, parent, configurations, name):
-        """ Build the configuration pop-up window.
-
-        Parameters
-        ----------
-        configurations: dict
-            Dictionary containing the :class:`~lib.config.FaceswapConfig` object for each
-            configuration section for the requested pop-up window
-        name: str
-            The name of the section that is being navigated to. Used for opening on the correct
-            page in the Tree View. ``None`` if no specific area is being navigated to
-
-        Returns
-        -------
-        :class:`tkinter.ttk.TreeView`
-            The populated tree view
-        """
-        logger.debug("Building Tree View Navigator")
-        tree = ttk.Treeview(parent, show="tree", style="ConfigNav.Treeview")
-        data = {category: [sect.split(".") for sect in sorted(conf.config.sections())]
-                for category, conf in configurations.items()}
-        ordered = sorted(list(data.keys()))
-        categories = ["extract", "train", "convert"]
-        categories += [x for x in ordered if x not in categories]
-
-        for cat in categories:
-            img = get_images().icons.get(f"settings_{cat}", "")
-            text = cat.replace("_", " ").title()
-            text = " " + text if img else text
-            is_open = tk.TRUE if name is None or name == cat else tk.FALSE
-            tree.insert("", "end", cat, text=text, image=img, open=is_open, tags="category")
-            self._process_sections(tree, data[cat], cat, name == cat)
-
-        tree.tag_configure('category', background='#DFDFDF')
-        tree.tag_configure('section', background='#E8E8E8')
-        tree.tag_configure('option', background='#F0F0F0')
-        logger.debug("Tree View Navigator")
-        return tree
-
     @classmethod
-    def _process_sections(cls, tree, sections, category, is_open):
-        """ Process the sections of a category's configuration.
+    def _process_sections(cls,
+                          tree: ttk.Treeview,
+                          sections: list[list[str]],
+                          category: str,
+                          is_open: bool) -> None:
+        """Process the sections of a category's configuration.
 
         Creates a category's sections, then the sub options for that category
 
         Parameters
         ----------
-        tree: :class:`tkinter.ttk.TreeView`
+        tree: :class:`tkinter.ttk.Treeview`
             The tree view to insert sections into
-        sections: list
+        sections: list[list[str]]
             The sections to insert into the Tree View
         category: str
             The category node that these sections sit in
@@ -383,94 +318,139 @@ class _Tree(ttk.Frame):  # pylint:disable=too-many-ancestors
                 opt_text = opt.replace("_", " ").title()
                 tree.insert(section_id, "end", opt_id, text=opt_text, open=is_open, tags="option")
 
+    def _build_tree(self, parent: ttk.Frame, name: str | None) -> ttk.Treeview:
+        """Build the configuration pop-up window.
+
+        Parameters
+        ----------
+        parent : :class:`tkinter.ttk.Frame`
+            The parent frame that holds the treeview
+        name : str | None
+            The name of the section that is being navigated to. Used for opening on the correct
+            page in the Tree View. ``None`` if no specific area is being navigated to
+
+        Returns
+        -------
+        :class:`tkinter.ttk.Treeview`
+            The populated tree view
+        """
+        logger.debug("Building Tree View Navigator")
+        tree = ttk.Treeview(parent, show="tree", style="ConfigNav.Treeview")
+        data = {category: [sect.split(".") for sect in sorted(conf.sections)]
+                for category, conf in get_configs().items()}
+        ordered = sorted(list(data.keys()))
+        categories = ["extract", "train", "convert"]
+        categories += [x for x in ordered if x not in categories]
+
+        for cat in categories:
+            img = get_images().icons.get(f"settings_{cat}", "")
+            text = cat.replace("_", " ").title()
+            text = " " + text if img else text
+            is_open = tk.TRUE if name is None or name == cat else tk.FALSE
+            tree.insert("", "end", cat, text=text, image=img, open=is_open, tags="category")
+            self._process_sections(tree, data[cat], cat, name == cat)
+
+        tree.tag_configure('category', background='#DFDFDF')
+        tree.tag_configure('section', background='#E8E8E8')
+        tree.tag_configure('option', background='#F0F0F0')
+        logger.debug("Tree View Navigator")
+        return tree
+
 
 class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
-    """ The option configuration area of the pop up options.
+    """The option configuration area of the pop up options.
 
     Parameters
     ----------
-    top_level: :class:``tk.Toplevel``
+    top_level : :class:``tk.Toplevel``
         The tkinter Top Level widget
-    parent: :class:`tkinter.ttk.Frame`
+    parent : :class:`tkinter.ttk.Frame`
         The parent frame that holds the Display Area of the pop up configuration window
-    tree: :class:`tkinter.ttk.TreeView`
+    tree : :class:`tkinter.ttk.Treeview`
         The Tree View navigator for the pop up configuration window
-    configurations: dict
-        Dictionary containing the :class:`~lib.config.FaceswapConfig` object for each
-        configuration section for the requested pop-up window
-    theme: dict
+    theme : dict[str, Any]
         The color mapping for the settings pop-up theme
     """
-    def __init__(self, top_level, parent, configurations, tree, theme):
+    def __init__(self,
+                 top_level: tk.Toplevel,
+                 parent: ttk.Frame,
+                 tree: ttk.Treeview,
+                 theme: dict[str, T.Any]) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(parent)
-        self._configs: dict[str, FaceswapConfig] = configurations
         self._theme = theme
         self._tree = tree
-        self._vars = {}
-        self._cache = {}
+        self._vars: dict[str, tk.StringVar] = {}
+        self._cache: dict[str, ttk.Frame] = {}
         self._config_cpanel_dict = self._get_config()
-        self._displayed_frame = None
-        self._displayed_key = None
+        self._displayed_frame: ttk.Frame | None = None
+        self._displayed_key: str | None = None
 
         self._presets = _Presets(self, top_level)
         self._build_header()
 
     @property
-    def displayed_key(self):
-        """ str: The current display page's lookup key for configuration options. """
+    def displayed_key(self) -> str | None:
+        """str : The current display page's lookup key for configuration options."""
         return self._displayed_key
 
     @property
-    def config_dict(self):
-        """ dict: The configuration dictionary for all display pages. """
+    def config_dict(self) -> dict[str, dict[str, str | dict[str, ControlPanelOption]]]:
+        """
+        dict[str, dict[str, str | dict[str, ControlPanelOption]]] : The configuration
+        dictionary for all display pages.
+        """
         return self._config_cpanel_dict
 
-    def _get_config(self):
-        """ Format the configuration options stored in :attr:`_config` into a dict of
-        :class:`~lib.gui.control_helper.ControlPanelOption's for placement into option frames.
+    def _get_config(self) -> dict[str, dict[str, str | dict[str, ControlPanelOption]]]:
+        """
+        Format the configuration options stored in :attr:`lib.config.FACESWAP_CONFIGS` into a
+        dict of :class:`~lib.gui.control_helper.ControlPanelOption's for placement into option
+        frames.
 
         Returns
         -------
-        dict
+        dict[str, dict[str, str | dict[str, class:`~lib.gui.control_helper.ControlPanelOption`]]]
             A dictionary of section names to :class:`~lib.gui.control_helper.ControlPanelOption`
             objects
         """
         logger.debug("Formatting Config for GUI")
-        retval = {}
-        for plugin, conf in self._configs.items():
-            for section in conf.config.sections():
-                conf.section = section
-                category = section.split(".")[0]
-                sect = section.split(".")[-1]
+        retval: dict[str, dict[str, str | dict[str, ControlPanelOption]]] = {}
+        for plugin, conf in get_configs().items():
+            for section_name, section in conf.sections.items():
+                category = section_name.split(".")[0]
+                sect = section_name.split(".")[-1]
                 # Elevate global to root
                 key = plugin if sect == "global" else f"{plugin}|{category}|{sect}"
-                retval[key] = {"helptext": None, "options": OrderedDict()}
+                retval[key] = {"helptext": section.helptext, "options": {}}
+                cp_options: dict[str, ControlPanelOption] = {}
+                for option_name, option in section.options.items():
+                    cp_options[option_name] = ControlPanelOption.from_config_object(option_name,
+                                                                                    option)
 
-                retval[key]["helptext"] = conf.defaults[section].helptext
-                for option, params in conf.defaults[section].items.items():
-                    initial_value = conf.config_dict[option]
-                    initial_value = "none" if initial_value is None else initial_value
-                    if params.datatype == list and isinstance(initial_value, list):
-                        # Split multi-select lists into space separated strings for tk variables
-                        initial_value = " ".join(initial_value)
-
-                    retval[key]["options"][option] = ControlPanelOption(
-                        title=option,
-                        dtype=params.datatype,
-                        group=params.group,
-                        default=params.default,
-                        initial_value=initial_value,
-                        choices=params.choices,
-                        is_radio=params.gui_radio,
-                        is_multi_option=params.datatype == list,
-                        rounding=params.rounding,
-                        min_max=params.min_max,
-                        helptext=params.helptext)
+                retval[key] = {"helptext": section.helptext, "options": cp_options}
         logger.debug("Formatted Config for GUI: %s", retval)
         return retval
 
-    def _build_header(self):
-        """ Build the dynamic header text. """
+    def _build_presets_buttons(self, frame: ttk.Frame) -> None:
+        """Build the section that holds the preset load and save buttons.
+
+        Parameters
+        ----------
+        frame : :class:`ttk.Frame`
+            The frame that holds the preset buttons
+        """
+        presets_frame = ttk.Frame(frame)
+        for lbl in ("load", "save"):
+            btn = ttk.Button(presets_frame,
+                             image=get_images().icons[lbl],
+                             command=getattr(self._presets, lbl))
+            Tooltip(btn, text=_(f"{lbl.title()} preset for this plugin"), wrap_length=720)
+            btn.pack(padx=2, side=tk.LEFT)
+        presets_frame.pack(side=tk.RIGHT)
+
+    def _build_header(self) -> None:
+        """Build the dynamic header text."""
         header_frame = ttk.Frame(self)
         lbl_frame = ttk.Frame(header_frame)
 
@@ -483,87 +463,18 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
         header_frame.pack(fill=tk.X, padx=5, pady=5, side=tk.TOP)
         self._vars["header"] = var
 
-    def _build_presets_buttons(self, frame):
-        """ Build the section that holds the preset load and save buttons.
+    def _create_links_page(self, key: str) -> ttk.Frame:
+        """For headings which don't have settings, build a links page to the subsections.
 
         Parameters
         ----------
-        frame: :class:`ttk.Frame`
-            The frame that holds the preset buttons
-        """
-        presets_frame = ttk.Frame(frame)
-        for lbl in ("load", "save"):
-            btn = ttk.Button(presets_frame,
-                             image=get_images().icons[lbl],
-                             command=getattr(self._presets, lbl))
-            Tooltip(btn, text=_(f"{lbl.title()} preset for this plugin"), wrap_length=720)
-            btn.pack(padx=2, side=tk.LEFT)
-        presets_frame.pack(side=tk.RIGHT)
-
-    def select_options(self, section, subsections):
-        """ Display the page for the given section and subsections.
-
-        Parameters
-        ----------
-        section: str
-            The main section to be navigated to (or root node)
-        subsections: list
-            The full list of subsections ending on the required node
-        """
-        labels = ["global"] if not subsections else subsections
-        self._vars["header"].set(" - ".join(sect.replace("_", " ").title() for sect in labels))
-        self._set_display(section, subsections)
-
-    def _set_display(self, section, subsections):
-        """ Set the correct display page for the given section and subsections.
-
-        Parameters
-        ----------
-        section: str
-            The main section to be navigated to (or root node)
-        subsections: list
-            The full list of subsections ending on the required node
-        """
-        key = "|".join([section] + subsections)
-        if self._displayed_frame is not None:
-            self._displayed_frame.pack_forget()
-
-        if key not in self._cache:
-            self._cache_page(key)
-
-        self._displayed_frame = self._cache[key]
-        self._displayed_key = key
-        self._displayed_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
-
-    def _cache_page(self, key):
-        """ Create the control panel options for the requested configuration and cache.
-
-        Parameters
-        ----------
-        key: str
-            The lookup key to the settings cache
-        """
-        info = self._config_cpanel_dict.get(key, None)
-        if info is None:
-            logger.debug("key '%s' does not exist in options. Creating links page.", key)
-            self._cache[key] = self._create_links_page(key)
-        else:
-            self._cache[key] = ControlPanel(self,
-                                            list(info["options"].values()),
-                                            header_text=info["helptext"],
-                                            columns=1,
-                                            max_columns=1,
-                                            option_columns=4,
-                                            style="SPanel",
-                                            blank_nones=False)
-
-    def _create_links_page(self, key):
-        """ For headings which don't have settings, build a links page to the subsections.
-
-        Parameters
-        ----------
-        key: str
+        key : str
             The lookup key to set the links page for
+
+        Returns
+        -------
+        :class:`tkinter.ttk.Frame`
+            The created links page
         """
         frame = ttk.Frame(self)
         links = {item.replace(key, "")[1:].split("|")[0]
@@ -583,16 +494,74 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
                             cursor="hand2")
             lbl.pack(side=tk.TOP, fill=tk.X, padx=10, pady=(0, 5))
             bind = f"{key}|{link}"
-            lbl.bind("<Button-1>", lambda e, x=bind: self._link_callback(x))
+            lbl.bind("<Button-1>", lambda e, x=bind: self._link_callback(x))  # type:ignore[misc]
 
         return frame
 
-    def _link_callback(self, identifier):
-        """ Set the tree view to the selected item and display the requested page on a link click.
+    def _cache_page(self, key: str) -> None:
+        """Create the control panel options for the requested configuration and cache.
 
         Parameters
         ----------
-        identifier: str
+        key : str
+            The lookup key to the settings cache
+        """
+        info = self._config_cpanel_dict.get(key, None)
+        if info is None:
+            logger.debug("key '%s' does not exist in options. Creating links page.", key)
+            self._cache[key] = self._create_links_page(key)
+        else:
+            opts = T.cast(dict[str, dict[str, ControlPanelOption]], info["options"])
+            self._cache[key] = ControlPanel(self,
+                                            list(opts.values()),
+                                            header_text=info["helptext"],
+                                            columns=1,
+                                            max_columns=1,
+                                            option_columns=4,
+                                            style="SPanel",
+                                            blank_nones=False)
+
+    def _set_display(self, section: str, subsections: list[str]) -> None:
+        """Set the correct display page for the given section and subsections.
+
+        Parameters
+        ----------
+        section : str
+            The main section to be navigated to (or root node)
+        subsections : list
+            The full list of subsections ending on the required node
+        """
+        key = "|".join([section] + subsections)
+        if self._displayed_frame is not None:
+            self._displayed_frame.pack_forget()
+
+        if key not in self._cache:
+            self._cache_page(key)
+
+        self._displayed_frame = self._cache[key]
+        self._displayed_key = key
+        self._displayed_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+
+    def select_options(self, section: str, subsections: list[str]) -> None:
+        """Display the page for the given section and subsections.
+
+        Parameters
+        ----------
+        section : str
+            The main section to be navigated to (or root node)
+        subsections : list[str]
+            The full list of subsections ending on the required node
+        """
+        labels = ["global"] if not subsections else subsections
+        self._vars["header"].set(" - ".join(sect.replace("_", " ").title() for sect in labels))
+        self._set_display(section, subsections)
+
+    def _link_callback(self, identifier: str):
+        """Set the tree view to the selected item and display the requested page on a link click.
+
+        Parameters
+        ----------
+        identifier : str
             The identifier from the tree view for the page to display
         """
         parent = "|".join(identifier.split("|")[:-1])
@@ -604,12 +573,12 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
         subsections = split[1:] if len(split) > 1 else []
         self.select_options(section, subsections)
 
-    def reset(self, page_only=False):
-        """ Reset all configuration options to their default values.
+    def reset(self, page_only: bool = False) -> None:
+        """Reset all configuration options to their default values.
 
         Parameters
         ----------
-        page_only: bool, optional
+        page_only : bool, optional
             ``True`` resets just the currently selected page's options to default, ``False`` resets
             all plugins within the currently selected config to default. Default: ``False``
         """
@@ -619,11 +588,12 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
             if selection not in self._config_cpanel_dict:
                 logger.info("No configuration options to reset for current page: %s", selection)
                 return
-            items = list(self._config_cpanel_dict[selection]["options"].values())
+            items = list(T.cast(dict[str, ControlPanelOption],
+                                self._config_cpanel_dict[selection]["options"]).values())
         else:
             items = [opt
                      for key, val in self._config_cpanel_dict.items()
-                     for opt in val["options"].values()
+                     for opt in T.cast(dict[str, ControlPanelOption], val["options"]).values()
                      if key.startswith(selection.split("|")[0])]
         for item in items:
             logger.debug("Resetting item '%s' from '%s' to default '%s'",
@@ -631,108 +601,103 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
             item.set(item.default)
         logger.debug("Reset config")
 
-    def _get_new_config(self,
-                        page_only: bool,
-                        config: FaceswapConfig,
-                        category: str,
-                        lookup: str) -> ConfigParser:
-        """ Obtain a new configuration file for saving
+    def _update_config(self,
+                       page_only: bool,
+                       config: FaceswapConfig,
+                       category: str,
+                       current_section: str) -> bool:
+        """Update the FaceswapConfig item from the currently selected options
 
         Parameters
         ----------
-        page_only: bool
+        page_only : bool
             ``True`` saves just the currently selected page's options, ``False`` saves all the
             plugins options within the currently selected config.
-        config: :class:`~lib.config.FaceswapConfig`
+        config : :class:`~lib.config.FaceswapConfig`
             The original config that is to be addressed
-        category: str
+        category : str
             The configuration category to update
-        lookup: str
+        current_section : str
             The section of the configuration to update
 
         Returns
         -------
-        :class:`configparse.ConfigParser`
-            The newly created configuration object for saving
+        bool
+            ``True`` if the config has been updated. ``False`` if it is unchanged
         """
-        new_config = ConfigParser(allow_no_value=True)
-        for section_name, section in config.defaults.items():
-            logger.debug("Adding section: '%s')", section_name)
-            config.insert_config_section(section_name, section.helptext, config=new_config)
-            for item, options in section.items.items():
-                if item == "helptext":
+        retval = False
+        for section_name, section in config.sections.items():
+            if page_only and section_name != current_section:
+                logger.debug("Skipping section '%s' for page_only save", section_name)
+                continue
+            key = category
+            key += f"|{section_name.replace('.', '|')}" if section_name != "global" else ""
+            gui_opts = T.cast(dict[str, ControlPanelOption],
+                              self._config_cpanel_dict[key]["options"])
+            for option_name, option in section.options.items():
+                new_opt = gui_opts[option_name].get()
+                if new_opt == option.value or (isinstance(option.value, list) and
+                                               set(str(new_opt).split()) == set(option.value)):
+                    logger.debug("Skipping unchanged option '%s'", option_name)
                     continue
-                if page_only and section_name != lookup:
-                    # Keep existing values for pages we are not updating
-                    new_opt = config.get(section_name, item)
-                    logger.debug("Retain existing value '%s' for %s",
-                                 new_opt, ".".join([section_name, item]))
-                else:
-                    # Get currently selected value
-                    key = category
-                    if section_name != "global":
-                        key += f"|{section_name.replace('.', '|')}"
-                    new_opt = self._config_cpanel_dict[key]["options"][item].get()
-                    logger.debug("Updating value to '%s' for %s",
-                                 new_opt, ".".join([section_name, item]))
-                helptext = config.format_help(options.helptext, is_section=False)
-                new_config.set(section_name, helptext)
-                if options.datatype == list:  # Comma separated multi select options
-                    assert isinstance(new_opt, (list, str))
-                    new_opt = ", ".join(new_opt if isinstance(new_opt, list) else new_opt.split())
-                new_config.set(section_name, item, str(new_opt))
+                fmt_opt = str(new_opt).split() if isinstance(option.value, list) else new_opt
+                logger.debug("Updating '%s' from %s to %s",
+                             option_name, repr(option.value), repr(fmt_opt))
+                option.set(new_opt)
+                retval = True
+        return retval
 
-        return new_config
-
-    def save(self, page_only=False):
-        """ Save the configuration file to disk.
+    def save(self, page_only: bool = False) -> None:
+        """Save the configuration file to disk.
 
         Parameters
         ----------
-        page_only: bool, optional
+        page_only : bool, optional
             ``True`` saves just the currently selected page's options, ``False`` saves all the
             plugins options within the currently selected config. Default: ``False``
         """
         logger.debug("Saving config")
         selection = self._tree.focus()
         category = selection.split("|")[0]
-        config = self._configs[category]
-        # Create a new config to pull through any defaults change
+        config = get_configs()[category]
 
         if "|" in selection:
             lookup = ".".join(selection.split("|")[1:])
         else:  # Expand global out from root node
             lookup = "global"
 
-        if page_only and lookup not in config.config.sections():
+        if page_only and lookup not in config.sections:
             logger.info("No settings to save for the current page")
             return
 
-        config.config = self._get_new_config(page_only, config, category, lookup)
-        config.save_config()
-        logger.info("Saved config: '%s'", config.configfile)
+        if not self._update_config(page_only, config, category, lookup):
+            logger.info("No config changes to save")
+            return
 
-        if category == "gui":
-            if not get_config().tk_vars.running_task.get():
-                get_config().root.rebuild()
-            else:
-                logger.info("Can't redraw GUI whilst a task is running. GUI Settings will be "
-                            "applied at the next restart.")
+        config.save_config()
         logger.debug("Saved config")
+        if category != "gui":
+            return
+
+        if not get_config().tk_vars.running_task.get():
+            get_config().root.rebuild()  # type:ignore[attr-defined]
+        else:
+            logger.info("Can't redraw GUI whilst a task is running. GUI Settings will be "
+                        "applied at the next restart.")
 
 
 class _Presets():
-    """ Handles the file dialog and loading and saving of plugin preset files.
+    """Handles the file dialog and loading and saving of plugin preset files.
 
     Parameters
     ----------
-    parent: :class:`ttk.Frame`
+    parent : :class:`DisplayArea`
         The parent display area frame
-    top_level: :class:`tkinter.Toplevel`
+    top_level : :class:`tkinter.Toplevel`
         The top level pop up window
     """
-    def __init__(self, parent, top_level):
-        logger.debug("Initializing: %s (top_level: %s)", self.__class__.__name__, top_level)
+    def __init__(self, parent: DisplayArea, top_level: tk.Toplevel):
+        logger.debug(parse_class_init(locals()))
         self._parent = parent
         self._popup = top_level
         self._base_path = os.path.join(PATHCACHE, "presets")
@@ -740,18 +705,25 @@ class _Presets():
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
-    def _preset_path(self):
-        """ str: The path to the default preset folder for the currently displayed plugin. """
-        return os.path.join(self._base_path, self._parent.displayed_key.split("|")[0])
+    def _displayed_key(self) -> str:
+        """str : The currently displayed plugin key"""
+        retval = self._parent.displayed_key
+        assert retval is not None
+        return retval
 
     @property
-    def _full_key(self):
-        """ str: The full extrapolated lookup key for the currently displayed page. """
-        full_key = self._parent.displayed_key
+    def _preset_path(self) -> str:
+        """str : The path to the default preset folder for the currently displayed plugin."""
+        return os.path.join(self._base_path, self._displayed_key.split("|")[0])
+
+    @property
+    def _full_key(self) -> str:
+        """str : The full extrapolated lookup key for the currently displayed page."""
+        full_key = self._displayed_key
         return full_key if "|" in full_key else f"{full_key}|global"
 
-    def load(self):
-        """ Action to perform when load preset button is pressed.
+    def load(self) -> None:
+        """Load a preset on a load preset button press.
 
         Loads parameters from a saved json file and updates the displayed page.
         """
@@ -770,7 +742,8 @@ class _Presets():
 
         logger.debug("Loaded preset: %s", opts)
 
-        exist = self._parent.config_dict[self._parent.displayed_key]["options"]
+        exist = T.cast(dict[str, ControlPanelOption],
+                       self._parent.config_dict[self._displayed_key]["options"])
         for key, val in opts.items():
             if key.startswith("__") or key not in exist:
                 logger.debug("Skipping non-existent item: '%s'", key)
@@ -779,8 +752,8 @@ class _Presets():
             exist[key].set(val)
         logger.info("Preset loaded from: '%s'", os.path.basename(filename))
 
-    def save(self):
-        """ Action to perform when save preset button is pressed.
+    def save(self) -> None:
+        """Save the preset when on a save preset button is press.
 
         Compiles currently displayed configuration options into a json file and saves into selected
         location.
@@ -789,45 +762,53 @@ class _Presets():
         if not filename:
             return
 
-        opts = self._parent.config_dict[self._parent.displayed_key]["options"]
+        opts = T.cast(dict[str, ControlPanelOption],
+                      self._parent.config_dict[self._displayed_key]["options"])
         preset = {opt: val.get() for opt, val in opts.items()}
         preset["__filetype"] = "faceswap_preset"
         preset["__section"] = self._full_key
         self._serializer.save(filename, preset)
         logger.info("Preset '%s' saved to: '%s'", self._full_key, filename)
 
-    def _get_filename(self, action):
-        """ Obtain the filename for load and save preset actions.
+    def _get_filename(self, action: T.Literal["load", "save"]) -> str | None:
+        """Obtain the filename for load and save preset actions.
 
         Parameters
         ----------
-        action: ["load", "save"]
+        action : ["load", "save"]
             The preset action that is being performed
 
         Returns
         -------
-        str: The requested preset filename
+        str | None
+            The requested preset filename. ``None`` if no filename found
         """
-        if not self._parent.config_dict.get(self._parent.displayed_key):
+        if not self._parent.config_dict.get(self._displayed_key):
             logger.info("No settings to %s for the current page.", action)
             return None
 
-        args = ("save_filename", "json") if action == "save" else ("filename", "json")
-        kwargs = {"title": f"{action.title()} Preset...",
-                  "initial_folder": self._preset_path,
-                  "parent": self._parent}
         if action == "save":
-            kwargs["initial_file"] = self._get_initial_filename()
+            filename = FileHandler("save_filename",
+                                   "json",
+                                   title="Save Preset...",
+                                   initial_folder=self._preset_path,
+                                   parent=self._parent,
+                                   initial_file=self._get_initial_filename()).return_file
+        else:
+            filename = FileHandler("filename",
+                                   "json",
+                                   title="Load Preset...",
+                                   initial_folder=self._preset_path,
+                                   parent=self._parent).return_file
 
-        filename = FileHandler(*args, **kwargs).return_file
         if not filename:
             logger.debug("%s cancelled", action.title())
 
         self._raise_toplevel()
         return filename
 
-    def _get_initial_filename(self):
-        """ Obtain the initial filename for saving a preset.
+    def _get_initial_filename(self) -> str:
+        """Obtain the initial filename for saving a preset.
 
         The name is based on the plugin's display key. A scan of the default presets folder is done
         to ensure no filename clash. If a filename does clash, then an integer is added to the end.
@@ -851,9 +832,11 @@ class _Presets():
         logger.debug("Initial filename: %s", filename)
         return filename
 
-    def _raise_toplevel(self):
-        """ Opening a file dialog tends to hide the top level pop up, so bring back to the
-        fore. """
+    def _raise_toplevel(self) -> None:
+        """Bring Toplevel to the top in case file dialog has hidden it."""
         self._popup.update()
         self._popup.deiconify()
         self._popup.lift()
+
+
+__all__ = get_module_objects(__name__)

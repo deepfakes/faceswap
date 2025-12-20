@@ -11,6 +11,7 @@ from time import time
 from lib.gui.control_helper import set_slider_rounding
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.utils import get_images
+from lib.utils import get_module_objects
 
 from .control import Navigation, BackgroundImage
 from .editor import (BoundingBox, ExtractBox, Landmarks, Mask,  # noqa pylint:disable=unused-import
@@ -822,3 +823,6 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
             logger.debug("Binding key '%s' to method %s", key, method)
             self.winfo_toplevel().bind(key, method)
             self.key_bindings[key]["bound_to"] = self.selected_action
+
+
+__all__ = get_module_objects(__name__)

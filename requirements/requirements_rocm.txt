@@ -1,2 +1,2 @@
--r _requirements_base.txt
-tensorflow-rocm>=2.10.0,<2.11.0
+# Meta requirements file for latest ROCm version
+-r _requirements_rocm_64.txt

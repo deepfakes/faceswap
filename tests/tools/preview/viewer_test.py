@@ -30,13 +30,13 @@ if T.TYPE_CHECKING:
 def test__faces():
     """ Test the :class:`~tools.preview.viewer._Faces dataclass initializes correctly """
     faces = _Faces()
-    assert faces.filenames == []
-    assert faces.matrix == []
-    assert faces.src == []
-    assert faces.dst == []
+    assert isinstance(faces.filenames, list) and not faces.filenames
+    assert isinstance(faces.matrix, list) and not faces.matrix
+    assert isinstance(faces.src, list) and not faces.src
+    assert isinstance(faces.dst, list) and not faces.dst
 
 
-_PARAMS = [(3, 448), (4, 333), (5, 254), (6, 128)]  # columns/face_size
+_PARAMS = ((3, 448), (4, 333), (5, 254), (6, 128))  # columns/face_size
 _IDS = [f"cols:{c},size:{s}[{get_backend().upper()}]" for c, s in _PARAMS]
 
 
@@ -118,6 +118,8 @@ class TestFacesDisplay():
         f_display.set_display_dimensions(dimensions)
         assert f_display._display_dims == dimensions
 
+    # TODO remove the next line that supresses a weird pytest bug when it tears down the tempdir
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     @pytest.mark.parametrize("columns, face_size", _PARAMS, ids=_IDS)
     def test_update_tk_image(self,
                              columns: int,
@@ -141,7 +143,11 @@ class TestFacesDisplay():
         f_display._faces_source = np.zeros((face_size, face_size, 3), dtype=np.uint8)
         f_display._faces_dest = np.zeros((face_size, face_size, 3), dtype=np.uint8)
 
-        tk.Tk()  # tkinter instance needed for image creation
+        try:
+            tk.Tk()  # tkinter instance needed for image creation
+        except tk.TclError:
+            # Some Windows runners arbitrarily don't install Tk correctly
+            pytest.skip("Tk not available on this system")
         f_display.update_tk_image()
 
         f_display._build_faces_image.assert_called_once()

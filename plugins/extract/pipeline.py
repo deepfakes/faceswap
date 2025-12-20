@@ -2,9 +2,6 @@
 """
 Return a requested detector/aligner/masker pipeline
 
-Tensorflow does not like to release GPU VRAM, so parallel plugins need to be managed to work
-together.
-
 This module sets up a pipeline for the extraction workflow, loading detect, align and mask
 plugins either in parallel or in series, giving easy access to input and output.
 """
@@ -18,7 +15,7 @@ from lib.gpu_stats import GPUStats
 from lib.logger import parse_class_init
 from lib.queue_manager import EventQueue, queue_manager, QueueEmpty
 from lib.serializer import get_serializer
-from lib.utils import get_backend, FaceswapError
+from lib.utils import get_backend, get_module_objects, FaceswapError
 from plugins.plugin_loader import PluginLoader
 
 if T.TYPE_CHECKING:
@@ -43,7 +40,7 @@ def _get_instance():
     return _INSTANCES
 
 
-class Extractor():
+class Extractor():  # pylint:disable=too-many-instance-attributes
     """ Creates a :mod:`~plugins.extract.detect`/:mod:`~plugins.extract.align``/\
     :mod:`~plugins.extract.mask` pipeline and yields results frame by frame from the
     :attr:`detected_faces` generator
@@ -68,9 +65,6 @@ class Extractor():
     multiprocess: bool, optional
         Whether to attempt processing the plugins in parallel. This may get overridden
         internally depending on the plugin combination. Default: ``False``
-    exclude_gpus: list, optional
-        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
-        ``None`` to not exclude any GPUs. Default: ``None``
     rotate_images: str, optional
         Used to set the :attr:`plugins.extract.detect.rotation` attribute. Pass in a single number
         to use increments of that size up to 360, or pass in a ``list`` of ``ints`` to enumerate
@@ -98,14 +92,13 @@ class Extractor():
         The current phase that the pipeline is running. Used in conjunction with :attr:`passes` and
         :attr:`final_pass` to indicate to the caller which phase is being processed
     """
-    def __init__(self,
+    def __init__(self,  # pylint:disable=too-many-arguments,too-many-positional-arguments
                  detector: str | None,
                  aligner: str | None,
                  masker: str | list[str] | None,
                  recognition: str | None = None,
                  configfile: str | None = None,
                  multiprocess: bool = False,
-                 exclude_gpus: list[int] | None = None,
                  rotate_images: str | None = None,
                  min_size: int = 0,
                  normalize_method:  T.Literal["none", "clahe", "hist", "mean"] | None = None,
@@ -118,10 +111,6 @@ class Extractor():
                    masker)] if not isinstance(masker, list) else T.cast(list[str | None],
                                                                         masker)
         self._flow = self._set_flow(detector, aligner, maskers, recognition)
-        self._exclude_gpus = exclude_gpus
-        # We only ever need 1 item in each queue. This is 2 items cached (1 in queue 1 waiting
-        # for queue) at each point. Adding more just stacks RAM with no speed benefit.
-        self._queue_size = 1
         # TODO Calculate scaling for more plugins than currently exist in _parallel_scaling
         self._scaling_fallback = 0.4
         self._vram_stats = self._get_vram_stats()
@@ -134,7 +123,6 @@ class Extractor():
                                        disable_filter)
         self._recognition = self._load_recognition(recognition, configfile)
         self._mask = [self._load_mask(mask, configfile) for mask in maskers]
-        self._is_parallel = self._set_parallel_processing(multiprocess)
         self._phases = self._set_phases(multiprocess)
         self._phase_index = 0
         self._set_extractor_batchsize()
@@ -347,9 +335,8 @@ class Extractor():
             return
 
         align_origin = None
-        assert self.aligner.name is not None
-        if self.aligner.name.lower() == "external":
-            align_origin = self.aligner.config["origin"]
+        if len(import_plugins) == 2:
+            align_origin = import_plugins[-1].origin
 
         logger.info("Importing external data for %s from json file...",
                     " and ".join([p.__class__.__name__ for p in import_plugins]))
@@ -359,9 +346,10 @@ class Extractor():
 
         last_fname = ""
         is_68_point = True
+        data = {}
         for plugin in import_plugins:
             plugin_type = plugin.__class__.__name__
-            path = os.path.join(folder, plugin.config["file_name"])
+            path = os.path.join(folder, plugin.file_name)
             if not os.path.isfile(path):
                 raise FaceswapError(f"{plugin_type} import file could not be found at '{path}'")
 
@@ -548,7 +536,7 @@ class Extractor():
         tasks.append(f"extract{self._instance}_{self._final_phase}_out")
         for task in tasks:
             # Limit queue size to avoid stacking ram
-            queue_manager.add_queue(task, maxsize=self._queue_size)
+            queue_manager.add_queue(task, maxsize=1)
             queues[task] = queue_manager.get_queue(task)
         logger.debug("Queues: %s", queues)
         return queues
@@ -563,6 +551,7 @@ class Extractor():
             Statistics on available VRAM
         """
         vram_buffer = 256  # Leave a buffer for VRAM allocation
+        assert GPUStats is not None
         gpu_stats = GPUStats()
         stats = gpu_stats.get_card_most_free()
         retval: dict[str, int | str] = {"count": gpu_stats.device_count,
@@ -680,8 +669,7 @@ class Extractor():
             return None
         aligner_name = aligner.replace("-", "_").lower()
         logger.debug("Loading Aligner: '%s'", aligner_name)
-        plugin = PluginLoader.get_aligner(aligner_name)(exclude_gpus=self._exclude_gpus,
-                                                        configfile=configfile,
+        plugin = PluginLoader.get_aligner(aligner_name)(configfile=configfile,
                                                         normalize_method=normalize_method,
                                                         re_feed=re_feed,
                                                         re_align=re_align,
@@ -726,8 +714,7 @@ class Extractor():
             detector_name = aligner
 
         logger.debug("Loading Detector: '%s'", detector_name)
-        plugin = PluginLoader.get_detector(detector_name)(exclude_gpus=self._exclude_gpus,
-                                                          rotation=rotation,
+        plugin = PluginLoader.get_detector(detector_name)(rotation=rotation,
                                                           min_size=min_size,
                                                           configfile=configfile,
                                                           instance=self._instance)
@@ -755,8 +742,7 @@ class Extractor():
             return None
         masker_name = masker.replace("-", "_").lower()
         logger.debug("Loading Masker: '%s'", masker_name)
-        plugin = PluginLoader.get_masker(masker_name)(exclude_gpus=self._exclude_gpus,
-                                                      configfile=configfile,
+        plugin = PluginLoader.get_masker(masker_name)(configfile=configfile,
                                                       instance=self._instance)
         return plugin
 
@@ -769,8 +755,7 @@ class Extractor():
             return None
         recognition_name = recognition.replace("-", "_").lower()
         logger.debug("Loading Recognition: '%s'", recognition_name)
-        plugin = PluginLoader.get_recognition(recognition_name)(exclude_gpus=self._exclude_gpus,
-                                                                configfile=configfile,
+        plugin = PluginLoader.get_recognition(recognition_name)(configfile=configfile,
                                                                 instance=self._instance)
         return plugin
 
@@ -793,15 +778,66 @@ class Extractor():
         plugin.start()
         logger.debug("Launched %s plugin", phase)
 
+    def _set_plugins_batchsize(self, gpu_plugins: list[str], vram_free: int) -> None:
+        """ Set the batch size for the current phase so that it will fit in available VRAM.
+
+        Do not update plugins which have a vram_per_batch of 0 (CPU plugins) due to
+        zero division error.
+
+        Reduces the batchsize of the plugin which has a batch size > 1 and the largest VRAM
+        requirements. The final reduction is the plugin which has a batch size > 1 and the
+        smallest VRAM requirements that would fit the pipeline inside VRAM
+
+        Parameters
+        ----------
+        gpu_plugins: list[str]
+            The name of the plugins that use the GPU for the current phase
+        vram_free: int
+            The amount of available VRAM, in MBs
+        """
+        logger.debug("GPU plugins: %s, Available vram: %s", gpu_plugins, vram_free)
+        plugins = [self._active_plugins[idx]
+                   for idx, plugin in enumerate(self._current_phase)
+                   if plugin in gpu_plugins]
+        base_vram = sum(p.vram for p in plugins)
+        vram_free = vram_free - base_vram
+        logger.debug("Base vram: %s, remaining vram: %s", base_vram, vram_free)
+
+        to_allocate = [(p.batchsize, p.vram_per_batch) for p in plugins]
+        excess = sum(a[0] * a[1] for a in to_allocate) - vram_free
+        logger.debug("Plugins to allocate: %s, excess vram: %s", to_allocate, excess)
+
+        while excess > 0:
+            chosen = next(p for p in to_allocate
+                          if p[0] > 1 and p[1] == max(p[1] for p in to_allocate if p[0] > 1))
+
+            if excess - chosen[1] <= 0:
+                chosen = next(p for p in to_allocate
+                              if p[0] > 1 and p[1] == min(p[1] for p in to_allocate
+                                                          if p[0] > 1 and p[1] >= excess))
+
+            excess -= chosen[1]
+            logger.debug("Reducing batch size for item %s. Remaining %s", chosen, excess)
+            to_allocate[to_allocate.index(chosen)] = (chosen[0] - 1, chosen[1])
+
+        msg = []
+        for plugin, alloc in zip(plugins, to_allocate):
+            if plugin.batchsize != alloc[0]:
+                logger.debug("Updating batchsize for plugin %s from %s to %s",
+                             plugin.name, plugin.batchsize, alloc[0])
+                plugin.batchsize = alloc[0]
+                msg.append(f"{plugin.__class__.__name__}: {plugin.batchsize}")
+
+        logger.info("Reset batch sizes due to available VRAM: %s", ", ".join(msg))
+
     def _set_extractor_batchsize(self) -> None:
         """
         Sets the batch size of the requested plugins based on their vram, their
         vram_per_batch_requirements and the number of plugins being loaded in the current phase.
-        Only adjusts if the the configured batch size requires more vram than is available. Nvidia
-        only.
+        Only adjusts if the the configured batch size requires more vram than is available.
         """
         backend = get_backend()
-        if backend not in ("nvidia", "directml", "rocm"):
+        if backend not in ("nvidia", "rocm"):
             logger.debug("Not updating batchsize requirements for backend: '%s'", backend)
             return
         if sum(plugin.vram for plugin in self._active_plugins) == 0:
@@ -810,62 +846,20 @@ class Extractor():
 
         batch_required = sum(plugin.vram_per_batch * plugin.batchsize
                              for plugin in self._active_plugins)
+
         gpu_plugins = [p for p in self._current_phase if self._vram_per_phase[p] > 0]
+
         scaling = self._parallel_scaling.get(len(gpu_plugins), self._scaling_fallback)
         plugins_required = sum(self._vram_per_phase[p] for p in gpu_plugins) * scaling
-        if plugins_required + batch_required <= T.cast(int, self._vram_stats["vram_free"]):
+
+        vram_free = T.cast(int, self._vram_stats["vram_free"])
+        total_required = plugins_required + batch_required
+        if total_required <= vram_free:
             logger.debug("Plugin requirements within threshold: (plugins_required: %sMB, "
                          "vram_free: %sMB)", plugins_required, self._vram_stats["vram_free"])
             return
-        # Hacky split across plugins that use vram
-        available_vram = (T.cast(int, self._vram_stats["vram_free"])
-                          - plugins_required) // len(gpu_plugins)
-        self._set_plugin_batchsize(gpu_plugins, available_vram)
 
-    def _set_plugin_batchsize(self, gpu_plugins: list[str], available_vram: float) -> None:
-        """ Set the batch size for the given plugin based on given available vram.
-        Do not update plugins which have a vram_per_batch of 0 (CPU plugins) due to
-        zero division error.
-        """
-        plugins = [self._active_plugins[idx]
-                   for idx, plugin in enumerate(self._current_phase)
-                   if plugin in gpu_plugins]
-        vram_per_batch = [plugin.vram_per_batch for plugin in plugins]
-        ratios = [vram / sum(vram_per_batch) for vram in vram_per_batch]
-        requested_batchsizes = [plugin.batchsize for plugin in plugins]
-        batchsizes = [min(requested, max(1, int((available_vram * ratio) / plugin.vram_per_batch)))
-                      for ratio, plugin, requested in zip(ratios, plugins, requested_batchsizes)]
-        remaining = available_vram - sum(batchsize * plugin.vram_per_batch
-                                         for batchsize, plugin in zip(batchsizes, plugins))
-        sorted_indices = [i[0] for i in sorted(enumerate(plugins),
-                                               key=lambda x: x[1].vram_per_batch, reverse=True)]
-
-        logger.debug("requested_batchsizes: %s, batchsizes: %s, remaining vram: %s",
-                     requested_batchsizes, batchsizes, remaining)
-
-        while remaining > min(plugin.vram_per_batch
-                              for plugin in plugins) and requested_batchsizes != batchsizes:
-            for idx in sorted_indices:
-                plugin = plugins[idx]
-                if plugin.vram_per_batch > remaining:
-                    logger.debug("Not enough VRAM to increase batch size of %s. Required: %sMB, "
-                                 "Available: %sMB", plugin, plugin.vram_per_batch, remaining)
-                    continue
-                if plugin.batchsize == batchsizes[idx]:
-                    logger.debug("Threshold reached for %s. Batch size: %s",
-                                 plugin, plugin.batchsize)
-                    continue
-                logger.debug("Incrementing batch size of %s to %s", plugin, batchsizes[idx] + 1)
-                batchsizes[idx] += 1
-                remaining -= plugin.vram_per_batch
-                logger.debug("Remaining VRAM to allocate: %sMB", remaining)
-
-        if batchsizes != requested_batchsizes:
-            text = ", ".join([f"{plugin.__class__.__name__}: {batchsize}"
-                              for plugin, batchsize in zip(plugins, batchsizes)])
-            for plugin, batchsize in zip(plugins, batchsizes):
-                plugin.batchsize = batchsize
-            logger.info("Reset batch sizes due to available VRAM: %s", text)
+        self._set_plugins_batchsize(gpu_plugins, vram_free)
 
     def _join_threads(self):
         """ Join threads for current pass """
@@ -876,3 +870,6 @@ class Extractor():
         """ Check all threads for errors and raise if one occurs """
         for plugin in self._active_plugins:
             plugin.check_and_raise_error()
+
+
+__all__ = get_module_objects(__name__)

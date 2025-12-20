@@ -20,8 +20,7 @@ from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
-
-from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module  # noqa
+from torch.cuda import OutOfMemoryError
 
 from lib.align import AlignedFace, LandmarkType, transform_image
 from lib.utils import FaceswapError
@@ -88,6 +87,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                  configfile: str | None = None,
                  instance: int = 0,
                  **kwargs) -> None:
+        # pylint:disable=duplicate-code
         logger.debug("Initializing %s: (configfile: %s)", self.__class__.__name__, configfile)
         super().__init__(git_model_id,
                          model_filename,
@@ -97,10 +97,10 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         self.input_size = 256  # Override for model specific input_size
         self.coverage_ratio = 1.0  # Override for model specific coverage_ratio
 
+        self._info.plugin_type = "mask"
         # Override if a specific type of landmark data is required:
         self.landmark_type: LandmarkType | None = None
 
-        self._plugin_type = "mask"
         self._storage_name = self.__module__.rsplit(".", maxsplit=1)[-1].replace("_", "-")
         self._storage_centering: CenteringType = "face"  # Centering to store the mask at
         self._storage_size = 128  # Size to store masks at. Leave this at default
@@ -208,39 +208,39 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                 if idx == self.batchsize:
                     frame_faces = len(item.detected_faces)
                     if f_idx + 1 != frame_faces:
-                        self._rollover = ExtractMedia(
+                        self._tracker.rollover = ExtractMedia(
                             item.filename,
                             item.image,
                             detected_faces=item.detected_faces[f_idx + 1:],
                             is_aligned=item.is_aligned)
-                        logger.trace("Rolled over %s faces of %s to next batch "  # type:ignore
-                                     "for '%s'", len(self._rollover.detected_faces), frame_faces,
+                        logger.trace("Rolled over %s faces of %s "  # type:ignore[attr-defined]
+                                     "to next batch for '%s'",
+                                     len(self._tracker.rollover.detected_faces), frame_faces,
                                      item.filename)
                     break
         if batch:
-            logger.trace("Returning batch: %s",  # type:ignore
+            logger.trace("Returning batch: %s",  # type:ignore[attr-defined]
                          {k: len(v) if isinstance(v, (list, np.ndarray)) else v
                           for k, v in batch.__dict__.items()})
         else:
-            logger.trace(item)  # type:ignore
+            logger.trace(item)  # type:ignore[attr-defined]
         return exhausted, batch
 
     def _predict(self, batch: BatchType) -> MaskerBatch:
         """ Just return the masker's predict function """
         assert isinstance(batch, MaskerBatch)
         assert self.name is not None
-        try:
-            # slightly hacky workaround to deal with landmarks based masks:
-            if self.name.lower() in ("components", "extended"):
-                feed = np.empty(2, dtype="object")
-                feed[0] = batch.feed
-                feed[1] = batch.feed_faces
-            else:
-                feed = batch.feed
+        # slightly hacky workaround to deal with landmarks based masks:
+        if self.name.lower() in ("components", "extended"):
+            feed = np.empty(2, dtype="object")
+            feed[0] = batch.feed
+            feed[1] = batch.feed_faces
+        else:
+            feed = batch.feed
 
+        try:
             batch.prediction = self.predict(feed)
-            return batch
-        except tf_errors.ResourceExhaustedError as err:
+        except OutOfMemoryError as err:
             msg = ("You do not have enough GPU memory available to run detection at the "
                    "selected batch size. You can try a number of things:"
                    "\n1) Close any other application that is using your GPU (web browsers are "
@@ -250,6 +250,8 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                    "CLI: Edit the file faceswap/config/extract.ini)."
                    "\n3) Enable 'Single Process' mode.")
             raise FaceswapError(msg) from err
+
+        return batch
 
     def finalize(self, batch: BatchType) -> Generator[ExtractMedia, None, None]:
         """ Finalize the output from Masker
@@ -292,14 +294,14 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                      {key: val.shape if isinstance(val, np.ndarray) else val
                                       for key, val in batch.__dict__.items()})
         for filename, face in zip(batch.filename, batch.detected_faces):
-            self._output_faces.append(face)
-            if len(self._output_faces) != self._faces_per_filename[filename]:
+            self._tracker.output_faces.append(face)
+            if len(self._tracker.output_faces) != self._tracker.faces_per_filename[filename]:
                 continue
 
             output = self._extract_media.pop(filename)
-            output.add_detected_faces(self._output_faces)
-            self._output_faces = []
-            logger.trace("Yielding: (filename: '%s', image: %s, "  # type:ignore
+            output.add_detected_faces(self._tracker.output_faces)
+            self._tracker.output_faces = []
+            logger.trace("Yielding: (filename: '%s', image: %s, "  # type:ignore[attr-defined]
                          "detected_faces: %s)", output.filename, output.image_shape,
                          len(output.detected_faces))
             yield output
@@ -313,7 +315,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         scale = target_size / image_size
         if scale == 1.:
             return image
-        method = cv2.INTER_CUBIC if scale > 1. else cv2.INTER_AREA  # pylint:disable=no-member
+        method = cv2.INTER_CUBIC if scale > 1. else cv2.INTER_AREA
         resized = cv2.resize(image, (0, 0), fx=scale, fy=scale, interpolation=method)
         resized = resized if channels > 1 else resized[..., None]
         return resized

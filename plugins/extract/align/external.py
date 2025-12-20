@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """ Import 68 point landmarks or ROI boxes from a json file """
+from __future__ import annotations
 import logging
 import typing as T
 import os
@@ -8,11 +9,17 @@ import re
 import numpy as np
 
 from lib.align import EXTRACT_RATIOS, LandmarkType
-from lib.utils import FaceswapError, IMAGE_EXTENSIONS
+from lib.utils import get_module_objects, FaceswapError, IMAGE_EXTENSIONS
 
 from ._base import BatchType, Aligner, AlignerBatch
+from . import external_defaults as cfg
+
+if T.TYPE_CHECKING:
+    from lib.align.constants import CenteringType
 
 logger = logging.getLogger(__name__)
+OriginType = T.Literal["top-left", "bottom-left", "top-right", "bottom-right"]
+# pylint:disable=duplicate-code
 
 
 class Align(Aligner):
@@ -26,11 +33,11 @@ class Align(Aligner):
 
         self.name = "External"
         self.batchsize = 16
-
-        self._origin: T.Literal["top-left",
-                                "bottom-left",
-                                "top-right",
-                                "bottom-right"] = self.config["origin"]
+        self.origin: OriginType = T.cast(OriginType, cfg.origin())
+        """ Literal["top-left", "bottom-left", "top-right", "bottom-right"] : The origin (0, 0)
+        location of the co-ordinates system used"""
+        self.file_name = cfg.file_name()
+        """ str : The file name to import landmark data from """
 
         self._re_frame_no: re.Pattern = re.compile(r"\d+$")
         self._is_video: bool = False
@@ -44,8 +51,8 @@ class Align(Aligner):
         """dict[Literal["bottom-left", "top-right", "bottom-right"], int]: Amount to roll the
         points by for different origins when 4 Point ROI landmarks are provided """
 
-        centering = self.config["4_point_centering"]
-        self._adjustment: float = 1. if centering is None else 1. - EXTRACT_RATIOS[centering]
+        centering = T.cast("CenteringType", cfg.four_point_centering)
+        self._adjustment: float = 1. if centering == "none" else 1. - EXTRACT_RATIOS[centering]
         """float: The amount to adjust 4 point ROI landmarks to standardize the points for a
         'head' sized extracted face """
 
@@ -200,15 +207,15 @@ class Align(Aligner):
         :class:`numpy.ndarray`
             The adjusted landmarks box for a top-left origin
         """
-        if not np.any(landmarks) or self._origin == "top-left":
+        if not np.any(landmarks) or self.origin == "top-left":
             return landmarks
 
         if LandmarkType.from_shape(landmarks.shape) == LandmarkType.LM_2D_4:
-            landmarks = np.roll(landmarks, self._roll[self._origin], axis=0)
+            landmarks = np.roll(landmarks, self._roll[self.origin], axis=0)
 
-        if self._origin.startswith("bottom"):
+        if self.origin.startswith("bottom"):
             landmarks[:, 1] = frame_dims[0] - landmarks[:, 1]
-        if self._origin.endswith("right"):
+        if self.origin.endswith("right"):
             landmarks[:, 0] = frame_dims[1] - landmarks[:, 0]
 
         return landmarks
@@ -265,13 +272,16 @@ class Align(Aligner):
         if self._missing:
             logger.warning("[ALIGN] %s input frames could not be matched in the import file "
                            "'%s'. Run in verbose mode for a list of frames.",
-                           len(self._missing), self.config["file_name"])
+                           len(self._missing), cfg.file_name)
             logger.verbose(  # type:ignore[attr-defined]
                 "[ALIGN] Input frames not in import file: %s", self._missing)
 
         if self._imported:
             logger.warning("[ALIGN] %s items in the import file '%s' could not be matched to any "
                            "input frames. Run in verbose mode for a list of items.",
-                           len(self._imported), self.config["file_name"])
+                           len(self._imported), cfg.file_name)
             logger.verbose(  # type:ignore[attr-defined]
                 "[ALIGN] import file items not in input frames: %s", list(self._imported))
+
+
+__all__ = get_module_objects(__name__)

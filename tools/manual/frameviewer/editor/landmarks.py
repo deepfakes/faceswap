@@ -4,6 +4,7 @@ import gettext
 import numpy as np
 
 from lib.align import AlignedFace, LANDMARK_PARTS, LandmarkType
+from lib.utils import get_module_objects
 from ._base import Editor, logger
 
 # LOCALES
@@ -200,7 +201,6 @@ class Landmarks(Editor):
             else:
                 self._canvas.config(cursor="")
                 self._mouse_location = None
-                return
 
     def _hide_labels(self):
         """ Clear all landmark text labels from display """
@@ -431,7 +431,7 @@ class Mesh(Editor):
     def __init__(self, canvas, detected_faces):
         super().__init__(canvas, detected_faces, None)
 
-    def update_annotation(self):
+    def update_annotation(self):  # pylint:disable=too-many-locals
         """ Get the latest Landmarks and update the mesh."""
         key = "mesh"
         color = self._control_color
@@ -463,3 +463,6 @@ class Mesh(Editor):
                 self._object_tracker(key, asset, face_index, pts, kwargs)
         # Place mesh as bottom annotation
         self._canvas.tag_raise(self.__class__.__name__, "main_image")
+
+
+__all__ = get_module_objects(__name__)

@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 # faceswap imports
 from lib.serializer import Serializer, get_serializer_from_filename
-from lib.utils import handle_deprecated_cliopts
+from lib.utils import get_module_objects, handle_deprecated_cliopts
 
 from .sort_methods import SortBlur, SortColor, SortFace, SortHistogram, SortMultiMethod
 from .sort_methods_aligned import SortDistance, SortFaceCNN, SortPitch, SortSize, SortYaw, SortRoll
@@ -329,3 +329,6 @@ class _Sort():
             dest = os.path.join(output_dir, f"{idx:06d}_{os.path.basename(source)}")
 
             self._sort_file(source, dest)
+
+
+__all__ = get_module_objects(__name__)

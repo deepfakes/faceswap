@@ -11,16 +11,21 @@ import numpy as np
 
 from numpy.testing import assert_allclose
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras import Input, Model, backend as K  # pylint:disable=import-error
+from keras import device, Input, Model, backend as K
 
 from lib.model import nn_blocks
 from lib.utils import get_backend
+from plugins.train import train_config as cfg
+# pylint:disable=unused-import
+from tests.lib.config.helpers import patch_config  # noqa:[F401]
 
 
-def block_test(layer_func, kwargs={}, input_shape=None):
+def block_test(layer_func,  # pylint:disable=dangerous-default-value,too-many-locals
+               kwargs={},
+               input_shape=None):
     """Test routine for faceswap neural network blocks. """
     # generate input data
+    # pylint:disable=duplicate-code
     assert input_shape
     input_dtype = K.floatx()
     input_data_shape = list(input_shape)
@@ -34,12 +39,12 @@ def block_test(layer_func, kwargs={}, input_shape=None):
     # test in functional API
     inp = Input(shape=input_shape[1:], dtype=input_dtype)
     outp = layer_func(inp, **kwargs)
-    assert K.dtype(outp) == expected_output_dtype
+    assert outp.dtype == expected_output_dtype
 
     # check with the functional API
     model = Model(inp, outp)
 
-    actual_output = model.predict(input_data, verbose=0)
+    actual_output = model.predict(input_data, verbose=0)  # type:ignore
 
     # test serialization, weight setting at model level
     model_config = model.get_config()
@@ -47,7 +52,7 @@ def block_test(layer_func, kwargs={}, input_shape=None):
     if model.weights:
         weights = model.get_weights()
         recovered_model.set_weights(weights)
-        _output = recovered_model.predict(input_data, verbose=0)
+        _output = recovered_model.predict(input_data, verbose=0)  # type:ignore
         assert_allclose(_output, actual_output, rtol=1e-3)
 
     # for further checks in the caller function
@@ -61,16 +66,20 @@ _IDS = [f"{'|'.join([_PARAMS[idx] for idx, b in enumerate(v) if b])}[{get_backen
 
 
 @pytest.mark.parametrize(_PARAMS, _VALUES, ids=_IDS)
-def test_blocks(use_icnr_init, use_convaware_init, use_reflect_padding):
+def test_blocks(use_icnr_init,
+                use_convaware_init,
+                use_reflect_padding,
+                patch_config):  # pylint:disable=redefined-outer-name  # noqa:[F811]
     """ Test for all blocks contained within the NNBlocks Class """
     config = {"icnr_init": use_icnr_init,
               "conv_aware_init": use_convaware_init,
               "reflect_padding": use_reflect_padding}
-    nn_blocks.set_config(config)
-    block_test(nn_blocks.Conv2DOutput(64, 3), input_shape=(2, 8, 8, 32))
-    block_test(nn_blocks.Conv2DBlock(64), input_shape=(2, 8, 8, 32))
-    block_test(nn_blocks.SeparableConv2DBlock(64), input_shape=(2, 8, 8, 32))
-    block_test(nn_blocks.UpscaleBlock(64), input_shape=(2, 4, 4, 128))
-    block_test(nn_blocks.Upscale2xBlock(64, fast=True), input_shape=(2, 4, 4, 128))
-    block_test(nn_blocks.Upscale2xBlock(64, fast=False), input_shape=(2, 4, 4, 128))
-    block_test(nn_blocks.ResidualBlock(64), input_shape=(2, 4, 4, 64))
+    patch_config(cfg, config)
+    with device("cpu"):
+        block_test(nn_blocks.Conv2DOutput(64, 3), input_shape=(2, 8, 8, 32))
+        block_test(nn_blocks.Conv2DBlock(64), input_shape=(2, 8, 8, 32))
+        block_test(nn_blocks.SeparableConv2DBlock(64), input_shape=(2, 8, 8, 32))
+        block_test(nn_blocks.UpscaleBlock(64), input_shape=(2, 4, 4, 128))
+        block_test(nn_blocks.Upscale2xBlock(64, fast=True), input_shape=(2, 4, 4, 128))
+        block_test(nn_blocks.Upscale2xBlock(64, fast=False), input_shape=(2, 4, 4, 128))
+        block_test(nn_blocks.ResidualBlock(64), input_shape=(2, 4, 4, 64))

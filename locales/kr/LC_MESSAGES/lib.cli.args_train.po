@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-11-21 17:32+0000\n"
-"PO-Revision-Date: 2025-11-21 17:47+0000\n"
+"POT-Creation-Date: 2025-12-15 20:02+0000\n"
+"PO-Revision-Date: 2025-12-19 23:26+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -16,7 +16,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Poedit 3.6\n"
+"X-Generator: Poedit 3.8\n"
 
 #: lib/cli/args_train.py:30
 msgid ""
@@ -157,8 +157,8 @@ msgstr ""
 "성 옵션이 있을 수 있습니다."
 
 #: lib/cli/args_train.py:147 lib/cli/args_train.py:160
-#: lib/cli/args_train.py:174 lib/cli/args_train.py:186
-#: lib/cli/args_train.py:202 lib/cli/args_train.py:211
+#: lib/cli/args_train.py:174 lib/cli/args_train.py:183
+#: lib/cli/args_train.py:190 lib/cli/args_train.py:199
 msgid "training"
 msgstr "훈련"
 
@@ -195,28 +195,11 @@ msgstr ""
 "학습률 워밍업. 여기에 주어진 반복 횟수에 따라 학습률을 0에서 선택한 목표 속도"
 "까지 선형적으로 증가시킵니다. 0으로 설정하면 비활성화됩니다."
 
-#: lib/cli/args_train.py:188
-msgid ""
-"R|Select the distribution stategy to use.\n"
-"L|default: Use Tensorflow's default distribution strategy.\n"
-"L|central-storage: Centralizes variables on the CPU whilst operations are "
-"performed on 1 or more local GPUs. This can help save some VRAM at the cost "
-"of some speed by not storing variables on the GPU. Note: Mixed-Precision is "
-"not supported on multi-GPU setups.\n"
-"L|mirrored: Supports synchronous distributed training across multiple local "
-"GPUs. A copy of the model and all variables are loaded onto each GPU with "
-"batches distributed to each GPU at each iteration."
-msgstr ""
-"R|사용할 배포 상태를 선택합니다.\n"
-"L|default: Tensorflow의 기본 배포 전략을 사용합니다.\n"
-"L|central-storage: 작업이 1개 이상의 로컬 GPU에서 수행되는 동안 CPU의 변수를 "
-"중앙 집중화합니다. 이렇게 하면 GPU에 변수를 저장하지 않음으로써 약간의 속도"
-"를 희생하여 일부 VRAM을 절약할 수 있습니다. 참고: 다중 정밀도는 다중 GPU 설정"
-"에서 지원되지 않습니다.\n"
-"L|mirrored: 여러 로컬 GPU에서 동기화 분산 훈련을 지원합니다. 모델의 복사본과 "
-"모든 변수는 각 반복에서 각 GPU에 배포된 배치들와 함께 각 GPU에 로드됩니다."
+#: lib/cli/args_train.py:184
+msgid "Use distibuted training on multi-gpu setups."
+msgstr "멀티 GPU 환경에서 분산 학습을 활용하세요."
 
-#: lib/cli/args_train.py:204
+#: lib/cli/args_train.py:192
 msgid ""
 "Disables TensorBoard logging. NB: Disabling logs means that you will not be "
 "able to use the graph or analysis for this session in the GUI."
@@ -224,7 +207,7 @@ msgstr ""
 "텐서보드 로깅을 비활성화합니다. 주의: 로그를 비활성화하면 GUI에서 이 세션에 "
 "대한 그래프 또는 분석을 사용할 수 없습니다."
 
-#: lib/cli/args_train.py:213
+#: lib/cli/args_train.py:201
 msgid ""
 "Use the Learning Rate Finder to discover the optimal learning rate for "
 "training. For new models, this will calculate the optimal learning rate for "
@@ -237,15 +220,15 @@ msgstr ""
 "때 발견된 최적의 학습률을 사용합니다. 이 옵션을 설정하면 수동으로 구성된 학습"
 "률(기차 설정에서 구성 가능)이 무시됩니다."
 
-#: lib/cli/args_train.py:226 lib/cli/args_train.py:236
+#: lib/cli/args_train.py:214 lib/cli/args_train.py:224
 msgid "Saving"
 msgstr "저장"
 
-#: lib/cli/args_train.py:227
+#: lib/cli/args_train.py:215
 msgid "Sets the number of iterations between each model save."
 msgstr "각 모델 저장 사이의 반복 횟수를 설정합니다."
 
-#: lib/cli/args_train.py:238
+#: lib/cli/args_train.py:226
 msgid ""
 "Sets the number of iterations before saving a backup snapshot of the model "
 "in it's current state. Set to 0 for off."
@@ -253,12 +236,12 @@ msgstr ""
 "현재 상태에서 모델의 백업 스냅샷을 저장하기 전에 반복할 횟수를 설정합니다. 0"
 "으로 설정하면 꺼집니다."
 
-#: lib/cli/args_train.py:245 lib/cli/args_train.py:257
-#: lib/cli/args_train.py:269
+#: lib/cli/args_train.py:233 lib/cli/args_train.py:245
+#: lib/cli/args_train.py:257
 msgid "timelapse"
 msgstr "타임랩스"
 
-#: lib/cli/args_train.py:247
+#: lib/cli/args_train.py:235
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -271,7 +254,7 @@ msgstr ""
 "랩스를 만드는 데 사용할 'A' 얼굴의 입력 폴더여야 합니다. 또한 사용자는 --"
 "timelapse-output 및 --timelapse-input-B 매개 변수를 제공해야 합니다."
 
-#: lib/cli/args_train.py:259
+#: lib/cli/args_train.py:247
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -284,7 +267,7 @@ msgstr ""
 "다. 타임 랩스를 만드는 데 사용할 'B' 얼굴의 입력 폴더여야 합니다. 또한 사용자"
 "는 --timelapse-output 및 --timelapse-input-A 매개 변수를 제공해야 합니다."
 
-#: lib/cli/args_train.py:271
+#: lib/cli/args_train.py:259
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. If "
@@ -296,27 +279,27 @@ msgstr ""
 "다. 입력 폴더가 제공되었지만 출력 폴더가 없는 경우 모델 폴더에/timelapse/로 "
 "기본 설정됩니다"
 
-#: lib/cli/args_train.py:280 lib/cli/args_train.py:287
+#: lib/cli/args_train.py:268 lib/cli/args_train.py:275
 msgid "preview"
 msgstr "미리보기"
 
-#: lib/cli/args_train.py:281
+#: lib/cli/args_train.py:269
 msgid "Show training preview output. in a separate window."
 msgstr "훈련 미리보기 결과를 각기 다른 창에서 보여줍니다."
 
-#: lib/cli/args_train.py:289
+#: lib/cli/args_train.py:277
 msgid ""
 "Writes the training result to a file. The image will be stored in the root "
 "of your FaceSwap folder."
 msgstr ""
 "훈련 결과를 파일에 씁니다. 이미지는 Faceswap 폴더의 최상위 폴더에 저장됩니다."
 
-#: lib/cli/args_train.py:296 lib/cli/args_train.py:306
-#: lib/cli/args_train.py:316 lib/cli/args_train.py:326
+#: lib/cli/args_train.py:284 lib/cli/args_train.py:294
+#: lib/cli/args_train.py:304 lib/cli/args_train.py:314
 msgid "augmentation"
 msgstr "보정"
 
-#: lib/cli/args_train.py:298
+#: lib/cli/args_train.py:286
 msgid ""
 "Warps training faces to closely matched Landmarks from the opposite face-set "
 "rather than randomly warping the face. This is the 'dfaker' way of doing "
@@ -325,7 +308,7 @@ msgstr ""
 "무작위로 얼굴을 변환하지 않고 반대쪽 얼굴 세트에서 특징점과 밀접하게 일치하도"
 "록 훈련 얼굴을 변환해줍니다. 이것은 변환하는 'dfaker' 방식이다."
 
-#: lib/cli/args_train.py:308
+#: lib/cli/args_train.py:296
 msgid ""
 "To effectively learn, a random set of images are flipped horizontally. "
 "Sometimes it is desirable for this not to occur. Generally this should be "
@@ -335,7 +318,7 @@ msgstr ""
 "런 일이 일어나지 않는 것이 바람직합니다. 일반적으로 'fit training' 중을 제외"
 "하고는 이 작업을 중단해야 합니다."
 
-#: lib/cli/args_train.py:318
+#: lib/cli/args_train.py:306
 msgid ""
 "Color augmentation helps make the model less susceptible to color "
 "differences between the A and B sets, at an increased training time cost. "
@@ -345,7 +328,7 @@ msgstr ""
 "이 되며, 훈련 시간 비용이 증가합니다. 색상 보저를 사용하지 않으려면 이 옵션"
 "을 사용합니다."
 
-#: lib/cli/args_train.py:328
+#: lib/cli/args_train.py:316
 msgid ""
 "Warping is integral to training the Neural Network. This option should only "
 "be enabled towards the very end of training to try to bring out more detail. "
@@ -356,3 +339,24 @@ msgstr ""
 "내위하여 훈련 막바지까지 활성화하여야 합니다. 이것은 '미세 조정'이라고 생각하"
 "면 됩니다. 처음부터 이 옵션을 활성화하면 모델이 죽을 수있고 끔찍한 결과를 초"
 "래할 수 있습니다."
+
+#~ msgid ""
+#~ "R|Select the distribution stategy to use.\n"
+#~ "L|default: Use Tensorflow's default distribution strategy.\n"
+#~ "L|central-storage: Centralizes variables on the CPU whilst operations are "
+#~ "performed on 1 or more local GPUs. This can help save some VRAM at the "
+#~ "cost of some speed by not storing variables on the GPU. Note: Mixed-"
+#~ "Precision is not supported on multi-GPU setups.\n"
+#~ "L|mirrored: Supports synchronous distributed training across multiple "
+#~ "local GPUs. A copy of the model and all variables are loaded onto each "
+#~ "GPU with batches distributed to each GPU at each iteration."
+#~ msgstr ""
+#~ "R|사용할 배포 상태를 선택합니다.\n"
+#~ "L|default: Tensorflow의 기본 배포 전략을 사용합니다.\n"
+#~ "L|central-storage: 작업이 1개 이상의 로컬 GPU에서 수행되는 동안 CPU의 변수"
+#~ "를 중앙 집중화합니다. 이렇게 하면 GPU에 변수를 저장하지 않음으로써 약간의 "
+#~ "속도를 희생하여 일부 VRAM을 절약할 수 있습니다. 참고: 다중 정밀도는 다중 "
+#~ "GPU 설정에서 지원되지 않습니다.\n"
+#~ "L|mirrored: 여러 로컬 GPU에서 동기화 분산 훈련을 지원합니다. 모델의 복사본"
+#~ "과 모든 변수는 각 반복에서 각 GPU에 배포된 배치들와 함께 각 GPU에 로드됩니"
+#~ "다."

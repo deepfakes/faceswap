@@ -56,9 +56,8 @@ The type of computations that the process does are well suited for graphics card
     - Laptop CPUs can often run the software, but will not be fast enough to train at reasonable speeds
 - **A powerful GPU**
     - Currently, Nvidia GPUs are fully supported
-    - DirectX 12 AMD GPUs are supported on Windows through DirectML.
     - More modern AMD GPUs are supported on Linux through ROCm.
-    - M-series Macs are supported through Tensorflow-Metal
+    - M-series Macs are supported using Metal
     - If using an Nvidia GPU, then it needs to support at least CUDA Compute Capability 3.5. (Release 1.0 will work on Compute Capability 3.0)
       To see which version your GPU supports, consult this list: https://developer.nvidia.com/cuda-gpus
       Desktop cards later than the 7xx series are most likely supported.
@@ -67,14 +66,13 @@ The type of computations that the process does are well suited for graphics card
 ## Supported operating systems
 - **Windows 10/11**
   Windows 7 and 8 might work for Nvidia. Your mileage may vary.
-  DirectML support is only available in Windows 10 onwards.
   Windows has an installer which will set up everything you need. See: https://github.com/deepfakes/faceswap/releases
 - **Linux**
   Most Ubuntu/Debian or CentOS based Linux distributions will work. There is a Linux install script that will install and set up everything you need. See: https://github.com/deepfakes/faceswap/releases
 - **macOS**
   Experimental support for GPU-accelerated, native Apple Silicon processing (e.g. Apple M1 chips). Installation instructions can be found [further down this page](#macos-apple-silicon-install-guide).
   Intel based macOS systems should work, but you will need to follow the [Manual Install](#manual-install) instructions.
-- All operating systems must be 64-bit for Tensorflow to run.
+- All operating systems must be 64-bit.
 
 Alternatively, there is a docker image that is based on Debian.
 
@@ -112,7 +110,7 @@ Reboot your PC, so that everything you have just installed gets registered.
 - Select "Create" at the bottom
 - In the pop up:
     - Give it the name: faceswap
-    - **IMPORTANT**: Select python version 3.10
+    - **IMPORTANT**: Select python version 3.13
     - Hit "Create" (NB: This may take a while as it will need to download Python)
 ![Anaconda virtual env setup](https://i.imgur.com/CLIDDfa.png)
 
@@ -134,11 +132,29 @@ To enter the virtual environment:
 
 #### Manual install
 Do not follow these steps if the Easy Install above completed succesfully.
-If you are using an Nvidia card make sure you have the correct versions of Cuda/cuDNN installed for the required version of Tensorflow
+If you are using an Nvidia card make sure you have the correct versions of Cuda/cuDNN installed for the required version of Torch
 - Install tkinter (required for the GUI) by typing: `conda install tk`
 - Install requirements:
-  - For Nvidia GPU users: `pip install -r ./requirements/requirements_nvidia.txt`
-  - For CPU users: `pip install -r ./requirements/requirements_cpu.txt`
+  - For **Nvidia** GPU users:
+    - RTX20xx GPUS onwards: `pip install -r ./requirements/requirements_nvidia_13.txt`
+    - GTX9xx - GTX10xx GPUs: `pip install -r ./requirements/requirements_nvidia_12.txt`
+    - GTX7xx - GTX8xx GPUs: `pip install -r ./requirements/requirements_nvidia_11.txt`
+      - **Note:** Maximum supported Python version for GTX8xx - GTX9xx GPUs is `3.13`
+
+  - For **AMD** GPU users (Linux only):
+    - **Note** You must install a version of ROCm to your system that is compatible with your OS and GPU.
+    - ROCm 6.4: `pip install -r ./requirements/requirements_rocm64.txt`
+    - ROCm 6.3: `pip install -r ./requirements/requirements_rocm63.txt`
+    - ROCm 6.2: `pip install -r ./requirements/requirements_rocm62.txt`
+      - **Note:** Maximum supported Python version for ROCm 6.2 is `3.13`
+    - ROCm 6.1: `pip install -r ./requirements/requirements_rocm61.txt`
+      - **Note:** Maximum supported Python version for ROCm 6.1 is `3.13`
+    - ROCm 6.0: `pip install -r ./requirements/requirements_rocm60.txt`
+      - **Note:** Maximum supported Python version for ROCm 6.0 is `3.12`
+
+  - For **CPU** users: `pip install -r ./requirements/requirements_cpu.txt`
+
+  - For **Apple-Silicon (M Series)** users: `pip install -r ./requirements/requirements_apple-silicon.txt`
 
 ## Running faceswap
 - If you are not already in your virtual environment follow [these steps](#entering-your-virtual-environment)
@@ -194,7 +210,7 @@ $ source ~/miniforge3/bin/activate
 ## Setup
 ### Create and Activate the Environment
 ```sh
-$ conda create --name faceswap python=3.10
+$ conda create --name faceswap python=3.13
 $ conda activate faceswap
 ```
 
@@ -224,7 +240,7 @@ Obtain git for your distribution from the [git website](https://git-scm.com/down
 The recommended install method is to use a Conda3 Environment as this will handle the installation of Nvidia's CUDA and cuDNN straight into your Conda Environment. This is by far the easiest and most reliable way to setup the project.
   - MiniConda3 is recommended: [MiniConda3](https://docs.conda.io/en/latest/miniconda.html)
 
-Alternatively you can install Python (3.10 64-bit) for your distribution (links below.) If you go down this route and are using an Nvidia GPU you should install CUDA (https://developer.nvidia.com/cuda-zone) and cuDNN (https://developer.nvidia.com/cudnn). for your system. If you do not plan to build Tensorflow yourself, make sure you install the correct Cuda and cuDNN package for the currently installed version of Tensorflow (Current release: Tensorflow 2.9. Release v1.0: Tensorflow 1.15). You can check for the compatible versions here: (https://www.tensorflow.org/install/source#gpu).
+Alternatively you can install Python (3.14 64-bit) for your distribution (links below.) If you go down this route and are using an Nvidia GPU you should install CUDA (https://developer.nvidia.com/cuda-zone) and cuDNN (https://developer.nvidia.com/cudnn). for your system. If you do not plan to build Torch yourself, make sure you install the correct Cuda and cuDNN package for the currently installed version of Torch.
   - Python distributions:
     - apt/yum install python3 (Linux)
     - [Installer](https://www.python.org/downloads/release/python-368/) (Windows)

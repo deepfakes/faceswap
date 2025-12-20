@@ -4,31 +4,20 @@ sort package
 
 .. contents:: Contents
    :local:
+   :depth: 2
 
+.. automodapi:: tools.sort.cli
+   :include-all-objects:
 
-sort module
-===========
-The Sort Module is the main entry point into the Sort Tool.
+|
+.. automodapi:: tools.sort.sort
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-.. automodule:: tools.sort.sort
-   :members:
-   :undoc-members:
-   :show-inheritance:
+|
+.. automodapi:: tools.sort.sort_methods
+   :include-all-objects:
 
-
-sort_methods module
-===================
-
-.. automodule:: tools.sort.sort_methods
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-sort_methods_aligned module
-===========================
-
-.. automodule:: tools.sort.sort_methods_aligned
-   :members:
-   :undoc-members:
-   :show-inheritance:
+|
+.. automodapi:: tools.sort.sort_methods_aligned
+   :include-all-objects:

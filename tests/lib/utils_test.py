@@ -2,9 +2,10 @@
 """ Pytest unit tests for :mod:`lib.utils` """
 import os
 import platform
+import sys
 import time
 import typing as T
-import warnings
+import types
 import zipfile
 
 from io import StringIO
@@ -19,8 +20,8 @@ import pytest_mock
 from lib import utils
 from lib.utils import (
     _Backend, camel_case_split, convert_to_secs, DebugTimes, deprecation_warning, FaceswapError,
-    full_path_split, get_backend, get_dpi, get_folder, get_image_paths, get_tf_version, GetModel,
-    safe_shutdown, set_backend, set_system_verbosity)
+    full_path_split, get_backend, get_dpi, get_folder, get_image_paths, get_module_objects,
+    get_torch_version, GetModel, safe_shutdown, set_backend)
 
 from lib.logger import log_setup
 # Need to setup logging to avoid trace/verbose errors
@@ -40,8 +41,8 @@ def test_set_backend(monkeypatch: pytest.MonkeyPatch) -> None:
         Monkey patching _FS_BACKEND
     """
     monkeypatch.setattr(utils, "_FS_BACKEND", "cpu")  # _FS_BACKEND already defined
-    set_backend("directml")
-    assert utils._FS_BACKEND == "directml"
+    set_backend("nvidia")
+    assert utils._FS_BACKEND == "nvidia"
     monkeypatch.delattr(utils, "_FS_BACKEND")  # _FS_BACKEND is not already defined
     set_backend("rocm")
     assert utils._FS_BACKEND == "rocm"
@@ -79,7 +80,7 @@ def test__backend(monkeypatch: pytest.MonkeyPatch) -> None:
     assert backend.backend == "cpu"
 
     monkeypatch.setattr("os.path.isfile", lambda x: False)  # no config file, dummy in user input
-    monkeypatch.setattr("builtins.input", lambda x: "3")
+    monkeypatch.setattr("builtins.input", lambda x: "2")
     backend = _Backend()
     assert backend._configure_backend() == "nvidia"
 
@@ -148,19 +149,61 @@ def test_get_image_paths(tmp_path: str) -> None:
     assert sorted(get_image_paths(test_folder, extension=".png")) == sorted(exists)
 
 
-_PARAMS = [("/path/to/file.txt", ["/", "path", "to", "file.txt"]),  # Absolute
-           ("/path/to/directory/", ["/", "path", "to", "directory"]),
-           ("/path/to/directory", ["/", "path", "to", "directory"]),
-           ("path/to/file.txt", ["path", "to", "file.txt"]),  # Relative
-           ("path/to/directory/", ["path", "to", "directory"]),
-           ("path/to/directory", ["path", "to", "directory"]),
-           ("", []),  # Edge cases
-           ("/", ["/"]),
-           (".", ["."]),
-           ("..", [".."])]
+def test_get_module_objects(mocker: pytest_mock.MockerFixture):
+    """ Test :func:`lib.utils.get_module_objects` returns as expected """
+    # pylint:disable=too-few-public-methods,missing-class-docstring
+    test_module = types.ModuleType("our_mod")
+
+    class InternalPublic:
+        pass
+    InternalPublic.__module__ = "our_mod"
+    setattr(test_module, "InternalPublic", InternalPublic)
+
+    class _InternalPrivate:
+        pass
+    _InternalPrivate.__module__ = "our_mod"
+    setattr(test_module, "_InternalPrivate", _InternalPrivate)
+
+    class External:
+        pass
+    External.__module__ = "other_mod"
+    setattr(test_module, "External", External)
+
+    def func_public():
+        pass
+    func_public.__module__ = "our_mod"
+    setattr(test_module, "func_public", func_public)
+
+    def _func_private():
+        pass
+    _func_private.__module__ = "our_mod"
+    setattr(test_module, "_func_private", _func_private)
+
+    def func_external():
+        pass
+    func_external.__module__ = "other_mod"
+    setattr(test_module, "func_external", func_external)
+
+    mocker.patch.dict(sys.modules, {"our_mod": test_module})
+
+    result = get_module_objects("our_mod")
+    assert sorted(result, key=str.casefold) == ["func_public", "InternalPublic"]
 
 
-@pytest.mark.parametrize("path,result", _PARAMS, ids=[f'"{p[0]}"' for p in _PARAMS])
+_PATHS = (  # type:ignore[var-annotated]
+    ("/path/to/file.txt", ["/", "path", "to", "file.txt"]),  # Absolute
+    ("/path/to/directory/", ["/", "path", "to", "directory"]),
+    ("/path/to/directory", ["/", "path", "to", "directory"]),
+    ("path/to/file.txt", ["path", "to", "file.txt"]),  # Relative
+    ("path/to/directory/", ["path", "to", "directory"]),
+    ("path/to/directory", ["path", "to", "directory"]),
+    ("", []),  # Edge cases
+    ("/", ["/"]),
+    (".", ["."]),
+    ("..", [".."]))
+
+
+@pytest.mark.parametrize("path,result", _PATHS, ids=[f'"{p[0]}"' for p in _PATHS])
 def test_full_path_split(path: str, result: list[str]) -> None:
     """ Test the :func:`~lib.utils.full_path_split` function works correctly
 
@@ -176,19 +219,19 @@ def test_full_path_split(path: str, result: list[str]) -> None:
     assert split == result
 
 
-_PARAMS = [("camelCase", ["camel", "Case"]),
-           ("camelCaseTest", ["camel", "Case", "Test"]),
-           ("camelCaseTestCase", ["camel", "Case", "Test", "Case"]),
-           ("CamelCase", ["Camel", "Case"]),
-           ("CamelCaseTest", ["Camel", "Case", "Test"]),
-           ("CamelCaseTestCase", ["Camel", "Case", "Test", "Case"]),
-           ("CAmelCASETestCase", ["C", "Amel", "CASE", "Test", "Case"]),
-           ("camelcasetestcase", ["camelcasetestcase"]),
-           ("CAMELCASETESTCASE", ["CAMELCASETESTCASE"]),
-           ("", [])]
+_CASES = (("camelCase", ["camel", "Case"]),  # type:ignore[var-annotated]
+          ("camelCaseTest", ["camel", "Case", "Test"]),
+          ("camelCaseTestCase", ["camel", "Case", "Test", "Case"]),
+          ("CamelCase", ["Camel", "Case"]),
+          ("CamelCaseTest", ["Camel", "Case", "Test"]),
+          ("CamelCaseTestCase", ["Camel", "Case", "Test", "Case"]),
+          ("CAmelCASETestCase", ["C", "Amel", "CASE", "Test", "Case"]),
+          ("camelcasetestcase", ["camelcasetestcase"]),
+          ("CAMELCASETESTCASE", ["CAMELCASETESTCASE"]),
+          ("", []))
 
 
-@pytest.mark.parametrize("text, result", _PARAMS, ids=[f'"{p[0]}"' for p in _PARAMS])
+@pytest.mark.parametrize("text, result", _CASES, ids=[f'"{p[0]}"' for p in _CASES])
 def test_camel_case_split(text: str, result: list[str]) -> None:
     """ Test the :func:`~lib.utils.camel_case_spli` function works correctly
 
@@ -204,11 +247,18 @@ def test_camel_case_split(text: str, result: list[str]) -> None:
     assert split == result
 
 
+_TORCH_PARAMS = (("2.4.9", (2, 4)), ("2.6", (2, 6)), ("2.8.rc3", (2, 8)))
+_TORCH_IDS = [x[0] for x in _TORCH_PARAMS]
+
+
 # General utils
-def test_get_tf_version() -> None:
-    """ Test the :func:`~lib.utils.get_tf_version` function version returns correctly in range """
-    tf_version = get_tf_version()
-    assert (2, 10) <= tf_version < (2, 11)
+@pytest.mark.parametrize("str_vers, tuple_vers", _TORCH_PARAMS, ids=_TORCH_IDS)
+def test_get_torch_version(str_vers, tuple_vers, monkeypatch: pytest.MonkeyPatch) -> None:
+    """ Test the :func:`~lib.utils.get_torch_version` function version returns correctly """
+    monkeypatch.setattr("lib.utils._versions", {})
+    monkeypatch.setattr("torch.__version__", str_vers)
+    torch_version = get_torch_version()
+    assert torch_version == tuple_vers
 
 
 def test_get_dpi() -> None:
@@ -249,31 +299,6 @@ def test_convert_to_secs(args: tuple[int, ...], result: int) -> None:
     secs = convert_to_secs(*args)
     assert isinstance(secs, int)
     assert secs == result
-
-
-@pytest.mark.parametrize("log_level", ["DEBUG", "INFO", "WARNING", "ERROR"])
-def test_set_system_verbosity(log_level: str) -> None:
-    """ Test the :func:`~lib.utils.set_system_verbosity` function works correctly
-
-    Parameters
-    ----------
-    log_level: str
-        The logging loglevel in upper text format
-    """
-    # Set TF Env Variable
-    tf_set_level = "0" if log_level == "DEBUG" else "3"
-    set_system_verbosity(log_level)
-    tf_get_level = os.environ["TF_CPP_MIN_LOG_LEVEL"]
-    assert tf_get_level == tf_set_level
-    warn_filters = [filt for filt in warnings.filters
-                    if filt[0] == "ignore"
-                    and filt[2] in (FutureWarning, DeprecationWarning, UserWarning)]
-    # Python Warnings
-    # DeprecationWarning is already ignored by default, so there should be 1 warning for debug
-    # warning. 3 for the rest
-    num_warnings = 1 if log_level == "DEBUG" else 3
-    warn_count = len(warn_filters)
-    assert warn_count == num_warnings
 
 
 @pytest.mark.parametrize("additional_info", [None, "additional information"])
@@ -488,21 +513,13 @@ def test_get_model__download_model(mocker: pytest_mock.MockerFixture,
     mock_urlopen.reset_mock()
 
 
+# TODO remove the next line that supresses a weird pytest bug when it tears down the tempdir
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 @pytest.mark.parametrize("dl_type", ["complete", "new", "continue"])
 def test_get_model__write_zipfile(mocker: pytest_mock.MockerFixture,
                                   get_model_instance: GetModel,
                                   dl_type: str) -> None:
-    """ Test :func:`~lib.utils.GetModel._write_zipfile` executes its logic correctly
-
-    Parameters
-    ---------
-    mocker: :class:`pytest_mock.MockerFixture`
-        Mocker for dummying in function calls
-    get_model_instance: `~lib.utils.GetModel`
-        The patched instance of the class
-    dl_type: str
-        The type of read to attemp
-    """
+    """ Test :func:`~lib.utils.GetModel._write_zipfile` executes its logic correctly """
     response = mocker.MagicMock()
     assert not os.path.isfile(get_model_instance._model_zip_path)
 
@@ -517,7 +534,7 @@ def test_get_model__write_zipfile(mocker: pytest_mock.MockerFixture,
 
     if dl_type == "continue":  # Write a partial download of the correct size
         with open(get_model_instance._model_zip_path, "wb") as partial:
-            partial.write(b"\x00" * sum(chunks))
+            partial.write(b"\x00" * sum(chunks))  # type:ignore
         downloaded = os.path.getsize(get_model_instance._model_zip_path)
 
     get_model_instance._write_zipfile(response, downloaded)
@@ -526,13 +543,15 @@ def test_get_model__write_zipfile(mocker: pytest_mock.MockerFixture,
         assert not response.read.called
         return
 
-    assert response.read.call_count == len(data)  # all data read
+    assert response.read.call_count == len(data)  # all data read  # type:ignore
     assert os.path.isfile(get_model_instance._model_zip_path)
     downloaded_size = os.path.getsize(get_model_instance._model_zip_path)
     downloaded_size = downloaded_size if dl_type == "new" else downloaded_size // 2
-    assert downloaded_size == sum(chunks)
+    assert downloaded_size == sum(chunks)  # type:ignore
 
 
+# TODO remove the next line that supresses a weird pytest bug when it tears down the tempdir
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 def test_get_model__unzip_model(mocker: pytest_mock.MockerFixture,
                                 get_model_instance: GetModel) -> None:
     """ Test :func:`~lib.utils.GetModel._unzip_model` executes its logic correctly

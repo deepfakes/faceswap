@@ -14,8 +14,7 @@ import numpy as np
 import pytest
 import pytest_mock
 
-import tensorflow as tf
-from tensorflow.core.util import event_pb2  # pylint:disable=no-name-in-module
+from tensorboard.compat.proto import event_pb2
 
 from lib.gui.analysis.event_reader import (_Cache, _CacheData, _EventParser,
                                            _LogFiles, EventData, TensorBoardLogs)
@@ -298,7 +297,10 @@ class TestTensorBoardLogs:
         tblogs_instance = TensorBoardLogs(tmp_path, False)
 
         def teardown():
-            rmtree(tmp_path)
+            try:
+                rmtree(tmp_path)
+            except PermissionError:
+                pass
 
         request.addfinalizer(teardown)
         return tblogs_instance
@@ -448,8 +450,8 @@ class TestTensorBoardLogs:
         """
         tb_logs = tensorboardlogs_instance
 
-        with pytest.raises(tf.errors.NotFoundError):  # Invalid session id
-            tb_logs.get_loss(3)
+        mocker.patch("lib.gui.analysis.event_reader.RecordIterator")
+        tb_logs.get_loss(3)
 
         check_cache = mocker.patch("lib.gui.analysis.event_reader.TensorBoardLogs._check_cache")
         get_data = mocker.patch("lib.gui.analysis.event_reader._Cache.get_data")
@@ -480,8 +482,9 @@ class TestTensorBoardLogs:
             Mocker for checking _cache_data is called
         """
         tb_logs = tensorboardlogs_instance
-        with pytest.raises(tf.errors.NotFoundError):  # invalid session_id
-            tb_logs.get_timestamps(3)
+        mocker.patch("lib.gui.analysis.event_reader.RecordIterator")
+
+        tb_logs.get_timestamps(3)
 
         check_cache = mocker.patch("lib.gui.analysis.event_reader.TensorBoardLogs._check_cache")
         get_data = mocker.patch("lib.gui.analysis.event_reader._Cache.get_data")
@@ -709,9 +712,18 @@ class Test_EventParser:  # pylint:disable=invalid-name
         model_config = {"output_layers": outputs}
 
         expected = np.array([[out] for out in outputs])
-        actual = event_parser_instance._get_outputs(model_config)
+        actual = event_parser_instance._get_outputs(model_config, is_sub_model=False)
         assert isinstance(actual, np.ndarray)
         assert actual.shape == (2, 1, 3)
+        np.testing.assert_equal(expected, actual)
+
+        outputs = [["encoder", 1, 0]]
+        model_config = {"output_layers": outputs}
+
+        expected = np.array([outputs])
+        actual = event_parser_instance._get_outputs(model_config, is_sub_model=True)
+        assert isinstance(actual, np.ndarray)
+        assert actual.shape == (1, 1, 3)
         np.testing.assert_equal(expected, actual)
 
     def test__process_event(self, event_parser_instance: _EventParser) -> None:

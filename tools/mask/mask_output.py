@@ -16,11 +16,12 @@ from lib.align import AlignedFace
 from lib.align.alignments import AlignmentDict
 
 from lib.image import ImagesSaver, read_image_meta_batch
-from lib.utils import get_folder
+from lib.utils import get_folder, get_module_objects
 from scripts.fsmedia import Alignments as ExtractAlignments
 
 if T.TYPE_CHECKING:
-    from lib.align import Alignments, DetectedFace
+    from lib import align
+    from lib.align import DetectedFace
     from lib.align.aligned_face import CenteringType
 
 logger = logging.getLogger(__name__)
@@ -33,13 +34,13 @@ class Output:
     ----------
     arguments: :class:`argparse.Namespace`
         The command line arguments that the mask tool was called with
-    alignments: :class:~`lib.align.alignments.Alignments` | None
+    alignments: :class:`~lib.align.alignments.Alignments` | None
         The alignments file object (or ``None`` if not provided and input is faces)
     file_list: list[str]
         Full file list for the loader. Used for extracting alignments from faces
     """
     def __init__(self, arguments: Namespace,
-                 alignments: Alignments | None,
+                 alignments: align.alignments.Alignments | None,
                  file_list: list[str]) -> None:
         logger.debug("Initializing %s (arguments: %s, alignments: %s, file_list: %s)",
                      self.__class__.__name__, arguments, alignments, len(file_list))
@@ -112,21 +113,21 @@ class Output:
         return retval
 
     def _get_alignments(self,
-                        alignments: Alignments | None,
-                        file_list: list[str]) -> Alignments | None:
+                        alignments: align.alignments.Alignments | None,
+                        file_list: list[str]) -> align.alignments.Alignments | None:
         """ Obtain the alignments file. If input is faces and full frame output is requested then
         the file needs to be generated from the input faces, if not provided
 
         Parameters
         ----------
-        alignments: :class:~`lib.align.alignments.Alignments` | None
+        alignments: :class:`~lib.align.alignments.Alignments` | None
             The alignments file object (or ``None`` if not provided and input is faces)
         file_list: list[str]
             Full paths to ihe mask tool input files
 
         Returns
         -------
-        :class:~`lib.align.alignments.Alignments` | None
+        :class:`~lib.align.alignments.Alignments` | None
             The alignments file if provided and/or is required otherwise ``None``
         """
         if alignments is not None or not self._full_frame:
@@ -517,3 +518,6 @@ class Output:
             return
         logger.debug("Shutting down saver")
         self._saver.close()
+
+
+__all__ = get_module_objects(__name__)

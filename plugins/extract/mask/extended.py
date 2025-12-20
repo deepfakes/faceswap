@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 
 from lib.align import LandmarkType
+from lib.utils import get_module_objects
 
 from ._base import BatchType, Masker
 
@@ -18,7 +19,7 @@ if T.TYPE_CHECKING:
 
 
 class Mask(Masker):
-    """ Perform transformation to align and get landmarks """
+    """ Apply a landmarks based extended mask """
     def __init__(self, **kwargs):
         git_model_id = None
         model_filename = None
@@ -107,3 +108,6 @@ class Mask(Masker):
         nose = (landmarks[27:31], landmarks[31:36])
         parts = [r_jaw, l_jaw, r_cheek, l_cheek, nose_ridge, r_eye, l_eye, nose]
         return parts
+
+
+__all__ = get_module_objects(__name__)

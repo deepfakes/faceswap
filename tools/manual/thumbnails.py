@@ -16,6 +16,7 @@ from tqdm import tqdm
 from lib.align import AlignedFace
 from lib.image import SingleFrameLoader, generate_thumbnail
 from lib.multithreading import MultiThread
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
     from .detected_faces import DetectedFaces
@@ -299,3 +300,6 @@ class ThumbsCreator():
         with self._pbar.lock:
             assert self._pbar.pbar is not None
             self._pbar.pbar.update(1)
+
+
+__all__ = get_module_objects(__name__)
