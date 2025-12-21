@@ -131,9 +131,9 @@ Function pgPrereqCreate
         ${NSD_CreateLabel} 10% $lblPos% 80% 14u "Faceswap"
         Pop $0
 
-        intOp $lblPos $lblPos + 31
+        intOp $lblPos $lblPos + 15
     # Info Custom Options
-    ${NSD_CreateGroupBox} 1% 35% 98% 65% "GPU and Location"
+    ${NSD_CreateGroupBox} 1% 31% 98% 65% "GPU and Location"
     Pop $0
         ${NSD_CreateRadioButton} 4% $lblPos% 27% 20u "NVIDIA RTX 20xx +"
             Pop $ctlRadio
@@ -153,7 +153,7 @@ Function pgPrereqCreate
             nsDialogs::SetUserData $ctlRadio "cpu"
             ${NSD_OnClick} $ctlRadio RadioClick
 
-        intOp $lblPos $lblPos + 20
+        intOp $lblPos $lblPos + 18
 
         ${NSD_CreateLabel} 4% $lblPos% 90% 10u "Environment Name (NB: Existing envs with this name will be deleted):"
         pop $0
