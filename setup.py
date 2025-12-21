@@ -27,9 +27,6 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 BackendType: T.TypeAlias = T.Literal['nvidia', 'apple_silicon', 'cpu', 'rocm', "all"]
 
-_INSTALLER_REQUIRED: list[tuple[str, list[str]]] = [("pywinpty>=3.0.0", ["windows"])]
-"""list[tuple[str, list[str]]] : Required installer packages versions for each OS """
-
 # Conda packages that are required for a specific backend
 _CONDA_BACKEND_REQUIRED: dict[BackendType, list[str]] = {
     "all": ["tk", "git"]}
@@ -38,7 +35,7 @@ _CONDA_BACKEND_REQUIRED: dict[BackendType, list[str]] = {
 _CONDA_OS_REQUIRED: dict[T.Literal["darwin", "linux", "windows"], list[str]] = {
     "linux": ["xorg-libxft"]}  # required to fix TK fonts on Linux
 
-# Mapping of Conda packages to channel if not in conda-forge
+# Mapping of Conda packages to channel if in not conda-forge
 _CONDA_MAPPING: dict[str, str] = {}
 
 # Force output to utf-8
@@ -236,7 +233,6 @@ class RequiredPackages():
         self._packages = Packages()
         self._requirements = Requirements(include_dev=self._env.include_dev_tools)
         self._check_packaging()
-        self._check_required()
         self.conda = self._get_missing_conda()
         self.python = self._get_missing_python(
             self._requirements.requirements[self._env.requirement_version])
@@ -256,38 +252,12 @@ class RequiredPackages():
         """ Install packaging if it is not available  """
         if self._requirements.packaging_available:
             return
-
         cmd = [sys.executable, "-u", "-m", "pip", "install", "--no-cache-dir"]
         if self._env.system.is_admin and not self._env.system.is_virtual_env:
             cmd.append("--user")
         cmd.append("packaging")
-
         logger.info("Installing required package...")
         installer = Installer(self._env, ["Packaging"], cmd, False, False)
-        if installer() != 0:
-            logger.error("Unable to install package: %s. Process aborted", "packaging")
-            sys.exit(1)
-
-    def _check_required(self) -> None:
-        """ Install any packages that are required for the installer """
-        pkgs = [p[0] for p in _INSTALLER_REQUIRED
-                if not p[1] or self._env.system.system in p[1]]
-        if not pkgs:
-            return
-
-        pkgs = [p for p, r in zip(pkgs, self._requirements.parse_requirements(pkgs))
-                if r.name not in self._packages.installed_python
-                or not r.specifier.contains(self._packages.installed_python[r.name])]
-
-        if not pkgs:
-            return
-
-        cmd = [sys.executable, "-u", "-m", "pip", "install", "--no-cache-dir"]
-        if self._env.system.is_admin and not self._env.system.is_virtual_env:
-            cmd.append("--user")
-        cmd.extend(pkgs)
-        logger.info("Installing required package...")
-        installer = Installer(self._env, [x.title() for x in pkgs], cmd, False, False)
         if installer() != 0:
             logger.error("Unable to install package: %s. Process aborted", "packaging")
             sys.exit(1)
@@ -836,103 +806,6 @@ class Installer():
         return returncode
 
 
-class WinPTYInstaller(Installer):  # pylint:disable=too-few-public-methods
-    """ Package installer for Windows using WinPTY
-
-    Spawns a pseudo PTY for installing packages allowing access to realtime feedback
-
-    Parameters
-    ----------
-    environment : :class:`Environment`
-        Environment class holding information about the running system
-    packages : list[str]
-        The list of package names that are to be installed
-    command : list
-        The command to run
-    is_conda : bool
-        ``True`` if conda install command is running. ``False`` if pip install command is running
-    is_gui : bool
-        ``True`` if the process is being called from the Faceswap GUI
-    """
-    def __init__(self,
-                 environment: Environment,
-                 packages: list[str],
-                 command: list[str],
-                 is_conda: bool,
-                 is_gui: bool) -> None:
-        super().__init__(environment, packages, command, is_conda, is_gui)
-        self._cmd = which(command[0], path=os.environ.get('PATH', os.defpath))
-        self._cmdline = " ".join(command)
-        logger.debug("cmd: '%s', cmdline: '%s'", self._cmd, self._cmdline)
-
-        self._eof = False
-
-        self._lines: list[str] = []
-        self._out = ""
-
-    def _out_to_lines(self) -> None:
-        """ Process the winpty output into separate lines. Roll over any semi-consumed lines to the
-        next proc call. """
-        if "\n" not in self._out:
-            return
-
-        self._lines.extend(self._out.split("\n"))
-
-        if self._out.endswith("\n") or self._eof:  # Ends on newline or is EOF
-            self._out = ""
-        else:  # roll over semi-consumed line to next read
-            self._out = self._lines[-1]
-            self._lines = self._lines[:-1]
-
-    def __call__(self) -> int:  # noqa[C901]
-        """ Install a package using the PyWinPTY module
-
-        Returns
-        -------
-        int
-            The return code of the package install process
-        """
-        try:
-            import winpty  # pylint:disable=import-outside-toplevel,import-error
-            # For some reason with WinPTY we need to pass in the full command. Probably a bug
-            proc = winpty.PTY(
-                720,  # Wide to make line wrapping less common
-                24,
-                backend=winpty.enums.Backend.WinPTY,  # ConPTY hangs and has lots of Ansi Escapes
-                agent_config=winpty.enums.AgentConfig.WINPTY_FLAG_PLAIN_OUTPUT)  # Strip all Ansi
-
-            if not proc.spawn(self._cmd, cmdline=self._cmdline):
-                del proc
-                raise RuntimeError("Failed to spawn winpty")
-
-            while True:
-                try:
-                    self._out += proc.read()
-                except winpty.WinptyError:
-                    # The error message "pipe has been ended" is language specific so old check
-                    # fails on non english systems. For now we just swallow all errors then check
-                    # the return code
-                    self._eof = True
-
-                self._out_to_lines()
-                for line in self._lines:
-                    clean = self._seen_line_log(line.rstrip())
-                    if clean.startswith("ERROR:"):
-                        self.error_lines.append(clean.replace("ERROR:", "").strip())
-                    if not self._is_gui and clean:
-                        self._status(clean)
-                self._lines = []
-
-                if self._eof:
-                    returncode = proc.get_exitstatus()
-                    break
-
-            del proc
-            return returncode
-        except:  # pylint:disable=bare-except  # noqa[E722]
-            return super().__call__()  # Fallback to Subprocess
-
-
 class Install():  # pylint:disable=too-few-public-methods
     """ Handles installation of Faceswap requirements
 
@@ -953,7 +826,6 @@ class Install():  # pylint:disable=too-few-public-methods
         if self._env.updater and not self._packages.packages_need_install:
             logger.info("All Dependencies are up to date")
             return
-        self._installer = WinPTYInstaller if self._env.system.is_windows else Installer
         self._install_packages()
         self._finalize()
 
@@ -993,7 +865,7 @@ class Install():  # pylint:disable=too-few-public-methods
             pipexe.extend(extra_args)
         pipexe.extend([p["package"] for p in packages])
         names = [p["name"] for p in packages]
-        installer = self._installer(self._env, names, pipexe, False, self._is_gui)
+        installer = Installer(self._env, names, pipexe, False, self._is_gui)
         if installer() != 0:
             msg = f"Unable to install Python packages: {', '.join(names)}"
             logger.warning("%s. Please install these packages manually", msg)
@@ -1024,7 +896,7 @@ class Install():  # pylint:disable=too-few-public-methods
                     "--override-channels", "--strict-channel-priority"]
         condaexe += [p["package"] for p in packages]
         names = [p["name"] for p in packages]
-        retcode = self._installer(self._env, names, condaexe, True, self._is_gui)()
+        retcode = Installer(self._env, names, condaexe, True, self._is_gui)()
         if retcode != 0:
             logger.warning("Unable to install Conda packages: %s. "
                            "Please install these packages manually", ', '.join(names))
