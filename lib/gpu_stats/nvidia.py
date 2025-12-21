@@ -2,11 +2,11 @@
 """ Collects and returns Information on available Nvidia GPUs. """
 import os
 
-import pynvml
+import pynvml  # pylint:disable=import-error
 
-from lib.utils import FaceswapError
+from lib.utils import FaceswapError, get_module_objects
 
-from ._base import _GPUStats
+from ._base import _GPUStats, _EXCLUDE_DEVICES
 
 
 class NvidiaStats(_GPUStats):
@@ -57,6 +57,8 @@ class NvidiaStats(_GPUStats):
             msg = ("An unhandled exception occured reading from the Nvidia Machine Learning "
                    f"Library. Original error: {str(err)}")
             raise FaceswapError(msg) from err
+
+        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
         super()._initialize()
 
     def _shutdown(self) -> None:
@@ -92,6 +94,7 @@ class NvidiaStats(_GPUStats):
         list
             The list of device indices that are available for Faceswap to use
         """
+        # pylint:disable=duplicate-code
         devices = super()._get_active_devices()
         env_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
         if env_devices:
@@ -178,3 +181,30 @@ class NvidiaStats(_GPUStats):
 
         self._log("debug", f"GPU VRAM free: {vram}")
         return vram
+
+    def exclude_devices(self, devices: list[int]) -> None:
+        """ Exclude GPU devices from being used by Faceswap. Sets the CUDA_VISIBLE_DEVICES
+        environment variable. This must be called before Torch/Keras are imported
+
+        Parameters
+        ----------
+        devices: list[int]
+            The GPU device IDS to be excluded
+        """
+        # pylint:disable=duplicate-code
+        if not devices:
+            return
+        self._log("debug", f"Excluding GPU indicies: {devices}")
+
+        _EXCLUDE_DEVICES.extend(devices)
+
+        active = self._get_active_devices()
+
+        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(str(d) for d in active
+                                                      if d not in _EXCLUDE_DEVICES)
+
+        env_vars = [f"{k}: {v}" for k, v in os.environ.items() if k.lower().startswith("cuda")]
+        self._log("debug", f"Cuda environmet variables: {env_vars}")
+
+
+__all__ = get_module_objects(__name__)

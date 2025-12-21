@@ -5,20 +5,18 @@ from dataclasses import dataclass, field
 import logging
 import typing as T
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-import tensorflow as tf
-from tensorflow.keras import applications as kapp  # pylint:disable=import-error
-from tensorflow.keras.layers import Dropout, Conv2D, Input, Layer, Resizing  # noqa,pylint:disable=no-name-in-module,import-error
-from tensorflow.keras.models import Model  # pylint:disable=no-name-in-module,import-error
-import tensorflow.keras.backend as K  # pylint:disable=no-name-in-module,import-error
+import keras
+from keras import applications as kapp, layers, Model, ops, Variable
 
 import numpy as np
 
+from lib.logger import parse_class_init
 from lib.model.networks import AlexNet, SqueezeNet
-from lib.utils import GetModel
+from lib.utils import get_module_objects, GetModel
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
+    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +43,7 @@ class NetInfo:
     net: Callable | None = None
     init_kwargs: dict[str, T.Any] = field(default_factory=dict)
     needs_init: bool = True
-    outputs: list[Layer] = field(default_factory=list)
+    outputs: list[str] = field(default_factory=list)
 
 
 class _LPIPSTrunkNet():
@@ -60,9 +58,11 @@ class _LPIPSTrunkNet():
     load_weights: bool
         ``True`` if pretrained trunk network weights should be loaded, otherwise ``False``
     """
-    def __init__(self, net_name: str, eval_mode: bool, load_weights: bool) -> None:
-        logger.debug("Initializing: %s (net_name '%s', eval_mode: %s, load_weights: %s)",
-                     self.__class__.__name__, net_name, eval_mode, load_weights)
+    def __init__(self,
+                 net_name: T.Literal["alex", "squeeze", "vgg16"],
+                 eval_mode: bool,
+                 load_weights: bool) -> None:
+        logger.debug(parse_class_init(locals()))
         self._eval_mode = eval_mode
         self._load_weights = load_weights
         self._net_name = net_name
@@ -76,11 +76,11 @@ class _LPIPSTrunkNet():
             "alex": NetInfo(model_id=15,
                             model_name="alexnet_imagenet_no_top_v1.h5",
                             net=AlexNet,
-                            outputs=[f"features.{idx}" for idx in (0, 3, 6, 8, 10)]),
+                            outputs=[f"features_{idx}" for idx in (0, 3, 6, 8, 10)]),
             "squeeze": NetInfo(model_id=16,
                                model_name="squeezenet_imagenet_no_top_v1.h5",
                                net=SqueezeNet,
-                               outputs=[f"features.{idx}" for idx in (0, 4, 7, 9, 10, 11, 12)]),
+                               outputs=[f"features_{idx}" for idx in (0, 4, 7, 9, 10, 11, 12)]),
             "vgg16": NetInfo(model_id=17,
                              model_name="vgg16_imagenet_no_top_v1.h5",
                              net=kapp.vgg16.VGG16,
@@ -88,17 +88,17 @@ class _LPIPSTrunkNet():
                              outputs=[f"block{i + 1}_conv{2 if i < 2 else 3}" for i in range(5)])}
 
     @classmethod
-    def _normalize_output(cls, inputs: tf.Tensor, epsilon: float = 1e-10) -> tf.Tensor:
+    def _normalize_output(cls, inputs: KerasTensor, epsilon: float = 1e-10) -> KerasTensor:
         """ Normalize the output tensors from the trunk network.
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             An output tensor from the trunk model
         epsilon: float, optional
             Epsilon to apply to the normalization operation. Default: `1e-10`
         """
-        norm_factor = K.sqrt(K.sum(K.square(inputs), axis=-1, keepdims=True))
+        norm_factor = ops.sqrt(ops.sum(ops.square(inputs), axis=-1, keepdims=True))
         return inputs / (norm_factor + epsilon)
 
     def _process_weights(self, model: Model) -> Model:
@@ -130,7 +130,7 @@ class _LPIPSTrunkNet():
 
         Returns
         -------
-        :class:`tensorflow.keras.models.Model`
+        :class:`keras.models.Model`
             The trunk net with normalized feature output layers
         """
         if self._net.net is None:
@@ -163,14 +163,12 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):
         ``True`` if a dropout layer should be used in the Linear network otherwise ``False``
     """
     def __init__(self,
-                 net_name: str,
+                 net_name: T.Literal["alex", "squeeze", "vgg16"],
                  eval_mode: bool,
                  load_weights: bool,
                  trunk_net: Model,
                  use_dropout: bool) -> None:
-        logger.debug(
-            "Initializing: %s (trunk_net: %s, use_dropout: %s)", self.__class__.__name__,
-            trunk_net, use_dropout)
+        logger.debug(parse_class_init(locals()))
         super().__init__(net_name=net_name, eval_mode=eval_mode, load_weights=load_weights)
 
         self._trunk = trunk_net
@@ -189,25 +187,25 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):
             "vgg16": NetInfo(model_id=20,
                              model_name="vgg16_lpips_v1.h5")}
 
-    def _linear_block(self, net_output_layer: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
+    def _linear_block(self, net_output_layer: KerasTensor) -> tuple[KerasTensor, KerasTensor]:
         """ Build a linear block for a trunk network output.
 
         Parameters
         ----------
-        net_output_layer: :class:`tensorflow.Tensor`
+        net_output_layer: :class:`keras.KerasTensor`
             An output from the selected trunk network
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The input to the linear block
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The output from the linear block
         """
-        in_shape = K.int_shape(net_output_layer)[1:]
-        input_ = Input(in_shape)
-        var_x = Dropout(rate=0.5)(input_) if self._use_dropout else input_
-        var_x = Conv2D(1, 1, strides=1, padding="valid", use_bias=False)(var_x)
+        in_shape = net_output_layer.shape[1:]
+        input_ = T.cast("KerasTensor", layers.Input(in_shape))
+        var_x = layers.Dropout(rate=0.5)(input_) if self._use_dropout else input_
+        var_x = layers.Conv2D(1, 1, strides=1, padding="valid", use_bias=False)(var_x)
         return input_, var_x
 
     def __call__(self) -> Model:
@@ -216,7 +214,7 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):
 
         Returns
         -------
-        :class:`tensorflow.keras.models.Model`
+        :class:`keras.models.Model`
             The compiled Linear Net model
         """
         inputs = []
@@ -232,7 +230,7 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):
         return model
 
 
-class LPIPSLoss():
+class LPIPSLoss(keras.losses.Loss):
     """ LPIPS Loss Function.
 
     A perceptual loss function that uses linear outputs from pretrained CNNs feature layers.
@@ -278,8 +276,8 @@ class LPIPSLoss():
         ``True`` to return the loss value per feature output layer otherwise ``False``.
         Default: ``False``
     """
-    def __init__(self,  # pylint:disable=too-many-arguments
-                 trunk_network: str,
+    def __init__(self,  # pylint:disable=too-many-arguments,too-many-positional-arguments
+                 trunk_network: T.Literal["alex", "squeeze", "vgg16"],
                  trunk_pretrained: bool = True,
                  trunk_eval_mode: bool = True,
                  linear_pretrained: bool = True,
@@ -289,27 +287,23 @@ class LPIPSLoss():
                  spatial: bool = False,
                  normalize: bool = True,
                  ret_per_layer: bool = False) -> None:
-        logger.debug(
-            "Initializing: %s (trunk_network '%s', trunk_pretrained: %s, trunk_eval_mode: %s, "
-            "linear_pretrained: %s, linear_eval_mode: %s, linear_use_dropout: %s, lpips: %s, "
-            "spatial: %s, normalize: %s, ret_per_layer: %s)", self.__class__.__name__,
-            trunk_network, trunk_pretrained, trunk_eval_mode, linear_pretrained, linear_eval_mode,
-            linear_use_dropout, lpips, spatial, normalize, ret_per_layer)
-
+        logger.debug(parse_class_init(locals()))
+        super().__init__(name=self.__class__.__name__)
         self._spatial = spatial
         self._use_lpips = lpips
         self._normalize = normalize
         self._ret_per_layer = ret_per_layer
-        self._shift = K.constant(np.array([-.030, -.088, -.188],
-                                          dtype="float32")[None, None, None, :])
-        self._scale = K.constant(np.array([.458, .448, .450],
-                                          dtype="float32")[None, None, None, :])
+        self._shift = Variable(np.array([-.030, -.088, -.188],
+                                        dtype="float32")[None, None, None, :],
+                               trainable=False)
+        self._scale = Variable(np.array([.458, .448, .450], dtype="float32")[None, None, None, :],
+                               trainable=False)
 
         # Loss needs to be done as fp32. We could cast at output, but better to update the model
-        switch_mixed_precision = tf.keras.mixed_precision.global_policy().name == "mixed_float16"
+        switch_mixed_precision = keras.mixed_precision.global_policy().name == "mixed_float16"
         if switch_mixed_precision:
             logger.debug("Temporarily disabling mixed precision")
-            tf.keras.mixed_precision.set_global_policy("float32")
+            keras.mixed_precision.set_global_policy("float32")
 
         self._trunk_net = _LPIPSTrunkNet(trunk_network, trunk_eval_mode, trunk_pretrained)()
         self._linear_net = _LPIPSLinearNet(trunk_network,
@@ -319,10 +313,10 @@ class LPIPSLoss():
                                            linear_use_dropout)()
         if switch_mixed_precision:
             logger.debug("Re-enabling mixed precision")
-            tf.keras.mixed_precision.set_global_policy("mixed_float16")
+            keras.mixed_precision.set_global_policy("mixed_float16")
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _process_diffs(self, inputs: list[tf.Tensor]) -> list[tf.Tensor]:
+    def _process_diffs(self, inputs: list[KerasTensor]) -> list[KerasTensor]:
         """ Perform processing on the Trunk Network outputs.
 
         If :attr:`use_ldip` is enabled, process the diff values through the linear network,
@@ -330,19 +324,19 @@ class LPIPSLoss():
 
         Parameters
         ----------
-        inputs: list
+        inputs: list[:class:`keras.KerasTensor`]
             List of the squared difference of the true and predicted outputs from the trunk network
 
         Returns
         -------
-        list
+        list[:class:`keras.KerasTensor`]
             List of either the linear network outputs (when using lpips) or summed network outputs
         """
         if self._use_lpips:
             return self._linear_net(inputs)
-        return [K.sum(x, axis=-1) for x in inputs]
+        return [T.cast("KerasTensor", ops.sum(x, axis=-1)) for x in inputs]
 
-    def _process_output(self, inputs: tf.Tensor, output_dims: tuple) -> tf.Tensor:
+    def _process_output(self, inputs: KerasTensor, output_dims: tuple) -> KerasTensor:
         """ Process an individual output based on whether :attr:`is_spatial` has been selected.
 
         When spatial output is selected, all outputs are sized to the shape of the original True
@@ -350,34 +344,34 @@ class LPIPSLoss():
 
         Parameters
         ----------
-        inputs: :class:`tensorflow.Tensor`
+        inputs: :class:`keras.KerasTensor`
             An individual diff output tensor from the linear network or summed output
         output_dims: tuple
             The (height, width) of the original true image
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             Either the original tensor resized to the true image dimensions, or the mean
             value across the height, width axes.
         """
         if self._spatial:
-            return Resizing(*output_dims, interpolation="bilinear")(inputs)
-        return K.mean(inputs, axis=(1, 2), keepdims=True)
+            return layers.Resizing(*output_dims, interpolation="bilinear")(inputs)
+        return T.cast("KerasTensor", ops.mean(inputs, axis=(1, 2), keepdims=True))
 
-    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def call(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
         """ Perform the LPIPS Loss Function.
 
         Parameters
         ----------
-        y_true: :class:`tensorflow.Tensor`
+        y_true: :class:`keras.KerasTensor`
             The ground truth batch of images
-        y_pred: :class:`tensorflow.Tensor`
+        y_pred: :class:`keras.KerasTensor`
             The predicted batch of images
 
         Returns
         -------
-        :class:`tensorflow.Tensor`
+        :class:`keras.KerasTensor`
             The final  loss value
         """
         if self._normalize:
@@ -393,11 +387,15 @@ class LPIPSLoss():
         diffs = [(out_true - out_pred) ** 2
                  for out_true, out_pred in zip(net_true, net_pred)]
 
-        dims = K.int_shape(y_true)[1:3]
+        dims = y_true.shape[1:3]
         res = [self._process_output(diff, dims) for diff in self._process_diffs(diffs)]
 
         axis = 0 if self._spatial else None
-        val = K.sum(res, axis=axis)
+        val = T.cast("KerasTensor", ops.sum(res, axis=axis))
 
         retval = (val, res) if self._ret_per_layer else val
+        assert not isinstance(retval, tuple)
         return retval / 10.0   # Reduce by factor of 10 'cos this loss is STRONG
+
+
+__all__ = get_module_objects(__name__)

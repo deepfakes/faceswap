@@ -1,0 +1,5 @@
+# Maximum supported Python: 3.13
+-r _requirements_base.txt
+--extra-index-url https://download.pytorch.org/whl/rocm6.2
+--extra-index-url https://download.pytorch.org/whl/rocm6.2.4
+torch>=2.5.0,<2.8.0

@@ -8,6 +8,7 @@ from functools import partial
 import numpy as np
 
 from lib.gui.custom_widgets import RightClickMenu
+from lib.utils import get_module_objects
 from ._base import ControlPanelOption, Editor, logger
 
 
@@ -408,3 +409,6 @@ class BoundingBox(Editor):
             return
         logger.debug("Deleting face. _mouse_location: %s", self._mouse_location)
         self._det_faces.update.delete(self._globals.frame_index, int(self._mouse_location[1]))
+
+
+__all__ = get_module_objects(__name__)

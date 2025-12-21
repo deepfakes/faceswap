@@ -20,6 +20,8 @@ from PIL import Image, ImageTk
 
 import cv2
 
+from lib.utils import get_module_objects
+
 from .preview_cv import PreviewBase, TriggerKeysType
 
 if T.TYPE_CHECKING:
@@ -233,7 +235,7 @@ class _Taskbar():
         if self._is_standalone:
             return
 
-        for widget in self._gui_mapped:
+        for widget in reversed(self._gui_mapped):
             if widget.winfo_ismapped():
                 logger.debug("Removing widget: %s", widget)
                 widget.pack_forget()
@@ -487,7 +489,7 @@ class _Image():
         """
         if self._interpolation == interpolation:
             return False
-        logger.debug("Setting interpolation: %s")
+        logger.debug("Setting interpolation: %s", interpolation)
         self._interpolation = interpolation
         return True
 
@@ -511,7 +513,7 @@ class _Image():
         now = datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
         filename = os.path.join(root_path, f"preview_{now}.png")
         cv2.imwrite(filename, self.source)
-        print("")
+        print("\x1b[2K", end="\r")  # Clear last line
         logger.info("Saved preview to: '%s'", filename)
 
         if self._is_standalone:
@@ -888,7 +890,7 @@ class PreviewTk(PreviewBase):
         key = T.cast(TriggerKeysType, keypress)
         logger.debug("Processing keypress '%s'", key)
         if key == "r":
-            print("")  # Let log print on different line from loss output
+            print("\x1b[2K", end="\r")  # Clear last line
             logger.info("Refresh preview requested...")
 
         self._triggers[self._keymaps[key]].set()
@@ -937,6 +939,9 @@ def main():
     buff = PreviewBuffer()  # pylint:disable=used-before-assignment
     buff.add_image("test_image", img)
     PreviewTk(buff)
+
+
+__all__ = get_module_objects(__name__)
 
 
 if __name__ == "__main__":

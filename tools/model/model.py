@@ -6,15 +6,18 @@ import os
 import sys
 import typing as T
 
+from keras import saving
 import numpy as np
-import tensorflow as tf
-from tensorflow import keras
+import keras
+
 
 from lib.model.backup_restore import Backup
 
+from lib.logger import parse_class_init
 # Import the following libs for custom objects
 from lib.model import initializers, layers, normalization  # noqa # pylint:disable=unused-import
-from plugins.train.model._base.model import _Inference
+from lib.utils import get_module_objects
+from plugins.train.model._base.model import Inference as FSInference
 
 
 if T.TYPE_CHECKING:
@@ -32,19 +35,13 @@ class Model():
         The command line arguments calling the model tool
     """
     def __init__(self, arguments: argparse.Namespace) -> None:
-        logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
-        self._configure_tensorflow()
+        logger.debug(parse_class_init(locals()))
         self._model_dir = self._check_folder(arguments.model_dir)
         self._job = self._get_job(arguments)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @classmethod
-    def _configure_tensorflow(cls) -> None:
-        """ Disable eager execution and force Tensorflow into CPU mode. """
-        tf.config.set_visible_devices([], device_type="GPU")
-        tf.compat.v1.disable_eager_execution()
-
-    @classmethod
-    def _get_job(cls, arguments: argparse.Namespace) -> T.Any:
+    def _get_job(cls, arguments: argparse.Namespace) -> Inference | NaNScan | Restore:
         """ Get the correct object that holds the selected job.
 
         Parameters
@@ -55,12 +52,13 @@ class Model():
 
         Returns
         -------
-        class
+        :class:`Inference` | :class:`NaNScan` | :class:`Restore`
             The object that will perform the selected job
         """
-        jobs = {"inference": Inference,
-                "nan-scan": NaNScan,
-                "restore": Restore}
+        jobs: dict[str, T.Type[Inference | NaNScan | Restore]] = {
+            "inference": Inference,
+            "nan-scan": NaNScan,
+            "restore": Restore}
         return jobs[arguments.job](arguments)
 
     @classmethod
@@ -85,7 +83,7 @@ class Model():
 
         chkfiles = [fname
                     for fname in os.listdir(model_dir)
-                    if fname.endswith(".h5")
+                    if fname.endswith(".keras")
                     and not os.path.splitext(fname)[0].endswith("_inference")]
 
         if not chkfiles:
@@ -114,9 +112,10 @@ class Inference():
         The command line arguments calling the model tool
     """
     def __init__(self, arguments: argparse.Namespace) -> None:
+        logger.debug(parse_class_init(locals()))
         self._switch = arguments.swap_model
-        self._format = arguments.format
         self._input_file, self._output_file = self._get_output_file(arguments.model_dir)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def _get_output_file(self, model_dir: str) -> tuple[str, str]:
         """ Obtain the full path for the output model file/folder
@@ -124,7 +123,7 @@ class Inference():
         Parameters
         ----------
         model_dir: str
-            The full path to the folder containing the Faceswap trained model .h5 file
+            The full path to the folder containing the Faceswap trained model .keras file
 
         Returns
         -------
@@ -133,12 +132,13 @@ class Inference():
         str
             The full path to the inference model save location
          """
-        model_name = next(fname for fname in os.listdir(model_dir) if fname.endswith(".h5"))
+        model_name = next(fname for fname in os.listdir(model_dir)
+                          if fname.endswith(".keras")
+                          and not fname.endswith("_inference.keras"))
         in_path = os.path.join(model_dir, model_name)
         logger.debug("Model input path: '%s'", in_path)
 
-        model_name = f"{os.path.splitext(model_name)[0]}_inference"
-        model_name = f"{model_name}.h5" if self._format == "h5" else model_name
+        model_name = f"{os.path.splitext(model_name)[0]}_inference.keras"
         out_path = os.path.join(model_dir, model_name)
         logger.debug("Inference output path: '%s'", out_path)
         return in_path, out_path
@@ -146,9 +146,9 @@ class Inference():
     def process(self) -> None:
         """ Run the inference model creation process. """
         logger.info("Loading model '%s'", self._input_file)
-        model = keras.models.load_model(self._input_file, compile=False)
+        model = saving.load_model(self._input_file, compile=False)
         logger.info("Creating inference model...")
-        inference = _Inference(model, self._switch).model
+        inference = FSInference(model, self._switch).model
         logger.info("Saving to: '%s'", self._output_file)
         inference.save(self._output_file)
 
@@ -162,12 +162,13 @@ class NaNScan():
         The command line arguments calling the model tool
     """
     def __init__(self, arguments: argparse.Namespace) -> None:
-        logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
+        logger.debug(parse_class_init(locals()))
         self._model_file = self._get_model_filename(arguments.model_dir)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @classmethod
     def _get_model_filename(cls, model_dir: str) -> str:
-        """ Obtain the full path the model's .h5 file.
+        """ Obtain the full path the model's .keras file.
 
         Parameters
         ----------
@@ -179,7 +180,7 @@ class NaNScan():
         str
             The full path to the saved model file
         """
-        model_file = next(fname for fname in os.listdir(model_dir) if fname.endswith(".h5"))
+        model_file = next(fname for fname in os.listdir(model_dir) if fname.endswith(".keras"))
         return os.path.join(model_dir, model_file)
 
     def _parse_weights(self,
@@ -233,7 +234,7 @@ class NaNScan():
     def process(self) -> None:
         """ Scan the loaded model for NaNs and Infs and output summary. """
         logger.info("Loading model...")
-        model = keras.models.load_model(self._model_file, compile=False)
+        model = saving.load_model(self._model_file, compile=False)
         logger.info("Parsing weights for invalid values...")
         errors = self._parse_weights(model)
 
@@ -254,9 +255,10 @@ class Restore():
         The command line arguments calling the model tool
     """
     def __init__(self, arguments: argparse.Namespace) -> None:
-        logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
+        logger.debug(parse_class_init(locals()))
         self._model_dir = arguments.model_dir
         self._model_name = self._get_model_name()
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self) -> None:
         """ Perform the Restore process """
@@ -272,7 +274,11 @@ class Restore():
             logger.error("Could not find any backup files in the supplied folder: '%s'",
                          self._model_dir)
             sys.exit(1)
-        logger.verbose("Backup files: %s)", bkfiles)  # type:ignore
+        logger.verbose("Backup files: %s)", bkfiles)  # type:ignore[attr-defined]
 
-        model_name = next(fname for fname in bkfiles if fname.endswith(".h5.bk"))
-        return model_name[:-6]
+        ext = ".keras.bk"
+        model_name = next(fname for fname in bkfiles if fname.endswith(ext))
+        return model_name[:-len(ext)]
+
+
+__all__ = get_module_objects(__name__)

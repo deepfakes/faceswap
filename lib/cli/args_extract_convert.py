@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """ The Command Line Argument options for extracting and converting with faceswap.py """
-import argparse
 import gettext
 import typing as T
 
+from lib.utils import get_module_objects
 from lib.utils import get_backend
 from plugins.plugin_loader import PluginLoader
 
@@ -65,14 +65,6 @@ class ExtractConvertArgs(FaceSwapArgs):
             "help": _(
                 "Optional path to an alignments file. Leave blank if the alignments file is at "
                 "the default location.")})
-        # Deprecated multi-character switches
-        argument_list.append({
-            "opts": ("-al", ),
-            "action": FileFullPaths,
-            "filetypes": "alignments",
-            "type": str,
-            "dest": "depr_alignments_al_p",
-            "help": argparse.SUPPRESS})
         return argument_list
 
 
@@ -359,7 +351,7 @@ class ExtractArgs(ExtractConvertArgs):
             "opts": ("-P", "--singleprocess"),
             "action": "store_true",
             "default": False,
-            "backend": ("nvidia", "directml", "rocm", "apple_silicon"),
+            "backend": ("nvidia", "rocm", "apple_silicon"),
             "group": _("settings"),
             "help": _(
                 "Don't run extraction in parallel. Will run each part of the extraction process "
@@ -387,58 +379,6 @@ class ExtractArgs(ExtractConvertArgs):
             "default": False,
             "group": _("settings"),
             "help": _("Skip saving the detected faces to disk. Just create an alignments file")})
-        # Deprecated multi-character switches
-        argument_list.append({
-            "opts": ("-min", ),
-            "type": int,
-            "dest": "depr_min-size_min_m",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-een", ),
-            "type": int,
-            "dest": "depr_extract-every-n_een_N",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-nm",),
-            "type": str.lower,
-            "dest": "depr_normalization_nm_O",
-            "choices": ["none", "clahe", "hist", "mean"],
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-rf", ),
-            "type": int,
-            "dest": "depr_re-feed_rf_R",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-sz", ),
-            "type": int,
-            "dest": "depr_size_sz_z",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-si", ),
-            "type": int,
-            "dest": "depr_save-interval_si_v",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-dl", ),
-            "action": "store_true",
-            "dest": "depr_debug-landmarks_dl_B",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-sp", ),
-            "dest": "depr_singleprocess_sp_P",
-            "action": "store_true",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-sf", ),
-            "action": "store_true",
-            "dest": "depr_skip-existing-faces_sf_e",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-ssf", ),
-            "action": "store_true",
-            "dest": "depr_skip-saving-faces_ssf_K",
-            "help": argparse.SUPPRESS})
         return argument_list
 
 
@@ -484,7 +424,7 @@ class ConvertArgs(ExtractConvertArgs):
             "help": _(
                 "Only required if converting from images to video. Provide The original video "
                 "that the source frames were extracted from (for extracting the fps and audio).")})
-        argument_list.append({
+        argument_list.append({  # pylint:disable=duplicate-code
             "opts": ("-m", "--model-dir"),
             "action": DirFullPaths,
             "dest": "model_dir",
@@ -717,31 +657,7 @@ class ConvertArgs(ExtractConvertArgs):
             "default": False,
             "group": _("settings"),
             "help": _("Disable multiprocessing. Slower but less resource intensive.")})
-        # Deprecated multi-character switches
-        argument_list.append({
-            "opts": ("-sp", ),
-            "action": "store_true",
-            "dest": "depr_singleprocess_sp_P",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-ref", ),
-            "type": str,
-            "dest": "depr_reference-video_ref_r",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-fr", ),
-            "type": str,
-            "nargs": "+",
-            "dest": "depr_frame-ranges_fr_R",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-osc", ),
-            "type": int,
-            "dest": "depr_output-scale_osc_O",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-otf", ),
-            "action": "store_true",
-            "dest": "depr_on-the-fly_otf_T",
-            "help": argparse.SUPPRESS})
         return argument_list
+
+
+__all__ = get_module_objects(__name__)

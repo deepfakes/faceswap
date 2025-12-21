@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+from lib.utils import get_module_objects
 from plugins.plugin_loader import PluginLoader
 
 if T.TYPE_CHECKING:
@@ -15,7 +16,6 @@ if T.TYPE_CHECKING:
     from collections.abc import Callable
     from lib.align.aligned_face import AlignedFace, CenteringType
     from lib.align.detected_face import DetectedFace
-    from lib.config import FaceswapConfig
     from lib.queue_manager import EventQueue
     from scripts.convert import ConvertItem
     from plugins.convert.color._base import Adjustment as ColorAdjust
@@ -47,7 +47,7 @@ class Adjustments:
     sharpening: ScalingAdjust | None = None
 
 
-class Converter():
+class Converter():  # pylint:disable=too-many-instance-attributes
     """ The converter is responsible for swapping the original face(s) in a frame with the output
     of a trained Faceswap model.
 
@@ -87,7 +87,7 @@ class Converter():
                      draw_transparent, pre_encode, arguments, configfile)
         self._output_size = output_size
         self._coverage_ratio = coverage_ratio
-        self._centering = centering
+        self._centering: CenteringType = centering
         self._draw_transparent = draw_transparent
         self._writer_pre_encode = pre_encode
         self._args = arguments
@@ -107,26 +107,19 @@ class Converter():
         process """
         return self._args
 
-    def reinitialize(self, config: FaceswapConfig) -> None:
+    def reinitialize(self) -> None:
         """ Reinitialize this :class:`Converter`.
 
         Called as part of the :mod:`~tools.preview` tool. Resets all adjustments then loads the
-        plugins as specified in the given config.
-
-        Parameters
-        ----------
-        config: :class:`lib.config.FaceswapConfig`
-            Pre-loaded :class:`lib.config.FaceswapConfig`. used over any configuration on disk.
+        plugins as specified in the current config.
         """
         logger.debug("Reinitializing converter")
         self._face_scale = 1.0 - self._args.face_scale / 100.
         self._adjustments = Adjustments()
-        self._load_plugins(config=config, disable_logging=True)
+        self._load_plugins(disable_logging=True)
         logger.debug("Reinitialized converter")
 
-    def _load_plugins(self,
-                      config: FaceswapConfig | None = None,
-                      disable_logging: bool = False) -> None:
+    def _load_plugins(self, disable_logging: bool = False) -> None:
         """ Load the requested adjustment plugins.
 
         Loads the :mod:`plugins.converter` plugins that have been requested for this conversion
@@ -137,34 +130,27 @@ class Converter():
         config: :class:`lib.config.FaceswapConfig`, optional
             Optional pre-loaded :class:`lib.config.FaceswapConfig`. If passed, then this will be
             used over any configuration on disk. If ``None`` then it is ignored. Default: ``None``
-        disable_logging: bool, optional
-            Plugin loader outputs logging info every time a plugin is loaded. Set to ``True`` to
-            suppress these messages otherwise ``False``. Default: ``False``
         """
-        logger.debug("Loading plugins. config: %s", config)
+        logger.debug("Loading plugins. disable_logging: %s", disable_logging)
         self._adjustments.mask = PluginLoader.get_converter("mask",
                                                             "mask_blend",
                                                             disable_logging=disable_logging)(
                                                                 self._args.mask_type,
                                                                 self._output_size,
                                                                 self._coverage_ratio,
-                                                                configfile=self._configfile,
-                                                                config=config)
+                                                                configfile=self._configfile)
 
-        if self._args.color_adjustment != "none" and self._args.color_adjustment is not None:
+        if self._args.color_adjustment is not None:
             self._adjustments.color = PluginLoader.get_converter("color",
                                                                  self._args.color_adjustment,
                                                                  disable_logging=disable_logging)(
-                                                                    configfile=self._configfile,
-                                                                    config=config)
+                                                                    configfile=self._configfile)
 
         sharpening = PluginLoader.get_converter("scaling",
                                                 "sharpen",
                                                 disable_logging=disable_logging)(
-                                                    configfile=self._configfile,
-                                                    config=config)
-        if sharpening.config.get("method") is not None:
-            self._adjustments.sharpening = sharpening
+                                                    configfile=self._configfile)
+        self._adjustments.sharpening = sharpening
         logger.debug("Loaded plugins: %s", self._adjustments)
 
     def process(self, in_queue: EventQueue, out_queue: EventQueue):
@@ -347,7 +333,8 @@ class Converter():
         logger.trace("Getting: (filename: '%s', faces: %s)",  # type: ignore[attr-defined]
                      predicted.inbound.filename, len(predicted.swapped_faces))
 
-        placeholder = np.zeros((frame_size[1], frame_size[0], 4), dtype="float32")
+        placeholder: np.ndarray = np.zeros((frame_size[1], frame_size[0], 4), dtype="float32")
+        faces: list[np.ndarray] | None = None
         if self._full_frame_output:
             background = predicted.inbound.image / np.array(255.0, dtype="float32")
             placeholder[:, :, :3] = background
@@ -370,6 +357,7 @@ class Converter():
                                     new_face, placeholder,
                                     len(predicted.swapped_faces) > 1)
             else:
+                assert faces is not None
                 faces.append(new_face)
 
         if not self._full_frame_output:
@@ -452,6 +440,7 @@ class Converter():
             The raw mask with no erosion or blurring applied
         """
         logger.trace("Getting mask. Image shape: %s", new_face.shape)  # type: ignore[attr-defined]
+        mask_centering: CenteringType
         if self._args.mask_type not in ("none", "predicted"):
             mask_centering = detected_face.mask[self._args.mask_type].stored_centering
         else:
@@ -525,3 +514,6 @@ class Converter():
         logger.trace("resized frame: %s", frame.shape)  # type: ignore[attr-defined]
         np.clip(frame, 0.0, 1.0, out=frame)
         return frame
+
+
+__all__ = get_module_objects(__name__)

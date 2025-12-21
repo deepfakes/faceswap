@@ -14,27 +14,29 @@ import logging
 import os
 import sys
 import typing as T
+from keras import layers, models as kmodels
 
-import tensorflow as tf
-
+from lib.logger import parse_class_init
 from lib.model.backup_restore import Backup
-from lib.utils import FaceswapError
+from lib.utils import get_module_objects, FaceswapError
+
+from .update import Legacy, PatchKerasConfig
 
 if T.TYPE_CHECKING:
     from .model import ModelBase
+    from keras import Optimizer
 
-kmodels = tf.keras.models
 logger = logging.getLogger(__name__)
 
 
 def get_all_sub_models(
-        model: tf.keras.models.Model,
-        models: list[tf.keras.models.Model] | None = None) -> list[tf.keras.models.Model]:
+        model: kmodels.Model,
+        models: list[kmodels.Model] | None = None) -> list[kmodels.Model]:
     """ For a given model, return all sub-models that occur (recursively) as children.
 
     Parameters
     ----------
-    model: :class:`tensorflow.keras.models.Model`
+    model: :class:`keras.models.Model`
         A Keras model to scan for sub models
     models: `None`
         Do not provide this parameter. It is used for recursion
@@ -42,7 +44,7 @@ def get_all_sub_models(
     Returns
     -------
     list
-        A list of all :class:`tensorflow.keras.models.Model` objects found within the given model.
+        A list of all :class:`keras.models.Model` objects found within the given model.
         The provided model will always be returned in the first position
     """
     if models is None:
@@ -80,12 +82,16 @@ class IO():
                  model_dir: str,
                  is_predict: bool,
                  save_optimizer: T.Literal["never", "always", "exit"]) -> None:
+        logger.debug(parse_class_init(locals()))
         self._plugin = plugin
         self._is_predict = is_predict
         self._model_dir = model_dir
         self._save_optimizer = save_optimizer
-        self._history: list[list[float]] = [[], []]  # Loss histories per save iteration
+        self._history: list[float] = []
+        """list[float]: Loss history for current save iteration """
         self._backup = Backup(self._model_dir, self._plugin.name)
+        self._update_legacy()
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def model_dir(self) -> str:
@@ -95,7 +101,7 @@ class IO():
     @property
     def filename(self) -> str:
         """str: The filename for this model."""
-        return os.path.join(self._model_dir, f"{self._plugin.name}.h5")
+        return os.path.join(self._model_dir, f"{self._plugin.name}.keras")
 
     @property
     def model_exists(self) -> bool:
@@ -105,8 +111,8 @@ class IO():
         return os.path.isfile(self.filename)
 
     @property
-    def history(self) -> list[list[float]]:
-        """ list: list of loss histories per side for the current save iteration. """
+    def history(self) -> list[float]:
+        """ list[float]: list of loss history for the current save iteration. """
         return self._history
 
     @property
@@ -114,9 +120,9 @@ class IO():
         """ :list: or ``None`` If there are multiple model types in the requested folder, or model
         types that don't correspond to the requested plugin type, then returns the list of plugin
         names that exist in the folder, otherwise returns ``None`` """
-        plugins = [fname.replace(".h5", "")
+        plugins = [fname.replace(".keras", "")
                    for fname in os.listdir(self._model_dir)
-                   if fname.endswith(".h5")]
+                   if fname.endswith(".keras")]
         test_names = plugins + [self._plugin.name]
         test = False if not test_names else os.path.commonprefix(test_names) == ""
         retval = None if not test else plugins
@@ -124,7 +130,24 @@ class IO():
                      self._plugin.name, plugins, test, retval)
         return retval
 
-    def load(self) -> tf.keras.models.Model:
+    def _update_legacy(self) -> None:
+        """ Look for faceswap 2.x .h5 files in the model folder. If exists, then update to Faceswap
+        3 .keras file and backup the original model .h5 file
+
+        Note: Currently disabled as keras hangs trying to load old faceswap models
+        """
+        if self.model_exists:
+            logger.debug("Existing model file is current: '%s'", os.path.basename(self.filename))
+            return
+
+        old_fname = f"{os.path.splitext(self.filename)[0]}.h5"
+        if not os.path.isfile(old_fname):
+            logger.debug("No legacy model file to update")
+            return
+
+        Legacy(old_fname)
+
+    def load(self) -> kmodels.Model:
         """ Loads the model from disk
 
         If the predict function is to be called and the model cannot be found in the model folder
@@ -135,7 +158,7 @@ class IO():
 
         Returns
         -------
-        :class:`tensorflow.keras.models.Model`
+        :class:`keras.models.Model`
             The saved model loaded from disk
         """
         logger.debug("Loading model: %s", self.filename)
@@ -162,10 +185,137 @@ class IO():
                        "should use the Restore Tool to restore your model from backup.\n"
                        f"Original error: {str(err)}")
                 raise FaceswapError(msg) from err
+            if 'parameter name can\\\'t contain "."' in str(err).lower():
+                PatchKerasConfig(self.filename)()
+                return self.load()
+            raise err
+        except TypeError as err:
+            if any(x in str(err) for x in ("Could not locate class 'Conv2D'",
+                                           "Could not locate class 'DepthwiseConv2D'")):
+                PatchKerasConfig(self.filename)()
+                return self.load()
             raise err
 
         logger.info("Loaded model from disk: '%s'", self.filename)
-        return model
+        return model  # pyright:ignore[reportReturnType]
+
+    def _remove_optimizer(self) -> Optimizer:
+        """ Keras 3 `.keras` format ignores the `save_optimizer` kwarg. To hack around this we
+        remove the optimizer from the model prior to saving and then re-attach it to the model
+
+        Returns
+        -------
+        :class:`keras.optimizers.Optimizer` | None
+            The optimizer for the model, if it should not be saved. ``None`` if it should be saved
+        """
+        retval = self._plugin.model.optimizer
+        del self._plugin.model.optimizer
+        logger.debug("Removed optimizer for saving: %s", retval)
+        return retval
+
+    def _save_model(self, is_exit: bool, force_save_optimizer: bool) -> None:
+        """ Save the model either with or without the optimizer weights
+
+        Keras 3 ignores 'save_optimizer` so if it should not be saved, we remove it from
+        the model for saving, then re-attach it
+
+        Parameters
+        ----------
+        is_exit: bool
+            ``True`` if the save request has come from an exit process request otherwise ``False``.
+        force_save_optimizer: bool
+            ``True`` to force saving the optimizer weights with the model, otherwise ``False``.
+        """
+        include_optimizer = (force_save_optimizer or
+                             self._save_optimizer == "always" or
+                             (self._save_optimizer == "exit" and is_exit))
+
+        optimizer = None
+        if not include_optimizer:
+            optimizer = self._remove_optimizer()
+
+        self._plugin.model.save(self.filename)
+        self._plugin.state.save()
+
+        if not include_optimizer:
+            assert optimizer is not None
+            logger.debug("Re-attaching optimizer: %s", optimizer)
+            setattr(self._plugin.model, "optimizer", optimizer)
+
+    def _get_save_average(self) -> float:
+        """ Return the average loss since the last save iteration and reset historical loss
+
+        Returns
+        -------
+        float
+            The average loss since the last save iteration
+        """
+        logger.debug("Getting save averages")
+        if not self._history:
+            logger.debug("No loss in history")
+            retval = 0.0
+        else:
+            retval = sum(self._history) / len(self._history)
+            self._history = []  # Reset historical loss
+        logger.debug("Average loss since last save: %s", round(retval, 5))
+        return retval
+
+    def _should_backup(self, save_average: float) -> bool:
+        """ Check whether the loss average for this save iteration is the lowest that has been
+        seen.
+
+        This protects against model corruption by only backing up the model if the sum of all loss
+        functions has fallen.
+
+        Notes
+        -----
+        This is by no means a perfect system. If the model corrupts at an iteration close
+        to a save iteration, then the averages may still be pushed lower than a previous
+        save average, resulting in backing up a corrupted model. Changing loss weighting can also
+        arteficially impact this
+
+        Parameters
+        ----------
+        save_average: float
+            The average loss since the last save iteration
+        """
+        if not self._plugin.state.lowest_avg_loss:
+            logger.debug("Set initial save iteration loss average: %s", save_average)
+            self._plugin.state.lowest_avg_loss = save_average
+            return False
+
+        old_average = self._plugin.state.lowest_avg_loss
+        backup = save_average < old_average
+
+        if backup:  # Update lowest loss values to the state file
+            self._plugin.state.lowest_avg_loss = save_average
+            logger.debug("Updated lowest historical save iteration average from: %s to: %s",
+                         old_average, save_average)
+
+        logger.debug("Should backup: %s", backup)
+        return backup
+
+    def _maybe_backup(self) -> tuple[float, bool]:
+        """ Backup the model if total average loss has dropped for the save iteration
+
+        Returns
+        -------
+        float
+            The total loss average since the last save iteration
+        bool
+            ``True`` if the model was backed up
+        """
+        save_average = self._get_save_average()
+        should_backup = self._should_backup(save_average)
+        if not save_average or not should_backup:
+            logger.debug("Not backing up model (save_average: %s, should_backup: %s)",
+                         save_average, should_backup)
+            return save_average, False
+
+        logger.debug("Backing up model")
+        self._backup.backup_model(self.filename)
+        self._backup.backup_model(self._plugin.state.filename)
+        return save_average, True
 
     def save(self,
              is_exit: bool = False,
@@ -180,92 +330,20 @@ class IO():
         force_save_optimizer: bool, optional
             ``True`` to force saving the optimizer weights with the model, otherwise ``False``.
             Default:``False``
-
-        Notes
-        -----
-        The backup function actually backups the model from the previous save iteration rather than
-        the current save iteration. This is not a bug, but protection against long save times, as
-        models can get quite large, so renaming the current model file rather than copying it can
-        save substantial amount of time.
         """
         logger.debug("Backing up and saving models")
-        print("")  # Insert a new line to avoid spamming the same row as loss output
-        save_averages = self._get_save_averages()
-        if save_averages and self._should_backup(save_averages):
-            self._backup.backup_model(self.filename)
-            self._backup.backup_model(self._plugin.state.filename)
+        print("\x1b[2K", end="\r")  # Clear last line
+        logger.info("Saving Model...")
 
-        include_optimizer = (force_save_optimizer or
-                             self._save_optimizer == "always" or
-                             (self._save_optimizer == "exit" and is_exit))
-
-        try:
-            self._plugin.model.save(self.filename, include_optimizer=include_optimizer)
-        except ValueError as err:
-            if include_optimizer and "name already exists" in str(err):
-                logger.warning("Due to a bug in older versions of Tensorflow, optimizer state "
-                               "cannot be saved for this model.")
-                self._plugin.model.save(self.filename, include_optimizer=False)
-            else:
-                raise
-
-        self._plugin.state.save()
+        self._save_model(is_exit, force_save_optimizer)
+        save_average, backed_up = self._maybe_backup()
 
         msg = "[Saved optimizer state for Snapshot]" if force_save_optimizer else "[Saved model]"
-        if save_averages:
-            lossmsg = [f"face_{side}: {avg:.5f}"
-                       for side, avg in zip(("a", "b"), save_averages)]
-            msg += f" - Average loss since last save: {', '.join(lossmsg)}"
+        if save_average:
+            msg += f" - Average total loss since last save: {save_average:.5f}"
+        if backed_up:
+            msg += " [Model backed up]"
         logger.info(msg)
-
-    def _get_save_averages(self) -> list[float]:
-        """ Return the average loss since the last save iteration and reset historical loss """
-        logger.debug("Getting save averages")
-        if not all(loss for loss in self._history):
-            logger.debug("No loss in history")
-            retval = []
-        else:
-            retval = [sum(loss) / len(loss) for loss in self._history]
-            self._history = [[], []]  # Reset historical loss
-        logger.debug("Average losses since last save: %s", retval)
-        return retval
-
-    def _should_backup(self, save_averages: list[float]) -> bool:
-        """ Check whether the loss averages for this save iteration is the lowest that has been
-        seen.
-
-        This protects against model corruption by only backing up the model if both sides have
-        seen a total fall in loss.
-
-        Notes
-        -----
-        This is by no means a perfect system. If the model corrupts at an iteration close
-        to a save iteration, then the averages may still be pushed lower than a previous
-        save average, resulting in backing up a corrupted model.
-
-        Parameters
-        ----------
-        save_averages: list
-            The average loss for each side for this save iteration
-        """
-        backup = True
-        for side, loss in zip(("a", "b"), save_averages):
-            if not self._plugin.state.lowest_avg_loss.get(side, None):
-                logger.debug("Set initial save iteration loss average for '%s': %s", side, loss)
-                self._plugin.state.lowest_avg_loss[side] = loss
-                continue
-            backup = loss < self._plugin.state.lowest_avg_loss[side] if backup else backup
-
-        if backup:  # Update lowest loss values to the state file
-            # pylint:disable=unnecessary-comprehension
-            old_avgs = {key: val for key, val in self._plugin.state.lowest_avg_loss.items()}
-            self._plugin.state.lowest_avg_loss["a"] = save_averages[0]
-            self._plugin.state.lowest_avg_loss["b"] = save_averages[1]
-            logger.debug("Updated lowest historical save iteration averages from: %s to: %s",
-                         old_avgs, self._plugin.state.lowest_avg_loss)
-
-        logger.debug("Should backup: %s", backup)
-        return backup
 
     def snapshot(self) -> None:
         """ Perform a model snapshot.
@@ -295,15 +373,13 @@ class Weights():
         self._do_freeze = plugin._args.freeze_weights
         self._weights_file = self._check_weights_file(plugin._args.load_weights)
 
-        freeze_layers = plugin.config.get("freeze_layers")  # Standardized config for freezing
-        load_layers = plugin.config.get("load_layers")  # Standardized config for loading
-        self._freeze_layers = freeze_layers if freeze_layers else ["encoder"]  # No plugin config
-        self._load_layers = load_layers if load_layers else ["encoder"]  # No plugin config
+        self._freeze_layers = plugin.freeze_layers
+        self._load_layers = plugin.load_layers
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @classmethod
     def _check_weights_file(cls, weights_file: str) -> str | None:
-        """ Validate that we have a valid path to a .h5 file.
+        """ Validate that we have a valid path to a .keras file.
 
         Parameters
         ----------
@@ -322,9 +398,9 @@ class Weights():
         msg = ""
         if not os.path.exists(weights_file):
             msg = f"Load weights selected, but the path '{weights_file}' does not exist."
-        elif not os.path.splitext(weights_file)[-1].lower() == ".h5":
+        elif not os.path.splitext(weights_file)[-1].lower() == ".keras":
             msg = (f"Load weights selected, but the path '{weights_file}' is not a valid Keras "
-                   f"model (.h5) file.")
+                   f"model (.keras) file.")
 
         if msg:
             msg += " Please check and try again."
@@ -372,6 +448,8 @@ class Weights():
 
         weights_models = self._get_weights_model()
         all_models = get_all_sub_models(self._model)
+        loaded_ops = 0
+        skipped_ops = 0
 
         for model_name in self._load_layers:
             sub_model = next((lyr for lyr in all_models if lyr.name == model_name), None)
@@ -404,13 +482,13 @@ class Weights():
                            "different settings than you have set for your current model.",
                            skipped_ops)
 
-    def _get_weights_model(self) -> list[tf.keras.models.Model]:
+    def _get_weights_model(self) -> list[kmodels.Model]:
         """ Obtain a list of all sub-models contained within the weights model.
 
         Returns
         -------
         list
-            List of all models contained within the .h5 file
+            List of all models contained within the .keras file
 
         Raises
         ------
@@ -418,7 +496,9 @@ class Weights():
             In the event of a failure to load the weights, or the weights belonging to a different
             model
         """
-        retval = get_all_sub_models(kmodels.load_model(self._weights_file, compile=False))
+        retval = get_all_sub_models(kmodels.load_model(    # pyright:ignore[reportArgumentType]
+            self._weights_file,
+            compile=False))
         if not retval:
             raise FaceswapError(f"Error loading weights file {self._weights_file}.")
 
@@ -428,14 +508,14 @@ class Weights():
         return retval
 
     def _load_layer_weights(self,
-                            layer: tf.keras.layers.Layer,
-                            sub_weights: tf.keras.layers.Layer,
+                            layer: layers.Layer,
+                            sub_weights: layers.Layer,
                             model_name: str) -> T.Literal[-1, 0, 1]:
         """ Load the weights for a single layer.
 
         Parameters
         ----------
-        layer: :class:`tensorflow.keras.layers.Layer`
+        layer: :class:`keras.layers.Layer`
             The layer to set the weights for
         sub_weights: list
             The list of layers in the weights model to load weights from
@@ -468,3 +548,6 @@ class Weights():
         logger.verbose("Setting weights for '%s'", layer.name)  # type:ignore
         layer.set_weights(layer_weights.get_weights())
         return 1
+
+
+__all__ = get_module_objects(__name__)

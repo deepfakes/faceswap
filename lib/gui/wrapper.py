@@ -14,6 +14,9 @@ from time import time
 
 import psutil
 
+from lib.gui import gui_config as cfg
+from lib.utils import get_module_objects
+
 from .analysis import Session
 from .utils import get_config, get_images, LongRunningTask, preview_trigger
 
@@ -167,7 +170,7 @@ class ProcessWrapper():
                 self._get_training_session_info(cliopt)
 
         if not generate:
-            args.append("-gui")  # Indicate to Faceswap that we are running the GUI
+            args.append("-G")  # Indicate to Faceswap that we are running the GUI
         if generate:
             # Delimit args with spaces
             args = [f'"{arg}"' if " " in arg and not arg.startswith(("[", "("))
@@ -176,7 +179,7 @@ class ProcessWrapper():
         logger.debug("Built cli arguments: (%s)", args)
         return args
 
-    def _get_training_session_info(self, cli_option: list[str]) -> None:
+    def _get_training_session_info(self, cli_option: tuple[str, ...]) -> None:
         """ Set the model folder and model name to :`attr:_training_session_location` so the global
         session picks them up for logging to the graph and analysis tab.
 
@@ -266,6 +269,7 @@ class FaceswapControl():
                      bufsize=1,
                      text=True,
                      stdin=PIPE,
+                     encoding="utf-8",
                      errors="backslashreplace")
         self._process = proc
         self._thread_stdout()
@@ -307,6 +311,9 @@ class FaceswapControl():
             return True
 
         if self._command == "train" and self._capture_loss(output):
+            return True
+
+        if self._command == "train" and output.strip() == "\x1b[2K":  # Clear line command for cli
             return True
 
         if self._command == "effmpeg" and self._capture_ffmpeg(output):
@@ -397,10 +404,6 @@ class FaceswapControl():
                 if self._command != "train" and self._capture_tqdm(output):
                     continue
                 if self._process_training_determinate_function(output):
-                    continue
-                if os.name == "nt" and "Call to CreateProcess failed. Error code: 2" in output:
-                    # Suppress ptxas errors on Tensorflow for Windows
-                    logger.debug("Suppressed call to subprocess error: '%s'", output)
                     continue
                 print(output.strip(), file=sys.stderr)
         logger.debug("Terminated stderr reader")
@@ -597,7 +600,7 @@ class FaceswapControl():
         """
         logger.debug("Terminating wrapper")
         if command == "train":
-            timeout = self._config.user_config_dict.get("timeout", 120)
+            timeout = cfg.timeout()
             logger.debug("Sending Exit Signal")
             print("Sending Exit Signal", flush=True)
             now = time()
@@ -697,3 +700,6 @@ class FaceswapControl():
             status = f"Failed - {self._command}.py. Return Code: {returncode}"
         logger.debug("Set final status: %s", status)
         return status
+
+
+__all__ = get_module_objects(__name__)

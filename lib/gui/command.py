@@ -6,6 +6,8 @@ import gettext
 import tkinter as tk
 from tkinter import ttk
 
+from lib.utils import get_module_objects
+
 from .control_helper import ControlPanel
 from .custom_widgets import Tooltip
 from .utils import get_images, get_config
@@ -198,3 +200,6 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         actionbtns[self.command] = btnact
 
         logger.debug("Added action buttons: '%s'", self.title)
+
+
+__all__ = get_module_objects(__name__)

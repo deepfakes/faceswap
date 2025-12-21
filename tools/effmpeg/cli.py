@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
-import argparse
 import gettext
 
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import ContextFullPaths, FileFullPaths, Radio
-from lib.utils import IMAGE_EXTENSIONS
+from lib.utils import get_module_objects, IMAGE_EXTENSIONS
 
 
 # LOCALES
@@ -201,35 +200,7 @@ class EffmpegArgs(FaceSwapArgs):
             "default": False,
             "help": _("Increases output verbosity. If both quiet and verbose are set, verbose "
                       "will override quiet.")})
-        # Deprecated multi-character switches
-        argument_list.append({
-            "opts": ('-fps', ),
-            "type": str,
-            "dest": "depr_fps_fps_R",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-ef", ),
-            "type": str,
-            "choices": IMAGE_EXTENSIONS,
-            "dest": "depr_extract-filetype_et_E",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ('-tr', ),
-            "choices": ("(0, 90CounterClockwise&VerticalFlip)",
-                        "(1, 90Clockwise)",
-                        "(2, 90CounterClockwise)",
-                        "(3, 90Clockwise&VerticalFlip)"),
-            "type": lambda v: __parse_transpose(v),  # pylint:disable=unnecessary-lambda
-            "dest": "depr_transpose_tr_T",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ('-de', ),
-            "type": str,
-            "dest": "depr_degrees_de_D",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ('-sc', ),
-            "type": str,
-            "dest": "depr_scale_sc_S",
-            "help": argparse.SUPPRESS})
         return argument_list
+
+
+__all__ = get_module_objects(__name__)

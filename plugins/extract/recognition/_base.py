@@ -22,12 +22,12 @@ import typing as T
 from dataclasses import dataclass, field
 
 import numpy as np
-from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module  # noqa
+from torch.cuda import OutOfMemoryError
 
 from lib.align import AlignedFace, DetectedFace, LandmarkType
 from lib.image import read_image_meta
 from lib.utils import FaceswapError
-from plugins.extract import ExtractMedia
+from plugins.extract import ExtractMedia, extract_config as cfg
 from plugins.extract._base import BatchType, ExtractorBatch, Extractor
 
 if T.TYPE_CHECKING:
@@ -84,7 +84,7 @@ class Identity(Extractor):  # pylint:disable=abstract-method
                  instance: int = 0,
                  **kwargs):
         logger.debug("Initializing %s", self.__class__.__name__)
-        super().__init__(git_model_id,
+        super().__init__(git_model_id,  # pylint:disable=duplicate-code
                          model_filename,
                          configfile=configfile,
                          instance=instance,
@@ -93,8 +93,8 @@ class Identity(Extractor):  # pylint:disable=abstract-method
         self.centering: CenteringType = "legacy"  # Override for model specific centering
         self.coverage_ratio = 1.0  # Override for model specific coverage_ratio
 
-        self._plugin_type = "recognition"
-        self._filter = IdentityFilter(self.config["save_filtered"])
+        self._info.plugin_type = "recognition"
+        self._filter = IdentityFilter(cfg.save_filtered())
         logger.debug("Initialized _base %s", self.__class__.__name__)
 
     def _get_detected_from_aligned(self, item: ExtractMedia) -> None:
@@ -111,7 +111,7 @@ class Identity(Extractor):  # pylint:disable=abstract-method
         if meta:
             detected_face.from_png_meta(meta)
         item.add_detected_faces([detected_face])
-        self._faces_per_filename[item.filename] += 1  # Track this added face
+        self._tracker.faces_per_filename[item.filename] += 1  # Track this added face
         logger.debug("Obtained detected face: (filename: %s, detected_face: %s)",
                      item.filename, item.detected_faces)
 
@@ -162,6 +162,7 @@ class Identity(Extractor):  # pylint:disable=abstract-method
         batch, :class:`~plugins.extract._base.ExtractorBatch`
             The batch object for the current batch
         """
+        # pylint:disable=duplicate-code
         exhausted = False
         batch = RecogBatch()
         idx = 0
@@ -198,21 +199,22 @@ class Identity(Extractor):  # pylint:disable=abstract-method
                 if idx == self.batchsize:
                     frame_faces = len(item.detected_faces)
                     if f_idx + 1 != frame_faces:
-                        self._rollover = ExtractMedia(
+                        self._tracker.rollover = ExtractMedia(
                             item.filename,
                             item.image,
                             detected_faces=item.detected_faces[f_idx + 1:],
                             is_aligned=item.is_aligned)
-                        logger.trace("Rolled over %s faces of %s to next batch "  # type:ignore
-                                     "for '%s'", len(self._rollover.detected_faces), frame_faces,
+                        logger.trace("Rolled over %s faces of %s to "  # type:ignore[attr-defined]
+                                     "next batch for '%s'",
+                                     len(self._tracker.rollover.detected_faces), frame_faces,
                                      item.filename)
                     break
         if batch:
-            logger.trace("Returning batch: %s",  # type:ignore
+            logger.trace("Returning batch: %s",  # type:ignore[attr-defined]
                          {k: len(v) if isinstance(v, (list, np.ndarray)) else v
                           for k, v in batch.__dict__.items()})
         else:
-            logger.trace(item)  # type:ignore
+            logger.trace(item)  # type:ignore[attr-defined]
 
         # TODO Move to end of process not beginning
         if exhausted:
@@ -222,12 +224,12 @@ class Identity(Extractor):  # pylint:disable=abstract-method
 
     def _predict(self, batch: BatchType) -> RecogBatch:
         """ Just return the recognition's predict function """
+        # pylint:disable=duplicate-code
         assert isinstance(batch, RecogBatch)
+        # slightly hacky workaround to deal with landmarks based masks:
         try:
-            # slightly hacky workaround to deal with landmarks based masks:
             batch.prediction = self.predict(batch.feed)
-            return batch
-        except tf_errors.ResourceExhaustedError as err:
+        except OutOfMemoryError as err:
             msg = ("You do not have enough GPU memory available to run recognition at the "
                    "selected batch size. You can try a number of things:"
                    "\n1) Close any other application that is using your GPU (web browsers are "
@@ -237,6 +239,8 @@ class Identity(Extractor):  # pylint:disable=abstract-method
                    "CLI: Edit the file faceswap/config/extract.ini)."
                    "\n3) Enable 'Single Process' mode.")
             raise FaceswapError(msg) from err
+
+        return batch
 
     def finalize(self, batch: BatchType) -> Generator[ExtractMedia, None, None]:
         """ Finalize the output from Masker
@@ -267,16 +271,17 @@ class Identity(Extractor):  # pylint:disable=abstract-method
                                       for key, val in batch.__dict__.items()})
 
         for filename, face in zip(batch.filename, batch.detected_faces):
-            self._output_faces.append(face)
-            if len(self._output_faces) != self._faces_per_filename[filename]:
+            self._tracker.output_faces.append(face)
+            if len(self._tracker.output_faces) != self._tracker.faces_per_filename[filename]:
                 continue
 
             output = self._extract_media.pop(filename)
-            self._output_faces = self._filter(self._output_faces, output.sub_folders)
+            self._tracker.output_faces = self._filter(self._tracker.output_faces,
+                                                      output.sub_folders)
 
-            output.add_detected_faces(self._output_faces)
-            self._output_faces = []
-            logger.trace("Yielding: (filename: '%s', image: %s, "  # type:ignore
+            output.add_detected_faces(self._tracker.output_faces)
+            self._tracker.output_faces = []
+            logger.trace("Yielding: (filename: '%s', image: %s, "  # type:ignore[attr-defined]
                          "detected_faces: %s)", output.filename, output.image_shape,
                          len(output.detected_faces))
             yield output

@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-03-28 18:04+0000\n"
-"PO-Revision-Date: 2024-03-28 18:09+0000\n"
+"POT-Creation-Date: 2025-12-15 20:02+0000\n"
+"PO-Revision-Date: 2025-12-16 14:55+0000\n"
 "Last-Translator: \n"
 "Language-Team: tokafondo\n"
 "Language: es\n"
@@ -16,7 +16,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 3.4.2\n"
+"X-Generator: Poedit 3.8\n"
 
 #: lib/cli/args_train.py:30
 msgid ""
@@ -169,8 +169,8 @@ msgstr ""
 "configuración para congelar otras capas."
 
 #: lib/cli/args_train.py:147 lib/cli/args_train.py:160
-#: lib/cli/args_train.py:175 lib/cli/args_train.py:191
-#: lib/cli/args_train.py:200
+#: lib/cli/args_train.py:174 lib/cli/args_train.py:183
+#: lib/cli/args_train.py:190 lib/cli/args_train.py:199
 msgid "training"
 msgstr "entrenamiento"
 
@@ -202,33 +202,20 @@ msgstr ""
 "automáticamente en un número determinado de iteraciones, puede establecer "
 "ese valor aquí."
 
-#: lib/cli/args_train.py:177
+#: lib/cli/args_train.py:176
 msgid ""
-"R|Select the distribution stategy to use.\n"
-"L|default: Use Tensorflow's default distribution strategy.\n"
-"L|central-storage: Centralizes variables on the CPU whilst operations are "
-"performed on 1 or more local GPUs. This can help save some VRAM at the cost "
-"of some speed by not storing variables on the GPU. Note: Mixed-Precision is "
-"not supported on multi-GPU setups.\n"
-"L|mirrored: Supports synchronous distributed training across multiple local "
-"GPUs. A copy of the model and all variables are loaded onto each GPU with "
-"batches distributed to each GPU at each iteration."
+"Learning rate warmup. Linearly increase the learning rate from 0 to the "
+"chosen target rate over the number of iterations given here. 0 to disable."
 msgstr ""
-"562 / 5,000\n"
-"Translation results\n"
-"R|Seleccione la estrategia de distribución a utilizar.\n"
-"L|default: utiliza la estrategia de distribución predeterminada de "
-"Tensorflow.\n"
-"L|central-storage: centraliza las variables en la CPU mientras que las "
-"operaciones se realizan en 1 o más GPU locales. Esto puede ayudar a ahorrar "
-"algo de VRAM a costa de cierta velocidad al no almacenar variables en la "
-"GPU. Nota: Mixed-Precision no es compatible con configuraciones de múltiples "
-"GPU.\n"
-"L|mirrored: Admite el entrenamiento distribuido síncrono en varias GPU "
-"locales. Se carga una copia del modelo y todas las variables en cada GPU con "
-"lotes distribuidos a cada GPU en cada iteración."
+"Calentamiento de la tasa de aprendizaje. Aumenta linealmente la tasa de "
+"aprendizaje desde 0 hasta la tasa objetivo elegida a lo largo del número de "
+"iteraciones indicado aquí. 0 para desactivar."
 
-#: lib/cli/args_train.py:193
+#: lib/cli/args_train.py:184
+msgid "Use distibuted training on multi-gpu setups."
+msgstr "Utilice capacitación distribuida en configuraciones de múltiples GPU."
+
+#: lib/cli/args_train.py:192
 msgid ""
 "Disables TensorBoard logging. NB: Disabling logs means that you will not be "
 "able to use the graph or analysis for this session in the GUI."
@@ -236,7 +223,7 @@ msgstr ""
 "Desactiva el registro de TensorBoard. NB: Desactivar los registros significa "
 "que no podrá utilizar el gráfico o el análisis de esta sesión en la GUI."
 
-#: lib/cli/args_train.py:202
+#: lib/cli/args_train.py:201
 msgid ""
 "Use the Learning Rate Finder to discover the optimal learning rate for "
 "training. For new models, this will calculate the optimal learning rate for "
@@ -251,15 +238,15 @@ msgstr ""
 "el modelo. Configurar esta opción ignorará la tasa de aprendizaje "
 "configurada manualmente (configurable en la configuración del tren)."
 
-#: lib/cli/args_train.py:215 lib/cli/args_train.py:225
+#: lib/cli/args_train.py:214 lib/cli/args_train.py:224
 msgid "Saving"
 msgstr "Guardar"
 
-#: lib/cli/args_train.py:216
+#: lib/cli/args_train.py:215
 msgid "Sets the number of iterations between each model save."
 msgstr "Establece el número de iteraciones entre cada guardado del modelo."
 
-#: lib/cli/args_train.py:227
+#: lib/cli/args_train.py:226
 msgid ""
 "Sets the number of iterations before saving a backup snapshot of the model "
 "in it's current state. Set to 0 for off."
@@ -267,12 +254,12 @@ msgstr ""
 "Establece el número de iteraciones antes de guardar una copia de seguridad "
 "del modelo en su estado actual. Establece 0 para que esté desactivado."
 
-#: lib/cli/args_train.py:234 lib/cli/args_train.py:246
-#: lib/cli/args_train.py:258
+#: lib/cli/args_train.py:233 lib/cli/args_train.py:245
+#: lib/cli/args_train.py:257
 msgid "timelapse"
 msgstr "intervalo"
 
-#: lib/cli/args_train.py:236
+#: lib/cli/args_train.py:235
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -286,7 +273,7 @@ msgstr ""
 "para crear el timelapse. También debe suministrar un parámetro --timelapse-"
 "output y un parámetro --timelapse-input-B."
 
-#: lib/cli/args_train.py:248
+#: lib/cli/args_train.py:247
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -300,7 +287,7 @@ msgstr ""
 "para crear el timelapse. También debe suministrar un parámetro --timelapse-"
 "output y un parámetro --timelapse-input-A."
 
-#: lib/cli/args_train.py:260
+#: lib/cli/args_train.py:259
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. If "
@@ -312,17 +299,17 @@ msgstr ""
 "Si se suministran las carpetas de entrada pero no la carpeta de salida, se "
 "guardará por defecto en la carpeta del modelo/timelapse/"
 
-#: lib/cli/args_train.py:269 lib/cli/args_train.py:276
+#: lib/cli/args_train.py:268 lib/cli/args_train.py:275
 msgid "preview"
 msgstr "previsualización"
 
-#: lib/cli/args_train.py:270
+#: lib/cli/args_train.py:269
 msgid "Show training preview output. in a separate window."
 msgstr ""
 "Mostrar la salida de la vista previa del entrenamiento. en una ventana "
 "separada."
 
-#: lib/cli/args_train.py:278
+#: lib/cli/args_train.py:277
 msgid ""
 "Writes the training result to a file. The image will be stored in the root "
 "of your FaceSwap folder."
@@ -330,12 +317,12 @@ msgstr ""
 "Escribe el resultado del entrenamiento en un archivo. La imagen se "
 "almacenará en la raíz de su carpeta FaceSwap."
 
-#: lib/cli/args_train.py:285 lib/cli/args_train.py:295
-#: lib/cli/args_train.py:305 lib/cli/args_train.py:315
+#: lib/cli/args_train.py:284 lib/cli/args_train.py:294
+#: lib/cli/args_train.py:304 lib/cli/args_train.py:314
 msgid "augmentation"
 msgstr "aumento"
 
-#: lib/cli/args_train.py:287
+#: lib/cli/args_train.py:286
 msgid ""
 "Warps training faces to closely matched Landmarks from the opposite face-set "
 "rather than randomly warping the face. This is the 'dfaker' way of doing "
@@ -345,7 +332,7 @@ msgstr ""
 "conjunto de caras opuestas en lugar de deformar la cara al azar. Esta es la "
 "forma 'dfaker' de hacer la deformación."
 
-#: lib/cli/args_train.py:297
+#: lib/cli/args_train.py:296
 msgid ""
 "To effectively learn, a random set of images are flipped horizontally. "
 "Sometimes it is desirable for this not to occur. Generally this should be "
@@ -356,7 +343,7 @@ msgstr ""
 "general, esto debería dejarse sin efecto, excepto durante el 'entrenamiento "
 "de ajuste'."
 
-#: lib/cli/args_train.py:307
+#: lib/cli/args_train.py:306
 msgid ""
 "Color augmentation helps make the model less susceptible to color "
 "differences between the A and B sets, at an increased training time cost. "
@@ -366,7 +353,7 @@ msgstr ""
 "diferencias de color entre los conjuntos A y B, con un mayor coste de tiempo "
 "de entrenamiento. Activa esta opción para desactivar el aumento de color."
 
-#: lib/cli/args_train.py:317
+#: lib/cli/args_train.py:316
 msgid ""
 "Warping is integral to training the Neural Network. This option should only "
 "be enabled towards the very end of training to try to bring out more detail. "
@@ -378,3 +365,28 @@ msgstr ""
 "de obtener más detalles. Piense en ello como un 'ajuste fino'. Si se activa "
 "esta opción desde el principio, es probable que arruine el modelo y se "
 "obtengan resultados terribles."
+
+#~ msgid ""
+#~ "R|Select the distribution stategy to use.\n"
+#~ "L|default: Use Tensorflow's default distribution strategy.\n"
+#~ "L|central-storage: Centralizes variables on the CPU whilst operations are "
+#~ "performed on 1 or more local GPUs. This can help save some VRAM at the "
+#~ "cost of some speed by not storing variables on the GPU. Note: Mixed-"
+#~ "Precision is not supported on multi-GPU setups.\n"
+#~ "L|mirrored: Supports synchronous distributed training across multiple "
+#~ "local GPUs. A copy of the model and all variables are loaded onto each "
+#~ "GPU with batches distributed to each GPU at each iteration."
+#~ msgstr ""
+#~ "562 / 5,000\n"
+#~ "Translation results\n"
+#~ "R|Seleccione la estrategia de distribución a utilizar.\n"
+#~ "L|default: utiliza la estrategia de distribución predeterminada de "
+#~ "Tensorflow.\n"
+#~ "L|central-storage: centraliza las variables en la CPU mientras que las "
+#~ "operaciones se realizan en 1 o más GPU locales. Esto puede ayudar a "
+#~ "ahorrar algo de VRAM a costa de cierta velocidad al no almacenar "
+#~ "variables en la GPU. Nota: Mixed-Precision no es compatible con "
+#~ "configuraciones de múltiples GPU.\n"
+#~ "L|mirrored: Admite el entrenamiento distribuido síncrono en varias GPU "
+#~ "locales. Se carga una copia del modelo y todas las variables en cada GPU "
+#~ "con lotes distribuidos a cada GPU en cada iteración."

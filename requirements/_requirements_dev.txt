@@ -1,0 +1,11 @@
+# Additional optional development tool requirements
+flake8
+flake8-pyproject
+mypy
+pylint
+pytest
+pytest-mock
+types-setuptools
+types-PyYAML
+types-psutil
+types-tensorflow

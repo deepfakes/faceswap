@@ -12,7 +12,7 @@ import webbrowser
 from lib.git import git
 from lib.multithreading import MultiThread
 from lib.serializer import get_serializer, Serializer
-from lib.utils import FaceswapError
+from lib.utils import FaceswapError, get_module_objects
 import update_deps
 
 from .popup_configure import open_popup
@@ -174,6 +174,7 @@ class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         logger.debug("Building Recent Files menu")
         serializer = get_serializer("json")
         menu_file = os.path.join(self._config.pathcache, ".recent.json")
+        recent_files = []
         if not os.path.isfile(menu_file) or os.path.getsize(menu_file) == 0:
             self._clear_recent_files(serializer, menu_file)
         try:
@@ -184,7 +185,6 @@ class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors
                 logger.warning("There was an error opening the recent files list so it has been "
                                "reset.")
                 self._clear_recent_files(serializer, menu_file)
-                recent_files = []
 
         logger.debug("Loaded recent files: %s", recent_files)
         removed_files = []
@@ -259,7 +259,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         self.root.config(cursor="watch")
         self._clear_console()
         try:
-            from lib.sysinfo import sysinfo  # pylint:disable=import-outside-toplevel
+            from lib.system.sysinfo import sysinfo  # pylint:disable=import-outside-toplevel
             info = sysinfo
         except Exception as err:  # pylint:disable=broad-except
             info = f"Error obtaining system info: {str(err)}"
@@ -568,8 +568,8 @@ class TaskBar(ttk.Frame):  # pylint:disable=too-many-ancestors
             loader, kwargs = self._loader_and_kwargs(btntype)
             cmd = getattr(self._config.project, loader)
             btn = ttk.Button(frame,
-                             image=get_images().icons[btntype],
-                             command=lambda fn=cmd, kw=kwargs: fn(**kw))  # type:ignore
+                             image=get_images().icons[btntype],  # type:ignore[arg-type]
+                             command=lambda fn=cmd, kw=kwargs: fn(**kw))  # type:ignore[misc]
             btn.pack(side=tk.LEFT, anchor=tk.W)
             hlp = self._set_help(btntype)
             Tooltip(btn, text=hlp, wrap_length=200)
@@ -589,8 +589,8 @@ class TaskBar(ttk.Frame):  # pylint:disable=too-many-ancestors
             cmd = getattr(self._config.tasks, loader)
             btn = ttk.Button(
                 frame,
-                image=get_images().icons[btntype],
-                command=lambda fn=cmd, kw=kwargs: fn(**kw))  # type:ignore
+                image=get_images().icons[btntype],  # type:ignore[arg-type]
+                command=lambda fn=cmd, kw=kwargs: fn(**kw))  # type:ignore[misc]
             btn.pack(side=tk.LEFT, anchor=tk.W)
             hlp = self._set_help(btntype)
             Tooltip(btn, text=hlp, wrap_length=200)
@@ -606,8 +606,8 @@ class TaskBar(ttk.Frame):  # pylint:disable=too-many-ancestors
             logger.debug("Adding button: '%s'", btntype)
             btn = ttk.Button(
                 frame,
-                image=get_images().icons[btntype],
-                command=lambda n=name: open_popup(name=n))  # type:ignore
+                image=get_images().icons[btntype],  # type:ignore[arg-type]
+                command=lambda n=name: open_popup(name=n))  # type:ignore[misc]
             btn.pack(side=tk.LEFT, anchor=tk.W)
             hlp = _("Configure {} settings...").format(name.title())
             Tooltip(btn, text=hlp, wrap_length=200)
@@ -623,3 +623,6 @@ class TaskBar(ttk.Frame):  # pylint:disable=too-many-ancestors
         frame.pack(side=tk.BOTTOM, fill=tk.X)
         separator = ttk.Separator(frame, orient="horizontal")
         separator.pack(fill=tk.X, side=tk.LEFT, expand=True)
+
+
+__all__ = get_module_objects(__name__)

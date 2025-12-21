@@ -11,7 +11,10 @@ import imageio
 import imageio_ffmpeg as im_ffm
 import numpy as np
 
+from lib.utils import get_module_objects
+
 from ._base import Output, logger
+from . import ffmpeg_defaults as cfg
 
 if T.TYPE_CHECKING:
     from collections.abc import Generator
@@ -70,22 +73,22 @@ class Writer(Output):
     @property
     def _output_params(self) -> list[str]:
         """ list: The FFMPEG Output parameters """
-        codec = self.config["codec"]
-        tune = self.config["tune"]
+        codec = cfg.codec()
+        tune = cfg.tune()
         # Force all frames to the same size
         output_args = ["-vf", f"scale={self._output_dimensions}"]
 
-        output_args.extend(["-crf", str(self.config["crf"])])
-        output_args.extend(["-preset", self.config["preset"]])
+        output_args.extend(["-crf", str(cfg.crf())])
+        output_args.extend(["-preset", cfg.preset()])
 
         if tune is not None and tune in self._valid_tunes[codec]:
             output_args.extend(["-tune", tune])
 
-        if codec == "libx264" and self.config["profile"] != "auto":
-            output_args.extend(["-profile:v", self.config["profile"]])
+        if codec == "libx264" and cfg.profile() != "auto":
+            output_args.extend(["-profile:v", cfg.profile()])
 
-        if codec == "libx264" and self.config["level"] != "auto":
-            output_args.extend(["-level", self.config["level"]])
+        if codec == "libx264" and cfg.level() != "auto":
+            output_args.extend(["-level", cfg.level()])
 
         logger.debug(output_args)
         return output_args
@@ -96,7 +99,7 @@ class Writer(Output):
         or ``None`` if skip muxing has been selected in configuration options, or if frame ranges
         have been passed in the command line arguments. """
         retval: str | None = "copy"
-        if self.config["skip_mux"]:
+        if cfg.skip_mux():
             logger.info("Skipping audio muxing due to configuration settings.")
             retval = None
         elif self._frame_ranges is not None:
@@ -163,7 +166,7 @@ class Writer(Output):
         """
         filename = os.path.basename(self._source_video)
         filename = os.path.splitext(filename)[0]
-        ext = self.config["container"]
+        ext = cfg.container()
         idx = 0
         while True:
             out_file = f"{filename}_converted{'' if idx == 0 else f'_{idx}'}.{ext}"
@@ -189,13 +192,13 @@ class Writer(Output):
         """
         audio_codec = self._audio_codec
         audio_path = None if audio_codec is None else self._source_video
-        logger.debug("writer config: %s, audio_path: '%s'", self.config, audio_path)
+        logger.debug("writer audio_path: '%s'", audio_path)
 
         retval = im_ffm.write_frames(self._output_filename,
                                      size=(frame_dims[1], frame_dims[0]),
                                      fps=self._video_fps,
                                      quality=None,
-                                     codec=self.config["codec"],
+                                     codec=cfg.codec(),
                                      macro_block_size=8,
                                      ffmpeg_log_level="error",
                                      ffmpeg_timeout=10,
@@ -261,3 +264,6 @@ class Writer(Output):
         """ Close the ffmpeg writer and mux the audio """
         if self._writer is not None:
             self._writer.close()
+
+
+__all__ = get_module_objects(__name__)

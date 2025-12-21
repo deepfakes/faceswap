@@ -23,8 +23,7 @@ from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
-
-from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module # noqa
+from torch.cuda import OutOfMemoryError
 
 from lib.align import DetectedFace
 from lib.utils import FaceswapError
@@ -60,7 +59,7 @@ class DetectorBatch(ExtractorBatch):
     rotation_matrix: list[np.ndarray] = field(default_factory=list)
     scale: list[float] = field(default_factory=list)
     pad: list[tuple[int, int]] = field(default_factory=list)
-    initial_feed: np.ndarray = np.array([])
+    initial_feed: np.ndarray = field(default_factory=lambda: np.array([]))
 
     def __repr__(self):
         """ Prettier repr for debug printing """
@@ -124,7 +123,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
         self.rotation = self._get_rotation_angles(rotation)
         self.min_size = min_size
 
-        self._plugin_type = "detect"
+        self._info.plugin_type = "detect"
 
         logger.debug("Initialized _base %s", self.__class__.__name__)
 
@@ -315,7 +314,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                 logger.trace("angle: %s, filenames: %s, "  # type:ignore[attr-defined]
                              "prediction: %s",
                              angle, batch.filename, pred)
-            except tf_errors.ResourceExhaustedError as err:
+            except OutOfMemoryError as err:
                 msg = ("You do not have enough GPU memory available to run detection at the "
                        "selected batch size. You can try a number of things:"
                        "\n1) Close any other application that is using your GPU (web browsers are "

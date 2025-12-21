@@ -30,6 +30,7 @@ import typing as T
 import cv2
 import numpy as np
 
+from lib.utils import get_module_objects
 from ._base import Aligner, AlignerBatch, BatchType
 
 if T.TYPE_CHECKING:
@@ -314,3 +315,6 @@ class Align(Aligner):
                 landmarks.append(points)
             batch.landmarks = np.array(landmarks)
         logger.trace("Predicted Landmarks: %s", batch.landmarks)  # type:ignore[attr-defined]
+
+
+__all__ = get_module_objects(__name__)

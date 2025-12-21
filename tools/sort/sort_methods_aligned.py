@@ -12,7 +12,7 @@ import numpy as np
 from tqdm import tqdm
 
 from lib.align import AlignedFace, LandmarkType
-from lib.utils import FaceswapError
+from lib.utils import get_module_objects, FaceswapError
 from .sort_methods import SortMethod
 
 if T.TYPE_CHECKING:
@@ -391,3 +391,6 @@ class SortFaceCNN(SortAlignedMetric):
             score = np.sum(np.absolute((ref - face).flatten()))
             scores.append(score)
         return sum(scores) / len(scores)
+
+
+__all__ = get_module_objects(__name__)

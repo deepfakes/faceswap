@@ -6,122 +6,89 @@ The Extract Package handles the various plugins available for extracting face se
 
 .. contents:: Contents
    :local:
+   :depth: 2
 
+align package
+=============
 
-extract\_media module
-=====================
-.. automodule:: plugins.extract.extract_media
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: plugins.extract.align.cv2_dnn
+   :include-all-objects:
 
+|
+.. automodapi:: plugins.extract.align.external
+   :include-all-objects:
 
-pipeline module
-===============
-.. automodule:: plugins.extract.pipeline
-   :members:
-   :undoc-members:
-   :show-inheritance:
+|
+.. automodapi:: plugins.extract.align.fan
+   :include-all-objects:
 
+detect package
+==============
 
-_base module
+.. automodapi:: plugins.extract.detect.cv2_dnn
+   :include-all-objects:
+
+|
+.. automodapi:: plugins.extract.detect.external
+   :include-all-objects:
+
+|
+.. automodapi:: plugins.extract.detect.mtcnn
+   :include-all-objects:
+
+|
+.. automodapi:: plugins.extract.detect.s3fd
+   :include-all-objects:
+
+mask package
 ============
-.. automodule:: plugins.extract._base
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
+.. automodapi:: plugins.extract.mask.bisenet_fp
+   :include-all-objects:
 
-align plugins package
-=====================
-.. contents:: Contents
-   :local:
+|
+.. automodapi:: plugins.extract.mask.components
+   :include-all-objects:
 
-align._base.aligner module
---------------------------
-.. automodule:: plugins.extract.align._base.aligner
-   :members:
-   :undoc-members:
-   :show-inheritance:
+|
+.. automodapi:: plugins.extract.mask.custom
+   :include-all-objects:
 
-align._base.processing module
------------------------------
-.. automodule:: plugins.extract.align._base.processing
-   :members:
-   :undoc-members:
-   :show-inheritance:
+|
+.. automodapi:: plugins.extract.mask.extended
+   :include-all-objects:
 
-align.cv2_dnn module
---------------------
-.. automodule:: plugins.extract.align.cv2_dnn
-   :members:
-   :undoc-members:
-   :show-inheritance:
+|
+.. automodapi:: plugins.extract.mask.unet_dfl
+   :include-all-objects:
 
-align.fan module
-----------------
-.. automodule:: plugins.extract.align.fan
-   :members:
-   :undoc-members:
-   :show-inheritance:
+|
+.. automodapi:: plugins.extract.mask.vgg_clear
+   :include-all-objects:
 
+|
+.. automodapi:: plugins.extract.mask.vgg_obstructed
+   :include-all-objects:
 
-detect plugins package
-======================
-.. contents:: Contents
-   :local:
+recognition package
+===================
 
-detect._base module
--------------------
-.. automodule:: plugins.extract.detect._base
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. automodapi:: plugins.extract.recognition.vgg_face2
+   :include-all-objects:
 
-detect.mtcnn module
--------------------
-.. automodule:: plugins.extract.detect.mtcnn
-   :members:
-   :undoc-members:
-   :show-inheritance:
+extract package
+===============
 
+.. automodapi:: plugins.extract.extract_config
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-mask plugins package
-====================
-.. contents:: Contents
-   :local:
+|
+.. automodapi:: plugins.extract.extract_media
+   :include-all-objects:
+   :no-inheritance-diagram:
 
-mask._base module
------------------
-.. automodule:: plugins.extract.mask._base
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-mask.bisenet_fp module
-----------------------
-.. automodule:: plugins.extract.mask.bisenet_fp
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-recognition plugins package
-===========================
-.. contents:: Contents
-   :local:
-
-recognition._base module
-------------------------
-.. automodule:: plugins.extract.recognition._base
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-recognition.vgg_face2 module
-----------------------------
-.. automodule:: plugins.extract.recognition.vgg_face2
-   :members:
-   :undoc-members:
-   :show-inheritance:
+|
+.. automodapi:: plugins.extract.pipeline
+   :include-all-objects:
+   :no-inheritance-diagram:

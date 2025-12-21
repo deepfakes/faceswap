@@ -19,7 +19,7 @@ from lib.align import DetectedFace
 from lib.cli.args_extract_convert import ConvertArgs
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.convert import Converter
-from lib.utils import FaceswapError, handle_deprecated_cliopts
+from lib.utils import get_module_objects, FaceswapError, handle_deprecated_cliopts
 from lib.queue_manager import queue_manager
 from scripts.fsmedia import Alignments, Images
 from scripts.convert import Predict, ConvertItem
@@ -60,7 +60,7 @@ class Preview(tk.Tk):
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         super().__init__()
         arguments = handle_deprecated_cliopts(arguments)
-        self._config_tools = ConfigTools()
+        self._config_tools = ConfigTools(arguments.configfile)
         self._lock = Lock()
         self._dispatcher = Dispatcher(self)
         self._display = FacesDisplay(self, 256, 64)
@@ -579,7 +579,7 @@ class Patch():
             self._feed_swapped_faces(patch_queue_in, samples)
             with self._app.lock:
                 self._update_converter_arguments()
-                self._converter.reinitialize(config=self._app.config_tools.config)
+                self._converter.reinitialize()
             swapped = self._patch_faces(patch_queue_in, patch_queue_out, samples.sample_size)
             with self._app.lock:
                 self._app.display.destination = swapped
@@ -651,3 +651,6 @@ class Patch():
             idx += 1
         logger.debug("Patched faces")
         return swapped
+
+
+__all__ = get_module_objects(__name__)

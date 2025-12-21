@@ -10,7 +10,7 @@ from multiprocessing import Process
 
 from lib.align import Alignments
 
-from lib.utils import handle_deprecated_cliopts, VIDEO_EXTENSIONS
+from lib.utils import get_module_objects, handle_deprecated_cliopts, VIDEO_EXTENSIONS
 from plugins.extract import ExtractMedia
 
 from .loader import Loader
@@ -175,8 +175,7 @@ class _Mask:
                                            self._input_is_faces,
                                            self._loader,
                                            self._alignments,
-                                           arguments.input,
-                                           arguments.exclude_gpus)
+                                           arguments.input)
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -305,3 +304,6 @@ class _Mask:
 
         self._output.close()
         logger.debug("Completed masker process")
+
+
+__all__ = get_module_objects(__name__)

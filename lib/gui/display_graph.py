@@ -19,6 +19,7 @@ from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
 from matplotlib.backend_bases import NavigationToolbar2
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .custom_widgets import Tooltip
 from .utils import get_config, get_images, LongRunningTask
@@ -188,7 +189,8 @@ class GraphBase(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.debug("yscale: '%s'", scale)
         self._ax1.set_yscale(scale)
 
-    def _lines_sort(self, keys: list[str]) -> list[list[str | int | tuple[float]]]:
+    def _lines_sort(self,
+                    keys: list[str]) -> list[list[str | int | tuple[float, float, float, float]]]:
         """ Sort the data keys into consistent order and set line color map and line width.
 
         Parameters
@@ -199,7 +201,7 @@ class GraphBase(ttk.Frame):  # pylint:disable=too-many-ancestors
         Returns
         -------
         list
-            A list of loss keys with their corresponding line formatting and color information
+            list[list[str | int | tuple[float, float, float, float]]]
         """
         logger.trace("Sorting lines")  # type:ignore[attr-defined]
         raw_lines: list[list[str]] = []
@@ -247,7 +249,7 @@ class GraphBase(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _lines_style(self,
                      lines: list[list[str]],
-                     groupsize: int) -> list[list[str | int | tuple[float]]]:
+                     groupsize: int) -> list[list[str | int | tuple[float, float, float, float]]]:
         """ Obtain the color map and line width for each group.
 
         Parameters
@@ -259,20 +261,22 @@ class GraphBase(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         Returns
         -------
-        list
+        list[list[str | int | tuple[float, float, float, float]]]
             A list of loss keys with their corresponding line formatting and color information
         """
         logger.trace("Setting lines style")  # type:ignore[attr-defined]
         groups = int(len(lines) / groupsize)
         colours = self._lines_create_colors(groupsize, groups)
         widths = list(range(1, groups + 1))
-        retval = T.cast(list[list[str | int | tuple[float]]], lines)
+        retval = T.cast(list[list[str | int | tuple[float, float, float, float]]], lines)
         for idx, item in enumerate(retval):
             linewidth = widths[idx // groupsize]
             item.extend((linewidth, colours[idx]))
         return retval
 
-    def _lines_create_colors(self, groupsize: int, groups: int) -> list[tuple[float]]:
+    def _lines_create_colors(self,
+                             groupsize: int,
+                             groups: int) -> list[tuple[float, float, float, float]]:
         """ Create the color maps.
 
         Parameters
@@ -284,7 +288,7 @@ class GraphBase(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         Returns
         -------
-        list
+        list[tuple[float, float, float, float]
             The colour map for each group
         """
         colours = []
@@ -490,8 +494,8 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint:disable=too-many-ancest
     pack_toolbar: bool, Optional
         Whether to pack the Tool bar or not. Default: ``True``
     """
-    toolitems = [t for t in NavigationToolbar2Tk.toolitems if
-                 t[0] in ("Home", "Pan", "Zoom", "Save")]
+    toolitems = tuple(t for t in NavigationToolbar2Tk.toolitems if
+                      t[0] in ("Home", "Pan", "Zoom", "Save"))
 
     def __init__(self,  # pylint:disable=super-init-not-called
                  canvas: FigureCanvasTkAgg,
@@ -502,7 +506,7 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint:disable=too-many-ancest
         # Avoid using self.window (prefer self.canvas.get_tk_widget().master),
         # so that Tool implementations can reuse the methods.
 
-        ttk.Frame.__init__(self,  # pylint:disable=non-parent-init-called
+        ttk.Frame.__init__(T.cast(ttk.Frame, self),  # pylint:disable=non-parent-init-called
                            master=window,
                            width=int(canvas.figure.bbox.width),
                            height=50)
@@ -515,6 +519,9 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint:disable=too-many-ancest
 
         self._buttons = {}
         for text, tooltip_text, image_file, callback in self.toolitems:
+            assert isinstance(text, str)
+            assert isinstance(image_file, str)
+            assert isinstance(callback, str)
             self._buttons[text] = button = self._Button(
                 btnframe,
                 text,
@@ -535,7 +542,7 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint:disable=too-many-ancest
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @staticmethod
-    def _Button(frame: ttk.Frame,  # pylint:disable=arguments-differ,arguments-renamed
+    def _Button(frame: ttk.Frame,  # type:ignore[override] # pylint:disable=arguments-differ,arguments-renamed  # noqa:E501
                 text: str,
                 image_file: str,
                 toggle: bool,
@@ -571,11 +578,14 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint:disable=too-many-ancest
         if not toggle:
             btn: ttk.Button | ttk.Checkbutton = ttk.Button(frame,
                                                            text=text,
-                                                           image=img,
+                                                           image=img,  # type:ignore[arg-type]
                                                            command=command)
         else:
             var = tk.IntVar(master=frame)
-            btn = ttk.Checkbutton(frame, text=text, image=img, command=command, variable=var)
+            btn = ttk.Checkbutton(frame,
+                                  text=text,
+                                  image=img,  # type:ignore[arg-type]
+                                  command=command, variable=var)
 
             # Original implementation uses tk Checkbuttons which have a select and deselect
             # method. These aren't available in ttk Checkbuttons, so we monkey patch the methods
@@ -585,3 +595,6 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint:disable=too-many-ancest
 
         btn.pack(side=tk.RIGHT, padx=2)
         return btn
+
+
+__all__ = get_module_objects(__name__)

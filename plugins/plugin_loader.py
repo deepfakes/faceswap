@@ -7,6 +7,8 @@ import typing as T
 
 from importlib import import_module
 
+from lib.utils import get_module_objects
+
 if T.TYPE_CHECKING:
     from collections.abc import Callable
     from plugins.extract.detect._base import Detector
@@ -296,3 +298,6 @@ class PluginLoader():
         if add_none:
             converters.insert(0, "none")
         return converters
+
+
+__all__ = get_module_objects(__name__)

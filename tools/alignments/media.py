@@ -17,7 +17,7 @@ from tqdm import tqdm
 from lib.align import Alignments, DetectedFace, update_legacy_png_header
 from lib.image import (count_frames, generate_thumbnail, ImagesLoader,
                        png_write_meta, read_image, read_image_meta_batch)
-from lib.utils import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, FaceswapError
+from lib.utils import get_module_objects, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, FaceswapError
 
 if T.TYPE_CHECKING:
     from collections.abc import Generator
@@ -440,8 +440,7 @@ class Frames(MediaLoader):
             The full framename, the filename and the file extension of the frame
         """
         iterator = self.process_video if self.is_video else self.process_frames
-        for item in iterator():
-            yield item
+        yield from iterator()
 
     def process_frames(self) -> Generator[dict[str, str], None, None]:
         """ Process exported Frames
@@ -641,3 +640,6 @@ class ExtractedFaces():
             sizes.append(length)
         logger.trace("sizes: '%s'", sizes)  # type: ignore
         return sizes
+
+
+__all__ = get_module_objects(__name__)

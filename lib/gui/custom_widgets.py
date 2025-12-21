@@ -11,6 +11,8 @@ from tkinter import ttk, TclError
 
 import numpy as np
 
+from lib.utils import get_module_objects
+
 from .utils import get_config
 
 logger = logging.getLogger(__name__)
@@ -636,7 +638,7 @@ class Tooltip:  # pylint:disable=too-few-public-methods
 
     def _show(self):
         """ Show the tooltip """
-        def tip_pos_calculator(widget, label,
+        def tip_pos_calculator(widget, label,  # pylint:disable=too-many-locals
                                *,
                                tip_delta=(10, 5), pad=(5, 3, 5, 3)):
             """ Calculate the tooltip position """
@@ -1016,3 +1018,6 @@ class ToggledFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             self.sub_frame.pack(fill=tk.X, expand=True)
             self._icon_var.set("-")
             self._toggle_var.set(1)
+
+
+__all__ = get_module_objects(__name__)

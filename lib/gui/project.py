@@ -7,6 +7,9 @@ import tkinter as tk
 from tkinter import messagebox
 
 from lib.serializer import get_serializer
+from lib.gui import gui_config as cfg
+from lib.utils import get_module_objects
+
 
 logger = logging.getLogger(__name__)
 
@@ -886,7 +889,7 @@ class Project(_GuiSession):
         self.set_default_options()
         self._reset_modified_var()
         self._update_root_title()
-        self._config.set_active_tab_by_name(self._config.user_config_dict["tab"])
+        self._config.set_active_tab_by_name(cfg.tab())
 
     def confirm_close(self):
         """ Pop a message box to get confirmation that an unsaved project should be closed
@@ -926,20 +929,15 @@ class LastSession(_GuiSession):
         if not self._enabled:
             return
 
-        if self._save_option == "prompt":
+        if cfg.autosave_last_session() == "prompt":
             self.ask_load()
-        elif self._save_option == "always":
+        elif cfg.autosave_last_session() == "always":
             self.load()
-
-    @property
-    def _save_option(self):
-        """ str: The user config autosave option. """
-        return self._config.user_config_dict.get("autosave_last_session", "never")
 
     @property
     def _enabled(self):
         """ bool: ``True`` if autosave is enabled otherwise ``False``. """
-        return self._save_option != "never"
+        return cfg.autosave_last_session() != "never"
 
     def from_dict(self, options):
         """ Set the :attr:`_options` property based on the given options dictionary
@@ -1030,3 +1028,6 @@ class LastSession(_GuiSession):
         if opts is not None:
             self._serializer.save(self._filename, opts)
             logger.debug("Saved last session. (filename: '%s', opts: %s", self._filename, opts)
+
+
+__all__ = get_module_objects(__name__)

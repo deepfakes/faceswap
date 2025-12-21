@@ -7,26 +7,38 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from lib.gui import (TaskBar, CliOptions, CommandNotebook, ConsoleOut, DisplayNotebook,
-                     get_images, initialize_images, initialize_config, LastSession,
-                     MainMenuBar, preview_trigger, ProcessWrapper, StatusBar)
+                     get_images, gui_config as cfg, initialize_images, initialize_config,
+                     LastSession, MainMenuBar, preview_trigger, ProcessWrapper, StatusBar)
+from lib.utils import get_module_objects
 
 logger = logging.getLogger(__name__)
 
 
 class FaceswapGui(tk.Tk):
-    """ The Graphical User Interface """
+    """ The Graphical User Interface
 
-    def __init__(self, debug):
+    Launch the Faceswap GUI
+
+    Parameters
+    ----------
+    debug : bool
+        Output to the terminal rather than to Faceswap's internal console
+    config_file : str | None
+        Path to a custom .ini configuration file. ``None`` to use the default config file
+    """
+
+    def __init__(self, debug, config_file):
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__()
+        cfg.load_config(config_file)
 
-        self._init_args = dict(debug=debug)
+        self._init_args = {"debug": debug}
         self._config = self.initialize_globals()
         self.set_fonts()
-        self._config.set_geometry(1200, 640, self._config.user_config_dict["fullscreen"])
+        self._config.set_geometry(1200, 640, cfg.fullscreen())
 
         self.wrapper = ProcessWrapper()
-        self.objects = dict()
+        self.objects = {}
 
         get_images().delete_preview()
         preview_trigger().clear(trigger_type=None)
@@ -99,7 +111,7 @@ class FaceswapGui(tk.Tk):
 
     def set_initial_focus(self):
         """ Set the tab focus from settings """
-        tab = self._config.user_config_dict["tab"]
+        tab = cfg.tab()
         logger.debug("Setting focus for tab: %s", tab)
         self._config.set_active_tab_by_name(tab)
         logger.debug("Focus set to: %s", tab)
@@ -107,11 +119,10 @@ class FaceswapGui(tk.Tk):
     def set_layout(self):
         """ Set initial layout """
         self.update_idletasks()
-        config_opts = self._config.user_config_dict
         r_width = self.winfo_width()
         r_height = self.winfo_height()
-        w_ratio = config_opts["options_panel_width"] / 100.0
-        h_ratio = 1 - (config_opts["console_panel_height"] / 100.0)
+        w_ratio = cfg.options_panel_width() / 100.0
+        h_ratio = 1 - (cfg.console_panel_height() / 100.0)
         width = round(r_width * w_ratio)
         height = round(r_height * h_ratio)
         logger.debug("Setting Initial Layout: (root_width: %s, root_height: %s, width_ratio: %s, "
@@ -125,8 +136,7 @@ class FaceswapGui(tk.Tk):
         """ Rebuild the GUI on config change """
         logger.debug("Redrawing GUI")
         session_state = self._last_session.to_dict()
-        self._config.refresh_config()
-        get_images().__init__()
+        get_images().__init__()  # pylint:disable=unnecessary-dunder-call
         self.set_fonts()
         self.build_gui(rebuild=True)
         if session_state is not None:
@@ -176,8 +186,11 @@ class FaceswapGui(tk.Tk):
 class Gui():
     """ The GUI process. """
     def __init__(self, arguments):
-        self.root = FaceswapGui(arguments.debug)
+        self.root = FaceswapGui(arguments.debug, arguments.configfile)
 
     def process(self):
         """ Builds the GUI """
         self.root.mainloop()
+
+
+__all__ = get_module_objects(__name__)

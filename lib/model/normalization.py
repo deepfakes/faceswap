@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
-""" Normalization methods for faceswap.py specific to Tensorflow backend """
+""" Normalization methods for faceswap.py specific to Torch backend """
+from __future__ import annotations
+
 import inspect
+import logging
 import sys
+import typing as T
 
-import tensorflow as tf
+from keras import constraints, initializers, InputSpec, layers, ops, regularizers, saving
 
-# Fix intellisense/linting for tf.keras' thoroughly broken import system
-from tensorflow.python.keras.utils.conv_utils import normalize_data_format  # noqa:E501 # pylint:disable=no-name-in-module
-keras = tf.keras
-layers = keras.layers
-K = keras.backend
+from lib.logger import parse_class_init
+from lib.utils import get_module_objects
+
+if T.TYPE_CHECKING:
+    from keras import KerasTensor
+
+logger = logging.getLogger(__name__)
 
 
-class AdaInstanceNormalization(layers.Layer):  # type:ignore[name-defined]
+class AdaInstanceNormalization(layers.Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Adaptive Instance Normalization Layer for Keras.
 
     Parameters
@@ -40,20 +46,28 @@ class AdaInstanceNormalization(layers.Layer):  # type:ignore[name-defined]
         Arbitrary Style Transfer in Real-time with Adaptive Instance Normalization - \
         https://arxiv.org/abs/1703.06868
     """
-    def __init__(self, axis=-1, momentum=0.99, epsilon=1e-3, center=True, scale=True, **kwargs):
+    def __init__(self,
+                 axis: int = -1,
+                 momentum: float = 0.99,
+                 epsilon: float = 1e-3,
+                 center: bool = True,
+                 scale: bool = True,
+                 **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         super().__init__(**kwargs)
         self.axis = axis
         self.momentum = momentum
         self.epsilon = epsilon
         self.center = center
         self.scale = scale
+        logger.debug("Initialized %s", self.__class__.__name__)
 
-    def build(self, input_shape):
+    def build(self, input_shape: tuple[tuple[int, ...], ...]) -> None:
         """Creates the layer weights.
 
         Parameters
         ----------
-        input_shape: tensor
+        input_shape: tuple[int, ...]
             Keras tensor (future input to layer) or ``list``/``tuple`` of Keras tensors to
             reference for weight shape computations.
         """
@@ -66,20 +80,21 @@ class AdaInstanceNormalization(layers.Layer):  # type:ignore[name-defined]
 
         super().build(input_shape)
 
-    def call(self, inputs, training=None):  # pylint:disable=unused-argument,arguments-differ
+    def call(self, inputs: KerasTensor  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """This is where the layer's logic lives.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             Input tensor, or list/tuple of input tensors
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
-        input_shape = K.int_shape(inputs[0])
+        input_shape = inputs[0].shape
         reduction_axes = list(range(0, len(input_shape)))
 
         beta = inputs[1]
@@ -89,20 +104,20 @@ class AdaInstanceNormalization(layers.Layer):  # type:ignore[name-defined]
             del reduction_axes[self.axis]
 
         del reduction_axes[0]
-        mean = K.mean(inputs[0], reduction_axes, keepdims=True)
-        stddev = K.std(inputs[0], reduction_axes, keepdims=True) + self.epsilon
+        mean = ops.mean(inputs[0], reduction_axes, keepdims=True)
+        stddev = ops.std(inputs[0], reduction_axes, keepdims=True) + self.epsilon
         normed = (inputs[0] - mean) / stddev
 
         return normed * gamma + beta
 
-    def get_config(self):
+    def get_config(self) -> dict[str, T.Any]:
         """Returns the config of the layer.
 
         The Keras configuration for the layer.
 
         Returns
         --------
-        dict
+        dict[str, Any]
             A python dictionary containing the layer configuration
         """
         config = {
@@ -115,7 +130,8 @@ class AdaInstanceNormalization(layers.Layer):  # type:ignore[name-defined]
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> int:
         """ Calculate the output shape from this layer.
 
         Parameters
@@ -131,7 +147,7 @@ class AdaInstanceNormalization(layers.Layer):  # type:ignore[name-defined]
         return input_shape[0]
 
 
-class GroupNormalization(layers.Layer):  # type:ignore[name-defined]
+class GroupNormalization(layers.Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Group Normalization
 
     Parameters
@@ -164,32 +180,42 @@ class GroupNormalization(layers.Layer):  # type:ignore[name-defined]
     Shaoanlu GAN: https://github.com/shaoanlu/faceswap-GAN
     """
     # pylint:disable=too-many-instance-attributes
-    def __init__(self, axis=-1, gamma_init='one', beta_init='zero', gamma_regularizer=None,
-                 beta_regularizer=None, epsilon=1e-6, group=32, data_format=None, **kwargs):
+    def __init__(self,
+                 axis: int = -1,
+                 gamma_init: str = 'one',
+                 beta_init: str = 'zero',
+                 gamma_regularizer: T.Any = None,
+                 beta_regularizer: T.Any = None,
+                 epsilon: float = 1e-6,
+                 group: int = 32,
+                 data_format: str | None = None,
+                 **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         self.beta = None
         self.gamma = None
         super().__init__(**kwargs)
         self.axis = axis if isinstance(axis, (list, tuple)) else [axis]
-        self.gamma_init = keras.initializers.get(gamma_init)
-        self.beta_init = keras.initializers.get(beta_init)
-        self.gamma_regularizer = keras.regularizers.get(gamma_regularizer)
-        self.beta_regularizer = keras.regularizers.get(beta_regularizer)
+        self.gamma_init = initializers.get(gamma_init)
+        self.beta_init = initializers.get(beta_init)
+        self.gamma_regularizer = regularizers.get(gamma_regularizer)
+        self.beta_regularizer = regularizers.get(beta_regularizer)
         self.epsilon = epsilon
         self.group = group
-        self.data_format = normalize_data_format(data_format)
+        self.data_format = "channels_last" if data_format is None else data_format
 
         self.supports_masking = True
+        logger.debug("Initialized %s", self.__class__.__name__)
 
-    def build(self, input_shape):
+    def build(self, input_shape: tuple[int, ...]) -> None:
         """Creates the layer weights.
 
         Parameters
         ----------
-        input_shape: tensor
+        input_shape: tuple[int, ...]
             Keras tensor (future input to layer) or ``list``/``tuple`` of Keras tensors to
             reference for weight shape computations.
         """
-        input_spec = [layers.InputSpec(shape=input_shape)]
+        input_spec = [InputSpec(shape=input_shape)]
         self.input_spec = input_spec  # pylint:disable=attribute-defined-outside-init
         shape = [1 for _ in input_shape]
         if self.data_format == 'channels_last':
@@ -210,105 +236,137 @@ class GroupNormalization(layers.Layer):  # type:ignore[name-defined]
                                     name='beta')
         self.built = True  # pylint:disable=attribute-defined-outside-init
 
-    def call(self, inputs, *args, **kwargs):  # noqa:C901
+    def _process_4_channel(self, inputs: KerasTensor) -> KerasTensor:
+        """ Logic for processing 4 channel inputs
+
+        Parameters
+        ----------
+        inputs: :class:`keras.KerasTensor`
+            The input to the layer
+
+        Returns
+        -------
+        :class:`keras.KerasTensor`
+            A tensor or list/tuple of tensors
+        """
+        input_shape = inputs.shape
+        if self.data_format == 'channels_last':
+            batch_size, height, width, channels = input_shape
+            if batch_size is None:
+                batch_size = -1
+
+            if channels < self.group:
+                raise ValueError('Input channels should be larger than group size' +
+                                 '; Received input channels: ' + str(channels) +
+                                 '; Group size: ' + str(self.group))
+
+            var_x = ops.reshape(inputs, (batch_size,
+                                         height,
+                                         width,
+                                         self.group,
+                                         channels // self.group))
+            mean = ops.mean(var_x, axis=[1, 2, 4], keepdims=True)
+            std = ops.sqrt(ops.var(var_x, axis=[1, 2, 4], keepdims=True) + self.epsilon)
+            var_x = (var_x - mean) / std
+
+            var_x = ops.reshape(var_x, (batch_size, height, width, channels))
+            return self.gamma * var_x + self.beta
+
+        # Channels first
+        batch_size, channels, height, width = input_shape
+        if batch_size is None:
+            batch_size = -1
+
+        if channels < self.group:
+            raise ValueError('Input channels should be larger than group size' +
+                             '; Received input channels: ' + str(channels) +
+                             '; Group size: ' + str(self.group))
+
+        var_x = ops.reshape(inputs, (batch_size,
+                                     self.group,
+                                     channels // self.group,
+                                     height,
+                                     width))
+        mean = ops.mean(var_x, axis=[2, 3, 4], keepdims=True)
+        std = ops.sqrt(ops.var(var_x, axis=[2, 3, 4], keepdims=True) + self.epsilon)
+        var_x = (var_x - mean) / std
+
+        var_x = ops.reshape(var_x, (batch_size, channels, height, width))
+        return self.gamma * var_x + self.beta
+
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> tuple[int, ...]:
+        """ Calculate the output shape from this layer.
+
+        Parameters
+        ----------
+        input_shape: tuple
+            The input shape to the layer
+
+        Returns
+        -------
+        int
+            The output shape to the layer
+        """
+        return input_shape
+
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """This is where the layer's logic lives.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             Input tensor, or list/tuple of input tensors
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
-        input_shape = K.int_shape(inputs)
+        input_shape = inputs.shape
         if len(input_shape) != 4 and len(input_shape) != 2:
             raise ValueError('Inputs should have rank ' +
                              str(4) + " or " + str(2) +
                              '; Received input shape:', str(input_shape))
 
         if len(input_shape) == 4:
-            if self.data_format == 'channels_last':
-                batch_size, height, width, channels = input_shape
-                if batch_size is None:
-                    batch_size = -1
+            return self._process_4_channel(inputs)
 
-                if channels < self.group:
-                    raise ValueError('Input channels should be larger than group size' +
-                                     '; Received input channels: ' + str(channels) +
-                                     '; Group size: ' + str(self.group))
+        reduction_axes = list(range(0, len(input_shape)))
+        del reduction_axes[0]
+        batch_size, _ = input_shape
+        if batch_size is None:
+            batch_size = -1
 
-                var_x = K.reshape(inputs, (batch_size,
-                                           height,
-                                           width,
-                                           self.group,
-                                           channels // self.group))
-                mean = K.mean(var_x, axis=[1, 2, 4], keepdims=True)
-                std = K.sqrt(K.var(var_x, axis=[1, 2, 4], keepdims=True) + self.epsilon)
-                var_x = (var_x - mean) / std
+        mean = ops.mean(inputs, keepdims=True)
+        std = ops.sqrt(ops.var(inputs, keepdims=True) + self.epsilon)
+        var_x = (inputs - mean) / std
 
-                var_x = K.reshape(var_x, (batch_size, height, width, channels))
-                retval = self.gamma * var_x + self.beta
-            elif self.data_format == 'channels_first':
-                batch_size, channels, height, width = input_shape
-                if batch_size is None:
-                    batch_size = -1
+        return self.gamma * var_x + self.beta
 
-                if channels < self.group:
-                    raise ValueError('Input channels should be larger than group size' +
-                                     '; Received input channels: ' + str(channels) +
-                                     '; Group size: ' + str(self.group))
-
-                var_x = K.reshape(inputs, (batch_size,
-                                           self.group,
-                                           channels // self.group,
-                                           height,
-                                           width))
-                mean = K.mean(var_x, axis=[2, 3, 4], keepdims=True)
-                std = K.sqrt(K.var(var_x, axis=[2, 3, 4], keepdims=True) + self.epsilon)
-                var_x = (var_x - mean) / std
-
-                var_x = K.reshape(var_x, (batch_size, channels, height, width))
-                retval = self.gamma * var_x + self.beta
-
-        elif len(input_shape) == 2:
-            reduction_axes = list(range(0, len(input_shape)))
-            del reduction_axes[0]
-            batch_size, _ = input_shape
-            if batch_size is None:
-                batch_size = -1
-
-            mean = K.mean(inputs, keepdims=True)
-            std = K.sqrt(K.var(inputs, keepdims=True) + self.epsilon)
-            var_x = (inputs - mean) / std
-
-            retval = self.gamma * var_x + self.beta
-        return retval
-
-    def get_config(self):
+    def get_config(self) -> dict[str, T.Any]:
         """Returns the config of the layer.
 
         The Keras configuration for the layer.
 
         Returns
         --------
-        dict
+        dict[str, Any]:
             A python dictionary containing the layer configuration
         """
         config = {'epsilon': self.epsilon,
                   'axis': self.axis,
-                  'gamma_init': keras.initializers.serialize(self.gamma_init),
-                  'beta_init': keras.initializers.serialize(self.beta_init),
-                  'gamma_regularizer': keras.regularizers.serialize(self.gamma_regularizer),
-                  'beta_regularizer': keras.regularizers.serialize(self.gamma_regularizer),
+                  'gamma_init': initializers.serialize(self.gamma_init),
+                  'beta_init': initializers.serialize(self.beta_init),
+                  'gamma_regularizer': regularizers.serialize(self.gamma_regularizer),
+                  'beta_regularizer': regularizers.serialize(self.gamma_regularizer),
                   'group': self.group}
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class InstanceNormalization(layers.Layer):  # type:ignore[name-defined]
+class InstanceNormalization(layers.Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """Instance normalization layer (Lei Ba et al, 2016, Ulyanov et al., 2016).
 
     Normalize the activations of the previous layer at each step, i.e. applies a transformation
@@ -351,19 +409,20 @@ class InstanceNormalization(layers.Layer):  # type:ignore[name-defined]
         - Instance Normalization: The Missing Ingredient for Fast Stylization - \
         https://arxiv.org/abs/1607.08022
     """
-    # pylint:disable=too-many-instance-attributes,too-many-arguments
+    # pylint:disable=too-many-instance-attributes,too-many-arguments,too-many-positional-arguments
     def __init__(self,
-                 axis=None,
-                 epsilon=1e-3,
-                 center=True,
-                 scale=True,
-                 beta_initializer="zeros",
-                 gamma_initializer="ones",
-                 beta_regularizer=None,
-                 gamma_regularizer=None,
-                 beta_constraint=None,
-                 gamma_constraint=None,
-                 **kwargs):
+                 axis: int | None = None,
+                 epsilon: float = 1e-3,
+                 center: bool = True,
+                 scale: bool = True,
+                 beta_initializer: str = "zeros",
+                 gamma_initializer: str = "ones",
+                 beta_regularizer: T.Any = None,
+                 gamma_regularizer: T.Any = None,
+                 beta_constraint: T.Any = None,
+                 gamma_constraint: T.Any = None,
+                 **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         self.beta = None
         self.gamma = None
         super().__init__(**kwargs)
@@ -372,19 +431,20 @@ class InstanceNormalization(layers.Layer):  # type:ignore[name-defined]
         self.epsilon = epsilon
         self.center = center
         self.scale = scale
-        self.beta_initializer = keras.initializers.get(beta_initializer)
-        self.gamma_initializer = keras.initializers.get(gamma_initializer)
-        self.beta_regularizer = keras.regularizers.get(beta_regularizer)
-        self.gamma_regularizer = keras.regularizers.get(gamma_regularizer)
-        self.beta_constraint = keras.constraints.get(beta_constraint)
-        self.gamma_constraint = keras.constraints.get(gamma_constraint)
+        self.beta_initializer = initializers.get(beta_initializer)
+        self.gamma_initializer = initializers.get(gamma_initializer)
+        self.beta_regularizer = regularizers.get(beta_regularizer)
+        self.gamma_regularizer = regularizers.get(gamma_regularizer)
+        self.beta_constraint = constraints.get(beta_constraint)
+        self.gamma_constraint = constraints.get(gamma_constraint)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
-    def build(self, input_shape):
+    def build(self, input_shape: tuple[int, ...]) -> None:
         """Creates the layer weights.
 
         Parameters
         ----------
-        input_shape: tensor
+        input_shape: tuple[int, ...]
             Keras tensor (future input to layer) or ``list``/``tuple`` of Keras tensors to
             reference for weight shape computations.
         """
@@ -395,7 +455,7 @@ class InstanceNormalization(layers.Layer):  # type:ignore[name-defined]
         if (self.axis is not None) and (ndim == 2):
             raise ValueError("Cannot specify axis for rank 1 tensor")
 
-        self.input_spec = layers.InputSpec(ndim=ndim)  # noqa:E501  pylint:disable=attribute-defined-outside-init
+        self.input_spec = InputSpec(ndim=ndim)  # pylint:disable=attribute-defined-outside-init
 
         if self.axis is None:
             shape = (1,)
@@ -420,20 +480,37 @@ class InstanceNormalization(layers.Layer):  # type:ignore[name-defined]
             self.beta = None
         self.built = True  # pylint:disable=attribute-defined-outside-init
 
-    def call(self, inputs, training=None):  # pylint:disable=arguments-differ,unused-argument
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> tuple[int, ...]:
+        """ Calculate the output shape from this layer.
+
+        Parameters
+        ----------
+        input_shape: tuple
+            The input shape to the layer
+
+        Returns
+        -------
+        int
+            The output shape to the layer
+        """
+        return input_shape
+
+    def call(self, inputs: KerasTensor  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """This is where the layer's logic lives.
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             Input tensor, or list/tuple of input tensors
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
-        input_shape = K.int_shape(inputs)
+        input_shape = inputs.shape
         reduction_axes = list(range(0, len(input_shape)))
 
         if self.axis is not None:
@@ -441,8 +518,8 @@ class InstanceNormalization(layers.Layer):  # type:ignore[name-defined]
 
         del reduction_axes[0]
 
-        mean = K.mean(inputs, reduction_axes, keepdims=True)
-        stddev = K.std(inputs, reduction_axes, keepdims=True) + self.epsilon
+        mean = ops.mean(inputs, reduction_axes, keepdims=True)
+        stddev = ops.std(inputs, reduction_axes, keepdims=True) + self.epsilon
         normed = (inputs - mean) / stddev
 
         broadcast_shape = [1] * len(input_shape)
@@ -450,14 +527,14 @@ class InstanceNormalization(layers.Layer):  # type:ignore[name-defined]
             broadcast_shape[self.axis] = input_shape[self.axis]
 
         if self.scale:
-            broadcast_gamma = K.reshape(self.gamma, broadcast_shape)
+            broadcast_gamma = ops.reshape(self.gamma, broadcast_shape)
             normed = normed * broadcast_gamma
         if self.center:
-            broadcast_beta = K.reshape(self.beta, broadcast_shape)
+            broadcast_beta = ops.reshape(self.beta, broadcast_shape)
             normed = normed + broadcast_beta
         return normed
 
-    def get_config(self):
+    def get_config(self) -> dict[str, T.Any]:
         """Returns the config of the layer.
 
         A layer config is a Python dictionary (serializable) containing the configuration of a
@@ -469,7 +546,7 @@ class InstanceNormalization(layers.Layer):  # type:ignore[name-defined]
 
         Returns
         --------
-        dict
+        dict[str, Any]
             A python dictionary containing the layer configuration
         """
         config = {
@@ -477,18 +554,18 @@ class InstanceNormalization(layers.Layer):  # type:ignore[name-defined]
             "epsilon": self.epsilon,
             "center": self.center,
             "scale": self.scale,
-            "beta_initializer": keras.initializers.serialize(self.beta_initializer),
-            "gamma_initializer": keras.initializers.serialize(self.gamma_initializer),
-            "beta_regularizer": keras.regularizers.serialize(self.beta_regularizer),
-            "gamma_regularizer": keras.regularizers.serialize(self.gamma_regularizer),
-            "beta_constraint": keras.constraints.serialize(self.beta_constraint),
-            "gamma_constraint": keras.constraints.serialize(self.gamma_constraint)
+            "beta_initializer": initializers.serialize(self.beta_initializer),
+            "gamma_initializer": initializers.serialize(self.gamma_initializer),
+            "beta_regularizer": regularizers.serialize(self.beta_regularizer),
+            "gamma_regularizer": regularizers.serialize(self.gamma_regularizer),
+            "beta_constraint": constraints.serialize(self.beta_constraint),
+            "gamma_constraint": constraints.serialize(self.gamma_constraint)
         }
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class RMSNormalization(layers.Layer):  # type:ignore[name-defined]
+class RMSNormalization(layers.Layer):  # pylint:disable=too-many-ancestors,abstract-method
     """ Root Mean Square Layer Normalization (Biao Zhang, Rico Sennrich, 2019)
 
     RMSNorm is a simplification of the original layer normalization (LayerNorm). LayerNorm is a
@@ -522,9 +599,14 @@ class RMSNormalization(layers.Layer):  # type:ignore[name-defined]
         - RMS Normalization - https://arxiv.org/abs/1910.07467
         - Official implementation - https://github.com/bzhangGo/rmsnorm
     """
-    def __init__(self, axis=-1, epsilon=1e-8, partial=0.0, bias=False, **kwargs):
+    def __init__(self,
+                 axis: int = -1,
+                 epsilon: float = 1e-8,
+                 partial: float = 0.0,
+                 bias: bool = False,
+                 **kwargs) -> None:
+        logger.debug(parse_class_init(locals()))
         self.scale = None
-        self.offset = 0
         super().__init__(**kwargs)
 
         # Checks
@@ -539,13 +621,14 @@ class RMSNormalization(layers.Layer):  # type:ignore[name-defined]
         self.partial = partial
         self.bias = bias
         self.offset = 0.
+        logger.debug("Initialized %s", self.__class__.__name__)
 
-    def build(self, input_shape):
+    def build(self, input_shape: tuple[int, ...]) -> None:
         """ Validate and populate :attr:`axis`
 
         Parameters
         ----------
-        input_shape: tensor
+        input_shape: tuple[int, ...]
             Keras tensor (future input to layer) or ``list``/``tuple`` of Keras tensors to
             reference for weight shape computations.
         """
@@ -574,53 +657,52 @@ class RMSNormalization(layers.Layer):  # type:ignore[name-defined]
 
         self.built = True  # pylint:disable=attribute-defined-outside-init
 
-    def call(self, inputs, *args, **kwargs):
+    def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
+             ) -> KerasTensor:
         """ Call Root Mean Square Layer Normalization
 
         Parameters
         ----------
-        inputs: tensor
+        inputs: :class:`keras.KerasTensor`
             Input tensor, or list/tuple of input tensors
 
         Returns
         -------
-        tensor
+        :class:`keras.KerasTensor`
             A tensor or list/tuple of tensors
         """
         # Compute the axes along which to reduce the mean / variance
-        input_shape = K.int_shape(inputs)
+        input_shape = inputs.shape
         layer_size = input_shape[self.axis]
 
         if self.partial in (0.0, 1.0):
-            mean_square = K.mean(K.square(inputs), axis=self.axis, keepdims=True)
+            mean_square = ops.mean(ops.square(inputs), axis=self.axis, keepdims=True)
         else:
             partial_size = int(layer_size * self.partial)
-            partial_x, _ = tf.split(  # pylint:disable=redundant-keyword-arg,no-value-for-parameter
-                inputs,
-                [partial_size, layer_size - partial_size],
-                axis=self.axis)
-            mean_square = K.mean(K.square(partial_x), axis=self.axis, keepdims=True)
+            partial_x, _ = ops.split(inputs, [partial_size], axis=self.axis)
+            mean_square = ops.mean(ops.square(partial_x), axis=self.axis, keepdims=True)
 
-        recip_square_root = tf.math.rsqrt(mean_square + self.epsilon)
+        recip_square_root = ops.rsqrt(mean_square + self.epsilon)
         output = self.scale * inputs * recip_square_root + self.offset
         return output
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
+                             ) -> tuple[int, ...]:
         """ The output shape of the layer is the same as the input shape.
 
         Parameters
         ----------
-        input_shape: tuple
+        input_shape: tuple[int, ...]
             The input shape to the layer
 
         Returns
         -------
-        tuple
+        tuple[int, ...]
             The output shape to the layer
         """
         return input_shape
 
-    def get_config(self):
+    def get_config(self) -> dict[str, T.Any]:
         """Returns the config of the layer.
 
         A layer config is a Python dictionary (serializable) containing the configuration of a
@@ -632,7 +714,7 @@ class RMSNormalization(layers.Layer):  # type:ignore[name-defined]
 
         Returns
         --------
-        dict
+        dict[str, Any]:
             A python dictionary containing the layer configuration
         """
         base_config = super().get_config()
@@ -646,4 +728,7 @@ class RMSNormalization(layers.Layer):  # type:ignore[name-defined]
 # Update normalization into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
-        keras.utils.get_custom_objects().update({name: obj})
+        saving.get_custom_objects().update({name: obj})
+
+
+__all__ = get_module_objects(__name__)

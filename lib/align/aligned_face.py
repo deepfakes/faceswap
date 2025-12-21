@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 
 from lib.logger import parse_class_init
+from lib.utils import get_module_objects
 
 from .constants import CenteringType, EXTRACT_RATIOS, LandmarkType, _MEAN_FACE
 from .pose import PoseEstimate
@@ -35,7 +36,10 @@ def get_matrix_scaling(matrix: np.ndarray) -> tuple[int, int]:
         for an upscale matrix and (Area, Cubic) for a downscale matrix
     """
     x_scale = np.sqrt(matrix[0, 0] * matrix[0, 0] + matrix[0, 1] * matrix[0, 1])
-    y_scale = (matrix[0, 0] * matrix[1, 1] - matrix[0, 1] * matrix[1, 0]) / x_scale
+    if x_scale == 0:
+        y_scale = 0.
+    else:
+        y_scale = (matrix[0, 0] * matrix[1, 1] - matrix[0, 1] * matrix[1, 0]) / x_scale
     avg_scale = (x_scale + y_scale) * 0.5
     if avg_scale >= 1.:
         interpolators = cv2.INTER_CUBIC, cv2.INTER_AREA
@@ -85,7 +89,8 @@ def transform_image(image: np.ndarray,
 def get_adjusted_center(image_size: int,
                         source_offset: np.ndarray,
                         target_offset: np.ndarray,
-                        source_centering: CenteringType) -> np.ndarray:
+                        source_centering: CenteringType,
+                        y_offset: float) -> np.ndarray:
     """ Obtain the correct center of a face extracted image to translate between two different
     extract centerings.
 
@@ -99,6 +104,8 @@ def get_adjusted_center(image_size: int,
         The pose offset to translate a base extracted face to target centering
     source_centering: ["face", "head", "legacy"]
         The centering of the source image
+    y_offset: float
+        Amount to additionally offset the center of the image along the y-axis
 
     Returns
     -------
@@ -106,13 +113,13 @@ def get_adjusted_center(image_size: int,
         The center point of the image at the given size for the target centering
     """
     source_size = image_size - (image_size * EXTRACT_RATIOS[source_centering])
-    offset = target_offset - source_offset
+    offset = target_offset - source_offset - [0., y_offset]
     offset *= source_size
     center = np.rint(offset + image_size / 2).astype("int32")
     logger.trace(  # type:ignore[attr-defined]
         "image_size: %s, source_offset: %s, target_offset: %s, source_centering: '%s', "
-        "adjusted_offset: %s, center: %s",
-        image_size, source_offset, target_offset, source_centering, offset, center)
+        "y_offset: %s, adjusted_offset: %s, center: %s",
+        image_size, source_offset, target_offset, source_centering, y_offset, offset, center)
     return center
 
 
@@ -154,6 +161,7 @@ def get_centered_size(source_centering: CenteringType,
         ratio
     """
     if source_centering == target_centering and coverage_ratio == 1.0:
+        src_size: float | int = size
         retval = size
     else:
         src_size = size - (size * EXTRACT_RATIOS[source_centering])
@@ -238,7 +246,7 @@ class _FaceCache:  # pylint:disable=too-many-instance-attributes
         return self._locks[name]
 
 
-class AlignedFace():
+class AlignedFace():  # pylint:disable=too-many-instance-attributes
     """ Class to align a face.
 
     Holds the aligned landmarks and face image, as well as associated matrices and information
@@ -263,6 +271,8 @@ class AlignedFace():
         The amount of the aligned image to return. A ratio of 1.0 will return the full contents of
         the aligned image. A ratio of 0.5 will return an image of the given size, but will crop to
         the central 50%% of the image.
+    y_offset: float, optional
+        Amount to adjust the aligned face along the y-axis in the range -1. to 1. Default: 0.0
     dtype: str, optional
         Set a data type for the final face to be returned as. Passing ``None`` will return a face
         with the same data type as the original :attr:`image`. Default: ``None``
@@ -279,6 +289,7 @@ class AlignedFace():
                  centering: CenteringType = "face",
                  size: int = 64,
                  coverage_ratio: float = 1.0,
+                 y_offset: float = 0.0,
                  dtype: str | None = None,
                  is_aligned: bool = False,
                  is_legacy: bool = False) -> None:
@@ -288,6 +299,7 @@ class AlignedFace():
         self._centering = centering
         self._size = size
         self._coverage_ratio = coverage_ratio
+        self._y_offset = y_offset
         self._dtype = dtype
         self._is_aligned = is_aligned
         self._source_centering: CenteringType = "legacy" if is_legacy and is_aligned else "head"
@@ -319,6 +331,11 @@ class AlignedFace():
         """ int: The amount of padding (in pixels) that is applied to each side of the
         extracted face image for the selected extract type. """
         return self._padding[self._centering]
+
+    @property
+    def y_offset(self) -> float:
+        """ float: Additional offset applied to the face along the y-axis in -1. to 1. range """
+        return self._y_offset
 
     @property
     def matrix(self) -> np.ndarray:
@@ -532,8 +549,7 @@ class AlignedFace():
                          "image. Returning empty face.")
             return None
 
-        if self._is_aligned and (self._centering != self._source_centering or
-                                 self._coverage_ratio != 1.0):
+        if self._is_aligned:
             # Crop out the sub face from full head
             image = self._convert_centering(image)
 
@@ -648,7 +664,8 @@ class AlignedFace():
                 center = get_adjusted_center(image_size,
                                              self.pose.offset[self._source_centering],
                                              self.pose.offset[centering],
-                                             self._source_centering)
+                                             self._source_centering,
+                                             self.y_offset)
                 padding = target_size // 2
                 roi = np.array([center - padding, center + padding]).ravel()
                 logger.trace(  # type:ignore[attr-defined]
@@ -753,3 +770,6 @@ def _umeyama(source: np.ndarray, destination: np.ndarray, estimate_scale: bool) 
     retval[:dim, :dim] *= scale
 
     return retval
+
+
+__all__ = get_module_objects(__name__)

@@ -21,12 +21,11 @@ from time import sleep
 
 import cv2
 import numpy as np
-
-from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module # noqa
+from torch.cuda import OutOfMemoryError
 
 from lib.align import LandmarkType
 from lib.utils import FaceswapError
-from plugins.extract import ExtractMedia
+from plugins.extract import ExtractMedia, extract_config as cfg
 from plugins.extract._base import BatchType, ExtractorBatch, Extractor
 from .processing import AlignedFilter, ReAlign
 
@@ -76,10 +75,10 @@ class AlignerBatch(ExtractorBatch):
     """
     batch_id: int = 0
     detected_faces: list[DetectedFace] = field(default_factory=list)
-    landmarks: np.ndarray = np.array([])
+    landmarks: np.ndarray = field(default_factory=lambda: np.array([]))
     refeeds: list[np.ndarray] = field(default_factory=list)
     second_pass: bool = False
-    second_pass_masks: np.ndarray = np.array([])
+    second_pass_masks: np.ndarray = field(default_factory=lambda: np.array([]))
 
     def __repr__(self):
         """ Prettier repr for debug printing """
@@ -132,7 +131,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
     plugins.extract.mask._base : Masker parent class for extraction plugins.
     """
 
-    def __init__(self,
+    def __init__(self,  # pylint:disable=too-many-positional-arguments
                  git_model_id: int | None = None,
                  model_filename: str | None = None,
                  configfile: str | None = None,
@@ -150,7 +149,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                          configfile=configfile,
                          instance=instance,
                          **kwargs)
-        self._plugin_type = "align"
+        self._info.plugin_type = "align"
         self.realign_centering: CenteringType = "face"  # overide for plugin specific centering
 
         # Override for specific landmark type:
@@ -159,19 +158,18 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         self._eof_seen = False
         self._normalize_method: T.Literal["clahe", "hist", "mean"] | None = None
         self._re_feed = re_feed
-        self._filter = AlignedFilter(feature_filter=self.config["aligner_features"],
-                                     min_scale=self.config["aligner_min_scale"],
-                                     max_scale=self.config["aligner_max_scale"],
-                                     distance=self.config["aligner_distance"],
-                                     roll=self.config["aligner_roll"],
-                                     save_output=self.config["save_filtered"],
+        self._filter = AlignedFilter(feature_filter=cfg.aligner_features(),
+                                     min_scale=cfg.aligner_min_scale(),
+                                     max_scale=cfg.aligner_max_scale(),
+                                     distance=cfg.aligner_distance(),
+                                     roll=cfg.aligner_roll(),
+                                     save_output=cfg.save_filtered(),
                                      disable=disable_filter)
         self._re_align = ReAlign(re_align,
-                                 self.config["realign_refeeds"],
-                                 self.config["filter_realign"])
+                                 cfg.realign_refeeds(),
+                                 cfg.filter_realign())
         self._needs_refeed_masks: bool = self._re_feed > 0 and (
-            self.config["filter_refeed"] or (self._re_align.do_refeeds and
-                                             self._re_align.do_filter))
+            cfg.filter_refeed() or (self._re_align.do_refeeds and self._re_align.do_filter))
         self.set_normalize_method(normalize_method)
 
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -301,14 +299,15 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                 if idx == self.batchsize:
                     frame_faces = len(item.detected_faces)
                     if f_idx + 1 != frame_faces:
-                        self._rollover = ExtractMedia(
+                        self._tracker.rollover = ExtractMedia(
                             item.filename,
                             item.image,
                             detected_faces=item.detected_faces[f_idx + 1:],
                             is_aligned=item.is_aligned)
                         logger.trace("Rolled over %s faces of %s to "  # type: ignore[attr-defined]
-                                     "next batch for '%s'", len(self._rollover.detected_faces),
-                                     frame_faces, item.filename)
+                                     "next batch for '%s'",
+                                     len(self._tracker.rollover.detected_faces), frame_faces,
+                                     item.filename)
                     break
         if batch.filename:
             logger.trace("Returning batch: %s", batch)  # type: ignore[attr-defined]
@@ -366,16 +365,17 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         logger.trace("Item out: %s", batch)  # type: ignore[attr-defined]
 
         for frame, filename, face in zip(batch.image, batch.filename, batch.detected_faces):
-            self._output_faces.append(face)
-            if len(self._output_faces) != self._faces_per_filename[filename]:
+            self._tracker.output_faces.append(face)
+            if len(self._tracker.output_faces) != self._tracker.faces_per_filename[filename]:
                 continue
 
-            self._output_faces, folders = self._filter(self._output_faces, min(frame.shape[:2]))
+            self._tracker.output_faces, folders = self._filter(self._tracker.output_faces,
+                                                               min(frame.shape[:2]))
 
             output = self._extract_media.pop(filename)
-            output.add_detected_faces(self._output_faces)
+            output.add_detected_faces(self._tracker.output_faces)
             output.add_sub_folders(folders)
-            self._output_faces = []
+            self._tracker.output_faces = []
 
             logger.trace("Final Output: (filename: '%s', image "  # type: ignore[attr-defined]
                          "shape: %s, detected_faces: %s, item: %s)", output.filename,
@@ -448,7 +448,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
         # Place the original bounding box back to detected face objects
         for face, box in zip(batch.detected_faces, original_boxes):
-            face.left, face.top, face.width, face.height = box
+            face.left, face.top, face.width, face.height = box.tolist()
 
     def _get_realign_masks(self, batch: AlignerBatch) -> np.ndarray:
         """ Obtain the masks required for processing re-aligns
@@ -533,6 +533,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             preds = [self.predict(feed) for feed in batch.refeeds]
             try:
                 batch.prediction = np.array(preds)
+                logger.trace("Aligner out: %s",  # type:ignore[attr-defined]
+                             batch.prediction.shape)
             except ValueError as err:
                 # If refeed batches are different sizes, Numpy will error, so we need to explicitly
                 # set the dtype to 'object' rather than let it infer
@@ -548,8 +550,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                 else:
                     raise
 
-            return batch
-        except tf_errors.ResourceExhaustedError as err:
+        except OutOfMemoryError as err:
             msg = ("You do not have enough GPU memory available to run detection at the "
                    "selected batch size. You can try a number of things:"
                    "\n1) Close any other application that is using your GPU (web browsers are "
@@ -559,6 +560,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                    "CLI: Edit the file faceswap/config/extract.ini)."
                    "\n3) Enable 'Single Process' mode.")
             raise FaceswapError(msg) from err
+
+        return batch
 
     def _process_refeeds(self, batch: AlignerBatch) -> list[AlignerBatch]:
         """ Process the output for each selected re-feed

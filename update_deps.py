@@ -8,6 +8,7 @@ import os
 import sys
 
 from lib.logger import log_setup
+from lib.utils import get_module_objects
 from setup import Environment, Install
 
 logger = logging.getLogger(__name__)
@@ -32,3 +33,6 @@ if __name__ == "__main__":
     logfile = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "faceswap_update.log")
     log_setup("INFO", logfile, "setup")
     main()
+
+
+__all__ = get_module_objects(__name__)

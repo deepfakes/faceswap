@@ -1,0 +1,8 @@
+# Cuda compatibility 3.5-9.0
+# GTX7xx - RTX40xx
+# Maximum supported Python: 3.13
+-r _requirements_base.txt
+# Exclude badly numbered Python2 version of nvidia-ml-py
+nvidia-ml-py>=12.535,<300
+--extra-index-url https://download.pytorch.org/whl/cu118
+torch>=2.7.0,<2.8.0

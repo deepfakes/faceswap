@@ -15,6 +15,7 @@ from tqdm import tqdm
 from lib.align import DetectedFace, EXTRACT_RATIOS, LANDMARK_PARTS, LandmarkType
 from lib.align.alignments import _VERSION, PNGHeaderDict
 from lib.image import encode_image, generate_thumbnail, ImagesSaver
+from lib.utils import get_module_objects
 from plugins.extract import ExtractMedia, Extractor
 from .media import ExtractedFaces, Frames
 
@@ -474,3 +475,6 @@ class Extract():
             # Get the affine matrix from recently generated components mask
             # pylint:disable=protected-access
             mask._affine_matrix = detected_face.mask["components"].affine_matrix
+
+
+__all__ = get_module_objects(__name__)

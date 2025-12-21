@@ -9,8 +9,8 @@ from datetime import datetime
 
 import numpy as np
 
-from lib.serializer import get_serializer, get_serializer_from_filename
-from lib.utils import FaceswapError
+from lib.serializer import get_serializer
+from lib.utils import FaceswapError, get_module_objects
 
 from .thumbnails import Thumbnails
 from .updater import (FileStructure, IdentityAndVideoMeta, LandmarkRename, Legacy, ListToNumpy,
@@ -51,7 +51,7 @@ class PNGHeaderAlignmentsDict(T.TypedDict):
     y: int
     w: int
     h: int
-    landmarks_xy: list[float] | np.ndarray
+    landmarks_xy: list[list[float]] | np.ndarray
     mask: dict[str, MaskAlignmentsFileDict]
     identity: dict[str, list[float]]
 
@@ -83,7 +83,7 @@ class PNGHeaderDict(T.TypedDict):
     source: PNGHeaderSourceDict
 
 
-class Alignments():
+class Alignments():  # pylint:disable=too-many-public-methods
     """ The alignments file is a custom serialized ``.fsa`` file that holds information for each
     frame for a video or series of images.
 
@@ -644,60 +644,8 @@ class _IO():
         logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
-    def _update_file_format(self, folder: str, filename: str) -> str:
-        """ Convert old style serialized alignments to new ``.fsa`` format.
-
-        Parameters
-        ----------
-        folder: str
-            The folder that the legacy alignments exist in
-        filename: str
-            The file name of the legacy alignments
-
-        Returns
-        -------
-        str
-            The full path to the newly created ``.fsa`` alignments file
-        """
-        logger.info("Reformatting legacy alignments file...")
-        old_location = os.path.join(str(folder), filename)
-        new_location = f"{os.path.splitext(old_location)[0]}.{self._serializer.file_extension}"
-        if os.path.exists(old_location):
-            if os.path.exists(new_location):
-                logger.info("Using existing updated alignments file found at '%s'. If you do not "
-                            "wish to use this existing file then you should delete or rename it.",
-                            new_location)
-            else:
-                logger.info("Old location: '%s', New location: '%s'", old_location, new_location)
-                load_serializer = get_serializer_from_filename(old_location)
-                data = load_serializer.load(old_location)
-                self._serializer.save(new_location, data)
-        return os.path.basename(new_location)
-
-    def _test_for_legacy(self, location: str) -> None:
-        """ For alignments filenames passed in without an extension, test for legacy
-        serialization formats and update to current ``.fsa`` format if any are found.
-
-        Parameters
-        ----------
-        location: str
-            The folder location to check for legacy alignments
-        """
-        logger.debug("Checking for legacy alignments file formats: '%s'", location)
-        filename = os.path.splitext(location)[0]
-        for ext in (".json", ".p", ".pickle", ".yaml"):
-            legacy_filename = f"{filename}{ext}"
-            if os.path.exists(legacy_filename):
-                logger.debug("Legacy alignments file exists: '%s'", legacy_filename)
-                _ = self._update_file_format(*os.path.split(legacy_filename))
-                break
-            logger.debug("Legacy alignments file does not exist: '%s'", legacy_filename)
-
     def _get_location(self, folder: str, filename: str) -> str:
         """ Obtains the location of an alignments file.
-
-        If a legacy alignments file is provided/discovered, then the alignments file will be
-        updated to the custom ``.fsa`` format and saved.
 
         Parameters
         ----------
@@ -713,10 +661,6 @@ class _IO():
         """
         logger.debug("Getting location: (folder: '%s', filename: '%s')", folder, filename)
         noext_name, extension = os.path.splitext(filename)
-        if extension in (".json", ".p", ".pickle", ".yaml", ".yml"):
-            # Reformat legacy alignments file
-            filename = self._update_file_format(folder, filename)
-            logger.debug("Updated legacy alignments. New filename: '%s'", filename)
         if extension[1:] == self._serializer.file_extension:
             logger.debug("Valid Alignments filename provided: '%s'", filename)
         else:
@@ -724,11 +668,7 @@ class _IO():
             logger.debug("File extension set from serializer: '%s'",
                          self._serializer.file_extension)
         location = os.path.join(str(folder), filename)
-        if not os.path.exists(location):
-            # Test for old format alignments files and reformat if they exist. This will be
-            # executed if an alignments file has not been explicitly provided therefore it will not
-            # have been picked up in the extension test
-            self._test_for_legacy(location)
+
         logger.verbose("Alignments filepath: '%s'", location)  # type:ignore[attr-defined]
         return location
 
@@ -808,3 +748,6 @@ class _IO():
         logger.info("Backing up original alignments to '%s'", dst)
         os.rename(src, dst)
         logger.debug("Backed up alignments")
+
+
+__all__ = get_module_objects(__name__)

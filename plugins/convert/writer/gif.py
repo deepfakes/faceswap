@@ -7,7 +7,10 @@ import typing as T
 import cv2
 import imageio
 
+from lib.utils import get_module_objects
+
 from ._base import Output, logger
+from . import gif_defaults as cfg
 
 if T.TYPE_CHECKING:
     from imageio.core import format as im_format  # noqa:F401
@@ -46,7 +49,10 @@ class Writer(Output):
     @property
     def _gif_params(self) -> dict:
         """ dict: The selected gif plugin configuration options. """
-        kwargs = {key: int(val) for key, val in self.config.items()}
+        kwargs = {"fps": cfg.fps(),
+                  "loop": cfg.loop(),
+                  "palettesize": cfg.palettesize(),
+                  "subrectangles": cfg.subrectangles()}
         logger.debug(kwargs)
         return kwargs
 
@@ -58,7 +64,6 @@ class Writer(Output):
         :class:`imageio.plugins.pillowmulti.GIFFormat.Writer`
             The imageio GIF writer
         """
-        logger.debug("writer config: %s", self.config)
         assert self._gif_file is not None
         return imageio.get_writer(self._gif_file,
                                   mode="i",
@@ -124,6 +129,7 @@ class Writer(Output):
         """ Set the attribute :attr:`_output_dimensions` based on the first frame received. This
         protects against different sized images coming in and ensure all images get written to the
         Gif at the sema dimensions. """
+        # pylint:disable=duplicate-code
         logger.debug("input dimensions: %s", frame_dims)
         self._output_dimensions = (frame_dims[1], frame_dims[0])
         logger.debug("Set dimensions: %s", self._output_dimensions)
@@ -131,6 +137,7 @@ class Writer(Output):
     def _save_from_cache(self) -> None:
         """ Writes any consecutive frames to the GIF container that are ready to be output
         from the cache. """
+        # pylint:disable=duplicate-code
         assert self._writer is not None
         while self._frame_order:
             if self._frame_order[0] not in self.cache:
@@ -146,3 +153,6 @@ class Writer(Output):
         """ Close the GIF writer on completion. """
         if self._writer is not None:
             self._writer.close()
+
+
+__all__ = get_module_objects(__name__)

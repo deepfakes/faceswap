@@ -17,15 +17,15 @@ from lib.image import read_image_meta
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread, FSThread
 from lib.training import Preview, PreviewBuffer, TriggerType
-from lib.utils import (get_folder, get_image_paths, handle_deprecated_cliopts,
+from lib.utils import (get_folder, get_image_paths, get_module_objects, handle_deprecated_cliopts,
                        FaceswapError, IMAGE_EXTENSIONS)
 from plugins.plugin_loader import PluginLoader
+from plugins.train.training import Trainer
 
 if T.TYPE_CHECKING:
     import argparse
     from collections.abc import Callable
     from plugins.train.model._base import ModelBase
-    from plugins.train.trainer._base import TrainerBase
 
 
 logger = logging.getLogger(__name__)
@@ -247,6 +247,7 @@ class Train():
 
     def _training(self) -> None:
         """ The training process to be run inside a thread. """
+        trainer = None
         try:
             sleep(0.5)  # Let preview instructions flush out to logger
             logger.debug("Commencing Training")
@@ -254,14 +255,15 @@ class Train():
             model = self._load_model()
             trainer = self._load_trainer(model)
             if trainer.exit_early:
+                logger.debug("Trainer exits early")
                 self._stop = True
                 return
-            self._run_training_cycle(model, trainer)
+            self._run_training_cycle(trainer)
         except KeyboardInterrupt:
             try:
                 logger.debug("Keyboard Interrupt Caught. Saving Weights and exiting")
-                model.io.save(is_exit=True)
-                trainer.clear_tensorboard()
+                if trainer is not None:
+                    trainer.save(is_exit=True)
             except KeyboardInterrupt:
                 logger.info("Saving model weights has been cancelled!")
             sys.exit(0)
@@ -286,7 +288,7 @@ class Train():
         logger.debug("Loaded Model")
         return model
 
-    def _load_trainer(self, model: ModelBase) -> TrainerBase:
+    def _load_trainer(self, model: ModelBase) -> Trainer:
         """ Load the trainer requested for training.
 
         Parameters
@@ -296,19 +298,25 @@ class Train():
 
         Returns
         -------
-        :file:`plugins.train.trainer` plugin
-            The requested model trainer plugin
+        :class:`plugins.train.trainer.run_train.Trainer`
+            The model training loop with the requested trainer plugin loaded
         """
         logger.debug("Loading Trainer")
-        base = PluginLoader.get_trainer(model.trainer)
-        trainer: TrainerBase = base(model,
-                                    self._images,
-                                    self._args.batch_size,
-                                    self._args.configfile)
-        logger.debug("Loaded Trainer")
-        return trainer
+        trainer = "distributed" if self._args.distributed else "original"
+        if trainer == "distributed":
+            import torch  # pylint:disable=import-outside-toplevel
+            gpu_count = torch.cuda.device_count()
+            if gpu_count < 2:
+                logger.warning("Distributed selected but fewer than 2 GPUs detected. Switching "
+                               "to Original")
+                trainer = "original"
 
-    def _run_training_cycle(self, model: ModelBase, trainer: TrainerBase) -> None:
+        retval = Trainer(PluginLoader.get_trainer(trainer)(model, self._args.batch_size),
+                         self._images)
+        logger.debug("Loaded Trainer")
+        return retval
+
+    def _run_training_cycle(self, trainer: Trainer) -> None:
         """ Perform the training cycle.
 
         Handles the background training, updating previews/time-lapse on each save interval,
@@ -316,8 +324,6 @@ class Train():
 
         Parameters
         ----------
-        model: :file:`plugins.train.model` plugin
-            The requested model plugin
         trainer: :file:`plugins.train.trainer` plugin
             The requested model trainer plugin
         """
@@ -348,7 +354,7 @@ class Train():
 
             if viewer is not None and not save_iteration:
                 # Spammy but required by GUI to know to update window
-                print("")
+                print("\x1b[2K", end="\r")  # Clear last line
                 logger.info("[Preview Updated]")
 
             if self._stop:
@@ -358,13 +364,12 @@ class Train():
             if save_iteration or self._save_now:
                 logger.debug("Saving (save_iterations: %s, save_now: %s) Iteration: "
                              "(iteration: %s)", save_iteration, self._save_now, iteration)
-                model.io.save(is_exit=False)
+                trainer.save(is_exit=False)
                 self._save_now = False
                 update_preview_images = True
 
         logger.debug("Training cycle complete")
-        model.io.save(is_exit=True)
-        trainer.clear_tensorboard()
+        trainer.save(is_exit=True)
         self._stop = True
 
     def _output_startup_info(self) -> None:
@@ -425,7 +430,7 @@ class Train():
                 logger.debug("Removing gui trigger file: %s", filename)
                 os.remove(filename)
                 if trigger == "refresh":
-                    print("")  # Let log print on different line from loss output
+                    print("\x1b[2K", end="\r")  # Clear last line
                     logger.info("Refresh preview requested...")
         return retval
 
@@ -434,7 +439,7 @@ class Train():
 
         Parameters
         ----------
-        thread: :class:~`lib.multithreading.MultiThread`
+        thread: :class:`~lib.multithreading.MultiThread`
             The thread containing the training loop
 
         Returns
@@ -469,6 +474,7 @@ class Train():
             except KeyboardInterrupt:
                 logger.debug("Keyboard Interrupt received")
                 break
+        logger.debug("Closing Monitor")
         self._preview.shutdown()
         keypress.set_normal_term()
         logger.debug("Closed Monitor")
@@ -614,3 +620,6 @@ class PreviewInterface():
             return
         logger.debug("Sending shutdown to preview viewer")
         self._triggers["shutdown"].set()
+
+
+__all__ = get_module_objects(__name__)

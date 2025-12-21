@@ -1,44 +1,22 @@
-***************
-preview package
-***************
+*********************
+tools.preview package
+*********************
 
 .. contents:: Contents
    :local:
+   :depth: 2
 
+.. automodapi:: tools.preview.cli
+   :include-all-objects:
 
-preview module
-==============
-The Preview Module is the main entry point into the Preview Tool.
+|
+.. automodapi:: tools.preview.control_panels
+   :include-all-objects:
 
-.. automodule:: tools.preview.preview
-   :members:
-   :undoc-members:
-   :show-inheritance:
+|
+.. automodapi:: tools.preview.preview
+   :include-all-objects:
 
-
-cli module
-==========
-
-.. automodule:: tools.preview.cli
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-control_panels module
-=====================
-
-.. automodule:: tools.preview.control_panels
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-viewer module
-=============
-
-.. automodule:: tools.preview.viewer
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
+|
+.. automodapi:: tools.preview.viewer
+   :include-all-objects:

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """ The Command Line Arguments for the Manual Editor tool. """
-import argparse
 import gettext
 
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import DirOrFileFullPaths, FileFullPaths
+from lib.utils import get_module_objects
 
 # LOCALES
 _LANG = gettext.translation("tools.manual", localedir="locales", fallback=True)
@@ -65,15 +65,7 @@ class ManualArgs(FaceSwapArgs):
                 "video in parallel threads. For some videos, this causes the caching process to "
                 "hang. If this happens, then set this option to generate the thumbnails in a "
                 "slower, but more stable single thread.")})
-        # Deprecated multi-character switches
-        argument_list.append({
-            "opts": ("-al", ),
-            "type": str,
-            "dest": "depr_alignments_al_a",
-            "help": argparse.SUPPRESS})
-        argument_list.append({
-            "opts": ("-fr", ),
-            "type": str,
-            "dest": "depr_frames_fr_f",
-            "help": argparse.SUPPRESS})
         return argument_list
+
+
+__all__ = get_module_objects(__name__)

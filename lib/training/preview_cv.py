@@ -13,6 +13,8 @@ from time import sleep
 
 import cv2
 
+from lib.utils import get_module_objects
+
 if T.TYPE_CHECKING:
     from collections.abc import Generator
     import numpy as np
@@ -106,6 +108,9 @@ class PreviewBase():  # pylint:disable=too-few-public-methods
         :func:`_display_preview` function """
         logger.debug("Launching %s", self.__class__.__name__)
         while True:
+            if self._should_shutdown:
+                logger.debug("Shutdown received")
+                return
             if not self._buffer.is_updated:
                 logger.debug("Waiting for preview image")
                 sleep(1)
@@ -165,7 +170,7 @@ class PreviewCV(PreviewBase):  # pylint:disable=too-few-public-methods
             return
 
         if key == ord("r"):
-            print("")  # Let log print on different line from loss output
+            print("\x1b[2K", end="\r")  # clear last line
             logger.info("Refresh preview requested...")
 
         self._triggers[self._lookup[key]].set()
@@ -187,3 +192,6 @@ class PreviewCV(PreviewBase):  # pylint:disable=too-few-public-methods
                 logger.debug("Shutdown received")
                 break
         logger.debug("%s shutdown", self.__class__.__name__)
+
+
+__all__ = get_module_objects(__name__)

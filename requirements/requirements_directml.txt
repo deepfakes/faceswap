@@ -1,4 +1,0 @@
--r _requirements_base.txt
-tensorflow-cpu>=2.10.0,<2.11.0
-tensorflow-directml-plugin
-comtypes
