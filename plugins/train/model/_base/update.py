@@ -157,7 +157,12 @@ class Legacy:  # pylint:disable=too-few-public-methods
         if operation not in ("multiply", "truediv", "add", "subtract"):
             raise FaceswapError(f"The TFLambdaOp '{name}' is not supported")
         value = layer["inbound_nodes"][0][-1]["y"]
-        new_layer = ScalarOp(operation, value, name=name, dtype=layer["config"]["dtype"])
+
+        if isinstance(layer["config"]["dtype"], str):
+            dtype = layer["config"]["dtype"]
+        else:
+            dtype = layer["config"]["dtype"]["config"]["name"]
+        new_layer = ScalarOp(operation, value, name=name, dtype=dtype)
 
         logger.debug("Converting legacy TFLambdaOp: %s", layer)
 
@@ -201,6 +206,24 @@ class Legacy:  # pylint:disable=too-few-public-methods
             # groups parameter doesn't exist in Keras 3. Hopefully it still works the same
             logger.debug("Removing groups from DepthwiseConv2D '%s'", layer["name"])
             del layer["config"]["groups"]
+
+        if "dtype" in layer["config"]:
+            # Incorrectly stored dtypes error when deserializing the new config. May be a Keras bug
+            actual_dtype = None
+            old_dtype = layer["config"]["dtype"]
+            if isinstance(old_dtype, str):
+                actual_dtype = layer["config"]["dtype"]
+            if isinstance(old_dtype, dict) and old_dtype.get("class_name") == "Policy":
+                actual_dtype = old_dtype["config"]["name"]
+
+            if actual_dtype is not None:
+                new_dtype = {"module": "keras",
+                             "class_name": "DTypePolicy",
+                             "config": {"name": actual_dtype},
+                             "registered_name": None}
+                logger.debug("Updating dtype for '%s' from %s to %s", layer["name"],
+                             old_dtype, new_dtype)
+                layer["config"]["dtype"] = new_dtype
 
     def _process_inbounds(self,
                           layer_name: str,
