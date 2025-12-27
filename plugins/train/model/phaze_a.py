@@ -426,6 +426,8 @@ class Model(ModelBase):
             inter_a.append(fc_gblock(inputs["a"]))
             inter_b.append(fc_gblock(inputs["b"]))
 
+        inter_a = inter_a[0] if len(inter_a) == 1 else inter_a
+        inter_b = inter_b[0] if len(inter_b) == 1 else inter_b
         retval = {"a": inter_a, "b": inter_b}
         logger.debug("Fully Connected: %s", retval)
         return retval

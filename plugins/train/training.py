@@ -6,6 +6,7 @@ import logging
 import os
 import typing as T
 import time
+import warnings
 
 import numpy as np
 import torch
@@ -25,6 +26,12 @@ if T.TYPE_CHECKING:
     from plugins.train.trainer._base import TrainerBase
 
 logger = logging.getLogger(__name__)
+
+
+# Suppress non-Faceswap related Keras warning about backend padding mismatches
+warnings.filterwarnings("ignore",
+                        message="You might experience inconsistencies",
+                        category=UserWarning)
 
 
 class Trainer:

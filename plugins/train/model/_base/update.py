@@ -202,9 +202,10 @@ class Legacy:  # pylint:disable=too-few-public-methods
             # TFLambdaOp are not supported
             self._convert_lambda_config(layer)
 
-        if layer["class_name"] == "DepthwiseConv2D" and "groups" in layer["config"]:
+        if layer["class_name"] in ("DepthwiseConv2D",
+                                   "Conv2DTranspose") and "groups" in layer["config"]:
             # groups parameter doesn't exist in Keras 3. Hopefully it still works the same
-            logger.debug("Removing groups from DepthwiseConv2D '%s'", layer["name"])
+            logger.debug("Removing groups from %s '%s'", layer["class_name"], layer["name"])
             del layer["config"]["groups"]
 
         if "dtype" in layer["config"]:
