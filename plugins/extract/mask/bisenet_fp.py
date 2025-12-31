@@ -49,7 +49,7 @@ class Mask(Masker):  # pylint:disable=too-many-instance-attributes
         self.batchsize = cfg.batch_size()
 
         self._segment_indices = self._get_segment_indices()
-        self.storage_centering = "head" if cfg.include_hair() else "face"
+        self._storage_centering = "head" if cfg.include_hair() else "face"
         """ Literal["head", "face"] The mask type/storage centering to use """
         # Separate storage for face and head masks
         self._storage_name = f"{self._storage_name}_{self._storage_centering}"

@@ -272,8 +272,9 @@ class Inference():
             built = self._build_layers(layers, history, built)
 
         assert len(self._input) == 1
-        assert len(built) == 1
-        retval = keras.Model(inputs=self._input[0], outputs=built[0], name=self._name)
+        assert len(built) in (1, 2)
+        out = built[0] if len(built) == 1 else built
+        retval = keras.Model(inputs=self._input[0], outputs=out, name=self._name)
         logger.debug("Compiled inference model '%s': %s", retval.name, retval)
 
         return retval
