@@ -106,6 +106,11 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         self._storage_size = 128  # Size to store masks at. Leave this at default
         logger.debug("Initialized %s", self.__class__.__name__)
 
+    @property
+    def storage_centering(self) -> CenteringType:
+        """ Literal["face", "head", "legacy"] : The centering that the mask is stored at """
+        return self._storage_centering
+
     def _maybe_log_warning(self, face: AlignedFace) -> None:
         """ Log a warning, once, if we do not have full facial landmarks
 
