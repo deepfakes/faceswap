@@ -239,7 +239,7 @@ def get_sysinfo() -> str:
     try:
         retval = _SysInfo().full_info()
     except Exception as err:  # pylint:disable=broad-except
-        retval = f"Exception occured trying to retrieve sysinfo: {str(err)}"
+        retval = f"Exception occurred trying to retrieve sysinfo: {str(err)}"
         raise
     return retval
 
