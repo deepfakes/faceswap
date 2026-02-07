@@ -92,7 +92,7 @@ class AppleSiliconStats(_GPUStats):
             self._log("debug",
                       f"Torch initialization test: (mem_info: {meminfo})")
         except RuntimeError as err:
-            msg = ("An unhandled exception occured initializing the device via Torch "
+            msg = ("An unhandled exception occurred initializing the device via Torch "
                    f"Library. Original error: {str(err)}")
             raise FaceswapError(msg) from err
 

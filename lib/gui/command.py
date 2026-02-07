@@ -146,10 +146,10 @@ class CommandTab(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def add_frame_separator(self):
         """ Add a separator between top and bottom frames """
-        logger.debug("Add frame seperator")
+        logger.debug("Add frame separator")
         sep = ttk.Frame(self, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=(5, 0), side=tk.TOP)
-        logger.debug("Added frame seperator")
+        logger.debug("Added frame separator")
 
 
 class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
