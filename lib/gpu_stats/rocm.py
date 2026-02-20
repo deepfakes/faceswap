@@ -462,7 +462,11 @@ class ROCm(_GPUStats):
                 retval.append(0)
                 continue
             if self._is_wsl:
-                used = torch.cuda.device_memory_used(device)
+                # Because WSL is such a pile of crap and ROCm is also not great, we cannot actually
+                # get real VRAM usage as torch queries amd-smi which is not compatible, so we have
+                # to query the allocator, which is probably going to always be zero, but better
+                # than crashing
+                used = torch.cuda.memory_reserved(device)
             else:
                 query = self._from_sysfs_file(os.path.join(device, "mem_info_vram_used"))
                 try:
