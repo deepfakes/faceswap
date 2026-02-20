@@ -385,7 +385,10 @@ class BoundingBox(Editor):
         coords = self.scale_from_display(
             np.array(coords).reshape((2, 2))).flatten().astype("int32")
         logger.trace("out: %s", coords)
-        return (coords[0], coords[2] - coords[0], coords[1], coords[3] - coords[1])
+        return (int(coords[0]),
+                int(coords[2] - coords[0]),
+                int(coords[1]),
+                int(coords[3] - coords[1]))
 
     def _context_menu(self, event):
         """ Create a right click context menu to delete the alignment that is being
