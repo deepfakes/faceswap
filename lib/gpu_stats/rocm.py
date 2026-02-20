@@ -10,6 +10,9 @@ It is a good starting point but may need to be refined over time
 import os
 import re
 from subprocess import run
+from shutil import which
+
+import torch
 
 from lib.utils import get_module_objects
 from ._base import _GPUStats, _EXCLUDE_DEVICES
@@ -222,6 +225,7 @@ class ROCm(_GPUStats):
     def __init__(self, log: bool = True) -> None:
         self._vendor_id = "0x1002"  # AMD VendorID
         self._sysfs_paths: list[str] = []
+        self._is_wsl = which("wslinfo") is not None
         super().__init__(log=log)
 
     def _from_sysfs_file(self, path: str) -> str:
@@ -291,8 +295,11 @@ class ROCm(_GPUStats):
         """
         if self._is_initialized:
             return
-        self._log("debug", "Initializing sysfs for AMDGPU (ROCm).")
-        self._sysfs_paths = self._get_sysfs_paths()
+        if self._is_wsl:
+            self._log("debug", "Running WSL. Obtaining limited info from Torch for AMDGPU (ROCm).")
+        else:
+            self._log("debug", "Initializing sysfs for AMDGPU (ROCm).")
+            self._sysfs_paths = self._get_sysfs_paths()
         super()._initialize()
 
     def _get_device_count(self) -> int:
@@ -303,7 +310,10 @@ class ROCm(_GPUStats):
         int
             The total number of GPUs available
         """
-        retval = len(self._sysfs_paths)
+        if self._is_wsl:
+            retval = torch.cuda.device_count()
+        else:
+            retval = len(self._sysfs_paths)
         self._log("debug", f"GPU Device count: {retval}")
         return retval
 
@@ -316,7 +326,10 @@ class ROCm(_GPUStats):
         list
             The list of all discovered GPUs
         """
-        handles = self._sysfs_paths
+        if self._is_wsl:
+            handles = list(range(self._device_count))
+        else:
+            handles = self._sysfs_paths
         self._log("debug", f"sysfs GPU Handles found: {handles}")
         return handles
 
@@ -328,21 +341,24 @@ class ROCm(_GPUStats):
         str
             The current AMDGPU driver versions
         """
-        retval = ""
-        cmd = ["modinfo", "amdgpu"]
-        try:
-            proc = run(cmd,
-                       check=True,
-                       timeout=5,
-                       capture_output=True,
-                       encoding="utf-8",
-                       errors="ignore")
-            for line in proc.stdout.split("\n"):
-                if line.startswith("version:"):
-                    retval = line.split()[-1]
-                    break
-        except Exception as err:  # pylint:disable=broad-except
-            self._log("debug", f"Error reading modinfo: '{str(err)}'")
+        if self._is_wsl:
+            retval = "unknown (wsl2)"
+        else:
+            retval = ""
+            cmd = ["modinfo", "amdgpu"]
+            try:
+                proc = run(cmd,
+                           check=True,
+                           timeout=5,
+                           capture_output=True,
+                           encoding="utf-8",
+                           errors="ignore")
+                for line in proc.stdout.split("\n"):
+                    if line.startswith("version:"):
+                        retval = line.split()[-1]
+                        break
+            except Exception as err:  # pylint:disable=broad-except
+                self._log("debug", f"Error reading modinfo: '{str(err)}'")
 
         self._log("debug", f"GPU Drivers: {retval}")
         return retval
@@ -356,29 +372,32 @@ class ROCm(_GPUStats):
             The list of connected AMD GPU names
         """
         retval = []
-        for device in self._sysfs_paths:
-            name = self._from_sysfs_file(os.path.join(device, "product_name"))
-            number = self._from_sysfs_file(os.path.join(device, "product_number"))
-            if name or number:  # product_name or product_number populated
-                self._log("debug", f"Got name from product_name: '{name}', product_number: "
-                                   f"'{number}'")
-                retval.append(f"{name + ' ' if name else ''}{number}")
-                continue
+        for device in self._handles:
+            if self._is_wsl:
+                retval.append(torch.cuda.get_device_name(device))
+            else:
+                name = self._from_sysfs_file(os.path.join(device, "product_name"))
+                number = self._from_sysfs_file(os.path.join(device, "product_number"))
+                if name or number:  # product_name or product_number populated
+                    self._log("debug", f"Got name from product_name: '{name}', product_number: "
+                                       f"'{number}'")
+                    retval.append(f"{name + ' ' if name else ''}{number}")
+                    continue
 
-            device_id = self._from_sysfs_file(os.path.join(device, "device"))
-            self._log("debug", f"Got device_id: '{device_id}'")
+                device_id = self._from_sysfs_file(os.path.join(device, "device"))
+                self._log("debug", f"Got device_id: '{device_id}'")
 
-            if not device_id:  # Can't get device name
-                retval.append("Not found")
-                continue
-            try:
-                lookup = int(device_id, 0)
-            except ValueError:
-                retval.append(device_id)
-                continue
+                if not device_id:  # Can't get device name
+                    retval.append("Not found")
+                    continue
+                try:
+                    lookup = int(device_id, 0)
+                except ValueError:
+                    retval.append(device_id)
+                    continue
 
-            device_name = _DEVICE_LOOKUP.get(lookup, device_id)
-            retval.append(device_name)
+                device_name = _DEVICE_LOOKUP.get(lookup, device_id)
+                retval.append(device_name)
 
         self._log("debug", f"Device names: {retval}")
         return retval
@@ -394,7 +413,7 @@ class ROCm(_GPUStats):
             The list of device indices that are available for Faceswap to use
         """
         devices = super()._get_active_devices()
-        env_devices = os.environ.get("HIP_VISIBLE_DEVICES ")
+        env_devices = os.environ.get("HIP_VISIBLE_DEVICES")
         if env_devices:
             new_devices = [int(i) for i in env_devices.split(",")]
             devices = [idx for idx in devices if idx in new_devices]
@@ -411,13 +430,16 @@ class ROCm(_GPUStats):
             The VRAM in Megabytes for each connected Nvidia GPU
         """
         retval = []
-        for device in self._sysfs_paths:
-            query = self._from_sysfs_file(os.path.join(device, "mem_info_vram_total"))
-            try:
-                vram = int(query)
-            except ValueError:
-                self._log("debug", f"Couldn't extract VRAM from string: '{query}'", )
-                vram = 0
+        for device in self._handles:
+            if self._is_wsl:
+                vram = torch.cuda.get_device_properties(device).total_memory
+            else:
+                query = self._from_sysfs_file(os.path.join(device, "mem_info_vram_total"))
+                try:
+                    vram = int(query)
+                except ValueError:
+                    self._log("debug", f"Couldn't extract VRAM from string: '{query}'", )
+                    vram = 0
             retval.append(int(vram / (1024 * 1024)))
 
         self._log("debug", f"GPU VRAM: {retval}")
@@ -435,16 +457,19 @@ class ROCm(_GPUStats):
         """
         retval = []
         total_vram = self._get_vram()
-        for device, vram in zip(self._sysfs_paths, total_vram):
+        for device, vram in zip(self._handles, total_vram):
             if not vram:
                 retval.append(0)
                 continue
-            query = self._from_sysfs_file(os.path.join(device, "mem_info_vram_used"))
-            try:
-                used = int(query)
-            except ValueError:
-                self._log("debug", f"Couldn't extract used VRAM from string: '{query}'")
-                used = 0
+            if self._is_wsl:
+                used = torch.cuda.device_memory_used(device)
+            else:
+                query = self._from_sysfs_file(os.path.join(device, "mem_info_vram_used"))
+                try:
+                    used = int(query)
+                except ValueError:
+                    self._log("debug", f"Couldn't extract used VRAM from string: '{query}'")
+                    used = 0
 
             retval.append(vram - int(used / (1024 * 1024)))
         self._log("debug", f"GPU VRAM free: {retval}")
