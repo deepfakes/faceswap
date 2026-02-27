@@ -194,7 +194,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
     def _handle_realigns(self, queue: Queue) -> tuple[bool, AlignerBatch] | None:
         """ Handle any items waiting for a second pass through the aligner.
 
-        If EOF has been recieved and items are still being processed through the first pass
+        If EOF has been received and items are still being processed through the first pass
         then wait for a short time and try again to collect them.
 
         On EOF return exhausted flag with an empty batch

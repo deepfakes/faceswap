@@ -619,10 +619,10 @@ class ConfigFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _add_frame_separator(self) -> None:
         """Add a separator between top and bottom frames."""
-        logger.debug("Add frame seperator")
+        logger.debug("Add frame separator")
         sep = ttk.Frame(self._action_frame, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=5, side=tk.TOP)
-        logger.debug("Added frame seperator")
+        logger.debug("Added frame separator")
 
     def _add_actions(self, parent: OptionsBook, config_key: str) -> None:
         """Add Action Buttons.
