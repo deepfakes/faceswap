@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Collects and returns Information about connected AMD GPUs for ROCm using sysfs and from
+"""Collects and returns Information about connected AMD GPUs for ROCm using sysfs and from
 modinfo
 
 As no ROCm compatible hardware was available for testing, this just returns information on all AMD
@@ -211,11 +211,11 @@ _DEVICE_LOOKUP = {  # ref: https://gist.github.com/roalercon/51f13a387f3754615cc
 
 
 class ROCm(_GPUStats):
-    """ Holds information and statistics about GPUs connected using sysfs
+    """Holds information and statistics about GPUs connected using sysfs
 
     Parameters
     ----------
-    log: bool, optional
+    log
         Whether the class should output information to the logger. There may be occasions where the
         logger has not yet been set up when this class is queried. Attempting to log in these
         instances will raise an error. If GPU stats are being queried prior to the logger being
@@ -229,37 +229,35 @@ class ROCm(_GPUStats):
         super().__init__(log=log)
 
     def _from_sysfs_file(self, path: str) -> str:
-        """ Obtain the value from a sysfs file. On permission error or file doesn't exist, log and
+        """Obtain the value from a sysfs file. On permission error or file doesn't exist, log and
         return empty value
 
         Parameters
         ----------
-        path: str
+        path
             The path to a sysfs file to obtain the value from
 
         Returns
         -------
-        str
-            The obtained value from the given path
+        The obtained value from the given path
         """
         if not os.path.isfile(path):
             self._log("debug", f"File '{path}' does not exist. Returning empty string")
             return ""
         try:
-            with open(path, "r", encoding="utf-8", errors="ignore") as sysfile:
-                val = sysfile.read().strip()
+            with open(path, "r", encoding="utf-8", errors="ignore") as sys_file:
+                val = sys_file.read().strip()
         except PermissionError:
             self._log("debug", f"Permission error accessing file '{path}'. Returning empty string")
             val = ""
         return val
 
     def _get_sysfs_paths(self) -> list[str]:
-        """ Obtain a list of sysfs paths to AMD branded GPUs connected to the system
+        """Obtain a list of sysfs paths to AMD branded GPUs connected to the system
 
         Returns
         -------
-        list[str]
-            List of full paths to the sysfs entries for connected AMD GPUs
+        List of full paths to the sysfs entries for connected AMD GPUs
         """
         base_dir = "/sys/class/drm/"
 
@@ -286,7 +284,7 @@ class ROCm(_GPUStats):
         return retval
 
     def _initialize(self) -> None:
-        """ Initialize sysfs for ROCm backend.
+        """Initialize sysfs for ROCm backend.
 
         If :attr:`_is_initialized` is ``True`` then this function just returns performing no
         action.
@@ -303,12 +301,11 @@ class ROCm(_GPUStats):
         super()._initialize()
 
     def _get_device_count(self) -> int:
-        """ The number of AMD cards found in sysfs
+        """The number of AMD cards found in sysfs
 
         Returns
         -------
-        int
-            The total number of GPUs available
+        The total number of GPUs available
         """
         if self._is_wsl:
             retval = torch.cuda.device_count()
@@ -318,13 +315,12 @@ class ROCm(_GPUStats):
         return retval
 
     def _get_handles(self) -> list:
-        """ The sysfs doesn't use device handles, so we just return the list of the sysfs locations
+        """The sysfs doesn't use device handles, so we just return the list of the sysfs locations
         per card
 
         Returns
         -------
-        list
-            The list of all discovered GPUs
+        The list of all discovered GPUs
         """
         if self._is_wsl:
             handles = list(range(self._device_count))
@@ -334,12 +330,11 @@ class ROCm(_GPUStats):
         return handles
 
     def _get_driver(self) -> str:
-        """ Obtain the driver versions currently in use from modinfo
+        """Obtain the driver versions currently in use from modinfo
 
         Returns
         -------
-        str
-            The current AMDGPU driver versions
+        The current AMDGPU driver versions
         """
         if self._is_wsl:
             retval = "unknown (wsl2)"
@@ -364,12 +359,11 @@ class ROCm(_GPUStats):
         return retval
 
     def _get_device_names(self) -> list[str]:
-        """ Obtain the list of names of connected GPUs as identified in :attr:`_handles`.
+        """Obtain the list of names of connected GPUs as identified in :attr:`_handles`.
 
         Returns
         -------
-        list
-            The list of connected AMD GPU names
+        The list of connected AMD GPU names
         """
         retval = []
         for device in self._handles:
@@ -403,14 +397,13 @@ class ROCm(_GPUStats):
         return retval
 
     def _get_active_devices(self) -> list[int]:
-        """ Obtain the indices of active GPUs (those that have not been explicitly excluded by
+        """Obtain the indices of active GPUs (those that have not been explicitly excluded by
         HIP_VISIBLE_DEVICES environment variable or explicitly excluded in the command line
         arguments).
 
         Returns
         -------
-        list
-            The list of device indices that are available for Faceswap to use
+        The list of device indices that are available for Faceswap to use
         """
         devices = super()._get_active_devices()
         env_devices = os.environ.get("HIP_VISIBLE_DEVICES")
@@ -421,13 +414,12 @@ class ROCm(_GPUStats):
         return devices
 
     def _get_vram(self) -> list[int]:
-        """ Obtain the VRAM in Megabytes for each connected AMD GPU as identified in
+        """Obtain the VRAM in Megabytes for each connected AMD GPU as identified in
         :attr:`_handles`.
 
         Returns
         -------
-        list
-            The VRAM in Megabytes for each connected Nvidia GPU
+        The VRAM in Megabytes for each connected Nvidia GPU
         """
         retval = []
         for device in self._handles:
@@ -446,14 +438,13 @@ class ROCm(_GPUStats):
         return retval
 
     def _get_free_vram(self) -> list[int]:
-        """ Obtain the amount of VRAM that is available, in Megabytes, for each connected AMD
+        """Obtain the amount of VRAM that is available, in Megabytes, for each connected AMD
         GPU.
 
         Returns
         -------
-        list
-             List of `float`s containing the amount of VRAM available, in Megabytes, for each
-             connected GPU as corresponding to the values in :attr:`_handles
+        List of `float`s containing the amount of VRAM available, in Megabytes, for each connected
+        GPU as corresponding to the values in :attr:`_handles
         """
         retval = []
         total_vram = self._get_vram()
@@ -480,17 +471,17 @@ class ROCm(_GPUStats):
         return retval
 
     def exclude_devices(self, devices: list[int]) -> None:
-        """ Exclude GPU devices from being used by Faceswap. Sets the HIP_VISIBLE_DEVICES
+        """Exclude GPU devices from being used by Faceswap. Sets the HIP_VISIBLE_DEVICES
         environment variable. This must be called before Torch/Keras are imported
 
         Parameters
         ----------
-        devices: list[int]
+        devices
             The GPU device IDS to be excluded
         """
         if not devices:
             return
-        self._log("debug", f"Excluding GPU indicies: {devices}")
+        self._log("debug", f"Excluding GPU indices: {devices}")
 
         _EXCLUDE_DEVICES.extend(devices)
 
@@ -500,7 +491,7 @@ class ROCm(_GPUStats):
                                                      if d not in _EXCLUDE_DEVICES)
 
         env_vars = [f"{k}: {v}" for k, v in os.environ.items() if k.lower().startswith("hip")]
-        self._log("debug", f"HIP environmet variables: {env_vars}")
+        self._log("debug", f"HIP environment variables: {env_vars}")
 
 
 __all__ = get_module_objects(__name__)

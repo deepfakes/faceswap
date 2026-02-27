@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Collects and returns Information on available Apple Silicon SoCs in Apple Macs. """
+"""Collects and returns Information on available Apple Silicon SoCs in Apple Macs."""
 import typing as T
 
 import os
@@ -12,11 +12,11 @@ from lib.utils import FaceswapError, get_module_objects
 from ._base import _GPUStats
 
 
-_metal_initialized: bool = False
+_METAL_INITIALIZED: bool = False
 
 
 class AppleSiliconStats(_GPUStats):
-    """ Holds information and statistics about Apple Silicon SoC(s) available on the currently
+    """Holds information and statistics about Apple Silicon SoC(s) available on the currently
     running Apple system.
 
     Notes
@@ -27,7 +27,7 @@ class AppleSiliconStats(_GPUStats):
 
     Parameters
     ----------
-    log: bool, optional
+    log
         Whether the class should output information to the logger. There may be occasions where the
         logger has not yet been set up when this class is queried. Attempting to log in these
         instances will raise an error. If GPU stats are being queried prior to the logger being
@@ -41,7 +41,7 @@ class AppleSiliconStats(_GPUStats):
         super().__init__(log=log)
 
     def _initialize(self) -> None:
-        """ Initialize Metal for Apple Silicon SoC(s).
+        """Initialize Metal for Apple Silicon SoC(s).
 
         If :attr:`_is_initialized` is ``True`` then this function just returns performing no
         action. Otherwise :attr:`is_initialized` is set to ``True`` after successfully
@@ -57,13 +57,11 @@ class AppleSiliconStats(_GPUStats):
         super()._initialize()
 
     def _initialize_metal(self) -> None:
-        """ Initialize Metal on first call to this class and set global
-        :attr:``_metal_initialized`` to ``True``. If Metal has already been initialized then return
-        performing no action.
-        """
-        global _metal_initialized  # pylint:disable=global-statement
+        """Initialize Metal on first call to this class and set global :attr:``_METAL_INITIALIZED``
+        to ``True``. If Metal has already been initialized then return performing no action."""
+        global _METAL_INITIALIZED  # pylint:disable=global-statement
 
-        if _metal_initialized:
+        if _METAL_INITIALIZED:
             return
 
         self._log("debug", "Performing first time Apple SoC setup.")
@@ -77,10 +75,10 @@ class AppleSiliconStats(_GPUStats):
 
         self._test_torch()
 
-        _metal_initialized = True
+        _METAL_INITIALIZED = True
 
     def _test_torch(self) -> None:
-        """ Test that torch can execute correctly.
+        """Test that torch can execute correctly.
 
         Raises
         ------
@@ -92,24 +90,23 @@ class AppleSiliconStats(_GPUStats):
             self._log("debug",
                       f"Torch initialization test: (mem_info: {meminfo})")
         except RuntimeError as err:
-            msg = ("An unhandled exception occured initializing the device via Torch "
+            msg = ("An unhandled exception occurred initializing the device via Torch "
                    f"Library. Original error: {str(err)}")
             raise FaceswapError(msg) from err
 
     def _get_device_count(self) -> int:
-        """ Detect the number of SoCs attached to the system.
+        """Detect the number of SoCs attached to the system.
 
         Returns
         -------
-        int
-            The total number of SoCs available
+        The total number of SoCs available
         """
         retval = len(self._mps_devices)
         self._log("debug", f"GPU Device count: {retval}")
         return retval
 
     def _get_handles(self) -> list:
-        """ Obtain the device handles for all available Apple Silicon SoCs.
+        """Obtain the device handles for all available Apple Silicon SoCs.
 
         Notes
         -----
@@ -118,15 +115,14 @@ class AppleSiliconStats(_GPUStats):
 
         Returns
         -------
-        list
-            The list of indices for available Apple Silicon SoCs
+        The list of indices for available Apple Silicon SoCs
         """
         handles = list(range(self._device_count))
         self._log("debug", f"GPU Handles found: {handles}")
         return handles
 
     def _get_driver(self) -> str:
-        """ Obtain the Apple Silicon driver version currently in use.
+        """Obtain the Apple Silicon driver version currently in use.
 
         Notes
         -----
@@ -135,34 +131,31 @@ class AppleSiliconStats(_GPUStats):
 
         Returns
         -------
-        str
-            The current SoC driver version
+        The current SoC driver version
         """
         driver = "Not Applicable"
         self._log("debug", f"GPU Driver: {driver}")
         return driver
 
     def _get_device_names(self) -> list[str]:
-        """ Obtain the list of names of available Apple Silicon SoC(s) as identified in
+        """Obtain the list of names of available Apple Silicon SoC(s) as identified in
         :attr:`_handles`.
 
         Returns
         -------
-        list
-            The list of available Apple Silicon SoC names
+        The list of available Apple Silicon SoC names
         """
         names = [d.type for d in self._mps_devices]
         self._log("debug", f"GPU Devices: {names}")
         return names
 
     def _get_vram(self) -> list[int]:
-        """ Obtain the VRAM in Megabytes for each available Apple Silicon SoC(s) as identified in
+        """Obtain the VRAM in Megabytes for each available Apple Silicon SoC(s) as identified in
         :attr:`_handles`.
 
         Returns
         -------
-        list
-            The RAM in Megabytes for each available Apple Silicon SoC
+        The RAM in Megabytes for each available Apple Silicon SoC
         """
         vram = [int((torch.mps.driver_allocated_memory() / self._device_count) / (1024 * 1024))
                 for _ in range(self._device_count)]
@@ -170,14 +163,13 @@ class AppleSiliconStats(_GPUStats):
         return vram
 
     def _get_free_vram(self) -> list[int]:
-        """ Obtain the amount of VRAM that is available, in Megabytes, for each available Apple
+        """Obtain the amount of VRAM that is available, in Megabytes, for each available Apple
         Silicon SoC.
 
         Returns
         -------
-        list
-             List of `float`s containing the amount of RAM available, in Megabytes, for each
-             available SoC as corresponding to the values in :attr:`_handles
+        List of `float`s containing the amount of RAM available, in Megabytes, for each available
+        SoC as corresponding to the values in :attr:`_handles
         """
         vram = [int((psutil.virtual_memory().available / self._device_count) / (1024 * 1024))
                 for _ in range(self._device_count)]
@@ -185,11 +177,11 @@ class AppleSiliconStats(_GPUStats):
         return vram
 
     def exclude_devices(self, devices: list[int]) -> None:
-        """ Apple-Silicon does not support excluding devices
+        """Apple-Silicon does not support excluding devices
 
         Parameters
         ----------
-        devices: list[int]
+        devices
             The GPU device IDS to be excluded
         """
         self._log("warning", "Apple Silicon does not support excluding GPUs. This option has been "

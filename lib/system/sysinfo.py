@@ -1,5 +1,5 @@
 #!/usr/bin python3
-""" Obtain information about the running system, environment and GPU. """
+"""Obtain information about the running system, environment and GPU."""
 
 import json
 import os
@@ -22,7 +22,7 @@ except ImportError:
 
 
 class _SysInfo():
-    """ Obtain information about the System, Python and GPU """
+    """Obtain information about the System, Python and GPU"""
     def __init__(self) -> None:
         self._state_file = _State().state_file
         self._configs = _Configs().configs
@@ -36,40 +36,40 @@ class _SysInfo():
 
     @property
     def _ram_free(self) -> int:
-        """ int : The amount of free RAM in bytes. """
+        """The amount of free RAM in bytes."""
         if psutil is None:
             return -1
         return psutil.virtual_memory().free
 
     @property
     def _ram_total(self) -> int:
-        """ int : The amount of total RAM in bytes. """
+        """The amount of total RAM in bytes."""
         if psutil is None:
             return -1
         return psutil.virtual_memory().total
 
     @property
     def _ram_available(self) -> int:
-        """ int : The amount of available RAM in bytes. """
+        """The amount of available RAM in bytes."""
         if psutil is None:
             return -1
         return psutil.virtual_memory().available
 
     @property
     def _ram_used(self) -> int:
-        """ int : The amount of used RAM in bytes. """
+        """The amount of used RAM in bytes."""
         if psutil is None:
             return -1
         return psutil.virtual_memory().used
 
     @property
     def _fs_command(self) -> str:
-        """ str : The command line command used to execute faceswap. """
+        """The command line command used to execute faceswap."""
         return " ".join(sys.argv)
 
     @property
     def _conda_version(self) -> str:
-        """ str : The installed version of Conda, or `N/A` if Conda is not installed. """
+        """The installed version of Conda, or `N/A` if Conda is not installed."""
         if not self._system.is_conda:
             return "N/A"
         with Popen("conda --version", shell=True, stdout=PIPE, stderr=PIPE) as conda:
@@ -81,7 +81,7 @@ class _SysInfo():
 
     @property
     def _git_commits(self) -> str:
-        """ str : The last 5 git commits for the currently running Faceswap. """
+        """The last 5 git commits for the currently running Faceswap."""
         commits = git.get_commits(3)
         if not commits:
             return "Not Found"
@@ -89,14 +89,14 @@ class _SysInfo():
 
     @property
     def _cuda_versions(self) -> str:
-        """ str : The globally installed Cuda versions"""
+        """The globally installed Cuda versions"""
         if not self._cuda.versions:
             return "No global Cuda versions found"
         return ", ".join(".".join(str(x) for x in v) for v in self._cuda.versions)
 
     @property
     def _cuda_version(self) -> str:
-        """ str : The installed CUDA version. """
+        """The installed CUDA version."""
         if self._cuda.version == (0, 0):
             retval = "No global version found"
             if self._system.is_conda:
@@ -106,7 +106,7 @@ class _SysInfo():
 
     @property
     def _cudnn_versions(self) -> str:
-        """ str : The installed cuDNN versions. """
+        """The installed cuDNN versions."""
         if not self._cuda.cudnn_versions:
             retval = "No global version found"
             if self._system.is_conda:
@@ -121,25 +121,24 @@ class _SysInfo():
 
     @property
     def _rocm_version(self) -> str:
-        """ str : The default ROCm version """
+        """The default ROCm version"""
         if self._rocm.version == (0, 0, 0):
             return "No default ROCm version found"
         return ".".join(str(x) for x in self._rocm.version)
 
     @property
     def _rocm_versions(self) -> str:
-        """ str : The installed ROCm versions """
+        """The installed ROCm versions"""
         if not self._rocm.versions:
             return "No ROCm versions found"
         return ", ".join(".".join(str(x) for x in v) for v in self._rocm.versions)
 
     def _get_gpu_info(self) -> GPUInfo:
-        """ Obtain GPU Stats. If an error is raised, swallow the error, and add to GPUInfo output
+        """Obtain GPU Stats. If an error is raised, swallow the error, and add to GPUInfo output
 
         Returns
         -------
-        :class:`~lib.gpu_stats.GPUInfo`
-            The information on connected GPUs
+        The information on connected GPUs
         """
         if GPUStats is None:
             return GPUInfo(vram=[],
@@ -159,12 +158,11 @@ class _SysInfo():
         return retval
 
     def _format_ram(self) -> str:
-        """ Format the RAM stats into Megabytes to make it more readable.
+        """Format the RAM stats into Megabytes to make it more readable.
 
         Returns
         -------
-        str
-            The total, available, used and free RAM displayed in Megabytes
+        The total, available, used and free RAM displayed in Megabytes
         """
         retval = []
         for name in ("total", "available", "used", "free"):
@@ -174,13 +172,12 @@ class _SysInfo():
         return ", ".join(retval)
 
     def full_info(self) -> str:
-        """ Obtain extensive system information stats, formatted into a human readable format.
+        """Obtain extensive system information stats, formatted into a human readable format.
 
         Returns
         -------
-        str
-            The system information for the currently running system, formatted for output to
-            console or a log file.
+        The system information for the currently running system, formatted for output to console or
+        a log file.
         """
         retval = "\n============ System Information ============\n"
         sys_info = {"backend": get_backend(),
@@ -226,26 +223,25 @@ class _SysInfo():
 
 
 def get_sysinfo() -> str:
-    """ Obtain extensive system information stats, formatted into a human readable format.
+    """Obtain extensive system information stats, formatted into a human readable format.
     If an error occurs obtaining the system information, then the error message is returned
     instead.
 
     Returns
     -------
-    str
-        The system information for the currently running system, formatted for output to
-        console or a log file.
+    The system information for the currently running system, formatted for output to console or a
+    log file.
     """
     try:
         retval = _SysInfo().full_info()
     except Exception as err:  # pylint:disable=broad-except
-        retval = f"Exception occured trying to retrieve sysinfo: {str(err)}"
+        retval = f"Exception occurred trying to retrieve sysinfo: {str(err)}"
         raise
     return retval
 
 
 class _Configs():  # pylint:disable=too-few-public-methods
-    """ Parses the config files in /faceswap/config and outputs the information stored within them
+    """Parses the config files in /faceswap/config and outputs the information stored within them
     in a human readable format. """
 
     def __init__(self) -> None:
@@ -253,62 +249,59 @@ class _Configs():  # pylint:disable=too-few-public-methods
         self.configs = self._get_configs()
 
     def _get_configs(self) -> str:
-        """ Obtain the formatted configurations from the config folder.
+        """Obtain the formatted configurations from the config folder.
 
         Returns
         -------
-        str
-            The current configuration in the config files formatted in a human readable format
+        The current configuration in the config files formatted in a human readable format
         """
         try:
-            config_files = [os.path.join(self.config_dir, cfile)
-                            for cfile in os.listdir(self.config_dir)
-                            if os.path.basename(cfile) == ".faceswap"
-                            or os.path.splitext(cfile)[1] == ".ini"]
+            config_files = [os.path.join(self.config_dir, c_file)
+                            for c_file in os.listdir(self.config_dir)
+                            if os.path.basename(c_file) == ".faceswap"
+                            or os.path.splitext(c_file)[1] == ".ini"]
             return self._parse_configs(config_files)
         except FileNotFoundError:
             return ""
 
     def _parse_configs(self, config_files: list[str]) -> str:
-        """ Parse the given list of config files into a human readable format.
+        """Parse the given list of config files into a human readable format.
 
         Parameters
         ----------
-        config_files : list[str]
+        config_files
             A list of paths to the faceswap config files
 
         Returns
         -------
-        str
-            The current configuration in the config files formatted in a human readable format
+        The current configuration in the config files formatted in a human readable format
         """
         formatted = ""
-        for cfile in config_files:
-            fname = os.path.basename(cfile)
-            ext = os.path.splitext(cfile)[1]
+        for c_file in config_files:
+            fname = os.path.basename(c_file)
+            ext = os.path.splitext(c_file)[1]
             formatted += f"\n--------- {fname} ---------\n"
             if ext == ".ini":
-                formatted += self._parse_ini(cfile)
+                formatted += self._parse_ini(c_file)
             elif fname == ".faceswap":
-                formatted += self._parse_json(cfile)
+                formatted += self._parse_json(c_file)
         return formatted
 
     def _parse_ini(self, config_file: str) -> str:
-        """ Parse an ``.ini`` formatted config file into a human readable format.
+        """Parse an ``.ini`` formatted config file into a human readable format.
 
         Parameters
         ----------
-        config_file : str
+        config_file
             The path to the config.ini file
 
         Returns
         -------
-        str
-            The current configuration in the config file formatted in a human readable format
+        The current configuration in the config file formatted in a human readable format
         """
         formatted = ""
-        with open(config_file, "r", encoding="utf-8", errors="replace") as cfile:
-            for line in cfile.readlines():
+        with open(config_file, "r", encoding="utf-8", errors="replace") as c_file:
+            for line in c_file.readlines():
                 line = line.strip()
                 if line.startswith("#") or not line:
                     continue
@@ -320,21 +313,20 @@ class _Configs():  # pylint:disable=too-few-public-methods
         return formatted
 
     def _parse_json(self, config_file: str) -> str:
-        """ Parse an ``.json`` formatted config file into a formatted string.
+        """Parse an ``.json`` formatted config file into a formatted string.
 
         Parameters
         ----------
-        config_file : str
+        config_file
             The path to the config.json file
 
         Returns
         -------
-        dict
-            The current configuration in the config file formatted as a python dictionary
+        The current configuration in the config file formatted as a python dictionary
         """
         formatted: str = ""
-        with open(config_file, "r", encoding="utf-8", errors="replace") as cfile:
-            conf_dict = json.load(cfile)
+        with open(config_file, "r", encoding="utf-8", errors="replace") as c_file:
+            conf_dict = json.load(c_file)
             for key in sorted(conf_dict.keys()):
                 formatted += self._format_text(key, conf_dict[key])
         return formatted
@@ -345,21 +337,20 @@ class _Configs():  # pylint:disable=too-few-public-methods
 
         Parameters
         ----------
-        key : str
+        key
             The label for this display item
-        value : str
+        value
             The value for this display item
 
         Returns
         -------
-        str
-            The formatted key value pair for display
+        The formatted key value pair for display
         """
         return f"{key.strip() + ':':<25} {value.strip()}\n"
 
 
 class _State():  # pylint:disable=too-few-public-methods
-    """ Parses the state file in the current model directory, if the model is training, and
+    """Parses the state file in the current model directory, if the model is training, and
     formats the content into a human readable format. """
     def __init__(self) -> None:
         self._model_dir = self._get_arg("-m", "--model-dir")
@@ -368,18 +359,17 @@ class _State():  # pylint:disable=too-few-public-methods
 
     @property
     def _is_training(self) -> bool:
-        """ bool : ``True`` if this function has been called during a training session
-        otherwise ``False``. """
+        """``True`` if this function has been called during a training session otherwise
+        ``False``."""
         return len(sys.argv) > 1 and sys.argv[1].lower() == "train"
 
     @staticmethod
     def _get_arg(*args: str) -> str | None:
-        """ Obtain the value for a given command line option from sys.argv.
+        """Obtain the value for a given command line option from sys.argv.
 
         Returns
         -------
-        str or ``None``
-            The value of the given command line option, if it exists, otherwise ``None``
+        The value of the given command line option, if it exists, otherwise ``None``
         """
         cmd = sys.argv
         for opt in args:
@@ -390,12 +380,11 @@ class _State():  # pylint:disable=too-few-public-methods
         return None
 
     def _get_state_file(self) -> str:
-        """ Parses the model's state file and compiles the contents into a human readable string.
+        """Parses the model's state file and compiles the contents into a human readable string.
 
         Returns
         -------
-        str
-            The state file formatted into a human readable format
+        The state file formatted into a human readable format
         """
         if not self._is_training or self._model_dir is None or self._trainer is None:
             return ""
@@ -404,8 +393,8 @@ class _State():  # pylint:disable=too-few-public-methods
             return ""
 
         retval = "\n\n=============== State File =================\n"
-        with open(fname, "r", encoding="utf-8", errors="replace") as sfile:
-            retval += sfile.read()
+        with open(fname, "r", encoding="utf-8", errors="replace") as s_file:
+            retval += s_file.read()
         return retval
 
 

@@ -14,7 +14,7 @@ import numpy as np
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
 
-from .constants import CenteringType, EXTRACT_RATIOS, LandmarkType, _MEAN_FACE
+from .constants import CenteringType, EXTRACT_RATIOS, LandmarkType, MEAN_FACE
 from .pose import PoseEstimate
 
 logger = logging.getLogger(__name__)
@@ -439,7 +439,7 @@ class AlignedFace():  # pylint:disable=too-many-instance-attributes
         used for aligning the image. """
         with self._cache.lock("average_distance"):
             if not self._cache.average_distance:
-                mean_face = _MEAN_FACE[self._mean_lookup]
+                mean_face = MEAN_FACE[self._mean_lookup]
                 lms = self.normalized_landmarks
                 if self._landmark_type == LandmarkType.LM_2D_68:
                     lms = lms[17:]  # 68 point landmarks only use core face items
@@ -500,7 +500,7 @@ class AlignedFace():  # pylint:disable=too-many-instance-attributes
         lms = self._frame_landmarks
         if self._landmark_type == LandmarkType.LM_2D_68:
             lms = lms[17:]  # 68 point landmarks only use core face items
-        retval = _umeyama(lms, _MEAN_FACE[self._mean_lookup], True)[0:2]
+        retval = _umeyama(lms, MEAN_FACE[self._mean_lookup], True)[0:2]
         logger.trace("Default matrix: %s", retval)  # type:ignore[attr-defined]
         return retval
 

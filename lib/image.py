@@ -1211,12 +1211,17 @@ class ImagesLoader(ImageIO):
         video then this is a list of dummy filenames as corresponding to an alignments file """
         return self._file_list
 
-    def add_skip_list(self, skip_list):
+    @property
+    def processed_file_list(self) -> list[str]:
+        """A list of files in the source location with any files that will be skipped removed"""
+        return [f for i, f in enumerate(self._file_list) if i not in self._skip_list]
+
+    def add_skip_list(self, skip_list: list[int]):
         """ Add a skip list to this :class:`ImagesLoader`
 
         Parameters
         ----------
-        skip_list: list
+        skip_list: list[int]
             A list of indices corresponding to the frame indices that should be skipped by the
             :func:`load` function.
         """

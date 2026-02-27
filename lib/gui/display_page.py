@@ -92,7 +92,7 @@ class DisplayPage(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def add_frame_separator(self):
         """ Add a separator between top and bottom frames """
-        logger.debug("Adding frame seperator")
+        logger.debug("Adding frame separator")
         sep = ttk.Frame(self, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=(5, 0), side=tk.BOTTOM)
 

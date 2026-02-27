@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Dummy functions for running faceswap on CPU. """
+"""Dummy functions for running faceswap on CPU."""
 
 from lib.utils import get_module_objects
 
@@ -7,7 +7,7 @@ from ._base import _GPUStats
 
 
 class CPUStats(_GPUStats):
-    """ Holds information and statistics about the CPU on the currently running system.
+    """Holds information and statistics about the CPU on the currently running system.
 
     Notes
     -----
@@ -19,7 +19,7 @@ class CPUStats(_GPUStats):
 
     Parameters
     ----------
-    log: bool, optional
+    log
         Whether the class should output information to the logger. There may be occasions where the
         logger has not yet been set up when this class is queried. Attempting to log in these
         instances will raise an error. If GPU stats are being queried prior to the logger being
@@ -28,85 +28,78 @@ class CPUStats(_GPUStats):
     """
 
     def _get_device_count(self) -> int:
-        """ Detect the number of GPUs attached to the system. Always returns zero for CPU
+        """Detect the number of GPUs attached to the system. Always returns zero for CPU
         backends.
 
         Returns
         -------
-        int
-            The total number of GPUs connected to the PC
+        The total number of GPUs connected to the PC
         """
         retval = 0
         self._log("debug", f"GPU Device count: {retval}")
         return retval
 
     def _get_handles(self) -> list:
-        """ Obtain the device handles for all connected GPUs.
+        """Obtain the device handles for all connected GPUs.
 
         Returns
         -------
-        list
-            An empty list for CPU Backends
+        An empty list for CPU Backends
         """
         handles: list = []
         self._log("debug", f"GPU Handles found: {len(handles)}")
         return handles
 
     def _get_driver(self) -> str:
-        """ Obtain the driver version currently in use.
+        """Obtain the driver version currently in use.
 
         Returns
         -------
-        str
-            An empty string for CPU backends
+        An empty string for CPU backends
         """
         driver = ""
         self._log("debug", f"GPU Driver: {driver}")
         return driver
 
     def _get_device_names(self) -> list[str]:
-        """ Obtain the list of names of connected GPUs as identified in :attr:`_handles`.
+        """Obtain the list of names of connected GPUs as identified in :attr:`_handles`.
 
         Returns
         -------
-        list
-            An empty list for CPU backends
+        An empty list for CPU backends
         """
         names: list[str] = []
         self._log("debug", f"GPU Devices: {names}")
         return names
 
     def _get_vram(self) -> list[int]:
-        """ Obtain the RAM in Megabytes for the running system.
+        """Obtain the RAM in Megabytes for the running system.
 
         Returns
         -------
-        list
-            An empty list for CPU backends
+        An empty list for CPU backends
         """
         vram: list[int] = []
         self._log("debug", f"GPU VRAM: {vram}")
         return vram
 
     def _get_free_vram(self) -> list[int]:
-        """ Obtain the amount of RAM that is available, in Megabytes, for the running system.
+        """Obtain the amount of RAM that is available, in Megabytes, for the running system.
 
         Returns
         -------
-        list
-             An empty list for CPU backends
+        An empty list for CPU backends
         """
         vram: list[int] = []
         self._log("debug", f"GPU VRAM free: {vram}")
         return vram
 
     def exclude_devices(self, devices: list[int]) -> None:
-        """ CPU does not support excluding devices
+        """CPU does not support excluding devices
 
         Parameters
         ----------
-        devices: list[int]
-            The GPU device IDS to be excluded
+        The GPU device IDS to be excluded
         """
         self._log("warning", "CPU does not support excluding GPUs. This option has been ignored")
 

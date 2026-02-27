@@ -1,6 +1,8 @@
 #!/usr/bin/python
-""" Logging Functions for Faceswap. """
+"""Logging Functions for Faceswap."""
 # NOTE: Don't import non stdlib packages. This module is accessed by setup.py
+from __future__ import annotations
+
 import collections
 import logging
 from logging.handlers import RotatingFileHandler
@@ -16,64 +18,70 @@ from datetime import datetime
 
 from lib.utils import get_module_objects
 
+if T.TYPE_CHECKING:
+    import numpy as np
+
+
+# Add our custom levels to logger
+for new_level in (("VERBOSE", 15), ("TRACE", 5)):
+    level_name, level_num = new_level
+    level_map = logging.getLevelNamesMapping()
+    if level_name in level_map:
+        continue
+    logging.addLevelName(level_num, level_name)
+    level_map[level_name] = level_num
+
 
 class FaceswapLogger(logging.Logger):
-    """ A standard :class:`logging.logger` with additional "verbose" and "trace" levels added. """
-    def __init__(self, name: str) -> None:
-        for new_level in (("VERBOSE", 15), ("TRACE", 5)):
-            level_name, level_num = new_level
-            if hasattr(logging, level_name):
-                continue
-            logging.addLevelName(level_num, level_name)
-            setattr(logging, level_name, level_num)
-        super().__init__(name)
-
+    """A standard :class:`logging.logger` with additional "verbose" and "trace" levels added. """
     def verbose(self, msg: str, *args, **kwargs) -> None:
         # pylint:disable=wrong-spelling-in-docstring
-        """ Create a log message at severity level 15.
+        """Create a log message at severity level 15.
 
         Parameters
         ----------
-        msg: str
+        msg
             The log message to be recorded at Verbose level
-        args: tuple
+        args
             Standard logging arguments
-        kwargs: dict
+        kwargs
             Standard logging key word arguments
         """
         if self.isEnabledFor(15):
+            kwargs.setdefault("stacklevel", 2)
             self._log(15, msg, args, **kwargs)
 
     def trace(self, msg: str, *args, **kwargs) -> None:
         # pylint:disable=wrong-spelling-in-docstring
-        """ Create a log message at severity level 5.
+        """Create a log message at severity level 5.
 
         Parameters
         ----------
-        msg: str
+        msg
             The log message to be recorded at Trace level
-        args: tuple
+        args
             Standard logging arguments
-        kwargs: dict
+        kwargs
             Standard logging key word arguments
         """
         if self.isEnabledFor(5):
+            kwargs.setdefault("stacklevel", 2)
             self._log(5, msg, args, **kwargs)
 
 
 class ColoredFormatter(logging.Formatter):
-    """ Overrides the stand :class:`logging.Formatter` to enable colored labels for message level
+    """Overrides the stand :class:`logging.Formatter` to enable colored labels for message level
     labels on supported platforms
 
     Parameters
     ----------
-    fmt: str
+    fmt
         The format string for the message as a whole
-    pad_newlines: bool, Optional
+    pad_newlines
         If ``True`` new lines will be padded to appear in line with the log message, if ``False``
         they will be left aligned
 
-    kwargs: dict
+    kwargs
         Standard :class:`logging.Formatter` keyword arguments
     """
     def __init__(self, fmt: str, pad_newlines: bool = False, **kwargs) -> None:
@@ -89,13 +97,12 @@ class ColoredFormatter(logging.Formatter):
 
     @classmethod
     def _get_color_compatibility(cls) -> bool:
-        """ Return whether the system supports color ansi codes. Most OSes do other than Windows
+        """Return whether the system supports color ansi codes. Most OSes do other than Windows
         below Windows 10 version 1511.
 
         Returns
         -------
-        bool
-            ``True`` if the system supports color ansi codes otherwise ``False``
+        ``True`` if the system supports color ansi codes otherwise ``False``
         """
         if platform.system().lower() != "windows":
             return True
@@ -108,20 +115,19 @@ class ColoredFormatter(logging.Formatter):
         return False
 
     def _get_newline_padding(self, pad_newlines: bool, fmt: str) -> int:
-        """ Parses the format string to obtain padding for newlines if requested
+        """Parses the format string to obtain padding for newlines if requested
 
         Parameters
         ----------
-        fmt: str
+        fmt
             The format string for the message as a whole
-        pad_newlines: bool, Optional
+        pad_newlines
             If ``True`` new lines will be padded to appear in line with the log message, if
             ``False`` they will be left aligned
 
         Returns
         -------
-        int
-            The amount of padding to apply to the front of newlines
+        The amount of padding to apply to the front of newlines
         """
         if not pad_newlines:
             return 0
@@ -134,36 +140,34 @@ class ColoredFormatter(logging.Formatter):
         return sum(pads) + spaces
 
     def _get_sample_time_string(self) -> int:
-        """ Obtain a sample time string and calculate correct padding.
+        """Obtain a sample time string and calculate correct padding.
 
         This may be inaccurate when ticking over an integer from single to double digits, but that
         shouldn't be a huge issue.
 
         Returns
         -------
-        int
-            The length of the formatted date-time string
+        The length of the formatted date-time string
         """
         sample_time = time.time()
         date_format = self.datefmt if self.datefmt else self.default_time_format
-        datestring = time.strftime(date_format, logging.Formatter.converter(sample_time))
+        date_string = time.strftime(date_format, logging.Formatter.converter(sample_time))
         if not self.datefmt and self.default_msec_format:
-            msecs = (sample_time - int(sample_time)) * 1000
-            datestring = self.default_msec_format % (datestring, msecs)
-        return len(datestring)
+            m_secs = (sample_time - int(sample_time)) * 1000
+            date_string = self.default_msec_format % (date_string, m_secs)
+        return len(date_string)
 
     def format(self, record: logging.LogRecord) -> str:
-        """ Color the log message level if supported otherwise return the standard log message.
+        """Color the log message level if supported otherwise return the standard log message.
 
         Parameters
         ----------
-        record: :class:`logging.LogRecord`
+        record
             The incoming log record to be formatted for entry into the logger.
 
         Returns
         -------
-        str
-            The formatted log message
+        The formatted log message
         """
         formatted = super().format(record)
         levelname = record.levelname
@@ -178,7 +182,7 @@ class ColoredFormatter(logging.Formatter):
 
 
 class FaceswapFormatter(logging.Formatter):
-    """ Overrides the standard :class:`logging.Formatter`.
+    """Overrides the standard :class:`logging.Formatter`.
 
     Strip newlines from incoming log messages.
 
@@ -186,17 +190,16 @@ class FaceswapFormatter(logging.Formatter):
     """
 
     def format(self, record: logging.LogRecord) -> str:
-        """ Strip new lines from log records and rewrite certain warning messages to debug level.
+        """Strip new lines from log records and rewrite certain warning messages to debug level.
 
         Parameters
         ----------
-        record : :class:`logging.LogRecord`
+        record
             The incoming log record to be formatted for entry into the logger.
 
         Returns
         -------
-        str
-            The formatted log message
+        The formatted log message
         """
         record.message = record.getMessage()
         record = self._lower_external(record)
@@ -224,20 +227,19 @@ class FaceswapFormatter(logging.Formatter):
 
     @classmethod
     def _lower_external(cls, record: logging.LogRecord) -> logging.LogRecord:
-        """ Some external libs log at a higher level than we would really like, so lower their
+        """Some external libs log at a higher level than we would really like, so lower their
         log level.
 
         Specifically: Matplotlib font properties
 
         Parameters
         ----------
-        record: :class:`logging.LogRecord`
+        record
             The log record to check for rewriting
 
         Returns
         ----------
-        :class:`logging.LogRecord`
-            The log rewritten or untouched record
+        The log rewritten or untouched record
         """
         if (record.levelno == 20 and record.funcName == "__init__"
                 and record.module == "font_manager"):
@@ -253,11 +255,11 @@ class RollingBuffer(collections.deque):
     crash log. """
 
     def write(self, buffer: str) -> None:
-        """ Splits lines from the incoming buffer and writes them out to the rolling buffer.
+        """Splits lines from the incoming buffer and writes them out to the rolling buffer.
 
         Parameters
         ----------
-        buffer: str
+        buffer
             The log messages to write to the rolling buffer
         """
         for line in buffer.rstrip().splitlines():
@@ -265,15 +267,15 @@ class RollingBuffer(collections.deque):
 
 
 class TqdmHandler(logging.StreamHandler):
-    """ Overrides :class:`logging.StreamHandler` to use :func:`tqdm.tqdm.write` rather than writing
+    """Overrides :class:`logging.StreamHandler` to use :func:`tqdm.tqdm.write` rather than writing
     to :func:`sys.stderr` so that log messages do not mess up tqdm progress bars. """
 
     def emit(self, record: logging.LogRecord) -> None:
-        """ Format the incoming message and pass to :func:`tqdm.tqdm.write`.
+        """Format the incoming message and pass to :func:`tqdm.tqdm.write`.
 
         Parameters
         ----------
-        record : :class:`logging.LogRecord`
+        record
             The incoming log record to be formatted for entry into the logger.
         """
         # tqdm is imported here as it won't be installed when setup.py is running
@@ -283,17 +285,16 @@ class TqdmHandler(logging.StreamHandler):
 
 
 def _set_root_logger(loglevel: int = logging.INFO) -> logging.Logger:
-    """ Setup the root logger.
+    """Setup the root logger.
 
     Parameters
     ----------
-    loglevel: int, optional
+    loglevel
         The log level to set the root logger to. Default :attr:`logging.INFO`
 
     Returns
     -------
-    :class:`logging.Logger`
-        The root logger for Faceswap
+    The root logger for Faceswap
     """
     rootlogger = logging.getLogger()
     rootlogger.setLevel(loglevel)
@@ -302,21 +303,21 @@ def _set_root_logger(loglevel: int = logging.INFO) -> logging.Logger:
 
 
 def log_setup(loglevel, log_file: str, command: str, is_gui: bool = False) -> None:
-    """ Set up logging for Faceswap.
+    """Set up logging for Faceswap.
 
     Sets up the root logger, the formatting for the crash logger and the file logger, and sets up
     the crash, file and stream log handlers.
 
     Parameters
     ----------
-    loglevel: str
+    loglevel
         The requested log level that Faceswap should be run at.
-    log_file: str
+    log_file
         The location of the log file to write Faceswap's log to
-    command: str
+    command
         The Faceswap command that is being run. Used to dictate whether the log file should
         have "_gui" appended to the filename or not.
-    is_gui: bool, optional
+    is_gui
         Whether Faceswap is running in the GUI or not. Dictates where the stream handler should
         output messages to. Default: ``False``
      """
@@ -349,24 +350,23 @@ def _file_handler(loglevel,
                   log_file: str,
                   log_format: FaceswapFormatter,
                   command: str) -> RotatingFileHandler:
-    """ Add a rotating file handler for the current Faceswap session. 1 backup is always kept.
+    """Add a rotating file handler for the current Faceswap session. 1 backup is always kept.
 
     Parameters
     ----------
-    loglevel: str
+    loglevel
         The requested log level that messages should be logged at.
-    log_file: str
+    log_file
         The location of the log file to write Faceswap's log to
-    log_format: :class:`FaceswapFormatter:
+    log_format
         The formatting to store log messages as
-    command: str
+    command
         The Faceswap command that is being run. Used to dictate whether the log file should
         have "_gui" appended to the filename or not.
 
     Returns
     -------
-    :class:`logging.RotatingFileHandler`
-        The logging file handler
+    The logging file handler
     """
     if log_file:
         filename = log_file
@@ -385,21 +385,20 @@ def _file_handler(loglevel,
 
 
 def _stream_handler(loglevel: int, is_gui: bool) -> logging.StreamHandler | TqdmHandler:
-    """ Add a stream handler for the current Faceswap session. The stream handler will only ever
+    """Add a stream handler for the current Faceswap session. The stream handler will only ever
     output at a maximum of VERBOSE level to avoid spamming the console.
 
     Parameters
     ----------
-    loglevel: int
+    loglevel
         The requested log level that messages should be logged at.
-    is_gui: bool, optional
+    is_gui
         Whether Faceswap is running in the GUI or not. Dictates where the stream handler should
         output messages to.
 
     Returns
     -------
-    :class:`TqdmHandler` or :class:`logging.StreamHandler`
-        The stream handler to use
+    The stream handler to use
     """
     # Don't set stdout to lower than verbose
     loglevel = max(loglevel, 15)
@@ -418,19 +417,18 @@ def _stream_handler(loglevel: int, is_gui: bool) -> logging.StreamHandler | Tqdm
 
 
 def _stream_setup_handler(loglevel: int) -> logging.StreamHandler:
-    """ Add a stream handler for faceswap's setup.py script
+    """Add a stream handler for faceswap's setup.py script
     This stream handler outputs a limited set of easy to use information using colored labels
     if available. It will only ever output at a minimum of INFO level
 
     Parameters
     ----------
-    loglevel: int
+    loglevel
         The requested log level that messages should be logged at.
 
     Returns
     -------
-    :class:`logging.StreamHandler`
-        The stream handler to use
+    The stream handler to use
     """
     loglevel = max(loglevel, 15)
     log_format = ColoredFormatter("%(levelname)-8s %(message)s", pad_newlines=True)
@@ -441,18 +439,17 @@ def _stream_setup_handler(loglevel: int) -> logging.StreamHandler:
 
 
 def _crash_handler(log_format: FaceswapFormatter) -> logging.StreamHandler:
-    """ Add a handler that stores the last 100 debug lines to :attr:'_DEBUG_BUFFER' for use in
+    """Add a handler that stores the last 100 debug lines to :attr:'_DEBUG_BUFFER' for use in
     crash reports.
 
     Parameters
     ----------
-    log_format: :class:`FaceswapFormatter:
+    log_format
         The formatting to store log messages as
 
     Returns
     -------
-    :class:`logging.StreamHandler`
-        The crash log handler
+    The crash log handler
     """
     log_crash = logging.StreamHandler(_DEBUG_BUFFER)
     log_crash.setFormatter(log_format)
@@ -461,33 +458,31 @@ def _crash_handler(log_format: FaceswapFormatter) -> logging.StreamHandler:
 
 
 def get_loglevel(loglevel: str) -> int:
-    """ Check whether a valid log level has been supplied, and return the numeric log level that
+    """Check whether a valid log level has been supplied, and return the numeric log level that
     corresponds to the given string level.
 
     Parameters
     ----------
-    loglevel: str
+    loglevel
         The loglevel that has been requested
 
     Returns
     -------
-    int
-        The numeric representation of the given loglevel
+    The numeric representation of the given loglevel
     """
-    numeric_level = getattr(logging, loglevel.upper(), None)
+    numeric_level = logging.getLevelNamesMapping()[loglevel.upper()]
     if not isinstance(numeric_level, int):
         raise ValueError(f"Invalid log level: {loglevel}")
     return numeric_level
 
 
 def crash_log() -> str:
-    """ On a crash, write out the contents of :func:`_DEBUG_BUFFER` containing the last 100 lines
+    """On a crash, write out the contents of :func:`_DEBUG_BUFFER` containing the last 100 lines
     of debug messages to a crash report in the root Faceswap folder.
 
     Returns
     -------
-    str
-        The filename of the file that contains the crash report
+    The filename of the file that contains the crash report
     """
     original_traceback = traceback.format_exc().encode("utf-8")
     path = os.path.dirname(os.path.realpath(sys.argv[0]))
@@ -505,18 +500,44 @@ def crash_log() -> str:
     return filename
 
 
-def _process_value(value: T.Any) -> T.Any:
-    """ Process the values from a local dict and return in a loggable format
+def format_array(array: np.ndarray) -> str:
+    """Format arrays to be suitable for logging
 
     Parameters
     ----------
-    value: Any
+    array
+        The array to be formatted for logging
+
+    Returns
+    -------
+    String representation of an array for logging
+    """
+    try:
+        import numpy as np  # pylint:disable=import-outside-toplevel
+    except ImportError:
+        return repr(array)
+
+    if np.prod(array.shape) <= 10:
+        retval = "np.array("
+        if array.dtype == "object":
+            retval += f"{[x.tolist() for x in array]}"
+        else:
+            retval += str(array.tolist())
+        return f"{retval}, dtype='{array.dtype}')"
+    return f"<array(shape{array.shape}, '{array.dtype}')>"
+
+
+def _process_value(value: T.Any) -> T.Any:
+    """Process the values from a local dict and return in a format suitable for logging
+
+    Parameters
+    ----------
+    value
         The dictionary value
 
     Returns
     -------
-    Any
-        The original or ammended value
+    The original or amended value
     """
     if isinstance(value, (list, tuple, set)) and len(value) > 10:
         return f'[type: "{type(value).__name__}" len: {len(value)}'
@@ -526,26 +547,25 @@ def _process_value(value: T.Any) -> T.Any:
     except ImportError:
         return repr(value)
 
-    if isinstance(value, np.ndarray) and np.prod(value.shape) > 10:
-        return f'[type: "{type(value).__name__}" shape: {value.shape}, dtype: "{value.dtype}"]'
+    if isinstance(value, np.ndarray):
+        return format_array(value)
 
     return repr(value)
 
 
 def parse_class_init(locals_dict: dict[str, T.Any]) -> str:
-    """ Parse a locals dict from a class and return in a format suitable for logging
+    """Parse a locals dict from a class and return in a format suitable for logging
     Parameters
     ----------
-    locals_dict: dict[str, T.Any]
+    locals_dict
         A locals() dictionary from a newly initialized class
 
     Returns
     -------
-    str
-        The locals information suitable for logging
+    The locals information suitable for logging
     """
     delimit = {k: _process_value(v)
-               for k, v in locals_dict.items() if k != "self"}
+               for k, v in locals_dict.items() if k not in ("self", "__class__")}
     dsp = ", ".join(f"{k}={v}" for k, v in delimit.items())
     dsp = f"({dsp})" if dsp else ""
     return f"Initializing {locals_dict['self'].__class__.__name__}{dsp}"
@@ -555,8 +575,8 @@ _OLD_FACTORY = logging.getLogRecordFactory()
 
 
 def _faceswap_logrecord(*args, **kwargs) -> logging.LogRecord:
-    """ Add a flag to :class:`logging.LogRecord` to not strip formatting from particular
-    records. """
+    """Add a flag to :class:`logging.LogRecord` to not strip formatting from particular
+    records."""
     record = _OLD_FACTORY(*args, **kwargs)
     record.strip_spaces = True  # type:ignore
     return record

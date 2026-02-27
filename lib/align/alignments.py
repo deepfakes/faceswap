@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-""" Alignments file functions for reading, writing and manipulating the data stored in a
+"""Alignments file functions for reading, writing and manipulating the data stored in a
 serialized alignments file. """
 from __future__ import annotations
 import logging
 import os
+import sys
 import typing as T
 from datetime import datetime
 
@@ -36,7 +37,7 @@ _VERSION = 2.4
 
 # TODO Convert these to Dataclasses
 class MaskAlignmentsFileDict(T.TypedDict):
-    """ Typed Dictionary for storing Masks. """
+    """Typed Dictionary for storing Masks."""
     mask: bytes
     affine_matrix: list[float] | np.ndarray
     interpolator: int
@@ -45,8 +46,8 @@ class MaskAlignmentsFileDict(T.TypedDict):
 
 
 class PNGHeaderAlignmentsDict(T.TypedDict):
-    """ Base Dictionary for storing a single faces' Alignment Information in Alignments files and
-    PNG Headers. """
+    """Base Dictionary for storing a single faces' Alignment Information in Alignments files and
+    PNG Headers."""
     x: int
     y: int
     w: int
@@ -57,12 +58,12 @@ class PNGHeaderAlignmentsDict(T.TypedDict):
 
 
 class AlignmentFileDict(PNGHeaderAlignmentsDict):
-    """ Typed Dictionary for storing a single faces' Alignment Information in alignments files. """
+    """Typed Dictionary for storing a single faces' Alignment Information in alignments files."""
     thumb: np.ndarray | None
 
 
 class PNGHeaderSourceDict(T.TypedDict):
-    """ Dictionary for storing additional meta information in PNG headers """
+    """Dictionary for storing additional meta information in PNG headers."""
     alignments_version: float
     original_filename: str
     face_index: int
@@ -72,19 +73,19 @@ class PNGHeaderSourceDict(T.TypedDict):
 
 
 class AlignmentDict(T.TypedDict):
-    """ Dictionary for holding all of the alignment information within a single alignment file """
+    """Dictionary for holding all of the alignment information within a single alignment file."""
     faces: list[AlignmentFileDict]
     video_meta: dict[str, float | int]
 
 
 class PNGHeaderDict(T.TypedDict):
-    """ Dictionary for storing all alignment and meta information in PNG Headers """
+    """Dictionary for storing all alignment and meta information in PNG Headers."""
     alignments: PNGHeaderAlignmentsDict
     source: PNGHeaderSourceDict
 
 
 class Alignments():  # pylint:disable=too-many-public-methods
-    """ The alignments file is a custom serialized ``.fsa`` file that holds information for each
+    """The alignments file is a custom serialized ``.fsa`` file that holds information for each
     frame for a video or series of images.
 
     Specifically, it holds a list of faces that appear in each frame. Each face contains
@@ -96,9 +97,9 @@ class Alignments():  # pylint:disable=too-many-public-methods
 
     Parameters
     ----------
-    folder: str
+    folder
         The folder that contains the alignments ``.fsa`` file
-    filename: str, optional
+    filename
         The filename of the ``.fsa`` alignments file. If not provided then the given folder will be
         checked for a default alignments file filename. Default: "alignments"
     """
@@ -117,62 +118,61 @@ class Alignments():  # pylint:disable=too-many-public-methods
 
     @property
     def frames_count(self) -> int:
-        """ int: The number of frames that appear in the alignments :attr:`data`. """
+        """The number of frames that appear in the alignments :attr:`data`."""
         retval = len(self._data)
         logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     @property
     def faces_count(self) -> int:
-        """ int: The total number of faces that appear in the alignments :attr:`data`. """
+        """The total number of faces that appear in the alignments :attr:`data`"""
         retval = sum(len(val["faces"]) for val in self._data.values())
         logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     @property
     def file(self) -> str:
-        """ str: The full path to the currently loaded alignments file. """
+        """The full path to the currently loaded alignments file."""
         return self._io.file
 
     @property
     def data(self) -> dict[str, AlignmentDict]:
-        """ dict: The loaded alignments :attr:`file` in dictionary form. """
+        """The loaded alignments :attr:`file` in dictionary form."""
         return self._data
 
     @property
     def have_alignments_file(self) -> bool:
-        """ bool: ``True`` if an alignments file exists at location :attr:`file` otherwise
-        ``False``. """
+        """``True`` if an alignments file exists at location :attr:`file` otherwise ``False``."""
         return self._io.have_alignments_file
 
     @property
     def hashes_to_frame(self) -> dict[str, dict[str, int]]:
-        """ dict: The SHA1 hash of the face mapped to the frame(s) and face index within the frame
-        that the hash corresponds to.
+        """The SHA1 hash of the face mapped to the frame(s) and face index within the frame that
+        the hash corresponds to.
 
         Notes
         -----
-        This method is depractated and exists purely for updating legacy hash based alignments
+        This method is deprecated and exists purely for updating legacy hash based alignments
         to new png header storage in :class:`lib.align.update_legacy_png_header`.
         """
         return self._legacy.hashes_to_frame
 
     @property
     def hashes_to_alignment(self) -> dict[str, AlignmentFileDict]:
-        """ dict: The SHA1 hash of the face mapped to the alignment for the face that the hash
-        corresponds to. The structure of the dictionary is:
+        """The SHA1 hash of the face mapped to the alignment for the face that the hash
+        corresponds to.
 
         Notes
         -----
-        This method is depractated and exists purely for updating legacy hash based alignments
+        This method is deprecated and exists purely for updating legacy hash based alignments
         to new png header storage in :class:`lib.align.update_legacy_png_header`.
         """
         return self._legacy.hashes_to_alignment
 
     @property
     def mask_summary(self) -> dict[str, int]:
-        """ dict: The mask type names stored in the alignments :attr:`data` as key with the number
-        of faces which possess the mask type as value. """
+        """The mask type names stored in the alignments :attr:`data` as key with the number of
+        faces which possess the mask type as value."""
         masks: dict[str, int] = {}
         for val in self._data.values():
             for face in val["faces"]:
@@ -184,8 +184,8 @@ class Alignments():  # pylint:disable=too-many-public-methods
 
     @property
     def video_meta_data(self) -> dict[str, list[int] | list[float] | None]:
-        """ dict: The frame meta data stored in the alignments file. If data does not exist in the
-        alignments file then ``None`` is returned for each Key """
+        """The frame meta data stored in the alignments file. If data does not exist in the
+        alignments file then ``None`` is returned for each Key"""
         retval: dict[str, list[int] | list[float] | None] = {"pts_time": None, "keyframes": None}
         pts_time: list[float] = []
         keyframes: list[int] = []
@@ -201,35 +201,33 @@ class Alignments():  # pylint:disable=too-many-public-methods
 
     @property
     def thumbnails(self) -> Thumbnails:
-        """ :class:`~lib.align.thumbnails.Thumbnails`: The low resolution thumbnail images that
-        exist within the alignments file """
+        """The low resolution thumbnail images that exist within the alignments file"""
         return self._thumbnails
 
     @property
     def version(self) -> float:
-        """ float: The alignments file version number. """
+        """float: The alignments file version number. """
         return self._io.version
 
     def _load(self) -> dict[str, AlignmentDict]:
-        """ Load the alignments data from the serialized alignments :attr:`file`.
+        """Load the alignments data from the serialized alignments :attr:`file`.
 
         Populates :attr:`_version` with the alignment file's loaded version as well as returning
         the serialized data.
 
         Returns
         -------
-        dict:
-            The loaded alignments data
+        The loaded alignments data
         """
         return self._io.load()
 
     def save(self) -> None:
-        """ Write the contents of :attr:`data` and :attr:`_meta` to a serialized ``.fsa`` file at
-        the location :attr:`file`. """
+        """Write the contents of :attr:`data` and :attr:`_meta` to a serialized ``.fsa`` file at
+        the location :attr:`file`."""
         return self._io.save()
 
     def backup(self) -> None:
-        """ Create a backup copy of the alignments :attr:`file`.
+        """Create a backup copy of the alignments :attr:`file`.
 
         Creates a copy of the serialized alignments :attr:`file` appending a
         timestamp onto the end of the file name and storing in the same folder as
@@ -238,7 +236,7 @@ class Alignments():  # pylint:disable=too-many-public-methods
         return self._io.backup()
 
     def save_video_meta_data(self, pts_time: list[float], keyframes: list[int]) -> None:
-        """ Save video meta data to the alignments file.
+        """Save video meta data to the alignments file.
 
         If the alignments file does not have an entry for every frame (e.g. if Extract Every N
         was used) then the frame is added to the alignments file with no faces, so that they video
@@ -246,10 +244,10 @@ class Alignments():  # pylint:disable=too-many-public-methods
 
         Parameters
         ----------
-        pts_time: list
+        pts_time
             A list of presentation timestamps (`float`) in frame index order for every frame in
             the input video
-        keyframes: list
+        keyframes
             A list of frame indices corresponding to the key frames in the input video
         """
         if pts_time[0] != 0:
@@ -288,7 +286,7 @@ class Alignments():  # pylint:disable=too-many-public-methods
     @classmethod
     def _pad_leading_frames(cls, pts_time: list[float], keyframes: list[int]) -> tuple[list[float],
                                                                                        list[int]]:
-        """ Calculate the number of frames to pad the video by when the first frame is not
+        """Calculate the number of frames to pad the video by when the first frame is not
         a key frame.
 
         A somewhat crude method by obtaining the gaps between existing frames and calculating
@@ -297,17 +295,16 @@ class Alignments():  # pylint:disable=too-many-public-methods
 
         Parameters
         ----------
-        pts_time: list
+        pts_time
             A list of presentation timestamps (`float`) in frame index order for every frame in
             the input video
-        keyframes: list
+        keyframes
             A list of keyframes (`int`) for the input video
 
         Returns
         -------
-        tuple
-            The presentation time stamps with extra frames padded to the beginning and the
-            keyframes adjusted to include the new frames
+        The presentation time stamps with extra frames padded to the beginning and the keyframes
+        adjusted to include the new frames
         """
         start_pts = pts_time[0]
         logger.debug("Video not cut on keyframe. Start pts: %s", start_pts)
@@ -329,37 +326,35 @@ class Alignments():  # pylint:disable=too-many-public-methods
 
     # << VALIDATION >> #
     def frame_exists(self, frame_name: str) -> bool:
-        """ Check whether a given frame_name exists within the alignments :attr:`data`.
+        """Check whether a given frame_name exists within the alignments :attr:`data`.
 
         Parameters
         ----------
-        frame_name: str
+        frame_name
             The frame name to check. This should be the base name of the frame, not the full path
 
         Returns
         -------
-        bool
-            ``True`` if the given frame_name exists within the alignments :attr:`data`
-            otherwise ``False``
+        ``True`` if the given frame_name exists within the alignments :attr:`data` otherwise
+        ``False``
         """
         retval = frame_name in self._data.keys()
         logger.trace("'%s': %s", frame_name, retval)  # type:ignore[attr-defined]
         return retval
 
     def frame_has_faces(self, frame_name: str) -> bool:
-        """ Check whether a given frame_name exists within the alignments :attr:`data` and contains
+        """Check whether a given frame_name exists within the alignments :attr:`data` and contains
         at least 1 face.
 
         Parameters
         ----------
-        frame_name: str
+        frame_name
             The frame name to check. This should be the base name of the frame, not the full path
 
         Returns
         -------
-        bool
-            ``True`` if the given frame_name exists within the alignments :attr:`data` and has at
-            least 1 face associated with it, otherwise ``False``
+        ``True`` if the given frame_name exists within the alignments :attr:`data` and has at least
+        1 face associated with it, otherwise ``False``
         """
         frame_data = self._data.get(frame_name, T.cast(AlignmentDict, {}))
         retval = bool(frame_data.get("faces", []))
@@ -367,20 +362,19 @@ class Alignments():  # pylint:disable=too-many-public-methods
         return retval
 
     def frame_has_multiple_faces(self, frame_name: str) -> bool:
-        """ Check whether a given frame_name exists within the alignments :attr:`data` and contains
+        """Check whether a given frame_name exists within the alignments :attr:`data` and contains
         more than 1 face.
 
         Parameters
         ----------
-        frame_name: str
+        frame_name
             The frame_name name to check. This should be the base name of the frame, not the full
             path
 
         Returns
         -------
-        bool
-            ``True`` if the given frame_name exists within the alignments :attr:`data` and has more
-            than 1 face associated with it, otherwise ``False``
+        ``True`` if the given frame_name exists within the alignments :attr:`data` and has more
+        than 1 face associated with it, otherwise ``False``
         """
         if not frame_name:
             retval = False
@@ -391,21 +385,20 @@ class Alignments():  # pylint:disable=too-many-public-methods
         return retval
 
     def mask_is_valid(self, mask_type: str) -> bool:
-        """ Ensure the given ``mask_type`` is valid for the alignments :attr:`data`.
+        """Ensure the given ``mask_type`` is valid for the alignments :attr:`data`.
 
         Every face in the alignments :attr:`data` must have the given mask type to successfully
         pass the test.
 
         Parameters
         ----------
-        mask_type: str
+        mask_type
             The mask type to check against the current alignments :attr:`data`
 
         Returns
         -------
-        bool:
-            ``True`` if all faces in the current alignments possess the given ``mask_type``
-            otherwise ``False``
+        ``True`` if all faces in the current alignments possess the given ``mask_type`` otherwise
+        ``False``
         """
         retval = all((face.get("mask") is not None and
                       face["mask"].get(mask_type) is not None)
@@ -416,36 +409,34 @@ class Alignments():  # pylint:disable=too-many-public-methods
 
     # << DATA >> #
     def get_faces_in_frame(self, frame_name: str) -> list[AlignmentFileDict]:
-        """ Obtain the faces from :attr:`data` associated with a given frame_name.
+        """Obtain the faces from :attr:`data` associated with a given frame_name.
 
         Parameters
         ----------
-        frame_name: str
+        frame_name
             The frame name to return faces for. This should be the base name of the frame, not the
             full path
 
         Returns
         -------
-        list
-            The list of face dictionaries that appear within the requested frame_name
+        The list of face dictionaries that appear within the requested frame_name
         """
         logger.trace("Getting faces for frame_name: '%s'", frame_name)  # type:ignore[attr-defined]
         frame_data = self._data.get(frame_name, T.cast(AlignmentDict, {}))
         return frame_data.get("faces", T.cast(list[AlignmentFileDict], []))
 
     def count_faces_in_frame(self, frame_name: str) -> int:
-        """ Return number of faces that appear within :attr:`data` for the given frame_name.
+        """Return number of faces that appear within :attr:`data` for the given frame_name.
 
         Parameters
         ----------
-        frame_name: str
+        frame_name
             The frame name to return the count for. This should be the base name of the frame, not
             the full path
 
         Returns
         -------
-        int
-            The number of faces that appear in the given frame_name
+        The number of faces that appear in the given frame_name
         """
         frame_data = self._data.get(frame_name, T.cast(AlignmentDict, {}))
         retval = len(frame_data.get("faces", []))
@@ -454,20 +445,19 @@ class Alignments():  # pylint:disable=too-many-public-methods
 
     # << MANIPULATION >> #
     def delete_face_at_index(self, frame_name: str, face_index: int) -> bool:
-        """ Delete the face for the given frame_name at the given face index from :attr:`data`.
+        """Delete the face for the given frame_name at the given face index from :attr:`data`.
 
         Parameters
         ----------
-        frame_name: str
+        frame_name
             The frame name to remove the face from. This should be the base name of the frame, not
             the full path
-        face_index: int
+        face_index
             The index number of the face within the given frame_name to remove
 
         Returns
         -------
-        bool
-            ``True`` if a face was successfully deleted otherwise ``False``
+        ``True`` if a face was successfully deleted otherwise ``False``
         """
         logger.debug("Deleting face %s for frame_name '%s'", face_index, frame_name)
         face_index = int(face_index)
@@ -480,21 +470,20 @@ class Alignments():  # pylint:disable=too-many-public-methods
         return True
 
     def add_face(self, frame_name: str, face: AlignmentFileDict) -> int:
-        """ Add a new face for the given frame_name in :attr:`data` and return it's index.
+        """Add a new face for the given frame_name in :attr:`data` and return it's index.
 
         Parameters
         ----------
-        frame_name: str
+        frame_name
             The frame name to add the face to. This should be the base name of the frame, not the
             full path
-        face: dict
+        face
             The face information to add to the given frame_name, correctly formatted for storing in
             :attr:`data`
 
         Returns
         -------
-        int
-            The index of the newly added face within :attr:`data` for the given frame_name
+        The index of the newly added face within :attr:`data` for the given frame_name
         """
         logger.debug("Adding face to frame_name: '%s'", frame_name)
         if frame_name not in self._data:
@@ -505,16 +494,16 @@ class Alignments():  # pylint:disable=too-many-public-methods
         return retval
 
     def update_face(self, frame_name: str, face_index: int, face: AlignmentFileDict) -> None:
-        """ Update the face for the given frame_name at the given face index in :attr:`data`.
+        """Update the face for the given frame_name at the given face index in :attr:`data`.
 
         Parameters
         ----------
-        frame_name: str
+        frame_name
             The frame name to update the face for. This should be the base name of the frame, not
             the full path
-        face_index: int
+        face_index
             The index number of the face within the given frame_name to update
-        face: dict
+        face
             The face information to update to the given frame_name at the given face_index,
             correctly formatted for storing in :attr:`data`
         """
@@ -522,13 +511,13 @@ class Alignments():  # pylint:disable=too-many-public-methods
         self._data[frame_name]["faces"][face_index] = face
 
     def filter_faces(self, filter_dict: dict[str, list[int]], filter_out: bool = False) -> None:
-        """ Remove faces from :attr:`data` based on a given filter list.
+        """Remove faces from :attr:`data` based on a given filter list.
 
         Parameters
         ----------
-        filter_dict: dict
+        filter_dict
             Dictionary of source filenames as key with a list of face indices to filter as value.
-        filter_out: bool, optional
+        filter_out
             ``True`` if faces should be removed from :attr:`data` when there is a corresponding
             match in the given filter_dict. ``False`` if faces should be kept in :attr:`data` when
             there is a corresponding match in the given filter_dict, but removed if there is no
@@ -551,11 +540,11 @@ class Alignments():  # pylint:disable=too-many-public-methods
                 del frame_data["faces"][face_idx]
 
     def update_from_dict(self, data: dict[str, AlignmentDict]) -> None:
-        """ Replace all alignments with the contents of the given dictionary
+        """Replace all alignments with the contents of the given dictionary
 
         Parameters
         ----------
-        data: dict[str, AlignmentDict]
+        data
             The alignments, in correctly formatted dictionary form, to be populated into this
             :class:`Alignments`
         """
@@ -564,7 +553,7 @@ class Alignments():  # pylint:disable=too-many-public-methods
 
     # << GENERATORS >> #
     def yield_faces(self) -> Generator[tuple[str, list[AlignmentFileDict], int, str], None, None]:
-        """ Generator to obtain all faces with meta information from :attr:`data`. The results
+        """Generator to obtain all faces with meta information from :attr:`data`. The results
         are yielded by frame.
 
         Notes
@@ -573,14 +562,14 @@ class Alignments():  # pylint:disable=too-many-public-methods
 
         Yields
         ------
-        frame_name: str
+        frame_name
             The frame name that the face belongs to. This is the base name of the frame, as it
             appears in :attr:`data`, not the full path
-        faces: list
+        faces
             The list of face `dict` objects that exist for this frame
-        face_count: int
+        face_count
             The number of faces that exist within :attr:`data` for this frame
-        frame_fullname: str
+        frame_fullname
             The full path (folder and filename) for the yielded frame
         """
         for frame_fullname, val in self._data.items():
@@ -592,13 +581,13 @@ class Alignments():  # pylint:disable=too-many-public-methods
             yield frame_name, val["faces"], face_count, frame_fullname
 
     def update_legacy_has_source(self, filename: str) -> None:
-        """ Update legacy alignments files when we have the source filename available.
+        """Update legacy alignments files when we have the source filename available.
 
         Updates here can only be performed when we have the source filename
 
         Parameters
         ----------
-        filename: str:
+        filename
             The filename/folder of the original source images/video for the current alignments
         """
         updates = [updater.is_updated for updater in (VideoExtension(self, filename), )]
@@ -608,15 +597,15 @@ class Alignments():  # pylint:disable=too-many-public-methods
 
 
 class _IO():
-    """ Class to handle the saving/loading of an alignments file.
+    """Class to handle the saving/loading of an alignments file.
 
     Parameters
     ----------
-    alignments: :class:'~Alignments`
+    alignments
         The parent alignments class that these IO operations belong to
-    folder: str
+    folder
         The folder that contains the alignments ``.fsa`` file
-    filename: str
+    filename
         The filename of the ``.fsa`` alignments file.
     """
     def __init__(self, alignments: Alignments, folder: str, filename: str) -> None:
@@ -628,36 +617,34 @@ class _IO():
 
     @property
     def file(self) -> str:
-        """ str: The full path to the currently loaded alignments file. """
+        """The full path to the currently loaded alignments file."""
         return self._file
 
     @property
     def version(self) -> float:
-        """ float: The alignments file version number. """
+        """The alignments file version number."""
         return self._version
 
     @property
     def have_alignments_file(self) -> bool:
-        """ bool: ``True`` if an alignments file exists at location :attr:`file` otherwise
-        ``False``. """
+        """``True`` if an alignments file exists at location :attr:`file` otherwise ``False``."""
         retval = os.path.exists(self._file)
         logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     def _get_location(self, folder: str, filename: str) -> str:
-        """ Obtains the location of an alignments file.
+        """Obtains the location of an alignments file.
 
         Parameters
         ----------
-        folder: str
+        folder
             The folder that the alignments file is located in
-        filename: str
+        filename
             The filename of the alignments file
 
         Returns
         -------
-        str
-            The full path to the alignments file
+        The full path to the alignments file
         """
         logger.debug("Getting location: (folder: '%s', filename: '%s')", folder, filename)
         noext_name, extension = os.path.splitext(filename)
@@ -673,8 +660,8 @@ class _IO():
         return location
 
     def update_legacy(self) -> None:
-        """ Check whether the alignments are legacy, and if so update them to current alignments
-        format. """
+        """Check whether the alignments are legacy, and if so update them to current alignments
+        format."""
         updates = [updater.is_updated for updater in (FileStructure(self._alignments),
                                                       LandmarkRename(self._alignments),
                                                       ListToNumpy(self._alignments),
@@ -685,36 +672,44 @@ class _IO():
             self.save()
 
     def update_version(self) -> None:
-        """ Update the version of the alignments file to the latest version """
+        """Update the version of the alignments file to the latest version"""
         self._version = _VERSION
         logger.info("Updating alignments file to version %s", self._version)
 
     def load(self) -> dict[str, AlignmentDict]:
-        """ Load the alignments data from the serialized alignments :attr:`file`.
+        """Load the alignments data from the serialized alignments :attr:`file`.
 
         Populates :attr:`_version` with the alignment file's loaded version as well as returning
         the serialized data.
 
         Returns
         -------
-        dict:
-            The loaded alignments data
+        The loaded alignments data
         """
         logger.debug("Loading alignments")
         if not self.have_alignments_file:
-            raise FaceswapError(f"Error: Alignments file not found at {self._file}")
+            raise FaceswapError(f"Alignments file not found at {self._file}")
 
         logger.info("Reading alignments from: '%s'", self._file)
         data = self._serializer.load(self._file)
         meta = data.get("__meta__", {"version": 1.0})
         self._version = meta["version"]
+        if self._version < 2.0:
+            logger.error("This alignments file was generated with a very old legacy extraction "
+                         "method.")
+            logger.error("Updating these very old files is no longer supported.")
+            logger.error("To update to a more recent, supported format, you should run the "
+                         "alignments tool's 'extract' job with this file in Faceswap v2.3: "
+                         "https://github.com/deepfakes/faceswap/releases/tag/v2.3.0")
+            sys.exit(1)
+
         data = data.get("__data__", data)
         logger.debug("Loaded alignments")
         return data
 
     def save(self) -> None:
-        """ Write the contents of :attr:`data` and :attr:`_meta` to a serialized ``.fsa`` file at
-        the location :attr:`file`. """
+        """Write the contents of :attr:`data` and :attr:`_meta` to a serialized ``.fsa`` file at
+        the location :attr:`file`."""
         logger.debug("Saving alignments")
         logger.info("Writing alignments to: '%s'", self._file)
         data = {"__meta__": {"version": self._version},
@@ -723,7 +718,7 @@ class _IO():
         logger.debug("Saved alignments")
 
     def backup(self) -> None:
-        """ Create a backup copy of the alignments :attr:`file`.
+        """Create a backup copy of the alignments :attr:`file`.
 
         Creates a copy of the serialized alignments :attr:`file` appending a
         timestamp onto the end of the file name and storing in the same folder as
@@ -733,10 +728,10 @@ class _IO():
         if not os.path.isfile(self._file):
             logger.debug("No alignments to back up")
             return
-        now = datetime.now().strftime("%Y%m%d_%H%M%S")
+        now = datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
         src = self._file
         split = os.path.splitext(src)
-        dst = f"{split[0]}_{now}{split[1]}"
+        dst = f"{split[0]}_bk_{now}{split[1]}"
         idx = 1
         while True:
             if not os.path.exists(dst):

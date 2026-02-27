@@ -43,6 +43,11 @@ release = '3.0'
 
 
 # -- General configuration ---------------------------------------------------
+autodoc_typehints = "both"
+autodoc_default_options = {
+    "members": True,
+    "special-members": "__next__, __call__",
+}
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom

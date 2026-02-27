@@ -51,7 +51,7 @@ class LandmarkType(Enum):
         return shapes[shape]
 
 
-_MEAN_FACE: dict[LandmarkType, np.ndarray] = {
+MEAN_FACE: dict[LandmarkType, np.ndarray] = {
     LandmarkType.LM_2D_4: np.array(
         [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]),  # Clockwise from TL
     LandmarkType.LM_2D_51: np.array([
