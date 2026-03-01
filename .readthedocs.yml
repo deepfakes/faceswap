@@ -5,7 +5,7 @@
 # Required
 version: 2
 
-# Set the version of Python and other tools you might need
+# Set the version of the operating system and tools
 build:
   os: ubuntu-24.04
   tools:
@@ -13,15 +13,38 @@ build:
   apt_packages:
     - graphviz
 
-# Build documentation in the docs/ directory with Sphinx
+# Build documentation using Sphinx, pointing to the configuration file
 sphinx:
-   configuration: docs/conf.py
+  configuration: docs/conf.py
 
-# If using Sphinx, optionally build your docs in additional formats such as PDF
-# formats:
-#    - pdf
+# Build documentation in additional formats (uncomment if needed)
+formats:
+  - html
+  - pdf
+  - epub
 
-# Optionally declare the Python requirements required to build your docs
+# Declare Python requirements for building the documentation
 python:
-   install:
-   - requirements: docs/sphinx_requirements.txt
+  install:
+    - requirements: docs/sphinx_requirements.txt
+    # Install additional dependencies (optional)
+    - method: pip
+      path: docs/extra_requirements.txt
+
+# Add optional configurations for building and previews
+build:
+  image: latest
+  apt_packages:
+    - graphviz  # Example: Install system packages if needed
+
+# Set environment variables if necessary
+environment:
+  variables:
+    SPHINXOPTS: "-W"  # Treat warnings as errors
+
+# Configure pre- and post-build hooks (if applicable)
+# hooks:
+#   pre_build:
+#     - echo "Running pre-build tasks..."
+#   post_build:
+#     - echo "Running post-build tasks..."
