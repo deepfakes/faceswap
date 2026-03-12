@@ -189,6 +189,53 @@ class FaceswapFormatter(logging.Formatter):
     Rewrites some upstream warning messages to debug level to avoid spamming the console.
     """
 
+    @classmethod
+    def _lower_external(cls, record: logging.LogRecord) -> logging.LogRecord:
+        """Some external libs log at a higher level than we would really like, so lower their
+        log level.
+
+        Specifically: Matplotlib font properties, pytorch compilation gemm warnings
+
+        Parameters
+        ----------
+        record
+            The log record to check for rewriting
+
+        Returns
+        ----------
+        The log rewritten or untouched record
+        """
+        if (record.levelno == logging.INFO and record.funcName == "__init__"
+                and record.module == "font_manager"):
+            # Matplotlib font manager
+            record.levelno = 10
+            record.levelname = "DEBUG"
+        return record
+
+    @classmethod
+    def _format_warnings(cls, record: logging.LogRecord) -> logging.LogRecord:
+        """Warnings redirected from the warnings module will have new lines inserted. We do not
+        want this for logging
+
+        Parameters
+        ----------
+        record
+            The log record to check for rewriting
+
+        Returns
+        ----------
+        The log rewritten or untouched record
+        """
+        if record.levelno != logging.WARNING or record.name != "py.warnings":
+            return record
+
+        msg = record.getMessage()
+        # Strip new lines and trailing superfluous information from captured warnings
+        msg = msg.replace("\n", " ").strip().rstrip("warnings.warn(")
+        record.msg = msg
+        record.args = ()
+        return record
+
     def format(self, record: logging.LogRecord) -> str:
         """Strip new lines from log records and rewrite certain warning messages to debug level.
 
@@ -201,8 +248,9 @@ class FaceswapFormatter(logging.Formatter):
         -------
         The formatted log message
         """
-        record.message = record.getMessage()
         record = self._lower_external(record)
+        record = self._format_warnings(record)
+        record.message = record.getMessage()
         # strip newlines
         if record.levelno < 30 and ("\n" in record.message or "\r" in record.message):
             record.message = record.message.replace("\n", "\\n").replace("\r", "\\r")
@@ -225,29 +273,33 @@ class FaceswapFormatter(logging.Formatter):
             msg = msg + self.formatStack(record.stack_info)
         return msg
 
-    @classmethod
-    def _lower_external(cls, record: logging.LogRecord) -> logging.LogRecord:
-        """Some external libs log at a higher level than we would really like, so lower their
-        log level.
 
-        Specifically: Matplotlib font properties
+class TorchWarningsFilter:
+    """Filter compilation warnings from Torch out of the console, but allow them to exist in the
+    log"""
+    def filter(self, record: logging.LogRecord) -> bool:
+        """ Filter specific Torch compile warnings from the console
 
         Parameters
         ----------
         record
-            The log record to check for rewriting
+            The incoming log record to check for filtering
 
         Returns
-        ----------
-        The log rewritten or untouched record
+        -------
+        ``True`` if the record should be displayed
         """
-        if (record.levelno == 20 and record.funcName == "__init__"
-                and record.module == "font_manager"):
-            # Matplotlib font manager
-            record.levelno = 10
-            record.levelname = "DEBUG"
+        if record.levelno != logging.WARNING:
+            return True
 
-        return record
+        if record.name == "torch._inductor.utils" and record.funcName == "is_big_gpu":
+            # PyTorch: Not enough SMs to use max_autotune_gemm mode
+            return False
+
+        if record.name != "py.warnings":
+            return True
+
+        return "/torch/_inductor" not in record.getMessage()
 
 
 class RollingBuffer(collections.deque):
@@ -336,14 +388,29 @@ def log_setup(loglevel, log_file: str, command: str, is_gui: bool = False) -> No
                                        datefmt="%m/%d/%Y %H:%M:%S")
         s_handler = _stream_handler(numeric_loglevel, is_gui)
         f_handler = _file_handler(numeric_loglevel, log_file, log_format, command)
+        s_handler.addFilter(TorchWarningsFilter())
 
     rootlogger.addHandler(f_handler)
     rootlogger.addHandler(s_handler)
 
-    if command != "setup":
-        c_handler = _crash_handler(log_format)
-        rootlogger.addHandler(c_handler)
-        logging.info("Log level set to: %s", loglevel.upper())
+    if command == "setup":
+        return
+
+    c_handler = _crash_handler(log_format)
+    rootlogger.addHandler(c_handler)
+    logging.info("Log level set to: %s", loglevel.upper())
+
+    try:
+        import torch  # noqa[F401]  # pylint:disable=unused-import,import-outside-toplevel
+    except ImportError:
+        return
+
+    # Elevate torch loggers to use our loggers
+    for name in rootlogger.manager.loggerDict:
+        if name.startswith("torch"):
+            logger = logging.getLogger(name)
+            logger.handlers.clear()
+            logger.propagate = True
 
 
 def _file_handler(loglevel,
@@ -517,13 +584,16 @@ def format_array(array: np.ndarray) -> str:
     except ImportError:
         return repr(array)
 
-    if np.prod(array.shape) <= 10:
+    if array.dtype == "object":
         retval = "np.array("
-        if array.dtype == "object":
-            retval += f"{[x.tolist() for x in array]}"
-        else:
-            retval += str(array.tolist())
+        for sub in array:
+            retval += f"{format_array(sub)}, "
+        if array.size:
+            retval = retval[:-2]
         return f"{retval}, dtype='{array.dtype}')"
+
+    if np.prod(array.shape) <= 10:
+        return f"np.array({str(array.tolist())}, dtype='{array.dtype}')"
     return f"<array(shape{array.shape}, '{array.dtype}')>"
 
 

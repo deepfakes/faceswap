@@ -403,7 +403,7 @@ class Export:
             Full path to an output json file
         """
         in_file = self._alignments.file
-        base_filename = f"{os.path.splitext(in_file)[0]}_export"
+        base_filename = f"{os.path.splitext(in_file)[0]}"
         out_file = f"{base_filename}.json"
         idx = 1
         while True:

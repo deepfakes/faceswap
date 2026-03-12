@@ -323,7 +323,7 @@ class ROCm(_GPUStats):
         The list of all discovered GPUs
         """
         if self._is_wsl:
-            handles = list(range(self._device_count))
+            handles = list(str(i) for i in range(self._device_count))
         else:
             handles = self._sysfs_paths
         self._log("debug", f"sysfs GPU Handles found: {handles}")

@@ -29,6 +29,11 @@ networks package
    :noindex:
 
 |
+.. automodapi:: lib.model.networks.insightface_resnet
+   :include-all-objects:
+   :noindex:
+
+|
 .. automodapi:: lib.model.networks.simple_nets
    :include-all-objects:
 

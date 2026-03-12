@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 import typing as T
+from dataclasses import dataclass, field
 from datetime import datetime
 
 import numpy as np
@@ -14,7 +15,7 @@ from lib.serializer import get_serializer
 from lib.utils import FaceswapError, get_module_objects
 
 from .thumbnails import Thumbnails
-from .updater import (FileStructure, IdentityAndVideoMeta, LandmarkRename, Legacy, ListToNumpy,
+from .updater import (FileStructure, IdentityAndVideoMeta, LandmarkRename, Legacy, NumpyToList,
                       MaskCentering, VideoExtension)
 
 if T.TYPE_CHECKING:
@@ -82,6 +83,90 @@ class PNGHeaderDict(T.TypedDict):
     """Dictionary for storing all alignment and meta information in PNG Headers."""
     alignments: PNGHeaderAlignmentsDict
     source: PNGHeaderSourceDict
+
+
+# Dataclass to slowly replace the above
+@dataclass
+class MaskAlignmentsFile:
+    """Dataclass for storing Masks in alignments files and PNG Headers"""
+    mask: bytes
+    """The zlib compressed UINT8 mask of shape (stored_size, stored_size)"""
+    affine_matrix: list[float]
+    """The affine matrix that takes the mask from stored space to frame space"""
+    interpolator: int
+    """The interpolator required to take the mask from stored space to frame space"""
+    stored_size: int
+    """The size the mask is stored at"""
+    stored_centering: CenteringType
+    """The (legacy, face, head) centering type of the mask"""
+
+
+@dataclass
+class PNGAlignments:
+    """Base Dataclass for storing a single faces' Alignment Information in Alignments files and PNG
+    Headers."""
+    x: int
+    """The left most point of the bounding box"""
+    y: int
+    """The top most point of the bounding box"""
+    w: int
+    """The width of the bounding box"""
+    h: int
+    """The height of the bounding box"""
+    landmarks_xy: list[list[float]]
+    """The (x, y) landmark points of the face"""
+    mask: dict[str, MaskAlignmentsFile]
+    """The masks stored for the face"""
+    identity: dict[str, list[float]]
+    """The identity vectors stored for the face"""
+
+    def __repr__(self) -> str:
+        """Pretty print for logging"""
+        params = {}
+        for k, v in self.__dict__.items():
+            if k in ("landmarks_xy", "thumb"):
+                params[k] = f"{type(v)}[{len(v)}]"
+                continue
+            if k == "identity":
+                params[k] = repr({n: f"{type(i)}[{len(i)}]" for n, i in v.items()})
+                continue
+            params[k] = v
+        s_params = ", ".join(f"{k}={v}" for k, v in params.items())
+        return f"{self.__class__.__name__}({s_params})"
+
+
+@dataclass
+class PNGSource:
+    """Dataclass for storing additional meta information in PNG headers."""
+    alignments_version: float
+    """The alignments file version that created the alignments data"""
+    original_filename: str
+    """The original filename that this face was saved with"""
+    face_index: int
+    """The index of this face within the frame"""
+    source_filename: str
+    """The filename of the original frame the face was extracted from"""
+    source_is_video: bool
+    """``True`` if the face was extracted from a video. ``False`` if from an image"""
+    source_frame_dims: tuple[int, int] | None
+    """The (Height, Width) dimensions of the original frame the face was extracted from"""
+
+
+@dataclass
+class PNGHeader:
+    """Dataclass for storing all alignment and meta information in PNG Headers."""
+    alignments: PNGAlignments
+    """The alignment information for the face"""
+    source: PNGSource
+    """The frame source information for the face"""
+
+
+@dataclass
+class AlignmentsFace(PNGAlignments):
+    """Dataclass that holds the same information as PNGAlignments as well as a thumbnail for a
+    single face"""
+    thumb: list[int] = field(default_factory=list)
+    """96px JPEG thumbnail of the aligned face image stored as a list"""
 
 
 class Alignments():  # pylint:disable=too-many-public-methods
@@ -647,11 +732,11 @@ class _IO():
         The full path to the alignments file
         """
         logger.debug("Getting location: (folder: '%s', filename: '%s')", folder, filename)
-        noext_name, extension = os.path.splitext(filename)
+        no_ext_name, extension = os.path.splitext(filename)
         if extension[1:] == self._serializer.file_extension:
             logger.debug("Valid Alignments filename provided: '%s'", filename)
         else:
-            filename = f"{noext_name}.{self._serializer.file_extension}"
+            filename = f"{no_ext_name}.{self._serializer.file_extension}"
             logger.debug("File extension set from serializer: '%s'",
                          self._serializer.file_extension)
         location = os.path.join(str(folder), filename)
@@ -664,7 +749,7 @@ class _IO():
         format."""
         updates = [updater.is_updated for updater in (FileStructure(self._alignments),
                                                       LandmarkRename(self._alignments),
-                                                      ListToNumpy(self._alignments),
+                                                      NumpyToList(self._alignments),
                                                       MaskCentering(self._alignments),
                                                       IdentityAndVideoMeta(self._alignments))]
         if any(updates):

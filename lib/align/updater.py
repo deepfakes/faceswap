@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Handles updating of an alignments file from an older version to the current version. """
+"""Handles updating of an alignments file from an older version to the current version."""
 from __future__ import annotations
 
 import logging
@@ -18,11 +18,11 @@ if T.TYPE_CHECKING:
 
 
 class _Updater():
-    """ Base class for inheriting to test for and update of an alignments file property
+    """Base class for inheriting to test for and update of an alignments file property
 
     Parameters
     ----------
-    alignments : :class:`~lib.align.alignments.Alignments`
+    alignments
         The alignments object that is being tested and updated
     """
     def __init__(self, alignments: align.alignments.Alignments) -> None:
@@ -35,16 +35,15 @@ class _Updater():
 
     @property
     def is_updated(self) -> bool:
-        """ bool : ``True`` if this updater has been run otherwise ``False`` """
+        """``True`` if this updater has been run otherwise ``False``"""
         return self._needs_update
 
     def _test(self) -> bool:
-        """ Calls the child's :func:`test` method and logs output
+        """Calls the child's :func:`test` method and logs output
 
         Returns
         -------
-        bool
-            ``True`` if the test condition is met otherwise ``False``
+        ``True`` if the test condition is met otherwise ``False``
         """
         logger.debug("checking %s", self.__class__.__name__)
         retval = self.test()
@@ -52,50 +51,47 @@ class _Updater():
         return retval
 
     def test(self) -> bool:
-        """ Override to set the condition to test for.
+        """Override to set the condition to test for.
 
         Returns
         -------
-        bool
-            ``True`` if the test condition is met otherwise ``False``
+        ``True`` if the test condition is met otherwise ``False``
         """
         raise NotImplementedError()
 
     def _update(self) -> int:
-        """ Calls the child's :func:`update` method, logs output and sets the
+        """Calls the child's :func:`update` method, logs output and sets the
         :attr:`is_updated` flag
 
         Returns
         -------
-        int
-            The number of items that were updated
+        The number of items that were updated
         """
         retval = self.update()
         logger.debug("Updated %s: %s", self.__class__.__name__, retval)
         return retval
 
     def update(self) -> int:
-        """ Override to set the action to perform on the alignments object if the test has
+        """Override to set the action to perform on the alignments object if the test has
         passed
 
         Returns
         -------
-        int
-            The number of items that were updated
+        The number of items that were updated
         """
         raise NotImplementedError()
 
 
 class VideoExtension(_Updater):
-    """ Alignments files from video files used to have a dummy '.png' extension for each of the
+    """Alignments files from video files used to have a dummy '.png' extension for each of the
     keys. This has been changed to be file extension of the original input video (for better)
     identification of alignments files generated from video files
 
     Parameters
     ----------
-    alignments : :class:`~lib.align.alignments.Alignments`
+    alignments
         The alignments object that is being tested and updated
-    video_filename : str
+    video_filename
         The video filename that holds these alignments
     """
     def __init__(self, alignments: align.alignments.Alignments, video_filename: str) -> None:
@@ -103,13 +99,12 @@ class VideoExtension(_Updater):
         super().__init__(alignments)
 
     def test(self) -> bool:
-        """ Requires update if the extension of the key in the alignment file is not the same
+        """Requires update if the extension of the key in the alignment file is not the same
         as for the input video file
 
         Returns
         -------
-        bool
-            ``True`` if the key extensions need updating otherwise ``False``
+        ``True`` if the key extensions need updating otherwise ``False``
         """
         # Note: Don't check on alignments file version. It's possible that the file gets updated to
         # a newer version before this check is run
@@ -130,12 +125,12 @@ class VideoExtension(_Updater):
         return True
 
     def update(self) -> int:
-        """ Update alignments files that have been extracted from videos to have the key end in the
+        """Update alignments files that have been extracted from videos to have the key end in the
         video file extension rather than ',png' (the old way)
 
         Parameters
         ----------
-        video_filename : str
+        video_filename
             The filename of the video file that created these alignments
         """
         updated = 0
@@ -157,47 +152,44 @@ class VideoExtension(_Updater):
 
 
 class FileStructure(_Updater):
-    """ Alignments were structured: {frame_name: <list of faces>}. We need to be able to store
+    """Alignments were structured: {frame_name: <list of faces>}. We need to be able to store
     information at the frame level, so new structure is:  {frame_name: {faces: <list of faces>}}
     """
     def test(self) -> bool:
-        """ Test whether the alignments file is laid out in the old structure of
+        """Test whether the alignments file is laid out in the old structure of
         `{frame_name: [faces]}`
 
         Returns
         -------
-        bool
-            ``True`` if the file has legacy structure otherwise ``False``
+        ``True`` if the file has legacy structure otherwise ``False``
         """
         return any(isinstance(val, list) for val in self._alignments.data.values())
 
     def update(self) -> int:
-        """ Update legacy alignments files from the format `{frame_name: [faces}` to the
+        """Update legacy alignments files from the format `{frame_name: [faces}` to the
         format `{frame_name: {faces: [faces]}`.
 
         Returns
         -------
-        int
-            The number of items that were updated
+        The number of items that were updated
         """
         updated = 0
         for key, val in self._alignments.data.items():
             if not isinstance(val, list):
                 continue
-            self._alignments.data[key] = {"faces": val}
+            self._alignments.data[key] = T.cast("align.alignments.AlignmentDict", {"faces": val})
             updated += 1
         return updated
 
 
 class LandmarkRename(_Updater):
-    """ Landmarks renamed from landmarksXY to landmarks_xy for PEP compliance """
+    """Landmarks renamed from landmarksXY to landmarks_xy for PEP compliance """
     def test(self) -> bool:
-        """ check for legacy landmarksXY keys.
+        """check for legacy landmarksXY keys.
 
         Returns
         -------
-        bool
-            ``True`` if the alignments file contains legacy `landmarksXY` keys otherwise ``False``
+        ``True`` if the alignments file contains legacy `landmarksXY` keys otherwise ``False``
         """
         return (any(key == "landmarksXY"
                     for val in self._alignments.data.values()
@@ -205,12 +197,11 @@ class LandmarkRename(_Updater):
                     for key in alignment))
 
     def update(self) -> int:
-        """ Update legacy `landmarksXY` keys to PEP compliant `landmarks_xy` keys.
+        """Update legacy `landmarksXY` keys to PEP compliant `landmarks_xy` keys.
 
         Returns
         -------
-        int
-            The number of landmarks keys that were changed
+        The number of landmarks keys that were changed
         """
         update_count = 0
         for val in self._alignments.data.values():
@@ -221,59 +212,61 @@ class LandmarkRename(_Updater):
         return update_count
 
 
-class ListToNumpy(_Updater):
-    """ Landmarks stored as list instead of numpy array """
+class NumpyToList(_Updater):
+    """Landmarks stored as a numpy array instead of a list"""
     def test(self) -> bool:
-        """ check for legacy landmarks stored as `list` rather than :class:`numpy.ndarray`.
+        """check for legacy landmarks and thumbnails stored as :class:`numpy.ndarray` rather than
+        list
 
         Returns
         -------
-        bool
-            ``True`` if not all landmarks are :class:`numpy.ndarray` otherwise ``False``
+        ``True`` if any landmarks or thumbnails are a numpy array otherwise ``False``
         """
-        return not all(isinstance(face["landmarks_xy"], np.ndarray)
-                       for val in self._alignments.data.values()
-                       for face in val["faces"])
+        return any(isinstance(face["landmarks_xy"], np.ndarray)
+                   or isinstance(face["thumb"], np.ndarray)
+                   for val in self._alignments.data.values()
+                   for face in val["faces"])
 
     def update(self) -> int:
-        """ Update landmarks stored as `list` to :class:`numpy.ndarray`.
+        """Update landmarks and thumbnails stored as :class:`numpy.ndarray` to `list`.
 
         Returns
         -------
-        int
-            The number of landmarks keys that were changed
+        The number of faces that were changed
         """
         update_count = 0
         for val in self._alignments.data.values():
             for alignment in val["faces"]:
-                test = alignment["landmarks_xy"]
-                if not isinstance(test, np.ndarray):
-                    alignment["landmarks_xy"] = np.array(test, dtype="float32")
+                test1 = alignment["landmarks_xy"]
+                test2 = alignment["thumb"]
+                if isinstance(test1, np.ndarray) or isinstance(test2, np.ndarray):
                     update_count += 1
+                if isinstance(test1, np.ndarray):
+                    alignment["landmarks_xy"] = test1.tolist()
+                if isinstance(test2, np.ndarray):
+                    alignment["thumb"] = test2.tolist()
         return update_count
 
 
 class MaskCentering(_Updater):
-    """ Masks not containing the stored_centering parameters. Prior to this implementation all
+    """Masks not containing the stored_centering parameters. Prior to this implementation all
     masks were stored with face centering """
 
     def test(self) -> bool:
-        """ Mask centering was introduced in alignments version 2.2
+        """Mask centering was introduced in alignments version 2.2
 
         Returns
         -------
-        bool
-            ``True`` mask centering requires updating otherwise ``False``
+        ``True`` mask centering requires updating otherwise ``False``
         """
         return self._alignments.version < 2.2
 
     def update(self) -> int:
-        """ Add the mask key to the alignment file and update the centering of existing masks
+        """Add the mask key to the alignment file and update the centering of existing masks
 
         Returns
         -------
-        int
-            The number of masks that were updated
+        The number of masks that were updated
         """
         update_count = 0
         for val in self._alignments.data.values():
@@ -287,27 +280,24 @@ class MaskCentering(_Updater):
 
 
 class IdentityAndVideoMeta(_Updater):
-    """ Prior to version 2.3 the identity key did not exist and the video_meta key was not
+    """Prior to version 2.3 the identity key did not exist and the video_meta key was not
     compulsory. These should now both always appear, but do not need to be populated. """
-
     def test(self) -> bool:
-        """ Identity Key was introduced in alignments version 2.3
+        """Identity Key was introduced in alignments version 2.3
 
         Returns
         -------
-        bool
-            ``True`` identity key needs inserting otherwise ``False``
+        ``True`` identity key needs inserting otherwise ``False``
         """
         return self._alignments.version < 2.3
 
     # Identity information was not previously stored in the alignments file.
     def update(self) -> int:
-        """ Add the video_meta and identity keys to the alignment file and leave empty
+        """Add the video_meta and identity keys to the alignment file and leave empty
 
         Returns
         -------
-        int
-            The number of keys inserted
+        The number of keys inserted
         """
         update_count = 0
         for val in self._alignments.data.values():
@@ -323,13 +313,13 @@ class IdentityAndVideoMeta(_Updater):
         return update_count
 
 
-class Legacy():
-    """ Legacy alignments properties that are no longer used, but are still required for backwards
+class Legacy():  # TODO remove this as it is now ancient and likely to lead to issues
+    """Legacy alignments properties that are no longer used, but are still required for backwards
     compatibility/upgrading reasons.
 
     Parameters
     ----------
-    alignments : :class:`~lib.align.alignments.Alignments`
+    alignments
         The alignments object that requires these legacy properties
     """
     def __init__(self, alignments: align.alignments.Alignments) -> None:
@@ -339,7 +329,7 @@ class Legacy():
 
     @property
     def hashes_to_frame(self) -> dict[str, dict[str, int]]:
-        """ dict: The SHA1 hash of the face mapped to the frame(s) and face index within the frame
+        """The SHA1 hash of the face mapped to the frame(s) and face index within the frame
         that the hash corresponds to. The structure of the dictionary is:
 
         {**SHA1_hash** (`str`): {**filename** (`str`): **face_index** (`int`)}}.
@@ -362,7 +352,7 @@ class Legacy():
 
     @property
     def hashes_to_alignment(self) -> dict[str, align.alignments.AlignmentFileDict]:
-        """ dict: The SHA1 hash of the face mapped to the alignment for the face that the hash
+        """The SHA1 hash of the face mapped to the alignment for the face that the hash
         corresponds to. The structure of the dictionary is:
 
         Notes

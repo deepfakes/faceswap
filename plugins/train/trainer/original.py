@@ -66,7 +66,7 @@ class Trainer(TrainerBase):
         gradients = [v.value.grad for v in trainable_weights]
 
         # Update weights
-        with torch.no_grad():
+        with torch.inference_mode():
             self.model.model.optimizer.apply(gradients, trainable_weights)
 
     def train_batch(self,

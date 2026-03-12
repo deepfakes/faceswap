@@ -38,6 +38,9 @@ _CENTER_OFFSETS: dict[CenteringType, npt.NDArray[np.float32]] = {
 """The offsets required to shift the center point of a head in 3D space relative to legacy
 centering"""
 
+_HEAD_CENTER_POINTS = np.array([[6., 0., -2.3], [0., 6., -2.3], [0., 0., 3.7]], dtype=np.float32)
+"""Points approximately equidistant from the center of a skull in normalized 3D space"""
+
 
 def get_camera_matrix(focal_length: int = 4) -> np.ndarray:
     """Obtain an estimate of a camera matrix in normalized space
@@ -57,6 +60,18 @@ def get_camera_matrix(focal_length: int = 4) -> np.ndarray:
                               [0, 0, 1]], dtype="double")
     logger.trace("camera_matrix: %s", camera_matrix)  # type:ignore[attr-defined]
     return camera_matrix
+
+
+def get_xyz_2d(rotation: npt.NDArray[np.float32],
+               translation: npt.NDArray[np.float32],
+               camera_matrix: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+    """projected (x, y) coordinates for each x, y, z point at a constant distance from the adjusted
+    center of the skull (0.5, 0.5) in 2D space."""
+    return cv2.projectPoints(_HEAD_CENTER_POINTS,
+                             rotation,
+                             translation,
+                             camera_matrix,
+                             _DISTORTION_COEFFICIENTS)[0].squeeze(1).astype(np.float32)
 
 
 class PoseEstimate():
@@ -95,13 +110,7 @@ class PoseEstimate():
         """projected (x, y) coordinates for each x, y, z point at a constant distance from adjusted
         center of the skull (0.5, 0.5) in the 2D space."""
         if self._xyz_2d is None:
-            xyz = cv2.projectPoints(np.array([[6., 0., -2.3],
-                                              [0., 6., -2.3],
-                                              [0., 0., 3.7]]).astype("float32"),
-                                    self._rotation,
-                                    self._translation,
-                                    self._camera_matrix,
-                                    _DISTORTION_COEFFICIENTS)[0].squeeze()
+            xyz = get_xyz_2d(self._rotation, self._translation, self._camera_matrix)
             self._xyz_2d = xyz - self._offset["head"]
         return self._xyz_2d
 
@@ -273,6 +282,55 @@ class Batch3D:
         ident = np.eye(3, dtype="float32")
         retval = ident + np.sin(theta)[:, None] * k + (1 - np.cos(theta))[:, None] * (k @ k)
         return retval
+
+    @classmethod
+    def pitch(cls, vectors: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+        """Obtain the pitch, in degrees, for a batch of rotation matrices
+
+        Parameters
+        ----------
+        vectors
+            The (N, 3, 1) rotation vectors to convert
+
+        Returns
+        -------
+        The (N, ) pitch, in degrees
+        """
+        rod = cls.rodrigues(vectors)
+        return np.degrees(np.arctan2(rod[:, 2, 1], rod[:, 2, 2]))
+
+    @classmethod
+    def roll(cls, vectors: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+        """Obtain the roll, in degrees, for a batch of rotation matrices
+
+        Parameters
+        ----------
+        vectors
+            The (N, 3, 1) rotation vectors to convert
+
+        Returns
+        -------
+        The (N, ) rolls, in degrees
+        """
+        rod = cls.rodrigues(vectors)
+        return np.degrees(np.arctan2(rod[:, 1, 0], rod[:, 0, 0]))
+
+    @classmethod
+    def yaw(cls, vectors: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+        """Obtain the yaw, in degrees, for a batch of rotation matrices
+
+        Parameters
+        ----------
+        vectors
+            The (N, 3, 1) rotation vectors to convert
+
+        Returns
+        -------
+        The (N, ) yaw, in degrees
+        """
+        rod = cls.rodrigues(vectors)
+        return np.degrees(np.arctan2(-rod[:, 2, 0],
+                                     np.sqrt(rod[:, 2, 1] ** 2 + rod[:, 2, 2] ** 2)))
 
     @classmethod
     def project_points(cls,
