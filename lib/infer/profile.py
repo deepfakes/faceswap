@@ -434,11 +434,11 @@ class Output:
         if self._data.has_detector and self._data.face_scaling > 1:
             lbl = [f"Scaled EG/S ({self._data.face_scaling}x)"]
             egs = [f"{e:.1f}" for e in self._data.get_samples(-1, adjusted=True) / self._run_time]
-            avg_egs = self._data.get_samples_stats("mean", -1, adjusted=True) / self._run_time
-            s_avg_egs = [f"{avg_egs:.1f}"]
+            avg_egs = [
+                f"{self._data.get_samples_stats('mean', -1, adjusted=True) / self._run_time:.1f}"]
             min_egs = [
-                f"{(self._data.get_samples_stats("min", -1, adjusted=True) / self._run_time):.1f}"]
-            self._write(lbl + egs + s_avg_egs + min_egs)
+                f"{self._data.get_samples_stats('min', -1, adjusted=True) / self._run_time:.1f}"]
+            self._write(lbl + egs + avg_egs + min_egs)
 
         vram_alloc, vram_res = (str(int(round(v / 1024 / 1024))) for v in self._data.vram[-1])
         vram_res = f"{vram_res}/{str(int(round(self._data.vram_limit / 1024 / 1024)))}"
