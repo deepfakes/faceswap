@@ -302,7 +302,8 @@ def test_image_augmentation_random_clahe(size: int,  # pylint:disable=too-many-l
     grid_sizes = (randint_ret *
                   (instance._constants.color.clahe_base_contrast //
                    2)) + instance._constants.color.clahe_base_contrast
-    clahe_calls = [mocker.call(clipLimit=2.0, tileGridSize=(grid, grid)) for grid in grid_sizes]
+    clahe_calls = [mocker.call(clipLimit=2.0, tileGridSize=(grid, grid))
+                   for grid in grid_sizes]  # type:ignore
     clahe_mock = mocker.patch(f"{MODULE_PREFIX}.cv2.createCLAHE",
                               return_value=cv2.createCLAHE(clipLimit=2.0, tileGridSize=(3, 3)))
 

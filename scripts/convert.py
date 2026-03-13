@@ -1,5 +1,5 @@
 #!/usr/bin python3
-""" Main entry point to the convert process of FaceSwap """
+"""Main entry point to the convert process of FaceSwap"""
 from __future__ import annotations
 from dataclasses import dataclass, field
 import logging
@@ -14,18 +14,19 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from scripts import fsmedia
-from scripts.fsmedia import PostProcess, finalize
+from scripts import fs_media
+from scripts.fs_media import finalize
 from lib.serializer import get_serializer
 from lib.convert import Converter
 from lib.align import AlignedFace, DetectedFace, update_legacy_png_header
+from lib.infer.objects import FrameFaces
 from lib.gpu_stats import GPUStats
 from lib.image import read_image_meta_batch, ImagesLoader
 from lib.multithreading import MultiThread, total_cpus
 from lib.queue_manager import queue_manager
 from lib.utils import (get_module_objects, FaceswapError, get_folder,
-                       get_image_paths, handle_deprecated_cliopts)
-from plugins.extract import ExtractMedia, Extractor
+                       get_image_paths, handle_deprecated_cli_opts)
+from lib.infer import Detect, Align
 from plugins.plugin_loader import PluginLoader
 from plugins.train import train_config as mod_cfg
 
@@ -35,6 +36,8 @@ if T.TYPE_CHECKING:
     from plugins.convert.writer._base import Output
     from plugins.train.model._base import ModelBase
     from lib.align.aligned_face import CenteringType
+    from lib.infer.runner import ExtractRunner
+    from lib.infer.handler import ExtractHandler
     from lib.queue_manager import EventQueue
 
 
@@ -43,30 +46,30 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ConvertItem:
-    """ A single frame with associated objects passing through the convert process.
+    """A single frame with associated objects passing through the convert process.
 
     Parameters
     ----------
-    input: :class:`~plugins.extract.extract_media.ExtractMedia`
-        The ExtractMedia object holding the :attr:`filename`, :attr:`image` and attr:`list` of
+    input
+        The FrameFaces object holding the :attr:`filename`, :attr:`image` and attr:`list` of
         :class:`~lib.align.DetectedFace` objects loaded from disk
-    feed_faces: list, Optional
+    feed_faces
         list of :class:`lib.align.AlignedFace` objects for feeding into the model's predict
         function
-    reference_faces: list, Optional
+    reference_faces
         list of :class:`lib.align.AlignedFace` objects at model output sized for using as reference
-        in the convert functionfor feeding into the model's predict
-    swapped_faces: :class:`np.ndarray`
+        in the convert function for feeding into the model's predict
+    swapped_faces
         The swapped faces returned from the model's predict function
     """
-    inbound: ExtractMedia
+    inbound: FrameFaces
     feed_faces: list[AlignedFace] = field(default_factory=list)
     reference_faces: list[AlignedFace] = field(default_factory=list)
     swapped_faces: np.ndarray = field(default_factory=lambda: np.array([]))
 
 
 class Convert():
-    """ The Faceswap Face Conversion Process.
+    """The Faceswap Face Conversion Process.
 
     The conversion process is responsible for swapping the faces on source frames with the output
     from a trained model.
@@ -79,13 +82,13 @@ class Convert():
 
     Parameters
     ----------
-    arguments: :class:`argparse.Namespace`
+    arguments
         The arguments to be passed to the convert process as generated from Faceswap's command
         line arguments
     """
     def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (args: %s)", self.__class__.__name__, arguments)
-        self._args = handle_deprecated_cliopts(arguments)
+        self._args = handle_deprecated_cli_opts(arguments)
 
         self._images = ImagesLoader(self._args.input_dir, fast_count=True)
         self._alignments = self._get_alignments()
@@ -98,27 +101,27 @@ class Convert():
         self._validate()
         get_folder(self._args.output_dir)
 
-        configfile = self._args.configfile if hasattr(self._args, "configfile") else None
+        config_file = self._args.config_file if hasattr(self._args, "config_file") else None
         self._converter = Converter(self._predictor.output_size,
                                     self._predictor.coverage_ratio,
                                     self._predictor.centering,
                                     self._disk_io.draw_transparent,
                                     self._disk_io.pre_encode,
                                     arguments,
-                                    configfile=configfile)
+                                    config_file=config_file)
         self._patch_threads = self._get_threads()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def _queue_size(self) -> int:
-        """ int: Size of the converter queues. 2 for single process otherwise 4 """
+        """Size of the converter queues. 2 for single process otherwise 4"""
         retval = 2 if self._args.singleprocess or self._args.jobs == 1 else 4
         logger.debug(retval)
         return retval
 
     @property
     def _pool_processes(self) -> int:
-        """ int: The number of threads to run in parallel. Based on user options and number of
+        """The number of threads to run in parallel. Based on user options and number of
         available processors. """
         if self._args.singleprocess:
             retval = 1
@@ -130,26 +133,22 @@ class Convert():
         logger.debug(retval)
         return retval
 
-    def _get_alignments(self) -> fsmedia.Alignments:
-        """ Perform validation checks and legacy updates and return alignemnts object
+    def _get_alignments(self) -> fs_media.Alignments:
+        """Perform validation checks and legacy updates and return alignments object
 
         Returns
         -------
-        :class:`~scripts.fsmedia.Alignments`
-            The alignments file for the extract job
+        The alignments file for the extract job
         """
-        retval = fsmedia.Alignments(self._args, False, self._images.is_video)
-        if retval.version == 1.0:
-            logger.error("The alignments file format has been updated since the given alignments "
-                         "file was generated. You need to update the file to proceed.")
-            logger.error("To do this run the 'Alignments Tool' > 'Extract' Job.")
-            sys.exit(1)
-
+        retval = fs_media.Alignments(self._args.alignments_path,
+                                     self._args.input_dir,
+                                     is_extract=False,
+                                     input_is_video=self._images.is_video)
         retval.update_legacy_has_source(os.path.basename(self._args.input_dir))
         return retval
 
     def _validate(self) -> None:
-        """ Validate the Command Line Options.
+        """Validate the Command Line Options.
 
         Ensure that certain cli selections are valid and won't result in an error. Checks:
             * If frames have been passed in with video output, ensure user supplies reference
@@ -178,7 +177,7 @@ class Convert():
             self._args.mask_type = "extended"
 
         if (not self._args.on_the_fly and
-                self._args.mask_type not in ("none", "predicted") and
+                self._args.mask_type not in ("none", "predicted", "extended", "components") and
                 not self._alignments.mask_is_valid(self._args.mask_type)):
             msg = (f"You have selected the Mask Type `{self._args.mask_type}` but at least one "
                    "face does not have this mask stored in the Alignments File.\nYou should "
@@ -202,17 +201,17 @@ class Convert():
             self._args.mask_type = mask_type
 
     def _add_queues(self) -> None:
-        """ Add the queues for in, patch and out. """
+        """Add the queues for in, patch and out."""
         logger.debug("Adding queues. Queue size: %s", self._queue_size)
         for qname in ("convert_in", "convert_out", "patch"):
             queue_manager.add_queue(qname, self._queue_size)
 
     def _get_threads(self) -> MultiThread:
-        """ Get the threads for patching the converted faces onto the frames.
+        """Get the threads for patching the converted faces onto the frames.
 
         Returns
-        :class:`lib.multithreading.MultiThread`
-            The threads that perform the patching of swapped faces onto the output frames
+        -------
+        The threads that perform the patching of swapped faces onto the output frames
         """
         save_queue = queue_manager.get_queue("convert_out")
         patch_queue = queue_manager.get_queue("patch")
@@ -220,7 +219,7 @@ class Convert():
                            thread_count=self._pool_processes, name="patch")
 
     def process(self) -> None:
-        """ The entry point for triggering the Conversion Process.
+        """The entry point for triggering the Conversion Process.
 
         Should only be called from  :class:`lib.cli.launcher.ScriptExecutor`
 
@@ -243,14 +242,14 @@ class Convert():
         except MemoryError as err:
             msg = ("Faceswap ran out of RAM running convert. Conversion is very system RAM "
                    "heavy, so this can happen in certain circumstances when you have a lot of "
-                   "cpus but not enough RAM to support them all."
+                   "CPUs but not enough RAM to support them all."
                    "\nYou should lower the number of processes in use by either setting the "
                    "'singleprocess' flag (-sp) or lowering the number of parallel jobs (-j).")
             raise FaceswapError(msg) from err
 
     def _convert_images(self) -> None:
-        """ Start the multi-threaded patching process, monitor all threads for errors and join on
-        completion. """
+        """Start the multi-threaded patching process, monitor all threads for errors and join on
+        completion."""
         logger.debug("Converting images")
         self._patch_threads.start()
         while True:
@@ -269,7 +268,7 @@ class Convert():
         logger.debug("Converted images")
 
     def _check_thread_error(self) -> None:
-        """ Monitor all running threads for errors, and raise accordingly.
+        """Monitor all running threads for errors, and raise accordingly.
 
         Raises
         ------
@@ -284,7 +283,7 @@ class Convert():
 
 
 class DiskIO():  # pylint:disable=too-many-instance-attributes
-    """ Disk Input/Output for the converter process.
+    """Disk Input/Output for the converter process.
 
     Background threads to:
         * Load images from disk and get the detected faces
@@ -292,19 +291,19 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
 
     Parameters
     ----------
-    alignments: :class:`scripts.fsmedia.Alignments`
+    alignments
         The alignments for the input video
-    images: :class:`lib.image.ImagesLoader`
+    images
         The input images
-    predictor: :class:`Predict`
+    predictor
         The object for generating predictions from the model
-    arguments: :class:`argparse.Namespace`
+    arguments
         The arguments that were passed to the convert process as generated from Faceswap's command
         line arguments
     """
 
     def __init__(self,
-                 alignments: fsmedia.Alignments,
+                 alignments: fs_media.Alignments,
                  images: ImagesLoader,
                  predictor: Predict,
                  arguments: Namespace) -> None:
@@ -313,11 +312,10 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
         self._alignments = alignments
         self._images = images
         self._args = arguments
-        self._pre_process = PostProcess(arguments)
         self._completion_event = Event()
 
         # For frame skipping
-        self._imageidxre = re.compile(r"(\d+)(?!.*\d\.)(?=\.\w+$)")
+        self._image_idx_re = re.compile(r"(\d+)(?!.*\d\.)(?=\.\w+$)")
         self._frame_ranges = self._get_frame_ranges()
         self._writer = self._get_writer(predictor)
 
@@ -331,19 +329,19 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
 
     @property
     def completion_event(self) -> Event:
-        """ :class:`event.Event`: Event is set when the DiskIO Save task is complete """
+        """Event is set when the DiskIO Save task is complete"""
         return self._completion_event
 
     @property
     def draw_transparent(self) -> bool:
-        """ bool: ``True`` if the selected writer can output transparent and it's Draw_transparent
-        configuration item is set otherwise ``False`` """
+        """``True`` if the selected writer can output transparent and it's Draw_transparent
+        configuration item is set otherwise ``False``"""
         return self._writer.output_alpha
 
     @property
     def pre_encode(self) -> Callable[[np.ndarray, T.Any], list[bytes]] | None:
-        """ python function: Selected writer's pre-encode function, if it has one,
-        otherwise ``None`` """
+        """python function: Selected writer's pre-encode function, if it has one,
+        otherwise ``None``"""
         dummy = np.zeros((20, 20, 3), dtype="uint8")
         test = self._writer.pre_encode(dummy)
         retval: Callable | None = None if test is None else self._writer.pre_encode
@@ -352,25 +350,22 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
 
     @property
     def save_thread(self) -> MultiThread:
-        """ :class:`lib.multithreading.MultiThread`: The thread that is running the image writing
-        operation. """
+        """The thread that is running the image writing operation."""
         return self._threads["save"]
 
     @property
     def load_thread(self) -> MultiThread:
-        """ :class:`lib.multithreading.MultiThread`: The thread that is running the image loading
-        operation. """
+        """The thread that is running the image loading operation."""
         return self._threads["load"]
 
     @property
     def load_queue(self) -> EventQueue:
-        """ :class:`~lib.queue_manager.EventQueue`: The queue that images and detected faces are "
-        "loaded into. """
+        """The queue that images and detected faces are loaded into."""
         return self._queues["load"]
 
     @property
     def _total_count(self) -> int:
-        """ int: The total number of frames to be converted """
+        """The total number of frames to be converted"""
         if self._frame_ranges and not self._args.keep_unchanged:
             retval = sum(fr[1] - fr[0] + 1 for fr in self._frame_ranges)
         else:
@@ -380,17 +375,16 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
 
     # Initialization
     def _get_writer(self, predictor: Predict) -> Output:
-        """ Load the selected writer plugin.
+        """Load the selected writer plugin.
 
         Parameters
         ----------
-        predictor: :class:`Predict`
+        predictor
             The object for generating predictions from the model
 
         Returns
         -------
-        :mod:`plugins.convert.writer` plugin
-            The requested writer plugin
+        The requested writer plugin
         """
         args = [self._args.output_dir]
         if self._args.writer in ("ffmpeg", "gif"):
@@ -403,36 +397,34 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
         if self._args.writer == "patch":
             args.append(predictor.output_size)
         logger.debug("Writer args: %s", args)
-        configfile = self._args.configfile if hasattr(self._args, "configfile") else None
+        config_file = self._args.config_file if hasattr(self._args, "config_file") else None
         return PluginLoader.get_converter("writer", self._args.writer)(*args,
-                                                                       configfile=configfile)
+                                                                       config_file=config_file)
 
     def _get_frame_ranges(self) -> list[tuple[int, int]] | None:
-        """ Obtain the frame ranges that are to be converted.
+        """Obtain the frame ranges that are to be converted.
 
         If frame ranges have been specified, then split the command line formatted arguments into
         ranges that can be used.
 
         Returns
-        list or ``None``
-            A list of  frames to be processed, or ``None`` if the command line argument was not
-            used
+        A list of  frames to be processed, or ``None`` if the command line argument was not used
         """
         if not self._args.frame_ranges:
             logger.debug("No frame range set")
             return None
 
-        minframe, maxframe = None, None
+        min_frame, max_frame = None, None
         if self._images.is_video:
-            minframe, maxframe = 1, self._images.count
+            min_frame, max_frame = 1, self._images.count
         else:
-            indices = [int(self._imageidxre.findall(os.path.basename(filename))[0])
+            indices = [int(self._image_idx_re.findall(os.path.basename(filename))[0])
                        for filename in self._images.file_list]
             if indices:
-                minframe, maxframe = min(indices), max(indices)
-        logger.debug("minframe: %s, maxframe: %s", minframe, maxframe)
+                min_frame, max_frame = min(indices), max(indices)
+        logger.debug("min_frame: %s, max_frame: %s", min_frame, max_frame)
 
-        if minframe is None or maxframe is None:
+        if min_frame is None or max_frame is None:
             raise FaceswapError("Frame Ranges specified, but could not determine frame numbering "
                                 "from filenames")
 
@@ -441,20 +433,19 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
             if "-" not in rng:
                 raise FaceswapError("Frame Ranges not specified in the correct format")
             start, end = rng.split("-")
-            retval.append((max(int(start), minframe), min(int(end), maxframe)))
+            retval.append((max(int(start), min_frame), min(int(end), max_frame)))
         logger.debug("frame ranges: %s", retval)
         return retval
 
-    def _load_extractor(self) -> Extractor | None:
-        """ Load the CV2-DNN Face Extractor Chain.
+    def _load_extractor(self) -> ExtractRunner[ExtractHandler] | None:
+        """Load the CV2-DNN Face Extractor Chain.
 
         For On-The-Fly conversion we use a CPU based extractor to avoid stacking the GPU.
         Results are poor.
 
         Returns
         -------
-        :class:`plugins.extract.Pipeline.Extractor`
-            The face extraction chain to be used for on-the-fly conversion
+        The face extraction chain to be used for on-the-fly conversion
         """
         if not self._alignments.have_alignments_file and not self._args.on_the_fly:
             logger.error("No alignments file found. Please provide an alignments file for your "
@@ -474,18 +465,12 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
                        "extraction and will produce poor results.")
         logger.warning("It is recommended to generate an alignments file for your destination "
                        "video with Extract first for superior results.")
-        extractor = Extractor(detector="cv2-dnn",
-                              aligner="cv2-dnn",
-                              masker=self._args.mask_type,
-                              multiprocess=True,
-                              rotate_images=None,
-                              min_size=20)
-        extractor.launch()
+        retval = Align("cv2-dnn")(Detect("cv2-dnn", min_size=3)())
         logger.debug("Loaded extractor")
-        return extractor
+        return retval
 
     def _init_threads(self) -> None:
-        """ Initialize queues and threads.
+        """Initialize queues and threads.
 
         Creates the load and save queues and the load and save threads. Starts the threads.
         """
@@ -496,11 +481,11 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
         logger.debug("Initialized DiskIO Threads")
 
     def _add_queue(self, task: T.Literal["load", "save"]) -> None:
-        """ Add the queue to queue_manager and to :attr:`self._queues` for the given task.
+        """Add the queue to queue_manager and to :attr:`self._queues` for the given task.
 
         Parameters
         ----------
-        task: {"load", "save"}
+        task
             The task that the queue is to be added for
         """
         logger.debug("Adding queue for task: '%s'", task)
@@ -514,11 +499,11 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
         logger.debug("Added queue for task: '%s'", task)
 
     def _start_thread(self, task: T.Literal["load", "save"]) -> None:
-        """ Create the thread for the given task, add it it :attr:`self._threads` and start it.
+        """Create the thread for the given task, add it it :attr:`self._threads` and start it.
 
         Parameters
         ----------
-        task: {"load", "save"}
+        task
             The task that the thread is to be created for
         """
         logger.debug("Starting thread: '%s'", task)
@@ -531,7 +516,7 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
 
     # Loading tasks
     def _load(self, *args) -> None:  # pylint:disable=unused-argument
-        """ Load frames from disk.
+        """Load frames from disk.
 
         In a background thread:
             * Loads frames from disk.
@@ -551,7 +536,7 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
                 # All black frames will return not numpy.any() so check dims too
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
-            if self._check_skipframe(filename):
+            if self._check_skip_frame(filename):
                 if self._args.keep_unchanged:
                     logger.trace("Saving unchanged frame: %s", filename)  # type:ignore
                     out_file = os.path.join(self._args.output_dir, os.path.basename(filename))
@@ -561,56 +546,56 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
                 continue
 
             detected_faces = self._get_detected_faces(filename, image)
-            item = ConvertItem(ExtractMedia(filename, image, detected_faces))
-            self._pre_process.do_actions(item.inbound)
+            frame_faces = FrameFaces(filename, image)
+            frame_faces.detected_faces = detected_faces
+            item = ConvertItem(frame_faces)
+
             self._queues["load"].put(item)
 
         logger.debug("Putting EOF")
         self._queues["load"].put("EOF")
         logger.debug("Load Images: Complete")
 
-    def _check_skipframe(self, filename: str) -> bool:
-        """ Check whether a frame is to be skipped.
+    def _check_skip_frame(self, filename: str) -> bool:
+        """Check whether a frame is to be skipped.
 
         Parameters
         ----------
-        filename: str
+        filename
             The filename of the frame to check
 
         Returns
         -------
-        bool
-            ``True`` if the frame is to be skipped otherwise ``False``
+        ``True`` if the frame is to be skipped otherwise ``False``
         """
         if not self._frame_ranges:
             return False
-        indices = self._imageidxre.findall(filename)
+        indices = self._image_idx_re.findall(filename)
         if not indices:
             logger.warning("Could not determine frame number. Frame will be converted: '%s'",
                            filename)
             return False
         idx = int(indices[0])
-        skipframe = not any(map(lambda b: b[0] <= idx <= b[1], self._frame_ranges))
-        logger.trace("idx: %s, skipframe: %s", idx, skipframe)  # type: ignore[attr-defined]
-        return skipframe
+        skip_frame = not any(map(lambda b: b[0] <= idx <= b[1], self._frame_ranges))
+        logger.trace("idx: %s, skip_frame: %s", idx, skip_frame)  # type: ignore[attr-defined]
+        return skip_frame
 
     def _get_detected_faces(self, filename: str, image: np.ndarray) -> list[DetectedFace]:
-        """ Return the detected faces for the given image.
+        """Return the detected faces for the given image.
 
         If we have an alignments file, then the detected faces are created from that file. If
         we're running On-The-Fly then they will be extracted from the extractor.
 
         Parameters
         ----------
-        filename: str
+        filename
             The filename to return the detected faces for
-        image: :class:`numpy.ndarray`
+        image
             The frame that the detected faces exist in
 
         Returns
         -------
-        list
-            List of :class:`lib.align.DetectedFace` objects
+        List of :class:`lib.align.DetectedFace` objects
         """
         logger.trace("Getting faces for: '%s'", filename)  # type:ignore
         if not self._extractor:
@@ -621,19 +606,18 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
         return detected_faces
 
     def _alignments_faces(self, frame_name: str, image: np.ndarray) -> list[DetectedFace]:
-        """ Return detected faces from an alignments file.
+        """Return detected faces from an alignments file.
 
         Parameters
         ----------
-        frame_name: str
+        frame_name
             The name of the frame to return the detected faces for
-        image: :class:`numpy.ndarray`
+        image
             The frame that the detected faces exist in
 
         Returns
         -------
-        list
-            List of :class:`lib.align.DetectedFace` objects
+        List of :class:`lib.align.DetectedFace` objects
         """
         if not self._check_alignments(frame_name):
             return []
@@ -641,26 +625,25 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
         faces = self._alignments.get_faces_in_frame(frame_name)
         detected_faces = []
 
-        for rawface in faces:
+        for raw_face in faces:
             face = DetectedFace()
-            face.from_alignment(rawface, image=image)
+            face.from_alignment(raw_face, image=image)
             detected_faces.append(face)
         return detected_faces
 
     def _check_alignments(self, frame_name: str) -> bool:
-        """ Ensure that we have alignments for the current frame.
+        """Ensure that we have alignments for the current frame.
 
         If we have no alignments for this image, skip it and output a message.
 
         Parameters
         ----------
-        frame_name: str
+        frame_name
             The name of the frame to check that we have alignments for
 
         Returns
         -------
-        bool
-            ``True`` if we have alignments for this face, otherwise ``False``
+        ``True`` if we have alignments for this face, otherwise ``False``
         """
         have_alignments = self._alignments.frame_exists(frame_name)
         if not have_alignments:
@@ -668,38 +651,36 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
         return have_alignments
 
     def _detect_faces(self, filename: str, image: np.ndarray) -> list[DetectedFace]:
-        """ Extract the face from a frame for On-The-Fly conversion.
+        """Extract the face from a frame for On-The-Fly conversion.
 
         Pulls detected faces out of the Extraction pipeline.
 
         Parameters
         ----------
-        filename: str
+        filename
             The filename to return the detected faces for
-        image: :class:`numpy.ndarray`
+        image
             The frame that the detected faces exist in
 
         Returns
         -------
-        list
-            List of :class:`lib.align.DetectedFace` objects
-         """
+        List of :class:`lib.align.DetectedFace` objects
+        """
         assert self._extractor is not None
-        self._extractor.input_queue.put(ExtractMedia(filename, image))
-        faces = next(self._extractor.detected_faces())
+        faces = self._extractor.put(filename, image, passthrough=True)
         return faces.detected_faces
 
     # Saving tasks
     def _save(self, completion_event: Event) -> None:
-        """ Save the converted images.
+        """Save the converted images.
 
         Puts the selected writer into a background thread and feeds it from the output of the
         patch queue.
 
         Parameters
         ----------
-        completion_event: :class:`event.Event`
-            An even that this process triggers when it has finished saving
+        completion_event
+            An event that this process triggers when it has finished saving
         """
         logger.debug("Save Images: Start")
         write_preview = self._args.redirect_gui and self._writer.is_stream
@@ -721,18 +702,20 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
                 cv2.imwrite(preview_image, image)
             self._writer.write(filename, image)
         self._writer.close()
+        if self._extractor is not None:
+            self._extractor.stop()
         completion_event.set()
         logger.debug("Save Faces: Complete")
 
 
 class Predict():  # pylint:disable=too-many-instance-attributes
-    """ Obtains the output from the Faceswap model.
+    """Obtains the output from the Faceswap model.
 
     Parameters
     ----------
-    queue_size: int
+    queue_size
         The maximum size of the input queue
-    arguments: :class:`argparse.Namespace`
+    arguments
         The arguments that were passed to the convert process as generated from Faceswap's command
         line arguments
     """
@@ -758,59 +741,57 @@ class Predict():  # pylint:disable=too-many-instance-attributes
 
     @property
     def thread(self) -> MultiThread:
-        """ :class:`~lib.multithreading.MultiThread`: The thread that is running the prediction
-        function from the Faceswap model. """
+        """The thread that is running the prediction function from the Faceswap model."""
         assert self._thread is not None
         return self._thread
 
     @property
     def in_queue(self) -> EventQueue:
-        """ :class:`~lib.queue_manager.EventQueue`: The input queue to the predictor. """
+        """The input queue to the predictor."""
         assert self._in_queue is not None
         return self._in_queue
 
     @property
     def out_queue(self) -> EventQueue:
-        """ :class:`~lib.queue_manager.EventQueue`: The output queue from the predictor. """
+        """The output queue from the predictor."""
         return self._out_queue
 
     @property
     def faces_count(self) -> int:
-        """ int: The total number of faces seen by the Predictor. """
+        """The total number of faces seen by the Predictor."""
         return self._faces_count
 
     @property
     def verify_output(self) -> bool:
-        """ bool: ``True`` if multiple faces have been found in frames, otherwise ``False``. """
+        """``True`` if multiple faces have been found in frames, otherwise ``False``."""
         return self._verify_output
 
     @property
     def coverage_ratio(self) -> float:
-        """ float: The coverage ratio that the model was trained at. """
+        """float: The coverage ratio that the model was trained at."""
         return self._coverage_ratio
 
     @property
     def centering(self) -> CenteringType:
-        """ str: The centering that the model was trained on (`"head", "face"` or `"legacy"`) """
+        """The centering that the model was trained on (`"head", "face"` or `"legacy"`)"""
         return self._centering
 
     @property
     def has_predicted_mask(self) -> bool:
-        """ bool: ``True`` if the model was trained to learn a mask, otherwise ``False``. """
+        """``True`` if the model was trained to learn a mask, otherwise ``False``."""
         return bool(mod_cfg.Loss.learn_mask())
 
     @property
     def output_size(self) -> int:
-        """ int: The size in pixels of the Faceswap model output. """
+        """The size in pixels of the Faceswap model output."""
         return self._sizes["output"]
 
     def _get_io_sizes(self) -> dict[str, int]:
-        """ Obtain the input size and output size of the model.
+        """Obtain the input size and output size of the model.
 
         Returns
         -------
-        dict
-            input_size in pixels and output_size in pixels
+        input_size in pixels and output_size in pixels
         """
         input_shape = self._model.model.input_shape
         input_shape = [input_shape] if not isinstance(input_shape, list) else input_shape
@@ -821,12 +802,11 @@ class Predict():  # pylint:disable=too-many-instance-attributes
         return retval
 
     def _load_model(self) -> ModelBase:
-        """ Load the Faceswap model.
+        """Load the Faceswap model.
 
         Returns
         -------
-        :mod:`plugins.train.model` plugin
-            The trained model in the specified model folder
+        The trained model in the specified model folder
         """
         logger.debug("Loading Model")
         model_dir = get_folder(self._args.model_dir, make_folder=False)
@@ -839,20 +819,19 @@ class Predict():  # pylint:disable=too-many-instance-attributes
         return model
 
     def _get_batchsize(self, queue_size: int) -> int:
-        """ Get the batch size for feeding the model.
+        """Get the batch size for feeding the model.
 
         Sets the batch size to 1 if inference is being run on CPU, otherwise the minimum of the
         input queue size and the model's `convert_batchsize` configuration option.
 
         Parameters
         ----------
-        queue_size: int
+        queue_size
             The queue size that is feeding the predictor
 
         Returns
         -------
-        int
-            The batch size that the model is to be fed at.
+        The batch size that the model is to be fed at.
         """
         logger.debug("Getting batchsize")
         is_cpu = GPUStats is None or GPUStats().device_count == 0
@@ -862,29 +841,27 @@ class Predict():  # pylint:disable=too-many-instance-attributes
         return batchsize
 
     def _get_model_name(self, model_dir: str) -> str:
-        """ Return the name of the Faceswap model used.
+        """Return the name of the Faceswap model used.
 
         Retrieve the name of the model from the model's state file.
 
         Parameters
         ----------
-        model_dir: str
+        model_dir
             The folder that contains the trained Faceswap model
 
         Returns
         -------
-        str
-            The name of the Faceswap model being used.
-
+        The name of the Faceswap model being used.
         """
-        statefiles = [fname for fname in os.listdir(str(model_dir))
-                      if fname.endswith("_state.json")]
-        if len(statefiles) != 1:
+        state_files = [fname for fname in os.listdir(str(model_dir))
+                       if fname.endswith("_state.json")]
+        if len(state_files) != 1:
             raise FaceswapError("There should be 1 state file in your model folder. "
-                                f"{len(statefiles)} were found.")
-        statefile = os.path.join(str(model_dir), statefiles[0])
+                                f"{len(state_files)} were found.")
+        state_file = os.path.join(str(model_dir), state_files[0])
 
-        state = self._serializer.load(statefile)
+        state = self._serializer.load(state_file)
         trainer = state.get("name", None)
 
         if not trainer:
@@ -893,13 +870,13 @@ class Predict():  # pylint:disable=too-many-instance-attributes
         return trainer
 
     def launch(self, load_queue: EventQueue) -> None:
-        """ Launch the prediction process in a background thread.
+        """Launch the prediction process in a background thread.
 
         Starts the prediction thread and returns the thread.
 
         Parameters
         ----------
-        load_queue: :class:`~lib.queue_manager.EventQueue`
+        load_queue
             The queue that contains images and detected faces for feeding the model
         """
         self._in_queue = load_queue
@@ -907,7 +884,7 @@ class Predict():  # pylint:disable=too-many-instance-attributes
         self._thread.start()
 
     def _predict_faces(self) -> None:
-        """ Run Prediction on the Faceswap model in a background thread.
+        """Run Prediction on the Faceswap model in a background thread.
 
         Reads from the :attr:`self._in_queue`, prepares images for prediction
         then puts the predictions back to the :attr:`self.out_queue`
@@ -958,19 +935,18 @@ class Predict():  # pylint:disable=too-many-instance-attributes
         logger.debug("Load queue complete")
 
     def _process_batch(self, batch: list[ConvertItem], faces_seen: int):
-        """ Predict faces on the given batch of images and queue out to patch thread
+        """Predict faces on the given batch of images and queue out to patch thread
 
         Parameters
         ----------
-        batch: list
+        batch
             List of :class:`ConvertItem` objects for the current batch
-        faces_seen: int
+        faces_seen
             The number of faces seen in the current batch
 
         Returns
         -------
-        :class:`np.narray`
-            The predicted faces for the current batch
+        The predicted faces for the current batch
         """
         logger.trace("Batching to predictor. Frames: %s, Faces: %s",  # type:ignore
                      len(batch), faces_seen)
@@ -985,15 +961,15 @@ class Predict():  # pylint:disable=too-many-instance-attributes
         self._queue_out_frames(batch, predicted)
 
     def load_aligned(self, item: ConvertItem) -> None:
-        """ Load the model's feed faces and the reference output faces.
+        """Load the model's feed faces and the reference output faces.
 
         For each detected face in the incoming item, load the feed face and reference face
         images, correctly sized for input and output respectively.
 
         Parameters
         ----------
-        item: :class:`ConvertMedia`
-            The convert media object, containing the ExctractMedia for the current image
+        item
+            The convert media object, containing the FrameFaces for the current image
         """
         logger.trace("Loading aligned faces: '%s'", item.inbound.filename)  # type:ignore
         feed_faces = []
@@ -1023,17 +999,16 @@ class Predict():  # pylint:disable=too-many-instance-attributes
 
     @staticmethod
     def _compile_feed_faces(feed_faces: list[AlignedFace]) -> np.ndarray:
-        """ Compile a batch of faces for feeding into the Predictor.
+        """Compile a batch of faces for feeding into the Predictor.
 
         Parameters
         ----------
-        feed_faces: list
+        feed_faces
             List of :class:`~lib.align.AlignedFace` objects sized for feeding into the model
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            A batch of faces ready for feeding into the Faceswap model.
+        A batch of faces ready for feeding into the Faceswap model.
         """
         logger.trace("Compiling feed face. Batchsize: %s", len(feed_faces))  # type:ignore
         retval = np.stack([T.cast(np.ndarray, feed_face.face)[..., :3]
@@ -1042,20 +1017,19 @@ class Predict():  # pylint:disable=too-many-instance-attributes
         return retval
 
     def _predict(self, feed_faces: np.ndarray, batch_size: int | None = None) -> np.ndarray:
-        """ Run the Faceswap models' prediction function.
+        """Run the Faceswap models' prediction function.
 
         Parameters
         ----------
-        feed_faces: :class:`numpy.ndarray`
+        feed_faces
             The batch to be fed into the model
-        batch_size: int, optional
+        batch_size
             Used for plaidml only. Indicates to the model what batch size is being processed.
             Default: ``None``
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The swapped faces for the given batch
+        The swapped faces for the given batch
         """
         logger.trace("Predicting: Batchsize: %s", len(feed_faces))  # type:ignore
 
@@ -1086,16 +1060,16 @@ class Predict():  # pylint:disable=too-many-instance-attributes
         return retval
 
     def _queue_out_frames(self, batch: list[ConvertItem], swapped_faces: np.ndarray) -> None:
-        """ Compile the batch back to original frames and put to the Out Queue.
+        """Compile the batch back to original frames and put to the Out Queue.
 
         For batching, faces are split away from their frames. This compiles all detected faces
         back to their parent frame before putting each frame to the out queue in batches.
 
         Parameters
         ----------
-        batch: dict
+        batch
             The batch that was used as the input for the model predict function
-        swapped_faces: :class:`numpy.ndarray`
+        swapped_faces
             The predictions returned from the model's predict function
         """
         logger.trace("Queueing out batch. Batchsize: %s", len(batch))  # type:ignore
@@ -1115,24 +1089,24 @@ class Predict():  # pylint:disable=too-many-instance-attributes
 
 
 class OptionalActions():  # pylint:disable=too-few-public-methods
-    """ Process specific optional actions for Convert.
+    """Process specific optional actions for Convert.
 
     Currently only handles skip faces. This class should probably be (re)moved.
 
     Parameters
     ----------
-    arguments : :class:`argparse.Namespace`
+    arguments
         The arguments that were passed to the convert process as generated from Faceswap's command
         line arguments
-    input_images : list[str]
+    input_images
         List of input image files
-    alignments : :class:`scripts.fsmedia.Alignments`
+    alignments
         The alignments file for this conversion
     """
     def __init__(self,
                  arguments: Namespace,
                  input_images: list[str],
-                 alignments: fsmedia.Alignments) -> None:
+                 alignments: fs_media.Alignments) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._args = arguments
         self._input_images = input_images
@@ -1143,7 +1117,7 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
 
     # SKIP FACES #
     def _remove_skipped_faces(self) -> None:
-        """ If the user has specified an input aligned directory, remove any non-matching faces
+        """If the user has specified an input aligned directory, remove any non-matching faces
         from the alignments file. """
         logger.debug("Filtering Faces")
         accept_dict = self._get_face_metadata()
@@ -1155,13 +1129,12 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
         logger.info("Faces filtered out: %s", pre_face_count - self._alignments.faces_count)
 
     def _get_face_metadata(self) -> dict[str, list[int]]:
-        """ Check for the existence of an aligned directory for identifying which faces in the
+        """Check for the existence of an aligned directory for identifying which faces in the
         target frames should be swapped. If it exists, scan the folder for face's metadata
 
         Returns
         -------
-        dict
-            Dictionary of source frame names with a list of associated face indices to be skipped
+        Dictionary of source frame names with a list of associated face indices to be skipped
         """
         retval: dict[str, list[int]] = {}
         input_aligned_dir = self._args.input_aligned_dir

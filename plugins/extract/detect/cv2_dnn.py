@@ -1,72 +1,91 @@
 #!/usr/bin/env python3
-""" OpenCV DNN Face detection plugin """
+"""OpenCV DNN Face detection plugin"""
 import logging
 
+import cv2
 import numpy as np
 
-from lib.utils import get_module_objects
-from ._base import BatchType, cv2, Detector, DetectorBatch
+from lib.utils import get_module_objects, GetModel
+from plugins.extract.base import ExtractPlugin
 from . import cv2_dnn_defaults as cfg
 
 
 logger = logging.getLogger(__name__)
 
 
-class Detect(Detector):
-    """ CV2 DNN detector for face recognition """
-    def __init__(self, **kwargs) -> None:
-        git_model_id = 4
-        model_filename = ["resnet_ssd_v1.caffemodel", "resnet_ssd_v1.prototxt"]
-        super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
-        self.name = "cv2-DNN Detector"
-        self.input_size = 300
-        self.vram = 0  # CPU Only. Doesn't use VRAM
-        self.vram_per_batch = 0
-        self.batchsize = 1
+class CV2DNNDetect(ExtractPlugin):
+    """CV2 DNN detector for face recognition"""
+    def __init__(self) -> None:
+        super().__init__(input_size=300,
+                         batch_size=1,
+                         is_rgb=False,
+                         dtype="float32",
+                         scale=(0, 255))
+        self.model: cv2.dnn.Net
         self.confidence = cfg.confidence() / 100
+        self._average_image = np.array([104, 117, 123], dtype="float32")
 
-    def init_model(self) -> None:
-        """ Initialize CV2 DNN Detector Model"""
-        assert isinstance(self.model_path, list)
-        self.model = cv2.dnn.readNetFromCaffe(self.model_path[1],
-                                              self.model_path[0])
-        self.model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+    def load_model(self) -> cv2.dnn.Net:
+        """Load the CV2 DNN Detector Model
 
-    def process_input(self, batch: BatchType) -> None:
-        """ Compile the detection image(s) for prediction """
-        assert isinstance(batch, DetectorBatch)
-        batch.feed = cv2.dnn.blobFromImages(batch.image,
-                                            scalefactor=1.0,
-                                            size=(self.input_size, self.input_size),
-                                            mean=[104, 117, 123],
-                                            swapRB=False,
-                                            crop=False)
+        Returns
+        -------
+        The loaded cv2-DNN model
+        """
+        weights = GetModel(model_filename=["resnet_ssd_v1.caffemodel", "resnet_ssd_v1.prototxt"],
+                           git_model_id=4)
+        model_path = weights.model_path
+        assert isinstance(model_path, list)
+        model = cv2.dnn.readNetFromCaffe(model_path[1], model_path[0])
+        model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+        return model
 
-    def predict(self, feed: np.ndarray) -> np.ndarray:
-        """ Run model to get predictions """
-        assert isinstance(self.model, cv2.dnn.Net)
-        self.model.setInput(feed)
-        predictions = self.model.forward()
-        return self.finalize_predictions(predictions)
+    def pre_process(self, batch: np.ndarray) -> np.ndarray:
+        """Compile the detection image(s) for prediction
 
-    def finalize_predictions(self, predictions: np.ndarray) -> np.ndarray:
-        """ Filter faces based on confidence level """
-        faces = []
-        for i in range(predictions.shape[2]):
-            confidence = predictions[0, 0, i, 2]
-            if confidence >= self.confidence:
-                logger.trace("Accepting due to confidence %s >= %s",  # type:ignore[attr-defined]
-                             confidence, self.confidence)
-                faces.append([(predictions[0, 0, i, 3] * self.input_size),
-                              (predictions[0, 0, i, 4] * self.input_size),
-                              (predictions[0, 0, i, 5] * self.input_size),
-                              (predictions[0, 0, i, 6] * self.input_size)])
-        logger.trace("faces: %s", faces)  # type:ignore[attr-defined]
-        return np.array(faces)[None, ...]
+        Parameters
+        ----------
+        batch
+            The input batch of images at model input size in the correct color order
 
-    def process_output(self, batch: BatchType) -> None:
-        """ Compile found faces for output """
-        return
+        Returns
+        -------
+        The batch of images ready for feeding the model
+        """
+        return (batch - self._average_image).transpose(0, 3, 1, 2)
+
+    def process(self, batch: np.ndarray) -> np.ndarray:
+        """Run model to get predictions
+
+        Parameters
+        ----------
+        batch
+            A batch of images ready to feed the model
+
+        Returns
+        -------
+        The batch of detection results from the model
+        """
+        self.model.setInput(batch)
+        result = self.model.forward()
+        return result.reshape(batch.shape[0], 200, 7)
+
+    def post_process(self, batch: np.ndarray) -> np.ndarray:
+        """Compile found faces for output
+
+        Parameters
+        ----------
+        batch
+            The detection results for the model
+
+        Returns
+        -------
+        The processed detection bounding box from the model at model input size
+        """
+        confidence_mask = batch[..., 2] >= self.confidence
+        boxes = [batch[b, ..., 3:7][confidence_mask[b]] * self.input_size
+                 for b in range(batch.shape[0])]
+        return np.array(boxes, dtype="object")
 
 
 __all__ = get_module_objects(__name__)

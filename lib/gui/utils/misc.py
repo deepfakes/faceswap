@@ -52,7 +52,7 @@ class LongRunningTask(Thread):
                      daemon)
         super().__init__(target=target, name=name, args=args, kwargs=kwargs,
                          daemon=daemon)
-        self.err: _ErrorType = None
+        self.err: _ErrorType | None = None
         self._widget = widget
         self._config = get_config()
         self._config.set_cursor_busy(widget=self._widget)

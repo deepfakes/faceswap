@@ -40,7 +40,7 @@ confidence = ConfigItem(
     datatype=int,
     default=70,
     group="settings",
-    info="The confidence level at which the detector has succesfully found a face.\n"
+    info="The confidence level at which the detector has successfully found a face.\n"
          "Higher levels will be more discriminating, lower levels will have more false "
          "positives.",
     rounding=5,
@@ -51,9 +51,6 @@ batch_size = ConfigItem(
     default=4,
     group="settings",
     info="The batch size to use. To a point, higher batch sizes equal better performance, "
-         "but setting it too high can harm performance.\n"
-         "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
-         "accomodate then this will automatically be lowered."
-         "\n\tAMD users: A batchsize of 8 requires about 2 GB vram.",
+         "but setting it too high can harm performance.",
     rounding=1,
-    min_max=(1, 64))
+    min_max=(1, 128))

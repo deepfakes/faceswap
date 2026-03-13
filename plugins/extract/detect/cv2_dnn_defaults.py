@@ -39,7 +39,7 @@ confidence = ConfigItem(
     datatype=int,
     default=50,
     group="settings",
-    info="The confidence level at which the detector has succesfully found a face.\nHigher "
+    info="The confidence level at which the detector has successfully found a face.\nHigher "
          "levels will be more discriminating, lower levels will have more false positives.",
     rounding=5,
     min_max=(25, 100))

@@ -1,5 +1,5 @@
 #!/usr/bin python3
-""" Handles retrieval and storage of Faceswap aligned masks """
+"""Handles retrieval and storage of Faceswap aligned masks"""
 
 from __future__ import annotations
 import logging
@@ -11,20 +11,22 @@ import cv2
 import numpy as np
 
 from lib.logger import parse_class_init
-from lib.utils import get_module_objects
+from lib.utils import FaceswapError, get_module_objects
 
+from .aligned_utils import get_adjusted_center, get_centered_size
 from .alignments import MaskAlignmentsFileDict
-from . import get_adjusted_center, get_centered_size
+from .constants import LandmarkType, LANDMARK_PARTS, LANDMARK_MASK_PARTS
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
+    import numpy.typing as npt
     from .aligned_face import CenteringType
 
 logger = logging.getLogger(__name__)
 
 
 class Mask():  # pylint:disable=too-many-instance-attributes
-    """ Face Mask information and convenience methods
+    """Face Mask information and convenience methods
 
     Holds a Faceswap mask as generated from :mod:`plugins.extract.mask` and the information
     required to transform it to its original frame.
@@ -33,17 +35,17 @@ class Mask():  # pylint:disable=too-many-instance-attributes
 
     Parameters
     ----------
-    storage_size: int, optional
+    storage_size
         The size (in pixels) that the mask should be stored at. Default: 128.
-    storage_centering, str (optional):
+    storage_centering
         The centering to store the mask at. One of `"legacy"`, `"face"`, `"head"`.
         Default: `"face"`
 
     Attributes
     ----------
-    stored_size: int
+    stored_size
         The size, in pixels, of the stored mask across its height and width.
-    stored_centering: str
+    stored_centering
         The centering that the mask is stored at. One of `"legacy"`, `"face"`, `"head"`
     """
     def __init__(self,
@@ -68,10 +70,17 @@ class Mask():  # pylint:disable=too-many-instance-attributes
         self.set_blur_and_threshold()
         logger.trace("Initialized: %s", self.__class__.__name__)  # type:ignore[attr-defined]
 
+    def __repr__(self) -> str:
+        """Pretty print for logging"""
+        params = {k.replace("stored", "storage"): v for k, v in self.__dict__.items()
+                  if k in ("stored_size", "stored_centering")}
+        s_params = ", ".join(f"{k}={repr(v)}" for k, v in params.items())
+        return f"{self.__class__.__name__}({s_params})"
+
     @property
     def mask(self) -> np.ndarray:
-        """ :class:`numpy.ndarray`: The mask at the size of :attr:`stored_size` with any requested
-        blurring, threshold amount and centering applied."""
+        """The mask at the size of :attr:`stored_size` with any requested blurring, threshold
+        amount and centering applied."""
         mask = self.stored_mask
         if self._dilation[-1] is not None or self._threshold != 0.0 or self._blur_kernel != 0:
             mask = mask.copy()
@@ -94,47 +103,46 @@ class Mask():  # pylint:disable=too-many-instance-attributes
 
     @property
     def stored_mask(self) -> np.ndarray:
-        """ :class:`numpy.ndarray`: The mask at the size of :attr:`stored_size` as it is stored
-        (i.e. with no blurring/centering applied). """
+        """The mask at the size of :attr:`stored_size` as it is stored (i.e. with no blurring/
+        centering applied)."""
         assert self._mask is not None
         dims = (self.stored_size, self.stored_size, 1)
-        mask = np.frombuffer(decompress(self._mask), dtype="uint8").reshape(dims)
+        mask = np.frombuffer(decompress(self._mask), dtype=np.uint8).reshape(dims)
         logger.trace("stored mask shape: %s", mask.shape)  # type:ignore[attr-defined]
         return mask
 
     @property
     def original_roi(self) -> np.ndarray:
-        """ :class: `numpy.ndarray`: The original region of interest of the mask in the
-        source frame. """
+        """The original region of interest of the mask in the source frame."""
         points = np.array([[0, 0],
                            [0, self.stored_size - 1],
                            [self.stored_size - 1, self.stored_size - 1],
                            [self.stored_size - 1, 0]], np.int32).reshape((-1, 1, 2))
-        matrix = cv2.invertAffineTransform(self.affine_matrix)
+        matrix = cv2.invertAffineTransform(self.affine_matrix[:2])
         roi = cv2.transform(points, matrix).reshape((4, 2))
         logger.trace("Returning: %s", roi)  # type:ignore[attr-defined]
         return roi
 
     @property
     def affine_matrix(self) -> np.ndarray:
-        """ :class: `numpy.ndarray`: The affine matrix to transpose the mask to a full frame. """
+        """The affine matrix to transpose the mask to a full frame."""
         assert self._affine_matrix is not None
         return self._affine_matrix
 
     @property
     def interpolator(self) -> int:
-        """ int: The cv2 interpolator required to transpose the mask to a full frame. """
+        """The cv2 interpolator required to transpose the mask to a full frame."""
         assert self._interpolator is not None
         return self._interpolator
 
     def _dilate_mask(self, mask: np.ndarray) -> None:
-        """ Erode/Dilate the mask. The action is performed in-place on the given mask.
+        """Erode/Dilate the mask. The action is performed in-place on the given mask.
 
         No action is performed if a dilation amount has not been set
 
         Parameters
         ----------
-        mask: :class:`numpy.ndarray`
+        mask
             The mask to be eroded/dilated
         """
         if self._dilation[-1] is None:
@@ -144,22 +152,22 @@ class Mask():  # pylint:disable=too-many-instance-attributes
         func(mask, self._dilation[-1], dst=mask, iterations=1)
 
     def get_full_frame_mask(self, width: int, height: int) -> np.ndarray:
-        """ Return the stored mask in a full size frame of the given dimensions
+        """Return the stored mask in a full size frame of the given dimensions
 
         Parameters
         ----------
-        width: int
+        width
             The width of the original frame that the mask was extracted from
-        height: int
+        height
             The height of the original frame that the mask was extracted from
 
         Returns
         -------
-        :class:`numpy.ndarray`: The mask affined to the original full frame of the given dimensions
+        The mask affined to the original full frame of the given dimensions
         """
-        frame = np.zeros((width, height, 1), dtype="uint8")
+        frame = np.zeros((width, height, 1), dtype=np.uint8)
         mask = cv2.warpAffine(self.mask,
-                              self.affine_matrix,
+                              self.affine_matrix[:2],
                               (width, height),
                               frame,
                               flags=cv2.WARP_INVERSE_MAP | self.interpolator,
@@ -168,48 +176,60 @@ class Mask():  # pylint:disable=too-many-instance-attributes
                      "mask max: %s", mask.shape, mask.dtype, mask.min(), mask.max())
         return mask
 
-    def add(self, mask: np.ndarray, affine_matrix: np.ndarray, interpolator: int) -> None:
-        """ Add a Faceswap mask to this :class:`Mask`.
+    def add(self, mask: npt.NDArray[np.uint8], affine_matrix: npt.NDArray[np.float32]) -> T.Self:
+        """Add a Faceswap mask to this :class:`Mask`.
 
         The mask should be the original output from  :mod:`plugins.extract.mask`
 
         Parameters
         ----------
-        mask: :class:`numpy.ndarray`
-            The mask that is to be added as output from :mod:`plugins.extract.mask`
-            It should be in the range 0.0 - 1.0 ideally with a ``dtype`` of ``float32``
-        affine_matrix: :class:`numpy.ndarray`
-            The transformation matrix required to transform the mask to the original frame.
-        interpolator, int:
-            The CV2 interpolator required to transform this mask to it's original frame
+        mask
+            The mask that is to be added as output from :mod:`plugins.extract.mask` as a UINT8
+            image
+        affine_matrix
+            The normalized transformation matrix required to transform the mask from (0, 1) to the
+            original frame.
+
+        Returns
+        -------
+        This mask object
         """
         logger.trace("mask shape: %s, mask dtype: %s, mask min: %s, "  # type:ignore[attr-defined]
-                     "mask max: %s, affine_matrix: %s, interpolator: %s)",
-                     mask.shape, mask.dtype, mask.min(), affine_matrix, mask.max(), interpolator)
+                     "mask max: %s, affine_matrix: %s)",
+                     mask.shape, mask.dtype, mask.min(), affine_matrix, mask.max())
         self._affine_matrix = self._adjust_affine_matrix(mask.shape[0], affine_matrix)
-        self._interpolator = interpolator
+        scale = (self._affine_matrix[0, 0] ** 2 + self._affine_matrix[1, 0] ** 2) ** 0.5
+        self._interpolator = cv2.INTER_LINEAR if scale < 1.0 else cv2.INTER_AREA
         self.replace_mask(mask)
+        return self
 
-    def replace_mask(self, mask: np.ndarray) -> None:
-        """ Replace the existing :attr:`_mask` with the given mask.
+    def replace_mask(self, mask: npt.NDArray[np.uint8]) -> None:
+        """Replace the existing :attr:`_mask` with the given mask.
 
         Parameters
         ----------
-        mask: :class:`numpy.ndarray`
-            The mask that is to be added as output from :mod:`plugins.extract.mask`.
-            It should be in the range 0.0 - 1.0 ideally with a ``dtype`` of ``float32``
+        mask
+            The mask that is to be added as output from :mod:`plugins.extract.mask` as a UINT8
+            image
         """
-        mask = (cv2.resize(mask * 255.0,
-                           (self.stored_size, self.stored_size),
-                           interpolation=cv2.INTER_AREA)).astype("uint8")
-        self._mask = compress(mask.tobytes())
+        assert mask.dtype == np.uint8
+        size = mask.shape[0]
+        if size == self.stored_size:
+            new_mask = mask
+        else:
+            dims = (self.stored_size, self.stored_size)
+            interpolation = cv2.INTER_AREA if self.stored_size < size else cv2.INTER_LINEAR
+            new_mask = T.cast("npt.NDArray[np.uint8]", cv2.resize(mask,
+                                                                  dims,
+                                                                  interpolation=interpolation))
+        self._mask = compress(new_mask.tobytes())
 
     def set_dilation(self, amount: float) -> None:
-        """ Set the internal dilation object for returned masks
+        """Set the internal dilation object for returned masks
 
         Parameters
         ----------
-        amount: float
+        amount
             The amount of erosion/dilation to apply as a percentage of the total mask size.
             Negative values erode the mask. Positive values dilate the mask
         """
@@ -229,19 +249,19 @@ class Mask():  # pylint:disable=too-many-instance-attributes
                                blur_type: T.Literal["gaussian", "normalized"] | None = "gaussian",
                                blur_passes: int = 1,
                                threshold: int = 0) -> None:
-        """ Set the internal blur kernel and threshold amount for returned masks
+        """Set the internal blur kernel and threshold amount for returned masks
 
         Parameters
         ----------
-        blur_kernel: int, optional
+        blur_kernel
             The kernel size, in pixels to apply gaussian blurring to the mask. Set to 0 for no
             blurring. Should be odd, if an even number is passed in (outside of 0) then it is
             rounded up to the next odd number. Default: 0
-        blur_type: ["gaussian", "normalized"], optional
+        blur_type
             The blur type to use. ``gaussian`` or ``normalized`` box filter. Default: ``gaussian``
-        blur_passes: int, optional
+        blur_passes
             The number of passed to perform when blurring. Default: 1
-        threshold: int, optional
+        threshold
             The threshold amount to minimize/maximize mask values to 0 and 100. Percentage value.
             Default: 0
         """
@@ -261,23 +281,23 @@ class Mask():  # pylint:disable=too-many-instance-attributes
                      centering: CenteringType,
                      coverage_ratio: float = 1.0,
                      y_offset: float = 0.0) -> None:
-        """ Set the internal crop area of the mask to be returned.
+        """Set the internal crop area of the mask to be returned.
 
         This impacts the returned mask from :attr:`mask` if the requested mask is required for
         different face centering than what has been stored.
 
         Parameters
         ----------
-        source_offset: :class:`numpy.ndarray`
+        source_offset
             The (x, y) offset for the mask at its stored centering
-        target_offset: :class:`numpy.ndarray`
+        target_offset
             The (x, y) offset for the mask at the requested target centering
-        centering: str
+        centering
             The centering to set the sub crop area for. One of `"legacy"`, `"face"`. `"head"`
-        coverage_ratio: float, optional
+        coverage_ratio
             The coverage ratio to be applied to the target image. ``None`` for default (1.0).
             Default: ``None``
-        y_offset: float, optional
+        y_offset
             Amount to additionally adjust the masks's offset along the y-axis. Default: 0.0
         """
         if centering == self.stored_centering and coverage_ratio == 1.0:
@@ -307,43 +327,59 @@ class Mask():  # pylint:disable=too-many-instance-attributes
                      "sub_crop_size: %s, sub_crop_slices: %s",
                      roi, coverage_ratio, self._sub_crop_size, self._sub_crop_slices)
 
-    def _adjust_affine_matrix(self, mask_size: int, affine_matrix: np.ndarray) -> np.ndarray:
-        """ Adjust the affine matrix for the mask's storage size
+    @classmethod
+    def _matrix_2to3(cls, matrix: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+        """ Update a legacy (2x3) affine matrix to (3x3)
 
         Parameters
         ----------
-        mask_size: int
+        matrix
+            The matrix that may require updating
+
+        Returns
+        -------
+        A 3x3 affine matrix
+        """
+        if matrix.shape[0] == 3:
+            return matrix
+        return np.concatenate([matrix, np.array([[0., 0., 1.]], dtype=np.float32)])
+
+    def _adjust_affine_matrix(self, mask_size: int, affine_matrix: np.ndarray) -> np.ndarray:
+        """Adjust the affine matrix for the mask's storage size
+
+        Parameters
+        ----------
+        mask_size
             The original size of the mask.
-        affine_matrix: :class:`numpy.ndarray`
+        affine_matrix
             The affine matrix to transform the mask at original size to the parent frame.
 
         Returns
         -------
-        affine_matrix: :class:`numpy,ndarray`
+        affine_matrix
             The affine matrix adjusted for the mask at its stored dimensions.
         """
         zoom = self.stored_size / mask_size
         zoom_mat = np.array([[zoom, 0, 0.], [0, zoom, 0.]])
-        adjust_mat = np.dot(zoom_mat, np.concatenate((affine_matrix, np.array([[0., 0., 1.]]))))
+        adjust_mat = np.dot(zoom_mat, self._matrix_2to3(affine_matrix))
         logger.trace("storage_size: %s, mask_size: %s, zoom: %s, "  # type:ignore[attr-defined]
                      "original matrix: %s, adjusted_matrix: %s", self.stored_size, mask_size, zoom,
                      affine_matrix.shape, adjust_mat.shape)
         return adjust_mat
 
     def to_dict(self, is_png=False) -> MaskAlignmentsFileDict:
-        """ Convert the mask to a dictionary for saving to an alignments file
+        """Convert the mask to a dictionary for saving to an alignments file
 
         Parameters
         ----------
-        is_png: bool
+        is_png
             ``True`` if the dictionary is being created for storage in a png header otherwise
             ``False``. Default: ``False``
 
         Returns
         -------
-        dict:
-            The :class:`Mask` for saving to an alignments file. Contains the keys ``mask``,
-            ``affine_matrix``, ``interpolator``, ``stored_size``, ``stored_centering``
+        The :class:`Mask` for saving to an alignments file. Contains the keys ``mask``,
+        ``affine_matrix``, ``interpolator``, ``stored_size``, ``stored_centering``
         """
         assert self._mask is not None
         affine_matrix = self.affine_matrix.tolist() if is_png else self.affine_matrix
@@ -357,29 +393,29 @@ class Mask():  # pylint:disable=too-many-instance-attributes
         return retval
 
     def to_png_meta(self) -> MaskAlignmentsFileDict:
-        """ Convert the mask to a dictionary supported by png itxt headers.
+        """Convert the mask to a dictionary supported by png itxt headers.
 
         Returns
         -------
-        dict:
-            The :class:`Mask` for saving to an alignments file. Contains the keys ``mask``,
-            ``affine_matrix``, ``interpolator``, ``stored_size``, ``stored_centering``
+        The :class:`Mask` for saving to an alignments file. Contains the keys ``mask``,
+        ``affine_matrix``, ``interpolator``, ``stored_size``, ``stored_centering``
         """
         return self.to_dict(is_png=True)
 
     def from_dict(self, mask_dict: MaskAlignmentsFileDict) -> None:
-        """ Populates the :class:`Mask` from a dictionary loaded from an alignments file.
+        """Populates the :class:`Mask` from a dictionary loaded from an alignments file.
 
         Parameters
         ----------
-        mask_dict: dict
+        mask_dict
             A dictionary stored in an alignments file containing the keys ``mask``,
             ``affine_matrix``, ``interpolator``, ``stored_size``, ``stored_centering``
         """
         self._mask = mask_dict["mask"]
         affine_matrix = mask_dict["affine_matrix"]
-        self._affine_matrix = (affine_matrix if isinstance(affine_matrix, np.ndarray)
-                               else np.array(affine_matrix, dtype="float64"))
+        self._affine_matrix = self._matrix_2to3(
+            affine_matrix if isinstance(affine_matrix, np.ndarray)
+            else np.array(affine_matrix, dtype=np.float32))
         self._interpolator = mask_dict["interpolator"]
         self.stored_size = mask_dict["stored_size"]
         centering = mask_dict.get("stored_centering")
@@ -389,7 +425,7 @@ class Mask():  # pylint:disable=too-many-instance-attributes
 
 
 class LandmarksMask(Mask):
-    """ Create a single channel mask from aligned landmark points.
+    """Create a single channel mask from aligned landmark points.
 
     Landmarks masks are created on the fly, so the stored centering and size should be the same as
     the aligned face that the mask will be applied to. As the masks are created on the fly, blur +
@@ -402,51 +438,146 @@ class LandmarksMask(Mask):
 
     Parameters
     ----------
-    points : list[:class:`numpy.ndarray`]
-        A list of landmark points that correspond to the given storage_size to create
-        the mask. Each item in the list should be a :class:`numpy.ndarray` that a filled
-        convex polygon will be created from
-    storage_size : int, optional
+    area
+        The type of mask to obtain. `face` is a full face mask, `face_extended` is a face mask
+        that extends above the eyebrows. The others are masks for those specific areas
+    landmark_type
+        The type of landmarks that this mask is being created from
+    landmarks
+        The landmarks to generate the mask from
+    affine_matrix
+        The transformation matrix required to transform the mask to the original frame.
+    storage_size
         The size (in pixels) that the compressed mask should be stored at. Default: 128.
-    storage_centering : str, optional:
+    storage_centering
         The centering to store the mask at. One of `"legacy"`, `"face"`, `"head"`.
         Default: `"face"`
-    dilation : float, optional
+    dilation
         The amount of dilation to apply to the mask. as a percentage of the mask size. Default: 0.0
     """
     def __init__(self,
-                 points: list[np.ndarray],
+                 area: T.Literal["eye", "mouth", "face", "face_extended"],
+                 landmark_type: LandmarkType,
+                 landmarks: npt.NDArray[np.float32],
+                 affine_matrix: npt.NDArray[np.float32],
                  storage_size: int = 128,
                  storage_centering: CenteringType = "face",
                  dilation: float = 0.0) -> None:
         super().__init__(storage_size=storage_size, storage_centering=storage_centering)
-        self._points = points
+        self._area = area
+        self._landmark_type = landmark_type
+        self._lm_matrix = affine_matrix
+        self._points = self._get_points(landmarks)
         self.set_dilation(dilation)
 
     @property
-    def mask(self) -> np.ndarray:
-        """ :class:`numpy.ndarray`: Overrides the default mask property, creating the processed
-        mask at first call and compressing it. The decompressed mask is returned from this
-        property. """
+    def mask(self) -> npt.NDArray[np.uint8]:
+        """Overrides the default mask property, creating the processed mask at first call and
+        compressing it. The decompressed mask is returned from this property."""
         return self.stored_mask
 
-    def generate_mask(self, affine_matrix: np.ndarray, interpolator: int) -> None:
-        """ Generate the mask.
+    def _get_slices(self) -> list[slice] | list[list[slice]]:
+        """Obtain the slices that will extract the points for the given area and landmark type
 
-        Creates the mask applying any requested dilation and blurring and assigns compressed mask
-        to :attr:`_mask`
+        Returns
+        -------
+        The slices required to extract landmark points for creating a mask
+        """
+        parts = LANDMARK_PARTS if self._area in ("eye", "mouth") else LANDMARK_MASK_PARTS
+        if self._landmark_type not in parts:
+            raise FaceswapError(
+                f"Landmark based masks cannot be created for {self._landmark_type.name}")
+
+        lm_parts = parts[self._landmark_type]
+        mapped = {"mouth": ["mouth_outer"],
+                  "eye": ["right_eye", "left_eye"],
+                  "face": list(lm_parts),
+                  "face_extended": list(lm_parts)}[self._area]
+
+        if not all(parts in lm_parts for parts in mapped):
+            raise FaceswapError(
+                f"Landmark based masks cannot be created for {self._landmark_type.name}")
+
+        if self._area in ("eye", "mouth"):
+            retval: list[slice] | list[list[slice]] = [slice(*lm_parts[v][:2]) for v in mapped]
+        else:
+            retval = [[slice(*p) for p in T.cast(list[tuple[int, int]], lm_parts[v])]
+                      for v in mapped]
+        logger.trace("[LM_MASK] area: '%s', slices: %s",  # type:ignore[attr-defined]
+                     self._area, retval)
+        return retval
+
+    def _extend_face_landmarks(self,
+                               landmarks: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+        """Adjust the top of the face mask to extend above eyebrows
 
         Parameters
         ----------
-        affine_matrix: :class:`numpy.ndarray`
-            The transformation matrix required to transform the mask to the original frame.
-        interpolator, int:
-            The CV2 interpolator required to transform this mask to it's original frame
+        landmarks
+            The 68 point landmarks to be adjusted
+
+        Returns
+        -------
+        The landmarks with the upper eyebrow points adjusted
         """
-        mask = np.zeros((self.stored_size, self.stored_size, 1), dtype="float32")
-        for landmarks in self._points:
-            lms = np.rint(landmarks).astype("int")
-            cv2.fillConvexPoly(mask, cv2.convexHull(lms), [1.0], lineType=cv2.LINE_AA)
+        assert self._landmark_type == LandmarkType.LM_2D_68
+        # mid points between the side of face and eye point
+        ml_pnt = (landmarks[36] + landmarks[0]) // 2
+        mr_pnt = (landmarks[16] + landmarks[45]) // 2
+
+        # mid points between the mid points and eye
+        ql_pnt = (landmarks[36] + ml_pnt) // 2
+        qr_pnt = (landmarks[45] + mr_pnt) // 2
+
+        # Top of the eye arrays
+        bot_l = np.array((ql_pnt, landmarks[36], landmarks[37], landmarks[38], landmarks[39]))
+        bot_r = np.array((landmarks[42], landmarks[43], landmarks[44], landmarks[45], qr_pnt))
+
+        # Eyebrow arrays
+        top_l = landmarks[17:22]
+        top_r = landmarks[22:27]
+
+        retval = landmarks.copy()
+
+        # Adjust eyebrow arrays
+        retval[17:22] = top_l + ((top_l - bot_l) // 2)
+        retval[22:27] = top_r + ((top_r - bot_r) // 2)
+        return retval
+
+    def _get_points(self, landmarks: npt.NDArray[np.float32]) -> list[npt.NDArray[np.int32]]:
+        """Obtain the points required to create the mask
+
+        Parameters
+        ----------
+        landmarks
+            The landmarks to obtain the points from
+
+        Returns
+        -------
+        The list of points for creating each section of the mask
+        """
+        slices = self._get_slices()
+        if self._area == "face_extended":
+            landmarks = self._extend_face_landmarks(landmarks)
+
+        if self._area in ("eye", "mouth"):
+            retval = [np.rint(landmarks[zone]).astype(np.int32)
+                      for zone in T.cast(list[slice], slices)]
+        else:
+            retval = [np.concatenate([np.rint(landmarks[x]).astype(np.int32) for x in zone])
+                      for zone in T.cast(list[list[slice]], slices)]
+        return retval
+
+    def generate_mask(self) -> None:
+        """Generate the mask.
+
+        Creates the mask applying any requested dilation and blurring and assigns compressed mask
+        to :attr:`_mask`
+        """
+        mask = np.zeros((self.stored_size, self.stored_size, 1), dtype=np.uint8)
+        for pts in self._points:
+            lms = np.rint(pts).astype("int")
+            cv2.fillConvexPoly(mask, cv2.convexHull(lms), [255], lineType=cv2.LINE_AA)
         if self._dilation[-1] is not None:
             self._dilate_mask(mask)
         if self._blur_kernel != 0 and self._blur_type is not None:
@@ -454,30 +585,30 @@ class LandmarksMask(Mask):
                             mask,
                             self._blur_kernel,
                             passes=self._blur_passes).blurred
-        logger.trace("mask: (shape: %s, dtype: %s)",  # type:ignore[attr-defined]
+        logger.trace("[LM_MASK] mask: (shape: %s, dtype: %s)",  # type:ignore[attr-defined]
                      mask.shape, mask.dtype)
-        self.add(mask, affine_matrix, interpolator)
+        self.add(mask, self._lm_matrix)
 
 
 class BlurMask():
-    """ Factory class to return the correct blur object for requested blur type.
+    """Factory class to return the correct blur object for requested blur type.
 
     Works for square images only. Currently supports Gaussian and Normalized Box Filters.
 
     Parameters
     ----------
-    blur_type: ["gaussian", "normalized"]
+    blur_type
         The type of blur to use
-    mask: :class:`numpy.ndarray`
+    mask
         The mask to apply the blur to
-    kernel: int or float
+    kernel
         Either the kernel size (in pixels) or the size of the kernel as a ratio of mask size
-    is_ratio: bool, optional
+    is_ratio
         Whether the given :attr:`kernel` parameter is a ratio or not. If ``True`` then the
         actual kernel size will be calculated from the given ratio and the mask size. If
         ``False`` then the kernel size will be set directly from the :attr:`kernel` parameter.
         Default: ``False``
-    passes: int, optional
+    passes
         The number of passes to perform when blurring. Default: ``1``
 
     Example
@@ -495,7 +626,7 @@ class BlurMask():
                  is_ratio: bool = False,
                  passes: int = 1) -> None:
         logger.trace(parse_class_init(locals()))  # type:ignore[attr-defined]
-        self._blur_type = blur_type
+        self._blur_type: T.Literal["gaussian", "normalized"] = blur_type
         self._mask = mask
         self._passes = passes
         kernel_size = self._get_kernel_size(kernel, is_ratio)
@@ -504,18 +635,19 @@ class BlurMask():
 
     @property
     def blurred(self) -> np.ndarray:
-        """ :class:`numpy.ndarray`: The final mask with blurring applied. """
+        """The final mask with blurring applied."""
         func = self._func_mapping[self._blur_type]
         kwargs = self._get_kwargs()
         blurred = self._mask
         for i in range(self._passes):
-            assert isinstance(kwargs["ksize"], tuple)
-            ksize = int(kwargs["ksize"][0])
+            k_tup = kwargs["ksize"]
+            assert isinstance(k_tup, tuple)
+            k_size = int(k_tup[0])
             logger.trace("Pass: %s, kernel_size: %s",  # type:ignore[attr-defined]
-                         i + 1, (ksize, ksize))
+                         i + 1, (k_size, k_size))
             blurred = func(blurred, **kwargs)
-            ksize = int(round(ksize * self._multipass_factor))
-            kwargs["ksize"] = self._get_kernel_tuple(ksize)
+            k_size = int(round(k_size * self._multipass_factor))
+            kwargs["ksize"] = self._get_kernel_tuple(k_size)
         blurred = blurred[..., None]
         logger.trace("Returning blurred mask. Shape: %s",  # type:ignore[attr-defined]
                      blurred.shape)
@@ -523,50 +655,49 @@ class BlurMask():
 
     @property
     def _multipass_factor(self) -> float:
-        """ For multiple passes the kernel must be scaled down. This value is
-            different for box filter and gaussian """
+        """For multiple passes the kernel must be scaled down. This value is
+            different for box filter and gaussian"""
         factor = {"gaussian": 0.8, "normalized": 0.5}
         return factor[self._blur_type]
 
     @property
     def _sigma(self) -> T.Literal[0]:
-        """ int: The Sigma for Gaussian Blur. Returns 0 to force calculation from kernel size. """
+        """The Sigma for Gaussian Blur. Returns 0 to force calculation from kernel size."""
         return 0
 
     @property
     def _func_mapping(self) -> dict[T.Literal["gaussian", "normalized"], Callable]:
-        """ dict: :attr:`_blur_type` mapped to cv2 Function name. """
+        """:attr:`_blur_type` mapped to cv2 Function name."""
         return {"gaussian": cv2.GaussianBlur, "normalized": cv2.blur}
 
     @property
     def _kwarg_requirements(self) -> dict[T.Literal["gaussian", "normalized"], list[str]]:
-        """ dict: :attr:`_blur_type` mapped to cv2 Function required keyword arguments. """
+        """:attr:`_blur_type` mapped to cv2 Function required keyword arguments. """
         return {"gaussian": ['ksize', 'sigmaX'], "normalized": ['ksize']}
 
     @property
     def _kwarg_mapping(self) -> dict[str, int | tuple[int, int]]:
-        """ dict: cv2 function keyword arguments mapped to their parameters. """
+        """cv2 function keyword arguments mapped to their parameters. """
         return {"ksize": self._kernel_size, "sigmaX": self._sigma}
 
     def _get_kernel_size(self, kernel: int | float, is_ratio: bool) -> int:
-        """ Set the kernel size to absolute value.
+        """Set the kernel size to absolute value.
 
         If :attr:`is_ratio` is ``True`` then the kernel size is calculated from the given ratio and
         the :attr:`_mask` size, otherwise the given kernel size is just returned.
 
         Parameters
         ----------
-        kernel: int or float
+        kernel
             Either the kernel size (in pixels) or the size of the kernel as a ratio of mask size
-        is_ratio: bool, optional
+        is_ratio
             Whether the given :attr:`kernel` parameter is a ratio or not. If ``True`` then the
             actual kernel size will be calculated from the given ratio and the mask size. If
             ``False`` then the kernel size will be set directly from the :attr:`kernel` parameter.
 
         Returns
         -------
-        int
-            The size (in pixels) of the blur kernel
+        The size (in pixels) of the blur kernel
         """
         if not is_ratio:
             return int(kernel)
@@ -579,17 +710,16 @@ class BlurMask():
 
     @staticmethod
     def _get_kernel_tuple(kernel_size: int) -> tuple[int, int]:
-        """ Make sure kernel_size is odd and return it as a tuple.
+        """Make sure kernel_size is odd and return it as a tuple.
 
         Parameters
         ----------
-        kernel_size: int
+        kernel_size
             The size in pixels of the blur kernel
 
         Returns
         -------
-        tuple
-            The kernel size as a tuple of ('int', 'int')
+        The kernel size as a tuple of ('int', 'int')
         """
         kernel_size += 1 if kernel_size % 2 == 0 else 0
         retval = (kernel_size, kernel_size)
@@ -597,9 +727,9 @@ class BlurMask():
         return retval
 
     def _get_kwargs(self) -> dict[str, int | tuple[int, int]]:
-        """ dict: the valid keyword arguments for the requested :attr:`_blur_type` """
-        retval = {kword: self._kwarg_mapping[kword]
-                  for kword in self._kwarg_requirements[self._blur_type]}
+        """the valid keyword arguments for the requested :attr:`_blur_type` """
+        retval = {k_word: self._kwarg_mapping[k_word]
+                  for k_word in self._kwarg_requirements[self._blur_type]}
         logger.trace("BlurMask kwargs: %s", retval)  # type:ignore[attr-defined]
         return retval
 

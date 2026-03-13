@@ -5,6 +5,7 @@ import gettext
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import DirFullPaths, SaveFileFullPaths, Radio, Slider
 from lib.utils import get_module_objects
+from plugins.plugin_loader import PluginLoader
 
 
 # pylint:disable=duplicate-code
@@ -202,6 +203,20 @@ class SortArgs(FaceSwapArgs):
                 "increment. Folder 0 will contain faces looking the most to the left/down whereas "
                 "the last folder will contain the faces looking the most to the right/up. NB: "
                 "Some bins may be empty if faces do not fit the criteria. \nDefault value: 5")})
+        argument_list.append({
+            "opts": ('-I', '--identity'),
+            "action": Radio,
+            "type": str,
+            "choices": PluginLoader.get_available_extractors("identity"),
+            "group": _("settings"),
+            "default": "t-face",
+            "help": _(
+                "R|The identity plugin to use when sorting/grouping by face. "
+                "\nL|t-face: An InsightFace ResNet based model with a lighter and heavier variant "
+                "(configurable in settings)."
+                "\nL|vggface2: An older and lighter, but fairly reliable plugin based on the VGG "
+                "Network."
+                "\nDefault: t-face")})
         argument_list.append({
             "opts": ('-l', '--log-changes'),
             "action": 'store_true',

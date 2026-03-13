@@ -280,7 +280,7 @@ _LOSS_HELP = {
         "produces slightly blurrier results. Ref: Multi-Scale Structural Similarity for Image "
         "Quality Assessment https://www.cns.nyu.edu/pub/eero/wang03b.pdf"),
     "ms_ssim": _(
-        "Multiscale Structural Similarity Index Metric is similar to SSIM except that it "
+        "Multi-scale Structural Similarity Index Metric is similar to SSIM except that it "
         "performs the calculations along multiple scales of the input image."),
     "smooth_loss": _(
         "Smooth_L1 is a modification of the MAE loss to correct two of its disadvantages. "
@@ -351,7 +351,7 @@ class Loss(GlobalSection):
             "\n\t 25 - The loss calculated for the second loss function will be reduced "
             "by a quarter prior to adding to the overall loss score. "
             "\n\t 400 - The loss calculated for the second loss function will be "
-            "mulitplied 4 times prior to adding to the overall loss score. "
+            "multiplied 4 times prior to adding to the overall loss score. "
             "\n\t 0 - Disables the second loss function altogether."),
         min_max=(0, 400),
         rounding=1,
@@ -380,7 +380,7 @@ class Loss(GlobalSection):
             "\n\t 25 - The loss calculated for the third loss function will be reduced "
             "by a quarter prior to adding to the overall loss score. "
             "\n\t 400 - The loss calculated for the third loss function will be "
-            "mulitplied 4 times prior to adding to the overall loss score. "
+            "multiplied 4 times prior to adding to the overall loss score. "
             "\n\t 0 - Disables the third loss function altogether."),
         min_max=(0, 400),
         rounding=1,
@@ -410,7 +410,7 @@ class Loss(GlobalSection):
             "\n\t 25 - The loss calculated for the fourth loss function will be reduced "
             "by a quarter prior to adding to the overall loss score. "
             "\n\t 400 - The loss calculated for the fourth loss function will be "
-            "mulitplied 4 times prior to adding to the overall loss score. "
+            "multiplied 4 times prior to adding to the overall loss score. "
             "\n\t 0 - Disables the fourth loss function altogether."),
         min_max=(0, 400),
         rounding=1,
@@ -477,36 +477,37 @@ class Loss(GlobalSection):
             "required mask should have been selected as part of the Extract process. If "
             "it does not exist in the alignments file then it will be generated prior to "
             "training commencing."
-            "\n\tnone: Don't use a mask."
-            "\n\tbisenet-fp_face: Relatively lightweight NN based mask that provides more "
+            "\n\t none: Don't use a mask."
+            "\n\t bisenet-fp_face: Relatively lightweight NN based mask that provides more "
             "refined control over the area to be masked (configurable in mask settings). "
             "Use this version of bisenet-fp if your model is trained with 'face' or "
             "'legacy' centering."
-            "\n\tbisenet-fp_head: Relatively lightweight NN based mask that provides more "
+            "\n\t bisenet-fp_head: Relatively lightweight NN based mask that provides more "
             "refined control over the area to be masked (configurable in mask settings). "
             "Use this version of bisenet-fp if your model is trained with 'head' "
             "centering."
-            "\n\tcomponents: Mask designed to provide facial segmentation based on the "
+            "\n\t components: Mask designed to provide facial segmentation based on the "
             "positioning of landmark locations. A convex hull is constructed around the "
             "exterior of the landmarks to create a mask."
-            "\n\tcustom_face: Custom user created, face centered mask."
-            "\n\tcustom_head: Custom user created, head centered mask."
-            "\n\textended: Mask designed to provide facial segmentation based on the "
+            "\n\t custom_face: Custom user created, face centered mask."
+            "\n\t custom_head: Custom user created, head centered mask."
+            "\n\t extended: Mask designed to provide facial segmentation based on the "
             "positioning of landmark locations. A convex hull is constructed around the "
             "exterior of the landmarks and the mask is extended upwards onto the forehead."
-            "\n\tvgg-clear: Mask designed to provide smart segmentation of mostly frontal "
+            "\n\t vgg-clear: Mask designed to provide smart segmentation of mostly frontal "
             "faces clear of obstructions. Profile faces and obstructions may result in "
             "sub-par performance."
-            "\n\tvgg-obstructed: Mask designed to provide smart segmentation of mostly "
+            "\n\t vgg-obstructed: Mask designed to provide smart segmentation of mostly "
             "frontal faces. The mask model has been specifically trained to recognize "
             "some facial obstructions (hands and eyeglasses). Profile faces may result in "
             "sub-par performance."
-            "\n\tunet-dfl: Mask designed to provide smart segmentation of mostly frontal "
+            "\n\t unet-dfl: Mask designed to provide smart segmentation of mostly frontal "
             "faces. The mask model has been trained by community members and will need "
             "testing for further description. Profile faces may result in sub-par "
             "performance."),
-        choices=PluginLoader.get_available_extractors("mask",
-                                                      add_none=True, extend_plugin=True),
+        choices=list(sorted(["extended", "components"] + PluginLoader.get_available_extractors(
+            "mask",
+            add_none=True, extend_plugin=True))),
         gui_radio=True)
     mask_dilation = ConfigItem(
         datatype=float,
@@ -565,7 +566,7 @@ class Optimizer(GlobalSection):
         group=_("optimizer"),
         info=_(
             "The optimizer to use."
-            "\n\t adabelief - Adapting Stepsizes by the Belief in Observed Gradients. An "
+            "\n\t adabelief - Adapting Step-sizes by the Belief in Observed Gradients. An "
             "optimizer with the aim to converge faster, generalize better and remain more "
             "stable. (https://arxiv.org/abs/2010.07468). NB: Epsilon for AdaBelief needs "
             "to be set to a smaller value than other Optimizers. Generally setting the "
@@ -658,15 +659,15 @@ class Optimizer(GlobalSection):
         info=_(
             "Apply clipping to the gradients. Can help prevent NaNs and improve model "
             "optimization at the expense of VRAM."
-            "\n\tautoclip: Analyzes the gradient weights and adjusts the normalization "
+            "\n\t autoclip: Analyzes the gradient weights and adjusts the normalization "
             "value dynamically to fit the data"
-            "\n\tglobal_norm: Clips the gradient of each weight so that the global norm "
+            "\n\t global_norm: Clips the gradient of each weight so that the global norm "
             "is no higher than the given value."
-            "\n\tnorm: Clips the gradient of each weight so that its norm is no higher "
+            "\n\t norm: Clips the gradient of each weight so that its norm is no higher "
             "than the given value."
-            "\n\tvalue: Clips the gradient of each weight so that it is no higher than "
+            "\n\t value: Clips the gradient of each weight so that it is no higher than "
             "the given value."
-            "\n\tnone: Don't perform any clipping to the gradients."),
+            "\n\t none: Don't perform any clipping to the gradients."),
         choices=["autoclip", "global_norm", "norm", "value", "none"],
         gui_radio=True,
         fixed=False)
@@ -694,7 +695,7 @@ class Optimizer(GlobalSection):
         default=10000,
         group=_("clipping"),
         info=_(
-            "The maximum number of prior iterations for autoclipper to analyze when "
+            "The maximum number of prior iterations for auto-clipper to analyze when "
             "calculating the normalization amount. 0 to always include all prior "
             "iterations."),
         min_max=(0, 100000),
@@ -801,5 +802,5 @@ def load_config(config_file: str | None = None) -> None:
     """
     global _IS_LOADED  # pylint:disable=global-statement
     if not _IS_LOADED:
-        _Config(configfile=config_file)
+        _Config(config_file=config_file)
     _IS_LOADED = True

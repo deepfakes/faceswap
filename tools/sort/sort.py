@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 # faceswap imports
 from lib.serializer import Serializer, get_serializer_from_filename
-from lib.utils import get_module_objects, handle_deprecated_cliopts
+from lib.utils import get_module_objects, handle_deprecated_cli_opts
 
 from .sort_methods import SortBlur, SortColor, SortFace, SortHistogram, SortMultiMethod
 from .sort_methods_aligned import SortDistance, SortFaceCNN, SortPitch, SortSize, SortYaw, SortRoll
@@ -39,7 +39,7 @@ class Sort():
     """
     def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing: %s (args: %s)", self.__class__.__name__, arguments)
-        self._args = handle_deprecated_cliopts(arguments)
+        self._args = handle_deprecated_cli_opts(arguments)
         self._input_locations = self._get_input_locations()
         logger.debug("Initialized: %s", self.__class__.__name__)
 

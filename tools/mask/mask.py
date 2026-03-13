@@ -1,29 +1,32 @@
 #!/usr/bin/env python3
-""" Tool to generate masks and previews of masks for existing alignments file """
+"""Tool to generate masks and previews of masks for existing alignments file"""
 from __future__ import annotations
 import logging
 import os
 import sys
+import typing as T
 
 from argparse import Namespace
 from multiprocessing import Process
 
 from lib.align import Alignments
 
-from lib.utils import get_module_objects, handle_deprecated_cliopts, VIDEO_EXTENSIONS
-from plugins.extract import ExtractMedia
+from lib.utils import get_module_objects, handle_deprecated_cli_opts, VIDEO_EXTENSIONS
 
 from .loader import Loader
 from .mask_import import Import
 from .mask_generate import MaskGenerator
 from .mask_output import Output
 
+if T.TYPE_CHECKING:
+    from lib.align.alignments import PNGHeaderSourceDict
+    from lib.infer.objects import FrameFaces
 
 logger = logging.getLogger(__name__)
 
 
 class Mask:
-    """ This tool is part of the Faceswap Tools suite and should be called from
+    """This tool is part of the Faceswap Tools suite and should be called from
     ``python tools.py mask`` command.
 
     Faceswap Masks tool. Generate masks from existing alignments files, and output masks
@@ -33,7 +36,7 @@ class Mask:
 
     Parameters
     ----------
-    arguments: :class:`argparse.Namespace`
+    arguments
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`
     """
     def __init__(self, arguments: Namespace) -> None:
@@ -46,13 +49,12 @@ class Mask:
         self._input_locations = self._get_input_locations()
 
     def _get_input_locations(self) -> list[str]:
-        """ Obtain the full path to input locations. Will be a list of locations if batch mode is
+        """Obtain the full path to input locations. Will be a list of locations if batch mode is
         selected, or containing a single location if batch mode is not selected.
 
         Returns
         -------
-        list:
-            The list of input location paths
+        The list of input location paths
         """
         if not self._args.batch_mode:
             return [self._args.input]
@@ -69,14 +71,14 @@ class Mask:
         return retval
 
     def _get_output_location(self, input_location: str) -> str:
-        """ Obtain the path to an output folder for faces for a given input location.
+        """Obtain the path to an output folder for faces for a given input location.
 
         A sub-folder within the user supplied output location will be returned based on
         the input filename
 
         Parameters
         ----------
-        input_location: str
+        input_location
             The full path to an input video or folder of images
         """
         retval = os.path.join(self._args.output,
@@ -86,14 +88,14 @@ class Mask:
 
     @staticmethod
     def _run_mask_process(arguments: Namespace) -> None:
-        """ The mask process to be run in a spawned process.
+        """The mask process to be run in a spawned process.
 
         In some instances, batch-mode memory leaks. Launching each job in a separate process
         prevents this leak.
 
         Parameters
         ----------
-        arguments: :class:`argparse.Namespace`
+        arguments
             The :mod:`argparse` arguments to be used for the given job
         """
         logger.debug("Starting process: (arguments: %s)", arguments)
@@ -102,7 +104,7 @@ class Mask:
         logger.debug("Finished process: (arguments: %s)", arguments)
 
     def process(self) -> None:
-        """ The entry point for triggering the Extraction Process.
+        """The entry point for triggering the Extraction Process.
 
         Should only be called from  :class:`lib.cli.launcher.ScriptExecutor`
         """
@@ -129,7 +131,7 @@ class Mask:
 
 
 class _Mask:
-    """ This tool is part of the Faceswap Tools suite and should be called from
+    """This tool is part of the Faceswap Tools suite and should be called from
     ``python tools.py mask`` command.
 
     Faceswap Masks tool. Generate masks from existing alignments files, and output masks
@@ -137,12 +139,12 @@ class _Mask:
 
     Parameters
     ----------
-    arguments: :class:`argparse.Namespace`
+    arguments
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`
     """
     def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        arguments = handle_deprecated_cliopts(arguments)
+        arguments = handle_deprecated_cli_opts(arguments)
         self._update_type = arguments.processing
         self._input_is_faces = arguments.input_type == "faces"
         self._check_input(arguments.input)
@@ -175,16 +177,17 @@ class _Mask:
                                            self._input_is_faces,
                                            self._loader,
                                            self._alignments,
-                                           arguments.input)
+                                           arguments.input,
+                                           arguments.config_file)
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _check_input(self, mask_input: str) -> None:
-        """ Check the input is valid. If it isn't exit with a logged error
+        """Check the input is valid. If it isn't exit with a logged error
 
         Parameters
         ----------
-        mask_input: str
+        mask_input
             Path to the input folder/video
         """
         if not os.path.exists(mask_input):
@@ -197,21 +200,20 @@ class _Mask:
         logger.debug("input '%s' is valid", mask_input)
 
     def _get_alignments(self, alignments: str | None, input_location: str) -> Alignments | None:
-        """ Obtain the alignments from either the given alignments location or the default
+        """Obtain the alignments from either the given alignments location or the default
         location.
 
         Parameters
         ----------
-        alignments: str | None
-            Full path to the alignemnts file if provided or ``None`` if not
-        input_location: str
+        alignments
+            Full path to the alignments file if provided or ``None`` if not
+        input_location
             Full path to the source files to be used by the mask tool
 
         Returns
         -------
-        ``None`` or :class:`~lib.align.alignments.Alignments`:
-            If output is requested, returns a :class:`~lib.align.alignments.Alignments` otherwise
-            returns ``None``
+        If output is requested, returns a :class:`~lib.align.alignments.Alignments` otherwise
+        returns ``None``
         """
         if alignments:
             logger.debug("Alignments location provided: %s", alignments)
@@ -237,24 +239,29 @@ class _Mask:
         retval = Alignments(folder, filename=filename)
         return retval
 
-    def _save_output(self, media: ExtractMedia) -> None:
-        """ Output masks to disk
+    def _save_output(self, media: FrameFaces) -> None:
+        """Output masks to disk
 
         Parameters
         ----------
-        media: :class:`~plugins.extract.extract_media.ExtractMedia`
+        media
             The extract media holding the faces to output
         """
-        filename = os.path.basename(media.frame_metadata["source_filename"]
-                                    if self._input_is_faces else media.filename)
-        dims = media.frame_metadata["source_frame_dims"] if self._input_is_faces else None
+        if self._input_is_faces:
+            assert media.frame_metadata is not None
+            filename = os.path.basename(media.frame_metadata["source_filename"])
+            dims = media.frame_metadata["source_frame_dims"]
+        else:
+            filename = os.path.basename(media.filename)
+            dims = None
         for idx, face in enumerate(media.detected_faces):
-            face_idx = media.frame_metadata["face_index"] if self._input_is_faces else idx
+            face_idx = T.cast("PNGHeaderSourceDict",
+                              media.frame_metadata)["face_index"] if self._input_is_faces else idx
             face.image = media.image
             self._output.save(filename, face_idx, face, frame_dims=dims)
 
     def _generate_masks(self) -> None:
-        """ Generate masks from a mask plugin """
+        """Generate masks from a mask plugin"""
         assert self._mask_gen is not None
 
         logger.info("Generating masks")
@@ -264,7 +271,7 @@ class _Mask:
                 self._save_output(media)
 
     def _import_masks(self) -> None:
-        """ Import masks that have been generated outside of faceswap """
+        """Import masks that have been generated outside of faceswap"""
         assert self._import is not None
         logger.info("Importing masks")
 
@@ -285,12 +292,12 @@ class _Mask:
                     self._import.update_count, self._import.update_count + self._import.skip_count)
 
     def _output_masks(self) -> None:
-        """ Output masks to selected output folder """
+        """Output masks to selected output folder"""
         for media in self._loader.load():
             self._save_output(media)
 
     def process(self) -> None:
-        """ The entry point for the Mask tool from :file:`lib.tools.cli`. Runs the Mask process """
+        """The entry point for the Mask tool from :file:`lib.tools.cli`. Runs the Mask process"""
         logger.debug("Starting masker process")
 
         if self._update_type in ("all", "missing"):

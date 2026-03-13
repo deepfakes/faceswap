@@ -31,12 +31,12 @@ from lib.config import ConfigItem
 
 HELPTEXT = (
     "MTCNN Detector options.\n"
-    "Fast on GPU, slow on CPU. Uses fewer resources than other GPU detectors but can often return "
-    "more false positives."
+    "Fast on CPU, Faster on GPU. Uses fewer resources than other GPU detectors but can often "
+    "return more false positives."
 )
 
 
-minsize = ConfigItem(
+min_size = ConfigItem(
     datatype=int,
     default=20,
     group="settings",
@@ -58,11 +58,9 @@ batch_size = ConfigItem(
     default=8,
     group="settings",
     info="The batch size to use. To a point, higher batch sizes equal better performance, "
-         "but setting it too high can harm performance.\n"
-         "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
-         "accomodate then this will automatically be lowered.",
+         "but setting it too high can harm performance.",
     rounding=1,
-    min_max=(1, 64))
+    min_max=(1, 256))
 
 cpu = ConfigItem(
     datatype=bool,

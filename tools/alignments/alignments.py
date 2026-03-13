@@ -9,7 +9,7 @@ from argparse import Namespace
 from multiprocessing import Process
 
 from lib.utils import (get_module_objects, FaceswapError,
-                       handle_deprecated_cliopts, VIDEO_EXTENSIONS)
+                       handle_deprecated_cli_opts, VIDEO_EXTENSIONS)
 from .media import AlignmentData
 from .jobs import Check, Export, Sort, Spatial  # noqa pylint:disable=unused-import
 from .jobs_faces import FromFaces, RemoveFaces, Rename  # noqa pylint:disable=unused-import
@@ -43,7 +43,7 @@ class Alignments():
                                  "missing-frames",
                                  "no-faces"]
 
-        self._args = handle_deprecated_cliopts(arguments)
+        self._args = handle_deprecated_cli_opts(arguments)
         self._batch_mode = self._validate_batch_mode()
         self._locations = self._get_locations()
 
@@ -293,7 +293,7 @@ class _Alignments():
 
         fname = "alignments.fsa"
         if os.path.isdir(frames) and os.path.exists(os.path.join(frames, fname)):
-            return fname
+            return os.path.join(frames, fname)
 
         if os.path.isdir(frames) or os.path.splitext(frames)[-1] not in VIDEO_EXTENSIONS:
             logger.error("Can't find a valid alignments file in location: %s", frames)

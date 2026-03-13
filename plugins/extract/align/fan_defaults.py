@@ -37,12 +37,9 @@ HELPTEXT = (
 
 batch_size = ConfigItem(
     datatype=int,
-    default=12,
+    default=16,
     group="settings",
     info="The batch size to use. To a point, higher batch sizes equal better performance, "
-         "but setting it too high can harm performance.\n"
-         "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
-         "accomodate then this will automatically be lowered."
-         "\n\tAMD users: A batchsize of 8 requires about 4 GB vram.",
+         "but setting it too high can harm performance.",
     rounding=1,
-    min_max=(1, 64))
+    min_max=(1, 256))

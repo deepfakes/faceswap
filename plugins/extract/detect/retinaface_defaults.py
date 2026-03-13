@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" The default options for the faceswap Import Alignments plugin.
+""" The default options for the faceswap S3Fd Detect plugin.
 
 Defaults files should be named `<plugin_name>_defaults.py`
 
@@ -30,31 +30,41 @@ from lib.config import ConfigItem
 
 
 HELPTEXT = (
-    "Import Detector options.\n"
-    "Imports a detected face bounding box from an external .json file.\n"
+    "RetinaFace Detector options.\n"
+    "GPU and CPU versions available."
     )
 
-
-file_name = ConfigItem(
-    datatype=str,
-    default="import.json",
+cpu = ConfigItem(
+    datatype=bool,
+    default=False,
     group="settings",
-    info="The import file should be stored in the same folder as the video (if extracting "
-         "from a video file) or inside the folder of images (if importing from a folder of "
-         "images)")
+    info="Enable CPU mode here to use the CPU for this detector to save some VRAM at a "
+         "speed cost.")
 
-origin = ConfigItem(
+backbone = ConfigItem(
     datatype=str,
-    default="top-left",
-    group="output",
-    info="The origin (0, 0) location of the co-ordinates system used. "
-         "\n\t top-left: The origin (0, 0) of the canvas is at the top left "
-         "corner."
-         "\n\t bottom-left: The origin (0, 0) of the canvas is at the bottom "
-         "left corner."
-         "\n\t top-right: The origin (0, 0) of the canvas is at the top right "
-         "corner."
-         "\n\t bottom-right: The origin (0, 0) of the canvas is at the bottom "
-         "right corner.",
-    choices=["top-left", "bottom-left", "top-right", "bottom-right"],
+    default="resnet",
+    group="settings",
+    info="The backbone to use. Resnet is heavier but more reliable, MobileNet is light enough to "
+         "run on CPU.",
+    choices=["resnet", "mobilenet"],
     gui_radio=True)
+
+confidence = ConfigItem(
+    datatype=int,
+    default=70,
+    group="settings",
+    info="The confidence level at which the detector has successfully found a face.\n"
+         "Higher levels will be more discriminating, lower levels will have more false "
+         "positives.",
+    rounding=5,
+    min_max=(25, 100))
+
+batch_size = ConfigItem(
+    datatype=int,
+    default=4,
+    group="settings",
+    info="The batch size to use. To a point, higher batch sizes equal better performance, "
+         "but setting it too high can harm performance.",
+    rounding=1,
+    min_max=(1, 128))

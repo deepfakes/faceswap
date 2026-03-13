@@ -451,7 +451,9 @@ def deprecation_warning(function: str, additional_info: str | None = None) -> No
     logger.warning(msg)
 
 
-def handle_deprecated_cliopts(arguments: Namespace) -> Namespace:
+def handle_deprecated_cli_opts(arguments: Namespace,
+                               additional: dict[str, tuple[str | bool | T.Any, ...]] | None = None
+                               ) -> Namespace:
     """ Handle deprecated command line arguments and update to correct argument.
 
     Deprecated cli opts will be provided in the following format:
@@ -459,8 +461,15 @@ def handle_deprecated_cliopts(arguments: Namespace) -> Namespace:
 
     Parameters
     ----------
-    arguments: :class:`argpares.Namespace`
+    arguments: :class:`argparse.Namespace`
         The passed in faceswap cli arguments
+    additional: dict[str, tuple[str, bool, Any]] | None, optional
+        Additional information in format {deprecated_argument: (additional_text, should_update,
+        [new_value])} where deprecated_argument is the command line argument, additional_text is
+        any additional text to display, should_update is whether the deprecated argument should be
+        replaced with the new argument and new_value is an optional value that can be passed in
+        that the new argument should be set to.
+        Default: ``None`` (no additional information)
 
     Returns
     -------
@@ -468,7 +477,7 @@ def handle_deprecated_cliopts(arguments: Namespace) -> Namespace:
         The cli arguments with deprecated values mapped to the correct entry
     """
     logger = logging.getLogger(__name__)
-
+    additional = {} if additional is None else additional
     for key, selected in vars(arguments).items():
         if not key.startswith("depr_") or key.startswith("depr_") and selected is None:
             continue  # Not a deprecated opt
@@ -476,14 +485,34 @@ def handle_deprecated_cliopts(arguments: Namespace) -> Namespace:
             continue  # store-true opt with default value
 
         opt, old, new = key.replace("depr_", "").rsplit("_", maxsplit=2)
-        deprecation_warning(f"Command line option '-{old}'", f"Use '-{new}, --{opt}' instead")
 
+        if opt == "removed":
+            deprecation_warning(f"Command line option '-{old}' ('--{new}')",
+                                "This option no longer performs any action")
+            continue
+
+        opt_additional = additional.get(old, ("", True))
+        add_msg = opt_additional[0]
+        should_update = opt_additional[1]
+        assert isinstance(add_msg, str)
+        assert isinstance(should_update, bool)
+        value = selected if len(opt_additional) < 3 else opt_additional[2]
+
+        add_msg = f" {add_msg}" if add_msg else ""
+        msg = f"Use '-{new}, --{opt}' instead{add_msg}"
+        deprecation_warning(f"Command line option '-{old}'", msg)
+
+        opt = opt.replace("-", "_")
         exist = getattr(arguments, opt)
-        if exist == selected:
-            logger.debug("Keeping existing '%s' value of '%s'", opt, exist)
+        if not should_update:
+            logger.debug("Keeping existing '%s' value '%s' from additional dict", opt, exist)
+        elif exist == value:
+            logger.debug("Keeping existing '%s' value of %s", opt, repr(exist))
         else:
-            logger.debug("Updating arg '%s' from '%s' to '%s' from deprecated opt",
-                         opt, exist, selected)
+            log_at_level = logger.info if old in additional else logger.debug
+            log_at_level("Updating arg '%s' from %s to %s from deprecated option '-%s'",
+                         opt, repr(exist), repr(value), old)
+            setattr(arguments, opt, value)
 
     return arguments
 
@@ -610,21 +639,21 @@ class GetModel():
         """ str: The full model name from the filename(s). """
         common_prefix = os.path.commonprefix(self._model_filename)
         retval = os.path.splitext(common_prefix)[0]
-        self.logger.trace(retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] full name: %s", repr(retval))  # type:ignore[attr-defined]
         return retval
 
     @property
     def _model_name(self) -> str:
         """ str: The model name from the model's full name. """
         retval = self._model_full_name[:self._model_full_name.rfind("_")]
-        self.logger.trace(retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] name: %s", repr(retval))  # type:ignore[attr-defined]
         return retval
 
     @property
     def _model_version(self) -> int:
         """ int: The model's version number from the model full name. """
         retval = int(self._model_full_name[self._model_full_name.rfind("_") + 2:])
-        self.logger.trace(retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] id: %s", repr(retval))  # type:ignore[attr-defined]
         return retval
 
     @property
@@ -640,14 +669,14 @@ class GetModel():
         """
         paths = [os.path.join(self._cache_dir, fname) for fname in self._model_filename]
         retval: str | list[str] = paths[0] if len(paths) == 1 else paths
-        self.logger.trace(retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] path: %s", repr(retval))  # type:ignore[attr-defined]
         return retval
 
     @property
     def _model_zip_path(self) -> str:
         """ str: The full path to downloaded zip file. """
         retval = os.path.join(self._cache_dir, f"{self._model_full_name}.zip")
-        self.logger.trace(retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] zip path: %s", repr(retval))  # type:ignore[attr-defined]
         return retval
 
     @property
@@ -657,7 +686,7 @@ class GetModel():
             retval = all(os.path.exists(pth) for pth in self.model_path)
         else:
             retval = os.path.exists(self.model_path)
-        self.logger.trace(retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] exists: %s", repr(retval))  # type:ignore[attr-defined]
         return retval
 
     @property
@@ -665,7 +694,7 @@ class GetModel():
         """ strL Base download URL for models. """
         tag = f"v{self._git_model_id}.{self._model_version}"
         retval = f"{self._url_base}/{tag}/{self._model_full_name}.zip"
-        self.logger.trace("Download url: %s", retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] Download url: %s", repr(retval))  # type:ignore[attr-defined]
         return retval
 
     @property
@@ -673,14 +702,14 @@ class GetModel():
         """ int: How many bytes have already been downloaded. """
         zip_file = self._model_zip_path
         retval = os.path.getsize(zip_file) if os.path.exists(zip_file) else 0
-        self.logger.trace(retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] Partial size: %s", retval)  # type:ignore[attr-defined]
         return retval
 
     def _get(self) -> None:
         """ Check the model exists, if not, download the model, unzip it and place it in the
         model's cache folder. """
         if self._model_exists:
-            self.logger.debug("Model exists: %s", self.model_path)
+            self.logger.debug("[GetModel] Model exists: %s", repr(self.model_path))
             return
         self._download_model()
         self._unzip_model()
@@ -696,8 +725,8 @@ class GetModel():
                 if downloaded_size != 0:
                     req.add_header("Range", f"bytes={downloaded_size}-")
                 with request.urlopen(req, timeout=10) as response:
-                    self.logger.debug("header info: {%s}", response.info())
-                    self.logger.debug("Return Code: %s", response.getcode())
+                    self.logger.debug("[GetModel] header info: {%s}", response.info())
+                    self.logger.debug("[GetModel] Return Code: %s", response.getcode())
                     self._write_zipfile(response, downloaded_size)
                 break
             except (socket_error, socket_timeout,
@@ -768,7 +797,7 @@ class GetModel():
         """
         length = sum(f.file_size for f in zip_file.infolist())
         fnames = zip_file.namelist()
-        self.logger.debug("Zipfile: Filenames: %s, Total Size: %s", fnames, length)
+        self.logger.debug("[GetModel] Zipfile: Filenames: %s, Total Size: %s", fnames, length)
         assert tqdm is not None
         pbar = tqdm(desc="Decompressing",
                     unit="B",
@@ -777,7 +806,8 @@ class GetModel():
                     unit_divisor=1024)
         for fname in fnames:
             out_fname = os.path.join(self._cache_dir, fname)
-            self.logger.debug("Extracting from: '%s' to '%s'", self._model_zip_path, out_fname)
+            self.logger.debug("[GetModel] Extracting from: '%s' to '%s'",
+                              self._model_zip_path, out_fname)
             zipped = zip_file.open(fname)
             with open(out_fname, "wb") as out_file:
                 while True:

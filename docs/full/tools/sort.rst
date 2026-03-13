@@ -10,6 +10,10 @@ sort package
    :include-all-objects:
 
 |
+.. automodapi:: tools.sort.info_loader
+   :include-all-objects:
+
+|
 .. automodapi:: tools.sort.sort
    :include-all-objects:
    :no-inheritance-diagram:

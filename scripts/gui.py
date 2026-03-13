@@ -49,9 +49,9 @@ class FaceswapGui(tk.Tk):
 
     def initialize_globals(self):
         """ Initialize config and images global constants """
-        cliopts = CliOptions()
+        cli_opts = CliOptions()
         statusbar = StatusBar(self)
-        config = initialize_config(self, cliopts, statusbar)
+        config = initialize_config(self, cli_opts, statusbar)
         initialize_images()
         return config
 
@@ -91,21 +91,21 @@ class FaceswapGui(tk.Tk):
         """ Add the paned window containers that
             hold each main area of the gui """
         logger.debug("Adding containers")
-        maincontainer = ttk.PanedWindow(self,
-                                        orient=tk.VERTICAL,
-                                        name="pw_main")
-        maincontainer.pack(fill=tk.BOTH, expand=True)
+        main_container = ttk.PanedWindow(self,
+                                         orient=tk.VERTICAL,
+                                         name="pw_main")
+        main_container.pack(fill=tk.BOTH, expand=True)
 
-        topcontainer = ttk.PanedWindow(maincontainer,
-                                       orient=tk.HORIZONTAL,
-                                       name="pw_top")
-        maincontainer.add(topcontainer)
+        top_container = ttk.PanedWindow(main_container,
+                                        orient=tk.HORIZONTAL,
+                                        name="pw_top")
+        main_container.add(top_container)
 
-        bottomcontainer = ttk.Frame(maincontainer, name="frame_bottom")
-        maincontainer.add(bottomcontainer)
-        self.objects["container_main"] = maincontainer
-        self.objects["container_top"] = topcontainer
-        self.objects["container_bottom"] = bottomcontainer
+        bottom_container = ttk.Frame(main_container, name="frame_bottom")
+        main_container.add(bottom_container)
+        self.objects["container_main"] = main_container
+        self.objects["container_top"] = top_container
+        self.objects["container_bottom"] = bottom_container
 
         logger.debug("Added containers")
 
@@ -175,8 +175,8 @@ class FaceswapGui(tk.Tk):
             logger.debug("No tasks currently running")
             return True
 
-        confirmtxt = "Processes are still running.\n\nAre you sure you want to exit?"
-        if not messagebox.askokcancel("Close", confirmtxt, default="cancel", icon="warning"):
+        confirm_txt = "Processes are still running.\n\nAre you sure you want to exit?"
+        if not messagebox.askokcancel("Close", confirm_txt, default="cancel", icon="warning"):
             logger.debug("Close Cancelled")
             return False
         logger.debug("Close confirmed")
@@ -186,7 +186,7 @@ class FaceswapGui(tk.Tk):
 class Gui():
     """ The GUI process. """
     def __init__(self, arguments):
-        self.root = FaceswapGui(arguments.debug, arguments.configfile)
+        self.root = FaceswapGui(arguments.debug, arguments.config_file)
 
     def process(self):
         """ Builds the GUI """

@@ -1,24 +1,63 @@
 #!/usr/bin/env python3
 """ Plugin loader for Faceswap extract, training and convert tasks """
 from __future__ import annotations
+import ast
 import logging
 import os
 import typing as T
 
 from importlib import import_module
 
-from lib.utils import get_module_objects
+from lib.utils import full_path_split, get_module_objects, PROJECT_ROOT
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
-    from plugins.extract.detect._base import Detector
-    from plugins.extract.align._base import Aligner
-    from plugins.extract.mask._base import Masker
-    from plugins.extract.recognition._base import Identity
+    from plugins.extract.base import ExtractPlugin
     from plugins.train.model._base import ModelBase
     from plugins.train.trainer._base import TrainerBase
 
 logger = logging.getLogger(__name__)
+
+
+def get_extractors() -> dict[str, list[str]]:  # noqa[C901]
+    """ Obtain a dictionary of all available extraction plugins by plugin type
+
+    Returns
+    -------
+    dict[str, list[:class:`plugins.extract._base.ExtractPlugin`]]
+        A list of all available plugins for each extraction plugin type
+    """
+    root = os.path.join(PROJECT_ROOT, "plugins", "extract")
+    folders = sorted(os.path.join(root, fldr) for fldr in os.listdir(root)
+                     if os.path.isdir(os.path.join(root, fldr))
+                     and not fldr.startswith("_"))
+    retval: dict[str, list[str]] = {}
+    for fldr in folders:
+        files = sorted(os.path.join(fldr, fname) for fname in os.listdir(fldr)
+                       if os.path.isfile(os.path.join(fldr, fname))
+                       and fname.endswith(".py")
+                       and not fname.startswith("_")
+                       and not fname.endswith("_defaults.py"))
+        mods = []
+        for fpath in files:
+            try:
+                with open(fpath, "r", encoding="utf-8") as pfile:
+                    tree = ast.parse(pfile.read())
+            except Exception:  # pylint:disable=broad-except
+                continue
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                for base in node.bases:
+                    if not isinstance(base, ast.Name):
+                        continue
+                    if base.id in ("ExtractPlugin", "FacePlugin"):
+                        rel_path = os.path.splitext(fpath.replace(PROJECT_ROOT, "")[1:])[0]
+                        mods.append(".".join(full_path_split(rel_path) + [node.name]))
+        if mods:
+            retval[os.path.basename(fldr)] = list(sorted(mods))
+    logger.debug("Extraction plugins: %s", retval)
+    return retval
 
 
 class PluginLoader():
@@ -33,81 +72,48 @@ class PluginLoader():
     >>> align_plugins = PluginLoader.get_available_extractors('align')
     >>> aligner = PluginLoader.get_aligner('cv2-dnn')
     """
-    @staticmethod
-    def get_detector(name: str, disable_logging: bool = False) -> type[Detector]:
-        """ Return requested detector plugin
+    extract_plugins = get_extractors()
+
+    @classmethod
+    def get_extractor(cls,
+                      plugin_type: T.Literal["align", "detect", "identity", "mask"],
+                      name: str) -> ExtractPlugin:
+        """ Return requested extractor plugin
 
         Parameters
         ----------
+        type : Literal["align", "detect", "identity", "mask"]
+            The type of extractor plugin to obtain
         name: str
-            The name of the requested detector plugin
-        disable_logging: bool, optional
-            Whether to disable the INFO log message that the plugin is being imported.
-            Default: `False`
+            The name of the requested extractor plugin
 
         Returns
         -------
-        :class:`plugins.extract.detect` object:
-            An extraction detector plugin
+        type[:class:`plugins.extract.ExtractPlugin`]
+            An extraction plugin
+
+        Raises
+        ------
+        ValueError
+            If an invalid plugin type or plugin name is selected
         """
-        return PluginLoader._import("extract.detect", name, disable_logging)
+        if plugin_type not in cls.extract_plugins:
+            raise ValueError(f"{plugin_type} is not a valid plugin type. Select from "
+                             f"{list(cls.extract_plugins)}")
+        plugins = cls.extract_plugins[plugin_type]
+        mods = [p.split(".")[-2] for p in plugins]
+        real_name = name.lower().replace("-", "_")
+        if real_name not in mods:
+            raise ValueError(f"{name} is not a valid {plugin_type} plugin. Select from {mods}")
 
-    @staticmethod
-    def get_aligner(name: str, disable_logging: bool = False) -> type[Aligner]:
-        """ Return requested aligner plugin
+        mod, obj = plugins[mods.index(real_name)].rsplit(".", maxsplit=1)
+        logger.debug("Loading '%s' from '%s'", plugin_type, name)
 
-        Parameters
-        ----------
-        name: str
-            The name of the requested aligner plugin
-        disable_logging: bool, optional
-            Whether to disable the INFO log message that the plugin is being imported.
-            Default: `False`
+        module = import_module(mod)
 
-        Returns
-        -------
-        :class:`plugins.extract.align` object:
-            An extraction aligner plugin
-        """
-        return PluginLoader._import("extract.align", name, disable_logging)
-
-    @staticmethod
-    def get_masker(name: str, disable_logging: bool = False) -> type[Masker]:
-        """ Return requested masker plugin
-
-        Parameters
-        ----------
-        name: str
-            The name of the requested masker plugin
-        disable_logging: bool, optional
-            Whether to disable the INFO log message that the plugin is being imported.
-            Default: `False`
-
-        Returns
-        -------
-        :class:`plugins.extract.mask` object:
-            An extraction masker plugin
-        """
-        return PluginLoader._import("extract.mask", name, disable_logging)
-
-    @staticmethod
-    def get_recognition(name: str, disable_logging: bool = False) -> type[Identity]:
-        """ Return requested recognition plugin
-
-        Parameters
-        ----------
-        name: str
-            The name of the requested reccognition plugin
-        disable_logging: bool, optional
-            Whether to disable the INFO log message that the plugin is being imported.
-            Default: `False`
-
-        Returns
-        -------
-        :class:`plugins.extract.recognition` object:
-            An extraction recognition plugin
-        """
-        return PluginLoader._import("extract.recognition", name, disable_logging)
+        retval = getattr(module, obj)()
+        logger.info("Loading %s from %s", plugin_type.title(), retval.name)
+        return retval
 
     @staticmethod
     def get_model(name: str, disable_logging: bool = False) -> type[ModelBase]:
@@ -177,7 +183,7 @@ class PluginLoader():
         Parameters
         ----------
         name: str
-            The name of the requested converter plugin
+            The name of the requested plugin
         disable_logging: bool
             Whether to disable the INFO log message that the plugin is being imported.
 
@@ -195,15 +201,16 @@ class PluginLoader():
         module = import_module(mod)
         return getattr(module, ttl)
 
-    @staticmethod
-    def get_available_extractors(extractor_type: T.Literal["align", "detect", "mask"],
+    @classmethod
+    def get_available_extractors(cls,
+                                 extractor_type: T.Literal["align", "detect", "identity", "mask"],
                                  add_none: bool = False,
                                  extend_plugin: bool = False) -> list[str]:
         """ Return a list of available extractors of the given type
 
         Parameters
         ----------
-        extractor_type: {'align', 'detect', 'mask'}
+        extractor_type : Literal["align", "detect", "identity", "mask"]
             The type of extractor to return the plugins for
         add_none: bool, optional
             Append "none" to the list of returned plugins. Default: False
@@ -220,25 +227,21 @@ class PluginLoader():
         list:
             A list of the available extractor plugin names for the given type
         """
-        extractpath = os.path.join(os.path.dirname(__file__),
-                                   "extract",
-                                   extractor_type)
-        extractors = [item.name.replace(".py", "").replace("_", "-")
-                      for item in os.scandir(extractpath)
-                      if not item.name.startswith("_")
-                      and not item.name.endswith("defaults.py")
-                      and item.name.endswith(".py")]
-        extendable = ["bisenet-fp", "custom"]
-        if extend_plugin and extractor_type == "mask" and any(ext in extendable
-                                                              for ext in extractors):
-            for msk in extendable:
-                extractors.remove(msk)
-                extractors.extend([f"{msk}_face", f"{msk}_head"])
-
-        extractors = sorted(extractors)
+        if extractor_type not in cls.extract_plugins:
+            raise ValueError(f"{extractor_type} is not a valid plugin type. Select from "
+                             f"{list(cls.extract_plugins)}")
+        plugins = [x.split(".")[-2].replace("_", "-") for x in cls.extract_plugins[extractor_type]]
+        if extend_plugin and extractor_type == "mask":
+            extendable = ["bisenet-fp", "custom"]
+            for plugin in extendable:
+                if plugin not in plugins:
+                    continue
+                plugins.remove(plugin)
+                plugins.extend([f"{plugin}_face", f"{plugin}_head"])
+        plugins = sorted(plugins)
         if add_none:
-            extractors.insert(0, "none")
-        return extractors
+            plugins.insert(0, "none")
+        return plugins
 
     @staticmethod
     def get_available_models() -> list[str]:

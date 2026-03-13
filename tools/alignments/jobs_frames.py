@@ -12,11 +12,10 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from lib.align import DetectedFace, EXTRACT_RATIOS, LANDMARK_PARTS, LandmarkType
-from lib.align.alignments import _VERSION, PNGHeaderDict
-from lib.image import encode_image, generate_thumbnail, ImagesSaver
-from lib.utils import get_module_objects
-from plugins.extract import ExtractMedia, Extractor
+from lib.align import DetectedFace, LANDMARK_PARTS, LandmarkType
+from lib.align.alignments import PNGHeaderDict
+from lib.image import encode_image, ImagesSaver
+from lib.utils import get_module_objects, deprecation_warning
 from .media import ExtractedFaces, Frames
 
 if T.TYPE_CHECKING:
@@ -177,10 +176,10 @@ class Extract():
     """
     def __init__(self, alignments: AlignmentData, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
+        deprecation_warning("'Extract' job", "Use 'python faceswap.py extract' instead, selecting "
+                            "the 'file' aligner plugin.")
         self._arguments = arguments
         self._alignments = alignments
-        self._is_legacy = self._alignments.version == 1.0  # pylint:disable=protected-access
-        self._mask_pipeline: Extractor | None = None
         self._faces_dir = arguments.faces_dir
         self._min_size = self._get_min_size(arguments.size, arguments.min_size)
 
@@ -238,8 +237,6 @@ class Extract():
         """ Run the re-extraction from Alignments file process"""
         logger.info("[EXTRACT FACES]")  # Tidy up cli output
         self._check_folder()
-        if self._is_legacy:
-            self._legacy_check()
         self._saver = ImagesSaver(self._faces_dir, as_bytes=True)
 
         if self._min_size > 0:
@@ -263,35 +260,6 @@ class Extract():
             sys.exit(0)
         logger.verbose("Creating output folder at '%s'", self._faces_dir)  # type:ignore
 
-    def _legacy_check(self) -> None:
-        """ Check whether the alignments file was created with the legacy extraction method.
-
-        If so, force user to re-extract all faces if any options have been specified, otherwise
-        raise the appropriate warnings and set the legacy options.
-        """
-        if self._min_size > 0 or self._arguments.extract_every_n != 1:
-            logger.warning("This alignments file was generated with the legacy extraction method.")
-            logger.warning("You should run this extraction job, but with 'min_size' set to 0 and "
-                           "'extract-every-n' set to 1 to update the alignments file.")
-            logger.warning("You can then re-run this extraction job with your chosen options.")
-            sys.exit(0)
-
-        maskers = ["components", "extended"]
-        nn_masks = [mask for mask in list(self._alignments.mask_summary) if mask not in maskers]
-        logtype = logger.warning if nn_masks else logger.info
-        logtype("This alignments file was created with the legacy extraction method and will be "
-                "updated.")
-        logtype("Faces will be extracted using the new method and landmarks based masks will be "
-                "regenerated.")
-        if nn_masks:
-            logtype("However, the NN based masks '%s' will be cropped to the legacy extraction "
-                    "method, so you may want to run the mask tool to regenerate these "
-                    "masks.", "', '".join(nn_masks))
-        self._mask_pipeline = Extractor(None, None, maskers, multiprocess=True)
-        self._mask_pipeline.launch()
-        # Update alignments versioning
-        self._alignments._io._version = _VERSION  # pylint:disable=protected-access
-
     def _export_faces(self) -> None:
         """ Export the faces to the output folder. """
         extracted_faces = 0
@@ -306,8 +274,6 @@ class Extract():
                 logger.verbose("Skipping '%s' - Alignments not found", frame_name)  # type:ignore
                 continue
             extracted_faces += self._output_faces(frame_name, image)
-        if self._is_legacy and extracted_faces != 0 and self._min_size == 0:
-            self._alignments.save()
         logger.info("%s face(s) extracted", extracted_faces)
 
     def _set_skip_list(self) -> list[int] | None:
@@ -355,8 +321,6 @@ class Extract():
         assert self._saver is not None
         if not faces:
             return face_count
-        if self._is_legacy:
-            faces = self._process_legacy(filename, image, faces)
 
         for idx, face in enumerate(faces):
             output = f"{frame_name}_{idx}.png"
@@ -370,9 +334,6 @@ class Extract():
                            "source_frame_dims": T.cast(tuple[int, int], image.shape[:2])}}
             assert face.aligned.face is not None
             self._saver.save(output, encode_image(face.aligned.face, ".png", metadata=meta))
-            if self._min_size == 0 and self._is_legacy:
-                face.thumbnail = generate_thumbnail(face.aligned.face, size=96, quality=60)
-                self._alignments.data[filename]["faces"][idx] = face.to_alignment()
             face_count += 1
         self._saver.close()
         return face_count
@@ -402,79 +363,6 @@ class Extract():
         logger.trace("frame: '%s', total_faces: %s, valid_faces: %s",  # type:ignore
                      frame, len(faces), len(valid_faces))
         return valid_faces
-
-    def _process_legacy(self,
-                        filename: str,
-                        image: np.ndarray,
-                        detected_faces: list[DetectedFace]) -> list[DetectedFace]:
-        """ Process legacy face extractions to new extraction method.
-
-        Updates stored masks to new extract size
-
-        Parameters
-        ----------
-        filename: str
-            The current frame filename
-        image: :class:`numpy.ndarray`
-            The current image the contains the faces
-        detected_faces: list
-            list of :class:`lib.align.DetectedFace` objects for the current frame
-
-        Returns
-        -------
-        list
-            The updated list of :class:`lib.align.DetectedFace` objects for the current frame
-        """
-        # Update landmarks based masks for face centering
-        assert self._mask_pipeline is not None
-        mask_item = ExtractMedia(filename, image, detected_faces=detected_faces)
-        self._mask_pipeline.input_queue.put(mask_item)
-        faces = next(self._mask_pipeline.detected_faces()).detected_faces
-
-        # Pad and shift Neural Network based masks to face centering
-        for face in faces:
-            self._pad_legacy_masks(face)
-        return faces
-
-    @classmethod
-    def _pad_legacy_masks(cls, detected_face: DetectedFace) -> None:
-        """ Recenter legacy Neural Network based masks from legacy centering to face centering
-        and pad accordingly.
-
-        Update the masks back into the detected face objects.
-
-        Parameters
-        ----------
-        detected_face: :class:`lib.align.DetectedFace`
-            The detected face to update the masks for
-        """
-        offset = detected_face.aligned.pose.offset["face"]
-        for name, mask in detected_face.mask.items():  # Re-center mask and pad to face size
-            if name in ("components", "extended"):
-                continue
-            old_mask = mask.mask.astype("float32") / 255.0
-            size = old_mask.shape[0]
-            new_size = int(size + (size * EXTRACT_RATIOS["face"]) / 2)
-
-            shift = np.rint(offset * (size - (size * EXTRACT_RATIOS["face"]))).astype("int32")
-            pos = np.array([(new_size // 2 - size // 2) - shift[1],
-                            (new_size // 2) + (size // 2) - shift[1],
-                            (new_size // 2 - size // 2) - shift[0],
-                            (new_size // 2) + (size // 2) - shift[0]])
-            bounds = np.array([max(0, pos[0]), min(new_size, pos[1]),
-                               max(0, pos[2]), min(new_size, pos[3])])
-
-            slice_in = [slice(0 - (pos[0] - bounds[0]), size - (pos[1] - bounds[1])),
-                        slice(0 - (pos[2] - bounds[2]), size - (pos[3] - bounds[3]))]
-            slice_out = [slice(bounds[0], bounds[1]), slice(bounds[2], bounds[3])]
-
-            new_mask = np.zeros((new_size, new_size, 1), dtype="float32")
-            new_mask[slice_out[0], slice_out[1], :] = old_mask[slice_in[0], slice_in[1], :]
-
-            mask.replace_mask(new_mask)
-            # Get the affine matrix from recently generated components mask
-            # pylint:disable=protected-access
-            mask._affine_matrix = detected_face.mask["components"].affine_matrix
 
 
 __all__ = get_module_objects(__name__)

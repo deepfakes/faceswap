@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 
 class Adjustment():
     """ Parent class for scaling adjustments """
-    def __init__(self, configfile=None):
+    def __init__(self, config_file=None):
         logger.debug(parse_class_init(locals()))
-        convert_config.load_config(config_file=configfile)
+        convert_config.load_config(config_file=config_file)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self, new_face):
