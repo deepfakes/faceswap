@@ -431,12 +431,13 @@ class Export:
             The face formatted for exporting to a json file
         """
         lms = face["landmarks_xy"]
-        assert isinstance(lms, np.ndarray)
-        retval = {"detected": [int(round(face["x"], 0)),
-                               int(round(face["y"], 0)),
-                               int(round(face["x"] + face["w"], 0)),
-                               int(round(face["y"] + face["h"], 0))],
-                  "landmarks_2d": lms.tolist()}
+        assert isinstance(lms, list)
+        box = [int(round(face["x"], 0)),
+               int(round(face["y"], 0)),
+               int(round(face["x"] + face["w"], 0)),
+               int(round(face["y"] + face["h"], 0))]
+        retval = T.cast(dict[str, list[int] | list[list[float]]],
+                        {"detected": box, "landmarks_2d": lms})
         return retval
 
     def process(self) -> None:
@@ -528,7 +529,7 @@ class Spatial:
 
     def process(self) -> None:
         """ Perform spatial filtering """
-        logger.info("[SPATIO-TEMPORAL FILTERING]")  # Tidy up cli output
+        logger.info("[SPATIAL-TEMPORAL FILTERING]")  # Tidy up cli output
         logger.info("NB: The process only processes the alignments for the first "
                     "face it finds for any given frame. For best results only run this when "
                     "there is only a single face in the alignments file and all false positives "
@@ -677,7 +678,7 @@ class Spatial:
         # Project onto shapes model and reconstruct
         landmarks_norm_table_rec = self._shapes_model.inverse_transform(
             self._shapes_model.transform(landmarks_norm_table))
-        # Convert back to shapes (numKeypoint, num_dims, numFrames)
+        # Convert back to shapes (num key points, num_dims, numFrames)
         landmarks_norm_rec = np.reshape(landmarks_norm_table_rec.T,
                                         [68, 2, landmarks_norm.shape[2]])
         # Transform back to image co-ordinates
@@ -707,9 +708,10 @@ class Spatial:
         temporal_filter = np.ones((1, 1, 2 * filter_half_length + 1))
         temporal_filter = temporal_filter / temporal_filter.sum()
 
-        start_tileblock = np.tile(landmarks[:, :, 0][:, :, np.newaxis], [1, 1, filter_half_length])
-        end_tileblock = np.tile(landmarks[:, :, -1][:, :, np.newaxis], [1, 1, filter_half_length])
-        landmarks_padded = np.dstack((start_tileblock, landmarks, end_tileblock))
+        start_tile_block = np.tile(landmarks[:, :, 0][:, :, np.newaxis],
+                                   [1, 1, filter_half_length])
+        end_tile_block = np.tile(landmarks[:, :, -1][:, :, np.newaxis], [1, 1, filter_half_length])
+        landmarks_padded = np.dstack((start_tile_block, landmarks, end_tile_block))
 
         retval = signal.convolve(landmarks_padded, temporal_filter, mode='valid', method='fft')
         logger.debug("Temporally Smoothed: %s", retval)
