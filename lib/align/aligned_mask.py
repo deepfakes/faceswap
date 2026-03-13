@@ -217,11 +217,11 @@ class Mask():  # pylint:disable=too-many-instance-attributes
         if size == self.stored_size:
             new_mask = mask
         else:
+            dims = (self.stored_size, self.stored_size)
             interpolation = cv2.INTER_AREA if self.stored_size < size else cv2.INTER_LINEAR
-            new_mask = T.cast(npt.NDArray[np.uint8], cv2.resize(mask,
-                                                                (self.stored_size,
-                                                                 self.stored_size),
-                                                                interpolation=interpolation))
+            new_mask = T.cast("npt.NDArray[np.uint8]", cv2.resize(mask,
+                                                                  dims,
+                                                                  interpolation=interpolation))
         self._mask = compress(new_mask.tobytes())
 
     def set_dilation(self, amount: float) -> None:

@@ -84,7 +84,7 @@ class ExtractBatchAligned:
             return self._cache_landmarks_68
 
         self._assert_landmarks()
-        lms = T.cast(npt.NDArray[np.float32], self.landmarks)
+        lms = T.cast("npt.NDArray[np.float32]", self.landmarks)
         if self.landmark_type != LandmarkType.LM_2D_68:
             lms = points_to_68(lms, landmark_type=self.landmark_type)
         self._cache_landmarks_68 = lms
@@ -152,7 +152,7 @@ class ExtractBatchAligned:
         """The estimated (N, 3, 1) rotation vectors"""
         if self._cache_rotation is None:
             rot_trans = Batch3D.solve_pnp(self.landmarks_normalized)
-            self._cache_rotation = T.cast(npt.NDArray[np.float32], rot_trans[0])
+            self._cache_rotation = T.cast("npt.NDArray[np.float32]", rot_trans[0])
             self._cache_translation = rot_trans[1]
         return self._cache_rotation
 
@@ -162,7 +162,7 @@ class ExtractBatchAligned:
         if self._cache_translation is None:
             rot_trans = Batch3D.solve_pnp(self.landmarks_normalized)
             self._cache_rotation = rot_trans[0]
-            self._cache_translation = T.cast(npt.NDArray[np.float32], rot_trans[1])
+            self._cache_translation = T.cast("npt.NDArray[np.float32]", rot_trans[1])
         return self._cache_translation
 
     def _assert_landmarks(self) -> None:

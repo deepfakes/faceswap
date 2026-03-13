@@ -892,7 +892,7 @@ class Output:  # pylint:disable=too-many-instance-attributes
             The (N, 96, 96, 3) jpeg thumbnails for the media object
         """
         if not media:
-            return (T.cast(npt.NDArray[np.uint8], self._align["empty_faces"]), [])
+            return (T.cast("npt.NDArray[np.uint8]", self._align["empty_faces"]), [])
         image_ids = np.fromiter((0 for _ in range(len(media))), dtype=np.int32)
         if self._saver is None:
             faces = np.empty((0, self._size, self._size, 3), dtype=np.uint8)

@@ -42,6 +42,7 @@ class _TorchInfer():
         self._output_is_list = False
         self._output_length = 0
         self._return_indices: list[int] = []
+        self._use_pinned = torch.cuda.is_available() and self.device.type == "cuda"
 
     def __repr__(self) -> str:
         """Pretty print for logging"""
@@ -148,9 +149,12 @@ class _TorchInfer():
                              "this function")
 
         with torch.inference_mode():
-            feed = torch.from_numpy(batch).pin_memory().to(self.device,
-                                                           non_blocking=True,
-                                                           memory_format=torch.channels_last)
+            if self._use_pinned:
+                feed = torch.from_numpy(batch).pin_memory().to(self.device,
+                                                               non_blocking=True,
+                                                               memory_format=torch.channels_last)
+            else:
+                feed = torch.from_numpy(batch).to(self.device, memory_format=torch.channels_last)
             out = self._model(feed)
 
             if not self._first_batch_seen:
