@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ Face patch output writer for faceswap.py converter
     Extracts the swapped Face Patch from faceswap rather than the final composited frame along with
-    the transformation matrix for re-inserting the face into the origial frame
+    the transformation matrix for re-inserting the face into the original frame
 """
 import json
 import logging
@@ -26,10 +26,10 @@ class Writer(Output):
     Parameters
     ----------
     output_folder: str
-        The full path to the output folder where the face patches should besaved
+        The full path to the output folder where the face patches should be saved
     patch_size: int
         The size of the face patch output from the model
-    configfile: str, optional
+    config_file: str, optional
         The full path to a custom configuration ini file. If ``None`` is passed
         then the file is loaded from the default location. Default: ``None``.
     """

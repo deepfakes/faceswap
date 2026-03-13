@@ -26,13 +26,13 @@ Items will be grouped together as per their `group` parameter, but otherwise wil
 the order that they are added to this module.
 from lib.config import ConfigItem
 """
+# pylint:disable=duplicate-code
 from lib.config import ConfigItem
 
 
 HELPTEXT = (
-    "VGG Face 2 identity recognition.\n"
-    "A Keras port of the model trained for VGGFace2: A dataset for recognising faces across pose "
-    "and age. (https://arxiv.org/abs/1710.08092)"
+    "Tencent TFace identity recognition.\n"
+    "(https://github.com/Tencent/TFace)"
     )
 
 
@@ -41,15 +41,25 @@ batch_size = ConfigItem(
     default=16,
     group="settings",
     info="The batch size to use. To a point, higher batch sizes equal better performance, "
-          "but setting it too high can harm performance.\n"
-          "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
-          "accomodate then this will automatically be lowered.",
+         "but setting it too high can harm performance.",
     rounding=1,
-    min_max=(1, 64))
+    min_max=(1, 256))
 
 cpu = ConfigItem(
     datatype=bool,
     default=False,
     group="settings",
-    info="VGG Face2 still runs fairly quickly on CPU on some setups. Enable "
+    info="The IR-50 backbone still runs fairly quickly on CPU on some setups. Enable "
          "CPU mode here to use the CPU for this plugin to save some VRAM at a speed cost.")
+
+backbone = ConfigItem(
+    datatype=str,
+    default="ir-101",
+    group="settings",
+    info="The model backbone to use."
+         "\n\tir-50 - InsightFace ResNet-50 (50 layers). Can run at a reasonable speed "
+         r"on CPU. Reports 95%-96% accuracy."
+         "\n\tir-101 - InsightFace ResNet-101 (100 layers). "
+         r"Reports ~97% accuracy",
+    choices=["ir-50", "ir-101"],
+    gui_radio=True)

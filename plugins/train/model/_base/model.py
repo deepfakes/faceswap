@@ -65,7 +65,7 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         self._is_predict = predict
         self._model: keras.Model | None = None
 
-        cfg.load_config(config_file=arguments.configfile)
+        cfg.load_config(config_file=arguments.config_file)
 
         if cfg.Loss.penalized_mask_loss() and cfg.Loss.mask_type() == "none":
             raise FaceswapError("Penalized Mask Loss has been selected but you have not chosen a "
@@ -201,8 +201,8 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
                    f"for the '{multiple_models[0]}' plugin already exists in the folder "
                    f"'{self.io.model_dir}'.\nPlease select a different model folder.")
         else:
-            ptypes = "', '".join(multiple_models)
-            msg = (f"There are multiple plugin types ('{ptypes}') stored in the model folder '"
+            p_types = "', '".join(multiple_models)
+            msg = (f"There are multiple plugin types ('{p_types}') stored in the model folder '"
                    f"{self.io.model_dir}'. This is not supported.\nPlease split the model files "
                    "into their own folders before proceeding")
         raise FaceswapError(msg)

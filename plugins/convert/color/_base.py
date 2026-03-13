@@ -11,10 +11,10 @@ logger = logging.getLogger(__name__)
 
 class Adjustment():
     """ Parent class for adjustments """
-    def __init__(self, configfile=None, config=None):
-        logger.debug("Initializing %s: (configfile: %s, config: %s)",
-                     self.__class__.__name__, configfile, config)
-        convert_config.load_config(config_file=configfile)
+    def __init__(self, config_file=None, config=None):
+        logger.debug("Initializing %s: (config_file: %s, config: %s)",
+                     self.__class__.__name__, config_file, config)
+        convert_config.load_config(config_file=config_file)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self, old_face, new_face, raw_mask):

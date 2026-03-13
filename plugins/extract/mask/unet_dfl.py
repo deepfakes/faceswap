@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" UNET DFL face mask plugin
+"""UNET DFL face mask plugin
 
 Architecture and Pre-Trained Model based on...
 TernausNet: U-Net with VGG11 Encoder Pre-Trained on ImageNet for Image Segmentation
@@ -18,237 +18,192 @@ import logging
 import typing as T
 
 import numpy as np
-from keras import backend as K, layers as kl, Model
+import torch
+from torch import nn
+from torch.nn import functional as F
 
-from lib.logger import parse_class_init
-from lib.utils import get_module_objects
-from ._base import BatchType, Masker, MaskerBatch
+from lib.utils import get_module_objects, GetModel
+from plugins.extract.base import FacePlugin
 from . import unet_dfl_defaults as cfg
 
 if T.TYPE_CHECKING:
-    from keras import KerasTensor
+    from torch import Tensor
 
 
 logger = logging.getLogger(__name__)
+# pylint:disable=duplicate-code
 
 
-class Mask(Masker):
-    """ Neural network to process face image into a segmentation mask of the face """
-    def __init__(self, **kwargs) -> None:
-        git_model_id = 6
-        model_filename = "DFL_256_sigmoid_v1.h5"
-        super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
+class UNetDFL(FacePlugin):
+    """Neural network to process face image into a segmentation mask of the face"""
+    def __init__(self) -> None:
+        super().__init__(input_size=256,
+                         batch_size=cfg.batch_size(),
+                         is_rgb=False,
+                         dtype="float32",
+                         scale=(0, 1),
+                         centering="legacy")
         self.model: UnetDFL
-        self.name = "U-Net"
-        self.input_size = 256
-        self.vram = 320  # 276 in testing
-        self.vram_per_batch = 256  # ~215 in testing
-        self.batchsize = cfg.batch_size()
-        self._storage_centering = "legacy"
 
-    def init_model(self) -> None:
-        assert self.name is not None and isinstance(self.model_path, str)
-        self.model = UnetDFL(self.model_path, self.batchsize)
-        placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
-                               dtype="float32")
-        self.model(placeholder)
+    def load_model(self) -> UnetDFL:
+        """Initialize the UNet-DFL Model
 
-    def process_input(self, batch: BatchType) -> None:
-        """ Compile the detected faces for prediction """
-        assert isinstance(batch, MaskerBatch)
-        batch.feed = np.array([T.cast(np.ndarray, feed.face)[..., :3]
-                               for feed in batch.feed_faces], dtype="float32") / 255.0
-        logger.trace("feed shape: %s", batch.feed.shape)  # type: ignore
+        Returns
+        -------
+        The loaded UnetDFL model
+        """
+        weights = GetModel("DFL_256_sigmoid_v2.pth", 6).model_path
+        assert isinstance(weights, str)
+        return T.cast(UnetDFL, self.load_torch_model(UnetDFL(), weights))
 
-    def predict(self, feed: np.ndarray) -> np.ndarray:
-        """ Run model to get predictions """
-        return self.model(feed)
+    def process(self, batch: np.ndarray) -> np.ndarray:
+        """Get the masks from the model
 
-    def process_output(self, batch: BatchType) -> None:
-        """ Compile found faces for output """
-        return
+        Parameters
+        ----------
+        batch
+            The batch to feed into the masker
+
+        Returns
+        -------
+        The predicted masks from the plugin
+        """
+        return self.from_torch(batch.transpose(0, 3, 1, 2)).transpose(0, 2, 3, 1)
 
 
-class UnetDFL:
-    """ UNet DFL Definition for Keras 3 with PyTorch backend
+class ConvBlock(nn.Module):
+    """Convolution block for UnetDFL down-scales
 
     Parameters
     ----------
-    weights_path: str
-        Full path to the location of the weights file for the model
-    batch_size: int
-        The batch size to feed the model at
-
-    Note
-    ----
-    Model definition is explicitly stated as there is an incompatibility for certain
-    Conv2DTranspose combinations when model was trained on one backend but inferred on another:
-    https://github.com/keras-team/keras-core/issues/774
-    The effect of this misaligns the mask and peforms bad inference for this model.
+    in_channels
+        The number of input channels to the block
+    filters
+        The number of filters for the convolution
+    recursions: int
+        The number of convolutions to run
     """
-    def __init__(self, weights_path: str, batch_size: int) -> None:
-        logger.debug(parse_class_init(locals()))
-        self._batch_size = batch_size
-        self._model = self._load_model(weights_path)
-        logger.debug("Initialized: %s", self.__class__.__name__)
+    def __init__(self, in_channels: int, filters: int, recursions: int) -> None:
+        super().__init__()
+        layers = [nn.Conv2d(in_channels, filters, 3, padding=1),
+                  nn.ReLU(inplace=True)]
+        for _ in range(recursions - 1):
+            layers.extend([nn.Conv2d(filters, filters, 3, padding=1),
+                           nn.ReLU(inplace=True)])
+        self.convs = nn.Sequential(*layers)
 
-    @classmethod
-    def conv_block(cls,
-                   inputs: KerasTensor,
-                   filters: int,
-                   recursions: int,
-                   idx: int) -> KerasTensor:
-        """ Convolution block for UnetDFL downscales
+    def forward(self, inputs: Tensor) -> Tensor:
+        """Convolution Block forward pass
 
         Parameters
         ----------
-        inputs: :class:`keras.KerasTensor`
-            The inputs to the block
-        filters: int
-            The number of filters for the convolution
-        recursions: int
-            The number of convolutions to run
-        idx: The index id of the first convolution (used for naming)
+        inputs
+            The input to the convolution block
 
         Returns
         -------
-        :class:`keras.KerasTensor`
-            The output from the convolution block
+        The output from the convolution block
         """
-        output = inputs
+        return self.convs(inputs)
 
-        for _ in range(recursions):
-            output = kl.Conv2D(filters,
-                               3,
-                               padding="same",
-                               activation="relu",
-                               kernel_initializer="random_uniform",
-                               name=f"features_{idx}")(output)
-            idx += 2
 
-        return output
+class DecoderBlock(nn.Module):
+    """Decoder Block for UnetDFL
 
-    @classmethod
-    def skip_block(cls,  # pylint:disable=too-many-positional-arguments
-                   input_1: KerasTensor,
-                   input_2: KerasTensor,
-                   conv_filters: int,
-                   trans_filters: int,
-                   linear: bool,
-                   idx: int) -> KerasTensor:
-        """ Deconvolution + skip connection for UnetDFL upscales
+    Parameters
+    ----------
+    in_channels
+        The number of input channels to the block
+    middle_channels
+        The number of filters for the first convolution
+    out_channels
+        The number of filters for the second convolution
+    relu
+        ``True`` to use ReLU activation on the first conv. ``False`` to use no activation
+    """
+    def __init__(self,
+                 in_channels: int,
+                 middle_channels: int,
+                 out_channels: int,
+                 relu: bool) -> None:
+        super().__init__()
+        self._use_relu = relu
+        self.conv = nn.Conv2d(in_channels, middle_channels, 3, padding=1)
+        self.conv_trans = nn.ConvTranspose2d(middle_channels,
+                                             out_channels,
+                                             3,
+                                             stride=2,
+                                             padding=0,
+                                             output_padding=0)
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        """Decoder block forward pass
 
         Parameters
         ----------
-        input_1: :class:`keras.KerasTensor`
-            The input to be upscaled
-        input_2: :class:`keras.KerasTensor`
-            The skip connection to be concatenated to the upscaled tensor
-        conv_filters: int
-            The number of filters to be used for the convolution
-        trans_filters: int
-            The number of filters to be used for the conv-transpose
-        linear: bool
-            ``True`` to use linear activation in the convolution, ``False`` to use ReLu
-        idx: int
-            The index for naming the layers
+        inputs
+            The input to the decoder block
 
         Returns
         -------
-        :class:`keras.KerasTensor`
-            The output from the upscaled/skip connection
+        The output from the decoder block
         """
-        output = kl.Conv2D(conv_filters,
-                           3,
-                           padding="same",
-                           activation="linear" if linear else "relu",
-                           kernel_initializer="random_uniform",
-                           name=f"conv2d_{idx}")(input_1)
+        x = self.conv(inputs)
+        if self._use_relu:
+            x = F.relu(x, inplace=True)
+        x = F.relu(self.conv_trans(x), inplace=True)
+        return x[:, :, :-1, :-1]
 
-        # TF vs PyTorch paddng is different. We need to negative pad the output for Torch
-        padding = "valid" if K.backend() == "torch" else "same"
-        output = kl.Conv2DTranspose(trans_filters,
-                                    3,
-                                    strides=2,
-                                    padding=padding,
-                                    activation="relu",
-                                    kernel_initializer="random_uniform",
-                                    name=f"conv2d_transpose_{idx}")(output)
 
-        if K.backend() == "torch":
-            output = output[:, :-1, :-1, :]
+class UnetDFL(nn.Module):  # pylint:disable=too-many-instance-attributes
+    """UNet DFL Definition for PyTorch"""
+    def __init__(self) -> None:
+        super().__init__()
+        self.features_0 = ConvBlock(3, 64, 1)
+        self.features_3 = ConvBlock(64, 128, 1)
+        self.features_8 = ConvBlock(128, 256, 2)
+        self.features_13 = ConvBlock(256, 512, 2)
+        self.features_18 = ConvBlock(512, 512, 2)
+        self.dec1 = DecoderBlock(512, 512, 256, False)
+        self.dec2 = DecoderBlock(768, 512, 256, True)
+        self.dec3 = DecoderBlock(768, 512, 128, True)
+        self.dec4 = DecoderBlock(384, 256, 64, True)
+        self.dec5 = DecoderBlock(192, 128, 32, True)
+        self.conv2d_6 = nn.Conv2d(96, 64, 3, padding=1)
+        self.conv2d_7 = nn.Conv2d(64, 1, 3, padding=1)
 
-        return kl.Concatenate(name=f"concatenate_{idx}")([output, input_2])
-
-    def _load_model(self, weights_path: str) -> Model:
-        """ Definition of the UNet-DFL Model.
+    def forward(self, inputs: Tensor) -> Tensor:
+        """UnetDFL forward pass
 
         Parameters
         ----------
-        weights_path: str
-            Full path to the model's weights
+        inputs
+            The input to UnetDFL
 
         Returns
         -------
-        :class:`keras.models.Model`
-            The VGG-Clear model
+        The output from UnetDFL
         """
         features = []
-        input_ = kl.Input(shape=(256, 256, 3), name="input_1")
+        features.append(self.features_0(inputs))
+        x = F.max_pool2d(features[-1], 2, stride=2)
+        features.append(self.features_3(x))
+        x = F.max_pool2d(features[-1], 2, stride=2)
+        features.append(self.features_8(x))
+        x = F.max_pool2d(features[-1], 2, stride=2)
+        features.append(self.features_13(x))
+        x = F.max_pool2d(features[-1], 2, stride=2)
+        features.append(self.features_18(x))
+        x = F.max_pool2d(features[-1], 2, stride=2)
 
-        features.append(self.conv_block(input_, 64, 1, 0))
-        var_x = kl.MaxPool2D(pool_size=2, strides=2, name="max_pooling2d_1")(features[-1])
+        x = torch.cat([self.dec1(x), features[4]], dim=1)
+        x = torch.cat([self.dec2(x), features[3]], dim=1)
+        x = torch.cat([self.dec3(x), features[2]], dim=1)
+        x = torch.cat([self.dec4(x), features[1]], dim=1)
+        x = torch.cat([self.dec5(x), features[0]], dim=1)
 
-        features.append(self.conv_block(var_x, 128, 1, 3))
-        var_x = kl.MaxPool2D(pool_size=2, strides=2, name="max_pooling2d_2")(features[-1])
-
-        features.append(self.conv_block(var_x, 256, 2, 6))
-        var_x = kl.MaxPool2D(pool_size=2, strides=2, name="max_pooling2d_3")(features[-1])
-
-        features.append(self.conv_block(var_x, 512, 2, 11))
-        var_x = kl.MaxPool2D(pool_size=2, strides=2, name="max_pooling2d_4")(features[-1])
-
-        features.append(self.conv_block(var_x, 512, 2, 16))
-        var_x = kl.MaxPool2D(pool_size=2, strides=2, name="max_pooling2d_5")(features[-1])
-
-        convs = [512, 512, 512, 256, 128]
-        for idx, (feats, filts) in enumerate(zip(reversed(features), convs)):
-            linear = idx == 0
-            trans_filts = filts // 2 if idx < 2 else filts // 4
-            var_x = self.skip_block(var_x, feats, filts, trans_filts, linear, idx + 1)
-
-        var_x = kl.Conv2D(64,
-                          3,
-                          padding="same",
-                          activation="relu",
-                          kernel_initializer="random_uniform",
-                          name="conv2d_6")(var_x)
-        output = kl.Conv2D(1,
-                           3,
-                           padding="same",
-                           activation="sigmoid",
-                           kernel_initializer="random_uniform",
-                           name="conv2d_7")(var_x)
-
-        model = Model(input_, output)
-        model.load_weights(weights_path)
-        model.make_predict_function()
-        return model
-
-    def __call__(self, inputs: np.ndarray) -> np.ndarray:
-        """ Obtain predictions from the UNet-DFL Model
-
-        Parameters
-        ----------
-        inputs: :class:`numpy.ndarray`
-            The input to UNet-DFL
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            The output from UNet-DFL
-        """
-        return self._model.predict(inputs, verbose=0, batch_size=self._batch_size)
+        x = F.relu(self.conv2d_6(x), inplace=True)
+        return F.sigmoid(self.conv2d_7(x))
 
 
 __all__ = get_module_objects(__name__)

@@ -69,7 +69,7 @@ class Converter():  # pylint:disable=too-many-instance-attributes
     arguments: :class:`argparse.Namespace`
         The arguments that were passed to the convert process as generated from Faceswap's command
         line arguments
-    configfile: str, optional
+    config_file: str, optional
         Optional location of custom configuration ``ini`` file. If ``None`` then use the default
         config location. Default: ``None``
     """
@@ -80,18 +80,18 @@ class Converter():  # pylint:disable=too-many-instance-attributes
                  draw_transparent: bool,
                  pre_encode: Callable | None,
                  arguments: Namespace,
-                 configfile: str | None = None) -> None:
+                 config_file: str | None = None) -> None:
         logger.debug("Initializing %s: (output_size: %s,  coverage_ratio: %s, centering: %s, "
-                     "draw_transparent: %s, pre_encode: %s, arguments: %s, configfile: %s)",
+                     "draw_transparent: %s, pre_encode: %s, arguments: %s, config_file: %s)",
                      self.__class__.__name__, output_size, coverage_ratio, centering,
-                     draw_transparent, pre_encode, arguments, configfile)
+                     draw_transparent, pre_encode, arguments, config_file)
         self._output_size = output_size
         self._coverage_ratio = coverage_ratio
         self._centering: CenteringType = centering
         self._draw_transparent = draw_transparent
         self._writer_pre_encode = pre_encode
         self._args = arguments
-        self._configfile = configfile
+        self._config_file = config_file
 
         self._scale = arguments.output_scale / 100
         self._face_scale = 1.0 - arguments.face_scale / 100.
@@ -138,18 +138,18 @@ class Converter():  # pylint:disable=too-many-instance-attributes
                                                                 self._args.mask_type,
                                                                 self._output_size,
                                                                 self._coverage_ratio,
-                                                                configfile=self._configfile)
+                                                                config_file=self._config_file)
 
         if self._args.color_adjustment is not None:
             self._adjustments.color = PluginLoader.get_converter("color",
                                                                  self._args.color_adjustment,
                                                                  disable_logging=disable_logging)(
-                                                                    configfile=self._configfile)
+                                                                    config_file=self._config_file)
 
         sharpening = PluginLoader.get_converter("scaling",
                                                 "sharpen",
                                                 disable_logging=disable_logging)(
-                                                    configfile=self._configfile)
+                                                    config_file=self._config_file)
         self._adjustments.sharpening = sharpening
         logger.debug("Loaded plugins: %s", self._adjustments)
 
@@ -280,8 +280,7 @@ class Converter():  # pylint:disable=too-many-instance-attributes
     def _warp_to_frame(self,
                        reference: AlignedFace,
                        face: np.ndarray,
-                       frame: np.ndarray,
-                       multiple_faces: bool) -> None:
+                       frame: np.ndarray) -> None:
         """ Perform affine transformation to place a face patch onto the given frame.
 
         Affine is done in place on the `frame` array, so this function does not return a value
@@ -294,19 +293,24 @@ class Converter():  # pylint:disable=too-many-instance-attributes
             The swapped face patch
         frame: :class:`numpy.ndarray`
             The frame to affine the face onto
-        multiple_faces: bool
-            Controls the border mode to use. Uses BORDER_CONSTANT if there is only 1 face in
-            the image, otherwise uses the inferior BORDER_TRANSPARENT
         """
         # Warp face with the mask
         mat = self._get_warp_matrix(reference.adjusted_matrix, face.shape[0])
-        border = cv2.BORDER_TRANSPARENT if multiple_faces else cv2.BORDER_CONSTANT
+        frame_face = np.zeros_like(frame)
         cv2.warpAffine(face,
                        mat,
                        (frame.shape[1], frame.shape[0]),
-                       frame,
+                       frame_face,
                        flags=cv2.WARP_INVERSE_MAP | reference.interpolators[1],
-                       borderMode=border)
+                       borderMode=cv2.BORDER_CONSTANT)
+        background = frame[..., :3]
+        alpha = frame[..., 3:4]
+        foreground, mask = np.split(frame_face,  # pylint:disable=unbalanced-tuple-unpacking
+                                    (3, ),
+                                    axis=-1)
+        background *= (1.0 - mask)
+        background += (foreground * mask)
+        alpha += mask * (1.0 - alpha)  # Merge masks
 
     def _get_new_image(self,
                        predicted: ConvertItem,
@@ -353,9 +357,7 @@ class Converter():  # pylint:disable=too-many-instance-attributes
                                                   predicted_mask)
 
             if self._full_frame_output:
-                self._warp_to_frame(reference_face,
-                                    new_face, placeholder,
-                                    len(predicted.swapped_faces) > 1)
+                self._warp_to_frame(reference_face, new_face, placeholder,)
             else:
                 assert faces is not None
                 faces.append(new_face)
@@ -441,7 +443,14 @@ class Converter():  # pylint:disable=too-many-instance-attributes
         """
         logger.trace("Getting mask. Image shape: %s", new_face.shape)  # type: ignore[attr-defined]
         mask_centering: CenteringType
-        if self._args.mask_type not in ("none", "predicted"):
+        lm_mask = None
+        if self._args.mask_type in ("components", "extended"):
+            mask_centering = reference_face.centering
+            m_type: T.Literal["face", "face_extended"] = (
+                "face" if self._args.mask_type == "components" else "face_extended"
+            )
+            lm_mask = reference_face.get_landmark_mask(m_type, dilation=0.0)
+        elif self._args.mask_type not in ("none", "predicted"):
             mask_centering = detected_face.mask[self._args.mask_type].stored_centering
         else:
             mask_centering = "face"  # Unused but requires a valid value
@@ -450,6 +459,7 @@ class Converter():  # pylint:disable=too-many-instance-attributes
                                                     reference_face.pose.offset[mask_centering],
                                                     reference_face.pose.offset[self._centering],
                                                     self._centering,
+                                                    landmarks_mask=lm_mask,
                                                     predicted_mask=predicted_mask)
         logger.trace("Adding mask to alpha channel")  # type: ignore[attr-defined]
         new_face = np.concatenate((new_face, mask), -1)
@@ -477,7 +487,7 @@ class Converter():  # pylint:disable=too-many-instance-attributes
 
         if self._draw_transparent:
             frame = new_image
-        else:
+        else:  # This next code is kinda redundant, but if sharpening is performed it is needed
             foreground, mask = np.split(new_image,  # pylint:disable=unbalanced-tuple-unpacking
                                         (3, ),
                                         axis=-1)
@@ -507,10 +517,10 @@ class Converter():  # pylint:disable=too-many-instance-attributes
         if self._scale == 1:
             return frame
         logger.trace("source frame: %s", frame.shape)  # type: ignore[attr-defined]
-        interp = cv2.INTER_CUBIC if self._scale > 1 else cv2.INTER_AREA
+        interpolation = cv2.INTER_CUBIC if self._scale > 1 else cv2.INTER_AREA
         dims = (round((frame.shape[1] / 2 * self._scale) * 2),
                 round((frame.shape[0] / 2 * self._scale) * 2))
-        frame = cv2.resize(frame, dims, interpolation=interp)
+        frame = cv2.resize(frame, dims, interpolation=interpolation)
         logger.trace("resized frame: %s", frame.shape)  # type: ignore[attr-defined]
         np.clip(frame, 0.0, 1.0, out=frame)
         return frame

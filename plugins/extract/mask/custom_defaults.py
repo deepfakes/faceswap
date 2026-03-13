@@ -38,7 +38,7 @@ HELPTEXT = (
 
 batch_size = ConfigItem(
     datatype=int,
-    default=8,
+    default=16,
     group="settings",
     info="The batch size to use. To a point, higher batch sizes equal better performance, "
          "but setting it too high can harm performance.",

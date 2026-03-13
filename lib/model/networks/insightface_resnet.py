@@ -58,7 +58,7 @@ class BasicBlockIR(nn.Module):
     def __init__(self, in_channels: int, depth: int, stride: int, use_se: bool) -> None:
         super().__init__()
         if in_channels == depth:
-            self.shortcut_layer: nn.MaxPool2d | nn.Sequential = nn.MaxPool2d(1, stride)
+            self.shortcut_layer: nn.Sequential | nn.MaxPool2d = nn.MaxPool2d(1, stride)
         else:
             self.shortcut_layer = nn.Sequential(
                 nn.Conv2d(in_channels, depth, 1, stride=stride, bias=False),
@@ -110,7 +110,7 @@ class BottleneckIR(nn.Module):
         super().__init__()
         shrink_channel = depth // 4
         if in_channels == depth:
-            self.shortcut_layer: nn.MaxPool2d | nn.Sequential = nn.MaxPool2d(1, stride)
+            self.shortcut_layer: nn.Sequential | nn.MaxPool2d = nn.MaxPool2d(1, stride)
         else:
             self.shortcut_layer = nn.Sequential(
                 nn.Conv2d(in_channels, depth, 1, stride=stride, bias=False),

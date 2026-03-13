@@ -633,8 +633,9 @@ def _get_curve(start_y: int,
                  start_y, end_y, num_points, scale, mode)
     if mode == "full":
         x_axis = np.linspace(0., 1., num=num_points)
-        y_axis = (x_axis - x_axis * scale) / (scale - abs(x_axis) * 2 * scale + 1)
-        y_axis = y_axis * (end_y - start_y) + start_y
+        y_axis: np.ndarray | list[int] = (x_axis - x_axis * scale) / (scale - abs(x_axis)
+                                                                      * 2 * scale + 1)
+        y_axis = T.cast(np.ndarray, y_axis) * (end_y - start_y) + start_y
         retval = [int((y // 8) * 8) for y in y_axis]
     else:
         y_axis = [start_y]

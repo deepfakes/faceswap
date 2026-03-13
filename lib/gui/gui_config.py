@@ -20,7 +20,7 @@ class _Config(FaceswapConfig):
         """ Set the default values for config """
         logger.debug("Setting defaults")
         super().set_defaults(
-            helptext="Faceswap GUI Options.\nConfigure the appearance and behaviour of the GUI")
+            helptext="Faceswap GUI Options.\nConfigure the appearance and behavior of the GUI")
         # Font choices cannot be added until tkinter has been launched
         logger.debug("Adding font list from tkinter")
         self.sections["global"].options["font"].choices = get_clean_fonts()
@@ -38,7 +38,7 @@ def get_commands() -> list[str]:
     tools_path = os.path.join(PROJECT_ROOT, "tools")
     commands = [os.path.splitext(item)[0] for item in os.listdir(command_path)
                 if os.path.splitext(item)[1] == ".py"
-                and os.path.splitext(item)[0] not in ("gui", "fsmedia")
+                and os.path.splitext(item)[0] not in ("gui", "fs_media")
                 and not os.path.splitext(item)[0].startswith("_")]
     tools = [os.path.splitext(item)[0] for item in os.listdir(tools_path)
              if os.path.splitext(item)[1] == ".py"
@@ -57,9 +57,9 @@ def get_clean_fonts() -> list[str]:
     list[str]:
         A list of valid fonts for the system
     """
-    fmanager = font_manager.FontManager()
+    f_manager = font_manager.FontManager()
     fonts: dict[str, dict[str, bool]] = {}
-    for fnt in fmanager.ttflist:
+    for fnt in f_manager.ttflist:
         if str(fnt.weight) in ("400", "normal", "regular"):
             fonts.setdefault(fnt.name, {})["regular"] = True
         if str(fnt.weight) in ("700", "bold"):
@@ -151,7 +151,7 @@ autosave_last_session = ConfigItem(
 timeout = ConfigItem(
     datatype=int,
     default=120,
-    group="behaviour",
+    group="behavior",
     info="Training can take some time to save and shutdown. Set the timeout "
          "in seconds before giving up and force quitting.",
     min_max=(10, 600),
@@ -161,7 +161,7 @@ timeout = ConfigItem(
 auto_load_model_stats = ConfigItem(
     datatype=bool,
     default=True,
-    group="behaviour",
+    group="behavior",
     info="Auto load model statistics into the Analysis tab when selecting a model "
          "in Train or Convert tabs.")
 
@@ -175,7 +175,7 @@ def load_config(config_file: str | None = None) -> None:
         Path to a custom .ini configuration file to load. Default: ``None`` (use default
         configuration file)
     """
-    _Config(configfile=config_file)
+    _Config(config_file=config_file)
 
 
 __all__ = get_module_objects(__name__)

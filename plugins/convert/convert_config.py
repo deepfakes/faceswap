@@ -37,5 +37,5 @@ def load_config(config_file: str | None = None) -> _Config:
     """
     global _CONFIG  # pylint:disable=global-statement
     if _CONFIG is None:
-        _CONFIG = _Config(configfile=config_file)
+        _CONFIG = _Config(config_file=config_file)
     return _CONFIG

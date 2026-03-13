@@ -24,19 +24,19 @@ _CONFIGS: dict[str, FaceswapConfig] = {}
 
 class FaceswapConfig():
     """ Config Items """
-    def __init__(self, configfile: str | None = None) -> None:
+    def __init__(self, config_file: str | None = None) -> None:
         """ Init Configuration
 
         Parameters
         ----------
-        configfile : str, optional
+        config_file : str, optional
             Optional path to a config file. ``None`` for default location. Default: ``None``
         """
         logger.debug("Initializing: %s", self.__class__.__name__)
 
         self._plugin_group = self._get_plugin_group()
 
-        self._ini = ConfigFile(self._plugin_group, ini_path=configfile)
+        self._ini = ConfigFile(self._plugin_group, ini_path=config_file)
         self.sections: dict[str, ConfigSection] = {}
         """ dict[str, :class:`ConfigSection`] : The Faceswap config sections and options """
 
@@ -132,9 +132,8 @@ class FaceswapConfig():
             default_files = [fname for fname in filenames if fname.endswith("_defaults.py")]
             if not default_files:
                 continue
-            base_path = os.path.dirname(os.path.realpath(sys.argv[0]))
             # Can't use replace as there is a bug on some Windows installs that lowers some paths
-            import_path = ".".join(full_path_split(dirpath[len(base_path):])[1:])
+            import_path = ".".join(full_path_split(dirpath[len(PROJECT_ROOT):])[1:])
             plugin_type = import_path.rsplit(".", maxsplit=1)[-1]
             for filename in default_files:
                 self._import_defaults_from_module(filename, import_path, plugin_type)
@@ -142,7 +141,7 @@ class FaceswapConfig():
     def set_defaults(self, helptext: str = "") -> None:
         """ Override for plugin specific config defaults.
 
-        This method should always be overriden to add the help text for the global plugin group.
+        This method should always be overridden to add the help text for the global plugin group.
         If `helptext` is not provided, then it is assumed that there is no global section for this
         plugin group.
 
@@ -257,10 +256,10 @@ def generate_configs(force: bool = False) -> None:
 
         config_file = os.path.join(configs_path, f"{plugin_group}.ini")
         if not os.path.exists(config_file) or force:
-            modname = os.path.splitext(filename)[0]
-            modpath = os.path.join(dirpath.replace(PROJECT_ROOT, ""),
-                                   modname)[1:].replace(os.sep, ".")
-            mod = import_module(modpath)
+            mod_name = os.path.splitext(filename)[0]
+            mod_path = os.path.join(dirpath.replace(PROJECT_ROOT, ""),
+                                    mod_name)[1:].replace(os.sep, ".")
+            mod = import_module(mod_path)
             for obj in vars(mod).values():
                 if (inspect.isclass(obj)
                         and issubclass(obj, FaceswapConfig)

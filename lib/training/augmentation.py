@@ -376,7 +376,7 @@ class ImageAugmentation():
 
         clahes = [cv2.createCLAHE(clipLimit=2.0,
                                   tileGridSize=(grid_size, grid_size))
-                  for grid_size in grid_sizes]
+                  for grid_size in grid_sizes]  # type:ignore[attr-defined]
 
         for idx, clahe in zip(indices, clahes):
             batch[idx, :, :, 0] = clahe.apply(batch[idx, :, :, 0], )

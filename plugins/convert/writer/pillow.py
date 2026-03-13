@@ -17,7 +17,7 @@ class Writer(Output):
     ----------
     output_folder: str
         The full path to the output folder where the converted media should be saved
-    configfile: str, optional
+    config_file: str, optional
         The full path to a custom configuration ini file. If ``None`` is passed
         then the file is loaded from the default location. Default: ``None``.
     """
