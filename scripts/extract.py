@@ -40,7 +40,6 @@ if T.TYPE_CHECKING:
     from lib.multithreading import ErrorState
 
 logger = logging.getLogger(__name__)
-# TODO lots of testing with the changes
 
 
 @dataclass
@@ -337,6 +336,7 @@ class Extract:
                     batch.loader.error_state.re_raise()
             self._output.join()
         except Exception:
+            self._output.join()
             self._pipeline.stop()
             raise
 
@@ -521,6 +521,8 @@ class Loader:  # pylint:disable=too-many-instance-attributes
         self._alignments = alignments
         self._set_skip_list()
         logger.debug("[Extract.Loader] start thread")
+        if isinstance(self._pipeline.handler, File):
+            self._pipeline.register_external_error_state(self._thread.error_state)
         self._thread.start()
 
     def join(self) -> None:

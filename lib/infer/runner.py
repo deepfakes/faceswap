@@ -46,14 +46,17 @@ class PluginThreads:
         self._threads: dict[str, FSThread] = {}
         self._backup_error_state = ErrorState()
         """This is used when a plugin has no threads to run. Specifically the File handler never
-        has threads, so there will never be a thread error, so it is safe to return an unused
-        object"""
+        has threads, so there will never be a thread error. If running in the main thread it is
+        safe to return an unused object"""
+        self._external_error_state: ErrorState | None = None
 
     @property
     def error_state(self) -> ErrorState:
         """The global FSThread error state object"""
-        if not self._threads:
+        if not self._threads and self._external_error_state is None:
             return self._backup_error_state
+        if self._external_error_state is not None:
+            return self._external_error_state
         return list(self._threads.values())[0].error_state
 
     @property
@@ -107,6 +110,31 @@ class PluginThreads:
         ``True`` if any thread is alive otherwise False
         """
         return any(t.is_alive() for t in self._threads.values())
+
+    def register_external_error_state(self, state: ErrorState) -> None:
+        """Register an external error state object.
+
+        If we are not running any threads (specifically, file handler), the pipeline can hang the
+        calling thread. The error state from the calling thread can be populated here. This can
+        only be called if no threads have been registered
+
+        Parameters
+        ----------
+        state
+            The ErrorState object to register
+
+        Raises
+        ------
+        RuntimeError
+            If an ErrorState object is registered when this object already contains threads
+        """
+        logger.debug("Registering external ErrorState: %s", state)
+        if self._external_error_state is not None:
+            logger.debug("Error state already registered: %s", state)
+            return
+        if self._threads:
+            raise RuntimeError("You cannot register an ErrorState object when threads exist")
+        self._external_error_state = state
 
 
 HandlerT = T.TypeVar("HandlerT", "ExtractHandler", "ExtractHandlerFace")
@@ -740,6 +768,20 @@ class ExtractRunner(T.Generic[HandlerT]):
         self._register_plugin(input_runner)
         if not profile:
             self.start()
+
+    def register_external_error_state(self, state: ErrorState) -> None:
+        """Register an external error state object.
+
+        If we are not running any threads (specifically, file handler), the pipeline can hang the
+        calling thread. The error state from the calling thread can be populated here. This can
+        only be called if no threads have been registered for the runner
+
+        Parameters
+        ----------
+        state
+            The ErrorState object to register
+        """
+        self._threads.register_external_error_state(state)
 
 
 def get_pipeline(runner: ExtractRunner) -> list[ExtractRunner]:

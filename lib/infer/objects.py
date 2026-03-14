@@ -83,7 +83,9 @@ class ExtractBatchAligned:
         if self._cache_landmarks_68 is not None:
             return self._cache_landmarks_68
 
-        self._assert_landmarks()
+        if self.landmarks is None:
+            return np.empty((0, 68, 2), dtype=np.float32)
+
         lms = T.cast("npt.NDArray[np.float32]", self.landmarks)
         if self.landmark_type != LandmarkType.LM_2D_68:
             lms = points_to_68(lms, landmark_type=self.landmark_type)
@@ -93,17 +95,27 @@ class ExtractBatchAligned:
     @property
     def landmarks_normalized(self) -> npt.NDArray[np.float32]:
         """The normalized, aligned 68 point landmarks"""
-        if self._cache_landmarks_normalized is None:
-            self._cache_landmarks_normalized = batch_transform(self.matrices, self.landmarks_68)
+        if self._cache_landmarks_normalized is not None:
+            return self._cache_landmarks_normalized
+
+        if self.landmarks is None:
+            return np.empty((0, 68, 2), dtype=np.float32)
+
+        self._cache_landmarks_normalized = batch_transform(self.matrices, self.landmarks_68)
         return self._cache_landmarks_normalized
 
     @property
     def matrices(self) -> npt.NDArray[np.float32]:
         """The face alignment matrices to transform from frame space to normalized (0, 1) space"""
-        if self._cache_matrices is None:
-            self._cache_matrices = batch_umeyama(self.landmarks_68[:, 17:],
-                                                 MEAN_FACE[LandmarkType.LM_2D_51],
-                                                 True).astype(np.float32)
+        if self._cache_matrices is not None:
+            return self._cache_matrices
+
+        if self.landmarks is None:
+            return np.empty((0, 3, 3), dtype=np.float32)
+
+        self._cache_matrices = batch_umeyama(self.landmarks_68[:, 17:],
+                                             MEAN_FACE[LandmarkType.LM_2D_51],
+                                             True).astype(np.float32)
         return self._cache_matrices
 
     @property
@@ -126,55 +138,69 @@ class ExtractBatchAligned:
     def offsets_legacy(self) -> npt.NDArray[np.float32]:
         """The (N, x, y) offsets for normalized (legacy) centering. This is always (0, 0) for all
         items in the batch"""
-        if self._cache_offsets_legacy is None:
-            self._cache_offsets_legacy = np.zeros((self.landmarks_68.shape[0], 2),
-                                                  dtype=np.float32)
+        if self._cache_offsets_legacy is not None:
+            return self._cache_offsets_legacy
+
+        if self.landmarks is None:
+            return np.empty((0, 2), dtype=np.float32)
+
+        self._cache_offsets_legacy = np.zeros((self.landmarks_68.shape[0], 2),
+                                              dtype=np.float32)
         return self._cache_offsets_legacy
 
     @property
     def offsets_face(self) -> npt.NDArray[np.float32]:
         """The (N, x, y) offsets required to shift from normalized (legacy) centering to face
         centering"""
-        if self._cache_offsets_face is None:
-            self._cache_offsets_face = Batch3D.get_offsets("face", self.rotation, self.translation)
+        if self._cache_offsets_face is not None:
+            return self._cache_offsets_face
+
+        if self.landmarks is None:
+            return np.empty((0, 2), dtype=np.float32)
+
+        self._cache_offsets_face = Batch3D.get_offsets("face", self.rotation, self.translation)
         return self._cache_offsets_face
 
     @property
     def offsets_head(self) -> npt.NDArray[np.float32]:
         """The (N, x, y) offsets required to shift from normalized (legacy) centering to head
         centering"""
-        if self._cache_offsets_head is None:
-            self._cache_offsets_head = Batch3D.get_offsets("head", self.rotation, self.translation)
+        if self._cache_offsets_head is not None:
+            return self._cache_offsets_head
+
+        if self.landmarks is None:
+            return np.empty((0, 2), dtype=np.float32)
+
+        self._cache_offsets_head = Batch3D.get_offsets("head", self.rotation, self.translation)
         return self._cache_offsets_head
 
     @property
     def rotation(self) -> npt.NDArray[np.float32]:
         """The estimated (N, 3, 1) rotation vectors"""
-        if self._cache_rotation is None:
-            rot_trans = Batch3D.solve_pnp(self.landmarks_normalized)
-            self._cache_rotation = T.cast("npt.NDArray[np.float32]", rot_trans[0])
-            self._cache_translation = rot_trans[1]
+        if self._cache_rotation is not None:
+            return self._cache_rotation
+
+        if self.landmarks is None:
+            return np.empty((0, 3, 1), dtype=np.float32)
+
+        rot_trans = Batch3D.solve_pnp(self.landmarks_normalized)
+        self._cache_rotation = T.cast("npt.NDArray[np.float32]", rot_trans[0])
+        self._cache_translation = rot_trans[1]
         return self._cache_rotation
 
     @property
     def translation(self) -> npt.NDArray[np.float32]:
         """The estimated (N, 3, 1) translation vectors"""
-        if self._cache_translation is None:
-            rot_trans = Batch3D.solve_pnp(self.landmarks_normalized)
-            self._cache_rotation = rot_trans[0]
-            self._cache_translation = T.cast("npt.NDArray[np.float32]", rot_trans[1])
-        return self._cache_translation
+        if self._cache_translation is not None:
+            return self._cache_translation
 
-    def _assert_landmarks(self) -> None:
-        """Ensure that landmark data is available
-
-        Raises
-        ------
-        ValueError
-            If landmark data is not available
-        """
         if self.landmarks is None:
-            raise ValueError("Aligned data cannot be calculated without landmarks")
+            return np.empty((0, 3, 1), dtype=np.float32)
+
+        rot_trans = Batch3D.solve_pnp(self.landmarks_normalized)
+        self._cache_rotation = rot_trans[0]
+        self._cache_translation = T.cast("npt.NDArray[np.float32]", rot_trans[1])
+        return self._cache_translation
 
     def __getitem__(self, indices: slice) -> ExtractBatchAligned:
         """Obtain a subset of this batch object with the data given by the start and end indices
