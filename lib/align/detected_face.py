@@ -111,6 +111,11 @@ class DetectedFace():  # pylint:disable=too-many-instance-attributes
         return self._aligned
 
     @property
+    def has_landmarks(self) -> bool:
+        """``True`` if this object contains landmarks"""
+        return self._landmarks_xy is not None
+
+    @property
     def landmarks_xy(self) -> np.ndarray:
         """The frame space 2D landmarks for this detected face."""
         assert self._landmarks_xy is not None

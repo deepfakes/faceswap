@@ -850,7 +850,7 @@ class FrameFaces:  # pylint:disable=too-many-instance-attributes
             if None not in (face.left, face.top, face.width, face.height):
                 bbox = np.array([[face.left, face.top, face.right, face.bottom]], dtype=np.int32)
                 self.bboxes = np.concatenate([self.bboxes, bbox])
-            if face.landmarks_xy is not None:
+            if face.has_landmarks:
                 landmarks = np.array(face.landmarks_xy, dtype=np.float32)[None]
                 self.landmarks = (landmarks if self.landmarks is None
                                   else np.concatenate([self.landmarks, landmarks]))
