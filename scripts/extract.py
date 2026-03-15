@@ -77,11 +77,11 @@ class Extract:
         args = handle_deprecated_cli_opts(arguments,
                                           additional={"K": ("to skip saving faces", True, None)})
         args = self._validate_compatible_args(args)
+        input_locations = self._get_input_locations(args.input_dir, args.batch_mode)
+        self._validate_batch_mode(args.batch_mode, input_locations, args)
         self._configure_torch(args.compile)
         self._face_filter = FilterLoader(args.ref_threshold, args.filter, args.nfilter)
         self._pipeline = self._load_pipeline(args)
-        input_locations = self._get_input_locations(args.input_dir, args.batch_mode)
-        self._validate_batch_mode(args.batch_mode, input_locations, args)
 
         file_input = args.detector == "file" or args.aligner == "file"
         save_alignments = self._should_save_alignments(args)

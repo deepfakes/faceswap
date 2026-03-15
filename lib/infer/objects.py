@@ -83,7 +83,7 @@ class ExtractBatchAligned:
         if self._cache_landmarks_68 is not None:
             return self._cache_landmarks_68
 
-        if self.landmarks is None:
+        if self.landmarks is None or not self.landmarks.size:
             return np.empty((0, 68, 2), dtype=np.float32)
 
         lms = T.cast("npt.NDArray[np.float32]", self.landmarks)
@@ -98,7 +98,7 @@ class ExtractBatchAligned:
         if self._cache_landmarks_normalized is not None:
             return self._cache_landmarks_normalized
 
-        if self.landmarks is None:
+        if self.landmarks is None or not self.landmarks.size:
             return np.empty((0, 68, 2), dtype=np.float32)
 
         self._cache_landmarks_normalized = batch_transform(self.matrices, self.landmarks_68)
@@ -110,7 +110,7 @@ class ExtractBatchAligned:
         if self._cache_matrices is not None:
             return self._cache_matrices
 
-        if self.landmarks is None:
+        if self.landmarks is None or not self.landmarks.size:
             return np.empty((0, 3, 3), dtype=np.float32)
 
         self._cache_matrices = batch_umeyama(self.landmarks_68[:, 17:],
@@ -141,7 +141,7 @@ class ExtractBatchAligned:
         if self._cache_offsets_legacy is not None:
             return self._cache_offsets_legacy
 
-        if self.landmarks is None:
+        if self.landmarks is None or not self.landmarks.size:
             return np.empty((0, 2), dtype=np.float32)
 
         self._cache_offsets_legacy = np.zeros((self.landmarks_68.shape[0], 2),
@@ -155,7 +155,7 @@ class ExtractBatchAligned:
         if self._cache_offsets_face is not None:
             return self._cache_offsets_face
 
-        if self.landmarks is None:
+        if self.landmarks is None or not self.landmarks.size:
             return np.empty((0, 2), dtype=np.float32)
 
         self._cache_offsets_face = Batch3D.get_offsets("face", self.rotation, self.translation)
@@ -168,7 +168,7 @@ class ExtractBatchAligned:
         if self._cache_offsets_head is not None:
             return self._cache_offsets_head
 
-        if self.landmarks is None:
+        if self.landmarks is None or not self.landmarks.size:
             return np.empty((0, 2), dtype=np.float32)
 
         self._cache_offsets_head = Batch3D.get_offsets("head", self.rotation, self.translation)
@@ -180,7 +180,7 @@ class ExtractBatchAligned:
         if self._cache_rotation is not None:
             return self._cache_rotation
 
-        if self.landmarks is None:
+        if self.landmarks is None or not self.landmarks.size:
             return np.empty((0, 3, 1), dtype=np.float32)
 
         rot_trans = Batch3D.solve_pnp(self.landmarks_normalized)
@@ -194,7 +194,7 @@ class ExtractBatchAligned:
         if self._cache_translation is not None:
             return self._cache_translation
 
-        if self.landmarks is None:
+        if self.landmarks is None or not self.landmarks.size:
             return np.empty((0, 3, 1), dtype=np.float32)
 
         rot_trans = Batch3D.solve_pnp(self.landmarks_normalized)

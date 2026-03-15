@@ -199,7 +199,8 @@ def compile_models(plugin: ExtractPlugin, modules: list[torch.nn.Module]) -> Non
                          "shape_padding": True,  # Pad tensors for Tensor core usage
                          "epilogue_fusion": True,
                          "coordinate_descent_tuning": True,  # Can sometimes find better kernels
-                         "max_autotune": True})
+                         "max_autotune": True,
+                         "max_autotune_report_choices_stats": False})
         # Send the warmup batch here as we need to keep the lock when tracing
         warmup_plugin(plugin, plugin.batch_size, channels_last=channels_last)
     torch.cuda.empty_cache()  # Need to clear cache or we may run out of VRAM
