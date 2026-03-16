@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-28 13:45+0100\n"
-"PO-Revision-Date: 2024-06-28 13:47+0100\n"
+"POT-Creation-Date: 2026-03-13 15:17+0000\n"
+"PO-Revision-Date: 2026-03-16 18:25+0000\n"
 "Last-Translator: \n"
 "Language-Team: tokafondo\n"
 "Language: es_ES\n"
@@ -16,9 +16,9 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 3.4.4\n"
+"X-Generator: Poedit 3.8\n"
 
-#: tools/mask/cli.py:15
+#: tools/mask/cli.py:16
 msgid ""
 "This tool allows you to generate, import, export or preview masks for "
 "existing alignments."
@@ -28,7 +28,7 @@ msgstr ""
 "Genere, importe, exporte o obtenga una vista previa de máscaras para "
 "archivos de alineaciones existentes."
 
-#: tools/mask/cli.py:25
+#: tools/mask/cli.py:26
 msgid ""
 "Mask tool\n"
 "Generate, import, export or preview masks for existing alignments files."
@@ -37,12 +37,12 @@ msgstr ""
 "Genere, importe, exporte o obtenga una vista previa de máscaras para "
 "archivos de alineaciones existentes."
 
-#: tools/mask/cli.py:35 tools/mask/cli.py:47 tools/mask/cli.py:58
-#: tools/mask/cli.py:69
+#: tools/mask/cli.py:36 tools/mask/cli.py:48 tools/mask/cli.py:59
+#: tools/mask/cli.py:70
 msgid "data"
 msgstr "datos"
 
-#: tools/mask/cli.py:39
+#: tools/mask/cli.py:40
 msgid ""
 "Full path to the alignments file that contains the masks if not at the "
 "default location. NB: If the input-type is faces and you wish to update the "
@@ -54,15 +54,15 @@ msgstr ""
 "actualizar el archivo de alineaciones correspondiente, debe proporcionar un "
 "valor aquí ya que la ubicación no se puede detectar automáticamente."
 
-#: tools/mask/cli.py:51
+#: tools/mask/cli.py:52
 msgid "Directory containing extracted faces, source frames, or a video file."
 msgstr ""
 "Directorio que contiene las caras extraídas, los fotogramas de origen o un "
 "archivo de vídeo."
 
-#: tools/mask/cli.py:61
+#: tools/mask/cli.py:62
 msgid ""
-"R|Whether the `input` is a folder of faces or a folder frames/video\n"
+"R|Whether the `input` is a folder of faces/frames or a video file\n"
 "L|faces: The input is a folder containing extracted faces.\n"
 "L|frames: The input is a folder containing frames or is a video"
 msgstr ""
@@ -70,7 +70,7 @@ msgstr ""
 "L|faces: La entrada es una carpeta que contiene caras extraídas.\n"
 "L|frames: La entrada es una carpeta que contiene fotogramas o es un vídeo"
 
-#: tools/mask/cli.py:71
+#: tools/mask/cli.py:72
 msgid ""
 "R|Run the mask tool on multiple sources. If selected then the other options "
 "should be set as follows:\n"
@@ -95,27 +95,20 @@ msgstr ""
 "con 'caras' como tipo de entrada, solo se actualizará el encabezado PNG "
 "dentro de las caras extraídas."
 
-#: tools/mask/cli.py:87 tools/mask/cli.py:119
+#: tools/mask/cli.py:88 tools/mask/cli.py:114
 msgid "process"
 msgstr "proceso"
 
-#: tools/mask/cli.py:89
+#: tools/mask/cli.py:90
 msgid ""
 "R|Masker to use.\n"
 "L|bisenet-fp: Relatively lightweight NN based mask that provides more "
 "refined control over the area to be masked including full head masking "
 "(configurable in mask settings).\n"
-"L|components: Mask designed to provide facial segmentation based on the "
-"positioning of landmark locations. A convex hull is constructed around the "
-"exterior of the landmarks to create a mask.\n"
 "L|custom: A dummy mask that fills the mask area with all 1s or 0s "
 "(configurable in settings). This is only required if you intend to manually "
 "edit the custom masks yourself in the manual tool. This mask does not use "
 "the GPU.\n"
-"L|extended: Mask designed to provide facial segmentation based on the "
-"positioning of landmark locations. A convex hull is constructed around the "
-"exterior of the landmarks and the mask is extended upwards onto the "
-"forehead.\n"
 "L|vgg-clear: Mask designed to provide smart segmentation of mostly frontal "
 "faces clear of obstructions. Profile faces and obstructions may result in "
 "sub-par performance.\n"
@@ -131,18 +124,11 @@ msgstr ""
 "L|bisenet-fp: Máscara relativamente ligera basada en NN que proporciona un "
 "control más refinado sobre el área a enmascarar, incluido el enmascaramiento "
 "completo de la cabeza (configurable en la configuración de la máscara).\n"
-"L|components: Máscara diseñada para proporcionar una segmentación facial "
-"basada en la posición de los puntos de referencia. Se construye un casco "
-"convexo alrededor del exterior de los puntos de referencia para crear una "
-"máscara.\n"
 "L|custom: Una máscara ficticia que llena el área de la máscara con 1 o 0 "
 "(configurable en la configuración). Esto solo es necesario si tiene la "
 "intención de editar manualmente las máscaras personalizadas usted mismo en "
 "la herramienta manual. Esta máscara no utiliza la GPU.\n"
-"L|extended: Máscara diseñada para proporcionar una segmentación facial "
-"basada en el posicionamiento de las ubicaciones de los puntos de referencia. "
-"Se construye un casco convexo alrededor del exterior de los puntos de "
-"referencia y la máscara se extiende hacia arriba en la frente.\n"
+"máscara se extiende hacia arriba en la frente.\n"
 "L|vgg-clear: Máscara diseñada para proporcionar una segmentación inteligente "
 "de rostros principalmente frontales y libres de obstrucciones. Los rostros "
 "de perfil y las obstrucciones pueden dar lugar a un rendimiento inferior.\n"
@@ -157,7 +143,7 @@ msgstr ""
 "descripción. Los rostros de perfil pueden dar lugar a un rendimiento "
 "inferior."
 
-#: tools/mask/cli.py:121
+#: tools/mask/cli.py:116
 msgid ""
 "R|The Mask tool process to perform.\n"
 "L|all: Update the mask for all faces in the alignments file for the selected "
@@ -181,11 +167,11 @@ msgstr ""
 "файл выравниваний. Примечание. «custom» должен быть выбранным «masker», а "
 "маски должны быть в том же формате, что и «input-type» (frames или faces)."
 
-#: tools/mask/cli.py:135 tools/mask/cli.py:154 tools/mask/cli.py:176
+#: tools/mask/cli.py:130 tools/mask/cli.py:149 tools/mask/cli.py:171
 msgid "import"
 msgstr "importar"
 
-#: tools/mask/cli.py:137
+#: tools/mask/cli.py:132
 msgid ""
 "R|Import only. The path to the folder that contains masks to be imported.\n"
 "L|How the masks are provided is not important, but they will be stored, "
@@ -214,7 +200,7 @@ msgstr ""
 "número de ceros. El número de fotograma debe corresponder correctamente al "
 "número de fotograma del vídeo original (a partir del fotograma 1)."
 
-#: tools/mask/cli.py:156
+#: tools/mask/cli.py:151
 msgid ""
 "R|Import/Output only. When importing masks, this is the centering to use. "
 "For output this is only used for outputting custom imported masks, and "
@@ -249,7 +235,7 @@ msgstr ""
 "nariz y la recorta cerca de la cara. Puede provocar que los bordes de la "
 "máscara aparezcan fuera del área de entrenamiento."
 
-#: tools/mask/cli.py:181
+#: tools/mask/cli.py:176
 msgid ""
 "Import only. The size, in pixels to internally store the mask at.\n"
 "The default is 128 which is fine for nearly all usecases. Larger sizes will "
@@ -261,12 +247,12 @@ msgstr ""
 "uso. Los tamaños más grandes darán como resultado archivos de alineaciones "
 "más grandes y un procesamiento más largo."
 
-#: tools/mask/cli.py:189 tools/mask/cli.py:197 tools/mask/cli.py:211
-#: tools/mask/cli.py:225 tools/mask/cli.py:235
+#: tools/mask/cli.py:184 tools/mask/cli.py:192 tools/mask/cli.py:206
+#: tools/mask/cli.py:220 tools/mask/cli.py:230
 msgid "output"
 msgstr "salida"
 
-#: tools/mask/cli.py:191
+#: tools/mask/cli.py:186
 msgid ""
 "Optional output location. If provided, a preview of the masks created will "
 "be output in the given folder."
@@ -274,7 +260,7 @@ msgstr ""
 "Ubicación de salida opcional. Si se proporciona, se obtendrá una vista "
 "previa de las máscaras creadas en la carpeta indicada."
 
-#: tools/mask/cli.py:202
+#: tools/mask/cli.py:197
 msgid ""
 "Apply gaussian blur to the mask output. Has the effect of smoothing the "
 "edges of the mask giving less of a hard edge. the size is in pixels. This "
@@ -287,7 +273,7 @@ msgstr ""
 "redondeará al siguiente número impar. NB: Sólo afecta a la vista previa de "
 "salida. Si se ajusta a 0, se desactiva"
 
-#: tools/mask/cli.py:216
+#: tools/mask/cli.py:211
 msgid ""
 "Helps reduce 'blotchiness' on some masks by making light shades white and "
 "dark shades black. Higher values will impact more of the mask. NB: Only "
@@ -298,7 +284,7 @@ msgstr ""
 "más a la máscara. NB: Sólo afecta a la vista previa de salida. Si se ajusta "
 "a 0, se desactiva"
 
-#: tools/mask/cli.py:227
+#: tools/mask/cli.py:222
 msgid ""
 "R|How to format the output when processing is set to 'output'.\n"
 "L|combined: The image contains the face/frame, face mask and masked face.\n"
@@ -313,7 +299,7 @@ msgstr ""
 "enmascarada.\n"
 "L|mask: Sólo emite la máscara como una imagen de un solo canal."
 
-#: tools/mask/cli.py:237
+#: tools/mask/cli.py:232
 msgid ""
 "R|Whether to output the whole frame or only the face box when using output "
 "processing. Only has an effect when using frames as input."

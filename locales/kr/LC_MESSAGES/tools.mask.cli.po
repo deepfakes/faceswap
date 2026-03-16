@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-28 13:45+0100\n"
-"PO-Revision-Date: 2024-06-28 13:48+0100\n"
+"POT-Creation-Date: 2026-03-13 15:17+0000\n"
+"PO-Revision-Date: 2026-03-16 18:24+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -16,9 +16,9 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Poedit 3.4.4\n"
+"X-Generator: Poedit 3.8\n"
 
-#: tools/mask/cli.py:15
+#: tools/mask/cli.py:16
 msgid ""
 "This tool allows you to generate, import, export or preview masks for "
 "existing alignments."
@@ -26,7 +26,7 @@ msgstr ""
 "이 도구를 사용하면 기존 정렬에 대한 마스크를 생성, 가져오기, 내보내기 또는 미"
 "리 볼 수 있습니다."
 
-#: tools/mask/cli.py:25
+#: tools/mask/cli.py:26
 msgid ""
 "Mask tool\n"
 "Generate, import, export or preview masks for existing alignments files."
@@ -35,12 +35,12 @@ msgstr ""
 "기존 alignments 파일에 대한 마스크를 생성, 가져오기, 내보내기 또는 미리 봅니"
 "다."
 
-#: tools/mask/cli.py:35 tools/mask/cli.py:47 tools/mask/cli.py:58
-#: tools/mask/cli.py:69
+#: tools/mask/cli.py:36 tools/mask/cli.py:48 tools/mask/cli.py:59
+#: tools/mask/cli.py:70
 msgid "data"
 msgstr "데이터"
 
-#: tools/mask/cli.py:39
+#: tools/mask/cli.py:40
 msgid ""
 "Full path to the alignments file that contains the masks if not at the "
 "default location. NB: If the input-type is faces and you wish to update the "
@@ -51,13 +51,13 @@ msgstr ""
 "유형이 얼굴이고 해당 정렬 파일을 업데이트하려는 경우 위치를 자동으로 감지할 "
 "수 없으므로 여기에 값을 제공해야 합니다."
 
-#: tools/mask/cli.py:51
+#: tools/mask/cli.py:52
 msgid "Directory containing extracted faces, source frames, or a video file."
 msgstr "추출된 얼굴들, 원본 프레임들, 또는 비디오 파일이 존재하는 디렉토리."
 
-#: tools/mask/cli.py:61
+#: tools/mask/cli.py:62
 msgid ""
-"R|Whether the `input` is a folder of faces or a folder frames/video\n"
+"R|Whether the `input` is a folder of faces/frames or a video file\n"
 "L|faces: The input is a folder containing extracted faces.\n"
 "L|frames: The input is a folder containing frames or is a video"
 msgstr ""
@@ -65,7 +65,7 @@ msgstr ""
 "L|faces: 입력은 추출된 얼굴을 포함된 폴더입니다.\n"
 "L|frames: 입력이 프레임을 포함된 폴더이거나 비디오입니다"
 
-#: tools/mask/cli.py:71
+#: tools/mask/cli.py:72
 msgid ""
 "R|Run the mask tool on multiple sources. If selected then the other options "
 "should be set as follows:\n"
@@ -88,27 +88,20 @@ msgstr ""
 "(프레임용)에 있어야 합니다. 입력 유형이 '얼굴'인 마스크를 일괄 처리하는 경우 "
 "추출된 얼굴 내의 PNG 헤더만 업데이트됩니다."
 
-#: tools/mask/cli.py:87 tools/mask/cli.py:119
+#: tools/mask/cli.py:88 tools/mask/cli.py:114
 msgid "process"
 msgstr "진행"
 
-#: tools/mask/cli.py:89
+#: tools/mask/cli.py:90
 msgid ""
 "R|Masker to use.\n"
 "L|bisenet-fp: Relatively lightweight NN based mask that provides more "
 "refined control over the area to be masked including full head masking "
 "(configurable in mask settings).\n"
-"L|components: Mask designed to provide facial segmentation based on the "
-"positioning of landmark locations. A convex hull is constructed around the "
-"exterior of the landmarks to create a mask.\n"
 "L|custom: A dummy mask that fills the mask area with all 1s or 0s "
 "(configurable in settings). This is only required if you intend to manually "
 "edit the custom masks yourself in the manual tool. This mask does not use "
 "the GPU.\n"
-"L|extended: Mask designed to provide facial segmentation based on the "
-"positioning of landmark locations. A convex hull is constructed around the "
-"exterior of the landmarks and the mask is extended upwards onto the "
-"forehead.\n"
 "L|vgg-clear: Mask designed to provide smart segmentation of mostly frontal "
 "faces clear of obstructions. Profile faces and obstructions may result in "
 "sub-par performance.\n"
@@ -123,15 +116,9 @@ msgstr ""
 "R|사용할 마스크.\n"
 "L|bisnet-fp: 전체 얼굴 마스킹(마스크 설정에서 구성 가능)을 포함하여 마스킹할 "
 "영역에 대한 보다 정교한 제어를 제공하는 비교적 가벼운 NN 기반 마스크입니다.\n"
-"L|components: 특징점 위치를 기반으로 얼굴 분할을 제공하도록 설계된 마스크입니"
-"다. 특징점의 외부에는 마스크를 만들기 위해 convex hull이가 형성되어 있습니"
-"다.\n"
 "L|custom: 마스크 영역을 모든 1 또는 0으로 채우는 더미 마스크입니다(설정에서 "
 "구성 가능). 수동 도구에서 사용자 정의 마스크를 직접 수동으로 편집하려는 경우"
 "에만 필요합니다. 이 마스크는 GPU를 사용하지 않습니다.\n"
-"L|extended: 특징점 위치를 기반으로 얼굴 분할을 제공하도록 설계된 마스크입니"
-"다. 지형지물의 외부에는 convex hull이 형성되어 있으며, 마스크는 이마 위로 뻗"
-"어 있습니다.\n"
 "L|vgg-clear: 대부분의 정면에 장애물이 없는 스마트한 분할을 제공하도록 설계된 "
 "마스크입니다. 프로필 면 및 장애물로 인해 성능이 저하될 수 있습니다.\n"
 "L|vgg-obstructed: 대부분의 정면 얼굴을 스마트하게 분할할 수 있도록 설계된 마"
@@ -141,7 +128,7 @@ msgstr ""
 "델은 커뮤니티 구성원들에 의해 훈련되었으며 추가 설명을 위해 테스트가 필요합니"
 "다. 옆 얼굴은 평균 이하의 성능을 초래할 수 있습니다."
 
-#: tools/mask/cli.py:121
+#: tools/mask/cli.py:116
 msgid ""
 "R|The Mask tool process to perform.\n"
 "L|all: Update the mask for all faces in the alignments file for the selected "
@@ -165,11 +152,11 @@ msgstr ""
 "'custom'은 선택된 'masker'여야 하며 마스크는 'input-type'(frames 또는 faces)"
 "과 동일한 형식이어야 합니다."
 
-#: tools/mask/cli.py:135 tools/mask/cli.py:154 tools/mask/cli.py:176
+#: tools/mask/cli.py:130 tools/mask/cli.py:149 tools/mask/cli.py:171
 msgid "import"
 msgstr "수입"
 
-#: tools/mask/cli.py:137
+#: tools/mask/cli.py:132
 msgid ""
 "R|Import only. The path to the folder that contains masks to be imported.\n"
 "L|How the masks are provided is not important, but they will be stored, "
@@ -194,7 +181,7 @@ msgstr ""
 "질 수 있습니다. 프레임 번호는 원본 비디오의 프레임 번호(프레임 1부터 시작)와 "
 "정확하게 일치해야 합니다."
 
-#: tools/mask/cli.py:156
+#: tools/mask/cli.py:151
 msgid ""
 "R|Import/Output only. When importing masks, this is the centering to use. "
 "For output this is only used for outputting custom imported masks, and "
@@ -225,7 +212,7 @@ msgstr ""
 "L|레거시: '원래' 추출 기술입니다. 마스크를 코 근처 중앙에 배치하고 얼굴에 가"
 "깝게 자릅니다. 마스크 가장자리가 훈련 영역 외부에 나타날 수 있습니다."
 
-#: tools/mask/cli.py:181
+#: tools/mask/cli.py:176
 msgid ""
 "Import only. The size, in pixels to internally store the mask at.\n"
 "The default is 128 which is fine for nearly all usecases. Larger sizes will "
@@ -235,12 +222,12 @@ msgstr ""
 "기본값은 128이며 거의 모든 사용 사례에 적합합니다. 크기가 클수록 정렬 파일도 "
 "커지고 처리 시간도 길어집니다."
 
-#: tools/mask/cli.py:189 tools/mask/cli.py:197 tools/mask/cli.py:211
-#: tools/mask/cli.py:225 tools/mask/cli.py:235
+#: tools/mask/cli.py:184 tools/mask/cli.py:192 tools/mask/cli.py:206
+#: tools/mask/cli.py:220 tools/mask/cli.py:230
 msgid "output"
 msgstr "출력"
 
-#: tools/mask/cli.py:191
+#: tools/mask/cli.py:186
 msgid ""
 "Optional output location. If provided, a preview of the masks created will "
 "be output in the given folder."
@@ -248,7 +235,7 @@ msgstr ""
 "선택적 출력 위치. 만약 값이 제공된다면 생성된 마스크 미리 보기가 주어진 폴더"
 "에 출력됩니다."
 
-#: tools/mask/cli.py:202
+#: tools/mask/cli.py:197
 msgid ""
 "Apply gaussian blur to the mask output. Has the effect of smoothing the "
 "edges of the mask giving less of a hard edge. the size is in pixels. This "
@@ -260,7 +247,7 @@ msgstr ""
 "은 홀수여야 하며 짝수가 전달되면 다음 홀수로 반올림됩니다. NB: 출력 미리 보기"
 "에만 영향을 줍니다. 0으로 설정하면 꺼집니다"
 
-#: tools/mask/cli.py:216
+#: tools/mask/cli.py:211
 msgid ""
 "Helps reduce 'blotchiness' on some masks by making light shades white and "
 "dark shades black. Higher values will impact more of the mask. NB: Only "
@@ -270,7 +257,7 @@ msgstr ""
 "줄이는 데 도움이 됩니다. 값이 클수록 마스크에 더 많은 영향을 미칩니다. NB: 출"
 "력 미리 보기에만 영향을 줍니다. 0으로 설정하면 꺼집니다"
 
-#: tools/mask/cli.py:227
+#: tools/mask/cli.py:222
 msgid ""
 "R|How to format the output when processing is set to 'output'.\n"
 "L|combined: The image contains the face/frame, face mask and masked face.\n"
@@ -283,7 +270,7 @@ msgstr ""
 "L|masked: 마스크된 얼굴/프레임을 Rgba 이미지로 출력합니다.\n"
 "L|mask: 마스크를 단일 채널 이미지로만 출력합니다."
 
-#: tools/mask/cli.py:237
+#: tools/mask/cli.py:232
 msgid ""
 "R|Whether to output the whole frame or only the face box when using output "
 "processing. Only has an effect when using frames as input."

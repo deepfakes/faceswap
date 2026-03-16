@@ -96,7 +96,7 @@ class ExtractArgs(ExtractConvertArgs):
             default_detector = "mtcnn"
             default_aligner = "cv2-dnn"
         else:
-            default_detector = "s3fd"
+            default_detector = "retinaface"
             default_aligner = "fan"
 
         argument_list: list[dict[str, T.Any]] = []
@@ -115,7 +115,7 @@ class ExtractArgs(ExtractConvertArgs):
             "default": False,
             "group": _("Data"),
             "help": _(
-                "R|If selected then the input_dir should be a parent folder containing multiple "
+                "If selected then the input_dir should be a parent folder containing multiple "
                 "videos and/or folders of images you wish to extract from. The faces will be "
                 "output to separate sub-folders in the output_dir.")})
         argument_list.append({
@@ -129,14 +129,17 @@ class ExtractArgs(ExtractConvertArgs):
                 "R|Detector to use. Some of these have configurable settings in "
                 "'/config/extract.ini' or 'Settings > Configure Extract 'Plugins':"
                 "\nL|cv2-dnn: A CPU only extractor which is the least reliable and least resource "
-                "intensive. Use this if not using a GPU and time is important."
-                "\nL|mtcnn: Good detector. Fast on CPU, faster on GPU. Uses fewer resources than "
-                "other GPU detectors but can often return more false positives."
-                "\nL|s3fd: Best detector. Slow on CPU, faster on GPU. Can detect more faces and "
+                "intensive. Use this only as a last resort. Both MTCNN and RetinaFace have "
+                "variants that will perform better on CPU."
+                "\nL|mtcnn: Average detector. Fast on CPU, faster on GPU. Uses fewer resources "
+                "than other GPU detectors but can often return more false positives or misses "
+                "faces."
+                "\nL|retinaface: Good detector. Faster and lighter than S3FD but of similar "
+                "quality. A ResNet and MobileNet version are available (configurable in Detect "
+                "settings). The MobileNet version is light enough to run on CPU."
+                "\nL|s3fd: Good detector. Slow on CPU, faster on GPU. Can detect more faces and "
                 "fewer false positives than other GPU detectors, but is a lot more resource "
-                "intensive."
-                "\nL|external: Import a face detection bounding box from a json file. ("
-                "configurable in Detect settings)")})
+                "intensive.")})
         argument_list.append({
             "opts": ("-A", "--aligner"),
             "action": Radio,
@@ -148,9 +151,7 @@ class ExtractArgs(ExtractConvertArgs):
                 "R|Aligner to use."
                 "\nL|cv2-dnn: A CPU only landmark detector. Faster, less resource intensive, but "
                 "less accurate. Only use this if not using a GPU and time is important."
-                "\nL|fan: Best aligner. Fast on GPU, slow on CPU."
-                "\nL|external: Import 68 point 2D landmarks or an aligned bounding box from a "
-                "json file. (configurable in Align settings)")})
+                "\nL|fan: Best aligner. Fast on GPU, slow on CPU.")})
         argument_list.append({
             "opts": ("-M", "--masker"),
             "action": MultiOption,
@@ -290,7 +291,8 @@ class ExtractArgs(ExtractConvertArgs):
             "default": False,
             "group": _("Align"),
             "help": _(
-                "Enable aligner filters. Filters are configurable in extract settings. Slows down "
+                "Enable aligner filters. This allows the filtering out of faces based on certain "
+                "statistics and characteristics. Configurable in extract settings. Slows down "
                 "extraction.")})
         argument_list.append({
             "opts": ("-n", "--nfilter"),

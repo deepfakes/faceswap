@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-04-19 11:28+0100\n"
-"PO-Revision-Date: 2024-04-19 11:30+0100\n"
+"POT-Creation-Date: 2026-03-13 15:17+0000\n"
+"PO-Revision-Date: 2026-03-16 18:20+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -16,7 +16,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Poedit 3.4.2\n"
+"X-Generator: Poedit 3.8\n"
 
 #: tools/alignments/cli.py:16
 msgid ""
@@ -53,8 +53,8 @@ msgstr ""
 
 #: tools/alignments/cli.py:47
 msgid ""
-" Must Pass in a frames folder/source video file AND a faces folder (-r and -"
-"c)."
+" Must Pass in a frames folder/source video file AND a faces folder (-r and "
+"-c)."
 msgstr ""
 " 프레임 폴더나 원본 비디오 파일 그리고 얼굴 폴더를 무조건 전달해야 합니다 (-"
 "r and -c)."
@@ -63,7 +63,7 @@ msgstr ""
 msgid " Use the output option (-o) to process results."
 msgstr " 결과를 진행하려면 (-o) 출력 옵션을 사용하세요."
 
-#: tools/alignments/cli.py:58 tools/alignments/cli.py:104
+#: tools/alignments/cli.py:58 tools/alignments/cli.py:103
 msgid "processing"
 msgstr "처리"
 
@@ -76,14 +76,13 @@ msgid ""
 "will be created within the frames folder to hold the output.{0}\n"
 "L|'export': Export the contents of an alignments file to a json file. Can be "
 "used for editing alignment information in external tools and then re-"
-"importing by using Faceswap's Extract 'Import' plugins. Note: masks and "
-"identity vectors will not be included in the exported file, so will be re-"
-"generated when the json file is imported back into Faceswap. All data is "
-"exported with the origin (0, 0) at the top left of the canvas.\n"
-"L|'extract': Re-extract faces from the source frames/video based on "
-"alignment data. This is a lot quicker than re-detecting faces. Can pass in "
-"the '-een' (--extract-every-n) parameter to only extract every nth frame."
-"{1}\n"
+"importing by using Faceswap's Extract 'file' plugins for detector and "
+"aligner. Note: masks and identity vectors will not be included in the "
+"exported file, so can be re-generated when the json file is imported back "
+"into Faceswap. All data is exported with the origin (0, 0) at the top left "
+"of the canvas.\n"
+"L|'extract': [DEPRECATED] Use 'python faceswap.py extract' instead and "
+"select 'file' as the aligner plugin. {1}\n"
 "L|'from-faces': Generate alignment file(s) from a folder of extracted faces. "
 "if the folder of faces comes from multiple sources, then multiple alignments "
 "files will be created. NB: for faces which have been extracted from folders "
@@ -118,9 +117,10 @@ msgstr ""
 "는 데 사용할 수 있습니다. 참고 : 마스크 및 ID 벡터는 내보내기 파일에 포함되"
 "지 않으므로 JSON 파일이 다시 FaceSwap으로 가져 오면 다시 생성됩니다. 모든 데"
 "이터는 캔버스의 왼쪽 상단에있는 원점 (0, 0)으로 내 보냅니다.\n"
-"L|'extract': alignments 데이터를 기반으로 소스 프레임/비디오에서 얼굴을 재추"
-"출합니다. 이것은 얼굴을 재감지하는 것보다 훨씬 더 빠릅니다. '-een'(--extract-"
-"every-n) 매개 변수를 전달하여 모든 n번째 프레임을 추출할 수 있습니다.{1}\n"
+"L|'extract': [사용 중단됨] alignments 데이터를 기반으로 소스 프레임/비디오에"
+"서 얼굴을 재추출합니다. 이것은 얼굴을 재감지하는 것보다 훨씬 더 빠릅니다. '-"
+"een'(--extract-every-n) 매개 변수를 전달하여 모든 n번째 프레임을 추출할 수 있"
+"습니다.{1}\n"
 "L|'from-faces': 추출된 얼굴 폴더에서 alignments 파일을 생성합니다. 폴더 내의 "
 "얼굴들을 여러 소스에서 가져온 경우 여러 alignments 파일이 생성됩니다. 참고: "
 "비디오가 아닌 원본 이미지의 폴더를 추출한 얼굴의 경우, 원래 사용된 이미지의 "
@@ -142,7 +142,7 @@ msgstr ""
 "L| 'spatial': 공간 및 시간 필터링을 수행하여 alignments를 원활하게 수행합니다"
 "(실험적!)."
 
-#: tools/alignments/cli.py:107
+#: tools/alignments/cli.py:106
 msgid ""
 "R|How to output discovered items ('faces' and 'frames' only):\n"
 "L|'console': Print the list of frames to the screen. (DEFAULT)\n"
@@ -156,12 +156,12 @@ msgstr ""
 "L|'파일': 프레임 목록을 텍스트 파일(소스 디렉토리에 저장)로 출력합니다.\n"
 "L|'이동': 검색된 항목을 원본 디렉토리 내의 하위 폴더로 이동합니다."
 
-#: tools/alignments/cli.py:118 tools/alignments/cli.py:141
-#: tools/alignments/cli.py:148
+#: tools/alignments/cli.py:117 tools/alignments/cli.py:140
+#: tools/alignments/cli.py:147
 msgid "data"
 msgstr "데이터"
 
-#: tools/alignments/cli.py:125
+#: tools/alignments/cli.py:124
 msgid ""
 "Full path to the alignments file to be processed. If you have input a "
 "'frames_dir' and don't provide this option, the process will try to find the "
@@ -174,11 +174,11 @@ msgstr ""
 "다. 지정된 얼굴 폴더에 alignments 파일이 생성될 때 모든 작업은 'from-"
 "faces'를 제외한 alignments 파일이 필요로 합니다."
 
-#: tools/alignments/cli.py:142
+#: tools/alignments/cli.py:141
 msgid "Directory containing source frames that faces were extracted from."
 msgstr "얼굴 추출의 소스로 쓰인 원본 프레임이 저장된 디렉토리."
 
-#: tools/alignments/cli.py:150
+#: tools/alignments/cli.py:149
 msgid ""
 "R|Run the aligmnents tool on multiple sources. The following jobs support "
 "batch mode:\n"
@@ -214,41 +214,42 @@ msgstr ""
 "지의 하위 폴더여야 합니다. 에. 정렬 파일은 기본 위치에 있어야 합니다. 다른 모"
 "든 작업의 경우 이 옵션은 무시됩니다."
 
-#: tools/alignments/cli.py:176 tools/alignments/cli.py:188
-#: tools/alignments/cli.py:198
+#: tools/alignments/cli.py:175 tools/alignments/cli.py:187
+#: tools/alignments/cli.py:197
 msgid "extract"
 msgstr "추출"
 
-#: tools/alignments/cli.py:178
+#: tools/alignments/cli.py:177
 msgid ""
-"[Extract only] Extract every 'nth' frame. This option will skip frames when "
-"extracting faces. For example a value of 1 will extract faces from every "
-"frame, a value of 10 will extract faces from every 10th frame."
+"[DEPRECTATED. Extract only] Extract every 'nth' frame. This option will skip "
+"frames when extracting faces. For example a value of 1 will extract faces "
+"from every frame, a value of 10 will extract faces from every 10th frame."
 msgstr ""
-"[Extract only] 모든 'n번째' 프레임을 추출합니다. 이 옵션은 얼굴을 추출할 때 "
-"프레임을 건너뜁니다. 예를 들어, 값이 1이면 모든 프레임에서 얼굴이 추출되고, "
-"값이 10이면 모든 10번째 프레임에서 얼굴이 추출됩니다."
+"[사용 중단됨. Extract only] 모든 'n번째' 프레임을 추출합니다. 이 옵션은 얼굴"
+"을 추출할 때 프레임을 건너뜁니다. 예를 들어, 값이 1이면 모든 프레임에서 얼굴"
+"이 추출되고, 값이 10이면 모든 10번째 프레임에서 얼굴이 추출됩니다."
 
-#: tools/alignments/cli.py:189
-msgid "[Extract only] The output size of extracted faces."
-msgstr "[Extract only] 추출된 얼굴들의 결과 크기입니다."
+#: tools/alignments/cli.py:188
+msgid "[DEPRECTATED. Extract only] The output size of extracted faces."
+msgstr "[사용 중단됨. Extract only] 추출된 얼굴들의 결과 크기입니다."
 
-#: tools/alignments/cli.py:200
+#: tools/alignments/cli.py:199
 msgid ""
-"[Extract only] Only extract faces that have been resized by this percent or "
-"more to meet the specified extract size (`-sz`, `--size`). Useful for "
-"excluding low-res images from a training set. Set to 0 to extract all faces. "
-"Eg: For an extract size of 512px, A setting of 50 will only include faces "
-"that have been resized from 256px or above. Setting to 100 will only extract "
-"faces that have been resized from 512px or above. A setting of 200 will only "
-"extract faces that have been downscaled from 1024px or above."
+"[DEPRECTATED. Extract only] Only extract faces that have been resized by "
+"this percent or more to meet the specified extract size (`-z`, `--size`). "
+"Useful for excluding low-res images from a training set. Set to 0 to extract "
+"all faces. Eg: For an extract size of 512px, A setting of 50 will only "
+"include faces that have been resized from 256px or above. Setting to 100 "
+"will only extract faces that have been resized from 512px or above. A "
+"setting of 200 will only extract faces that have been downscaled from 1024px "
+"or above."
 msgstr ""
-"[Extract only] 지정된 추출 크기('-sz', '--size')를 맞추기 위하여 크기가 이 비"
-"율 이상 resize된 얼굴들만 추출합니다. 훈련 세트에서 저해상도 이미지를 제외하"
-"는 데 유용합니다. 모든 얼굴을 추출하려면 0으로 설정합니다. 예: 추출 크기가 "
-"512px인 경우, 50으로 설정하면 크기가 256px 이상인 면만 포함됩니다. 100으로 설"
-"정하면 512px 이상에서 크기가 조정된 얼굴만 추출됩니다. 200으로 설정하면 "
-"1024px 이상에서 축소된 얼굴만 추출됩니다."
+"[사용 중단됨 Extract only] 지정된 추출 크기('-sz', '--size')를 맞추기 위하여 "
+"크기가 이 비율 이상 resize된 얼굴들만 추출합니다. 훈련 세트에서 저해상도 이미"
+"지를 제외하는 데 유용합니다. 모든 얼굴을 추출하려면 0으로 설정합니다. 예: 추"
+"출 크기가 512px인 경우, 50으로 설정하면 크기가 256px 이상인 면만 포함됩니다. "
+"100으로 설정하면 512px 이상에서 크기가 조정된 얼굴만 추출됩니다. 200으로 설정"
+"하면 1024px 이상에서 축소된 얼굴만 추출됩니다."
 
 #~ msgid "Directory containing extracted faces."
 #~ msgstr "추출된 얼굴들이 저장된 디렉토리."
