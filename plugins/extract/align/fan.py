@@ -31,7 +31,9 @@ class FAN(ExtractPlugin):
                          scale=(0, 1))
         self.model: FaceAlignmentNetwork
         self.realign_centering = "head"
-        self._reference_scale = 200. / 195.
+        # Original reference scale leads to some fairly unsatisfying landmarks so tightened up
+        # self._reference_scale = 200. / 195.
+        self._reference_scale = 0.8
 
     def load_model(self) -> FaceAlignmentNetwork:
         """Load the FAN model
@@ -67,7 +69,9 @@ class FAN(ExtractPlugin):
         heights = batch[:, 3] - batch[:, 1]
         widths = batch[:, 2] - batch[:, 0]
         ctr_x = np.rint((batch[:, 0] + batch[:, 2]) * 0.5).astype("int32")
-        ctr_y = np.rint((batch[:, 1] + batch[:, 3]) * 0.5 - heights * 0.12).astype("int32")
+        # This y-shift only really makes sense for derived bounding boxes, so removed:
+        # ctr_y = np.rint((batch[:, 1] + batch[:, 3]) * 0.5 - heights * 0.12).astype("int32")
+        ctr_y = np.rint((batch[:, 1] + batch[:, 3]) * 0.5).astype("int32")
         size = (widths + heights) * self._reference_scale
         half = np.rint(size * 0.5).astype("int32")
         # Original implementation is (1, 1) top left, not (0, 0)

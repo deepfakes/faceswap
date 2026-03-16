@@ -223,7 +223,7 @@ class NumpyToList(_Updater):
         ``True`` if any landmarks or thumbnails are a numpy array otherwise ``False``
         """
         return any(isinstance(face["landmarks_xy"], np.ndarray)
-                   or isinstance(face["thumb"], np.ndarray)
+                   or isinstance(face.get("thumb"), np.ndarray)
                    for val in self._alignments.data.values()
                    for face in val["faces"])
 
