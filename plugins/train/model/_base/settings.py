@@ -37,17 +37,17 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class LossClass:
-    """ Typing class for holding loss functions.
+    """Typing class for holding loss functions.
 
     Parameters
     ----------
-    function: Callable
+    function
         The function that takes in the true/predicted images and returns the loss
-    init: bool, Optional
+    init
         Whether the loss object ``True`` needs to be initialized (i.e. it's a class) or
         ``False`` it does not require initialization (i.e. it's a function).
         Default ``True``
-    kwargs: dict
+    kwargs
         Any keyword arguments to supply to the loss function at initialization.
     """
     function: Callable[[KerasTensor, KerasTensor],
@@ -57,11 +57,11 @@ class LossClass:
 
 
 class Loss():
-    """ Holds loss names and functions for an Autoencoder.
+    """Holds loss names and functions for an Autoencoder.
 
     Parameters
     ----------
-    color_order: str
+    color_order
         Color order of the model. One of `"BGR"` or `"RGB"`
     """
     def __init__(self, color_order: T.Literal["bgr", "rgb"]) -> None:
@@ -69,8 +69,8 @@ class Loss():
         self._mask_channels = self._get_mask_channels()
         self._inputs: list[keras.layers.Layer] = []
         self._names: list[str] = []
-        self._funcs: dict[str, losses.LossWrapper | T.Callable[[KerasTensor, KerasTensor],
-                                                               KerasTensor]] = {}
+        self._functions: dict[str, losses.LossWrapper | T.Callable[[KerasTensor, KerasTensor],
+                                                                   KerasTensor]] = {}
 
         self._loss_dict = {"ffl": LossClass(function=losses.FocalFrequencyLoss),
                            "flip": LossClass(function=losses.LDRFLIPLoss,
@@ -96,37 +96,36 @@ class Loss():
 
     @property
     def names(self) -> list[str]:
-        """ list: The list of loss names for the model. """
+        """The loss function names"""
         return self._names
 
     @property
     def functions(self) -> dict[str, losses.LossWrapper | T.Callable[[KerasTensor, KerasTensor],
                                                                      KerasTensor]]:
-        """ dict[str, :class:`~lib.model.losses.LossWrapper` | | Callable[[KerasTensor,
-        KerasTensor], KerasTensor]]]: The loss functions that apply to each model output. """
-        return self._funcs
+        """The loss functions that apply to each model output."""
+        return self._functions
 
     @property
     def _mask_inputs(self) -> list | None:
-        """ list: The list of input tensors to the model that contain the mask. Returns ``None``
-        if there is no mask input to the model. """
+        """The list of input tensors to the model that contain the mask. Returns ``None`` if there
+        is no mask input to the model."""
         mask_inputs = [inp for inp in self._inputs if inp.name.startswith("mask")]
         return None if not mask_inputs else mask_inputs
 
     @property
     def _mask_shapes(self) -> list[tuple] | None:
-        """ list: The list of shape tuples for the mask input tensors for the model. Returns
-        ``None`` if there is no mask input. """
+        """The list of shape tuples for the mask input tensors for the model. Returns ``None`` if
+        there is no mask input."""
         if self._mask_inputs is None:
             return None
         return [mask_input.shape for mask_input in self._mask_inputs]
 
     def configure(self, model: keras.models.Model) -> None:
-        """ Configure the loss functions for the given inputs and outputs.
+        """Configure the loss functions for the given inputs and outputs.
 
         Parameters
         ----------
-        model: :class:`keras.models.Model`
+        model
             The model that is to be trained
         """
         self._inputs = model.inputs
@@ -135,7 +134,7 @@ class Loss():
         self._names.insert(0, "total")
 
     def _set_loss_names(self, outputs: list[KerasTensor]) -> None:
-        """ Name the losses based on model output.
+        """Name the losses based on model output.
 
         This is used for correct naming in the state file, for display purposes only.
 
@@ -143,8 +142,7 @@ class Loss():
 
         Parameters
         ----------
-        outputs: list[:class:`keras.KerasTensor`]
-            A list of output tensors from the model plugin
+        A list of output tensors from the model plugin
         """
         # TODO Use output names if/when these are fixed upstream
         split_outputs = [outputs[:len(outputs) // 2], outputs[len(outputs) // 2:]]
@@ -160,17 +158,16 @@ class Loss():
         logger.debug(self._names)
 
     def _get_function(self, name: str) -> Callable[[KerasTensor, KerasTensor], KerasTensor]:
-        """ Obtain the requested Loss function
+        """Obtain the requested Loss function
 
         Parameters
         ----------
-        name: str
+        name
             The name of the loss function from the training configuration file
 
         Returns
         -------
-        Keras Loss Function
-            The requested loss function
+        The requested loss function
         """
         func = self._loss_dict[name]
         retval = func.function(**func.kwargs) if func.init else func.function  # type:ignore
@@ -178,24 +175,24 @@ class Loss():
         return retval
 
     def _set_loss_functions(self, output_names: list[str]) -> None:
-        """ Set the loss functions and their associated weights.
+        """Set the loss functions and their associated weights.
 
         Adds the loss functions to the :attr:`functions` dictionary.
 
         Parameters
         ----------
-        output_names: list[str]
+        output_names
             The output names from the model
         """
-        loss_funcs = [cfg_loss.loss_function(),
-                      cfg_loss.loss_function_2(),
-                      cfg_loss.loss_function_3(),
-                      cfg_loss.loss_function_4()]
+        loss_functions = [cfg_loss.loss_function(),
+                          cfg_loss.loss_function_2(),
+                          cfg_loss.loss_function_3(),
+                          cfg_loss.loss_function_4()]
         loss_amount = [100,
                        cfg_loss.loss_weight_2(),
                        cfg_loss.loss_weight_3(),
                        cfg_loss.loss_weight_4()]
-        face_losses = [(name, weight) for name, weight in zip(loss_funcs, loss_amount)
+        face_losses = [(name, weight) for name, weight in zip(loss_functions, loss_amount)
                        if name != "none" and weight > 0]
 
         for name, output_name in zip(self._names, output_names):
@@ -207,23 +204,23 @@ class Loss():
                     self._add_face_loss_function(loss_func, func, weight / 100.)
 
             logger.debug("%s: (output_name: '%s', function: %s)", name, output_name, loss_func)
-            self._funcs[name] = loss_func
-        logger.debug("functions: %s", self._funcs)
+            self._functions[name] = loss_func
+        logger.debug("functions: %s", self._functions)
 
     def _add_face_loss_function(self,
                                 loss_wrapper: losses.LossWrapper,
                                 loss_function: str,
                                 weight: float) -> None:
-        """ Add the given face loss function at the given weight and apply any mouth and eye
+        """Add the given face loss function at the given weight and apply any mouth and eye
         multipliers
 
         Parameters
         ----------
-        loss_wrapper: :class:`lib.model.losses.LossWrapper`
+        loss_wrapper
             The wrapper loss function that holds the face losses
-        loss_function: str
+        loss_function
             The loss function to add to the loss wrapper
-        weight: float
+        weight
             The amount of weight to apply to the given loss function
         """
         logger.debug("Adding loss function: %s, weight: %s", loss_function, weight)
@@ -245,13 +242,12 @@ class Loss():
             channel_idx += 1
 
     def _get_mask_channels(self) -> list[int]:
-        """ Obtain the channels from the face targets that the masks reside in from the training
+        """Obtain the channels from the face targets that the masks reside in from the training
         data generator.
 
         Returns
         -------
-        list:
-            A list of channel indices that contain the mask for the corresponding config item
+        A list of channel indices that contain the mask for the corresponding config item
         """
         eye_multiplier = cfg_loss.eye_multiplier()
         mouth_multiplier = cfg_loss.mouth_multiplier()
@@ -272,7 +268,7 @@ class Loss():
 
 
 class Optimizer():
-    """ Obtain the selected optimizer with the appropriate keyword arguments. """
+    """Obtain the selected optimizer with the appropriate keyword arguments."""
     def __init__(self) -> None:
         logger.debug(parse_class_init(locals()))
         betas = {"ada_beta_1": "beta_1", "ada_beta_2": "beta_2"}
@@ -297,23 +293,23 @@ class Optimizer():
 
     @property
     def optimizer(self) -> optimizers.Optimizer:
-        """ :class:`keras.optimizers.Optimizer`: The requested optimizer. """
+        """The requested optimizer."""
         return T.cast(optimizers.Optimizer, self._optimizer(**self._kwargs))
 
     def _configure_clipping(self,
                             method: T.Literal["autoclip", "norm", "value", "none"],
                             value: float,
                             history: int) -> None:
-        """ Configure optimizer clipping related kwargs, if selected
+        """Configure optimizer clipping related kwargs, if selected
 
         Parameters
         ----------
-        method: Literal["autoclip", "norm", "value", "none"]
+        method
             The clipping method to use. ``None`` for no clipping
-        value: float
+        value
             The value to clip by norm/value by. For autoclip, this is the clip percentile
             (a value of 1.0 is a clip percentile of 10%)
-        history: int
+        history
             autoclip only: The number of iterations to keep for calculating the normalized value
         """
         logger.debug("method: '%s', value: %s, history: %s", method, value, history)
@@ -337,22 +333,22 @@ class Optimizer():
                        "_clip_gradients"), "keras.BaseOptimizer._clip_gradients no longer exists"
 
         # TODO Keras3 has removed the ""gradient_transformers" kwarg, and there now appears to be
-        # no standardised method to add custom gradent transformers. Currently, we monkey patch its
-        # _clip_gradients function, which feels hacky and potentially problematic
+        # no standardized method to add custom gradient transformers. Currently, we monkey patch
+        # its _clip_gradients function, which feels hacky and potentially problematic
         setattr(self._optimizer, "_clip_gradients", AutoClipper(int(value * 10),
                                                                 history_size=history))
 
     def _configure_ema(self, enable: bool, momentum: float, frequency: int) -> None:
-        """ Confihure the optimizer kwargs for exponential moving average updates
+        """configure the optimizer kwargs for exponential moving average updates
 
         Parameters
         ----------
-        enable: bool
+        enable
             ``False`` to disable
-        momentum: float
+        momentum
             the momentum to use when computing the EMA of the model's weights: new_average =
             momentum * old_average + (1 - momentum) * current_variable_value
-        frequency: int
+        frequency
             the number of iterations, to overwrite the model variable by its moving average.
         """
         self._kwargs["use_ema"] = enable
@@ -366,13 +362,13 @@ class Optimizer():
         logger.debug("ema enabled (momentum: %s, frequency: %s)", momentum, frequency)
 
     def _configure_kwargs(self, weight_decay: float, gradient_accumulation_steps: int) -> None:
-        """ Configure the remaining global optimizer kwargs
+        """Configure the remaining global optimizer kwargs
 
         Parameters
         ----------
-        weight_decay: float
+        weight_decay
             The amount of weight decay to apply
-        gradient_accumulation_steps: int
+        gradient_accumulation_steps
             The number of steps to accumulate gradients for before applying the average
         """
         if weight_decay > 0.0:
@@ -388,7 +384,7 @@ class Optimizer():
             logger.debug("gradient accumulation disabled")
 
     def _configure_specific(self) -> None:
-        """ Configure keyword optimizer specific keyword arguments based on user settings. """
+        """Configure keyword optimizer specific keyword arguments based on user settings."""
         opts = self._valid[cfg_opt.optimizer()][1]
         if not opts:
             logger.debug("No additional kwargs to set for '%s'", cfg_opt.optimizer())
@@ -400,7 +396,7 @@ class Optimizer():
             self._kwargs[val] = opt_val
 
     def _configure(self) -> None:
-        """ Process the user configuration options into Keras Optimizer kwargs. """
+        """Process the user configuration options into Keras Optimizer kwargs."""
         self._configure_clipping(T.cast(T.Literal["autoclip", "norm", "value", "none"],
                                         cfg_opt.gradient_clipping()),
                                  cfg_opt.clipping_value(),
@@ -419,21 +415,18 @@ class Optimizer():
 
 
 class Settings():
-    """ Tensorflow core training settings.
+    """Core training settings.
 
-    Sets backend tensorflow settings prior to launching the model.
-
-    Tensorflow 2 uses distribution strategies for multi-GPU/system training. These are context
-    managers.
+    Sets backend settings prior to launching the model.
 
     Parameters
     ----------
-    arguments: :class:`argparse.Namespace`
+    arguments
         The arguments that were passed to the train or convert process as generated from
         Faceswap's command line arguments
-    mixed_precision: bool
+    mixed_precision
         ``True`` if Mixed Precision training should be used otherwise ``False``
-    is_predict: bool, optional
+    is_predict
         ``True`` if the model is being loaded for inference, ``False`` if the model is being loaded
         for training. Default: ``False``
     """
@@ -453,38 +446,34 @@ class Settings():
 
     @property
     def use_mixed_precision(self) -> bool:
-        """ bool: ``True`` if mixed precision training has been enabled, otherwise ``False``. """
+        """``True`` if mixed precision training has been enabled, otherwise ``False``. """
         return self._use_mixed_precision
 
     @classmethod
     def loss_scale_optimizer(
             cls,
             optimizer: optimizers.Optimizer) -> optimizers.LossScaleOptimizer:
-        """ Optimize loss scaling for mixed precision training.
+        """Optimize loss scaling for mixed precision training.
 
         Parameters
         ----------
-        optimizer: :class:`keras.optimizers.Optimizer`
+        optimizer
             The optimizer instance to wrap
 
         Returns
         --------
-        :class:`keras.optimizers.LossScaleOptimizer`
-            The original optimizer with loss scaling applied
+        The original optimizer with loss scaling applied
         """
         return optimizers.LossScaleOptimizer(optimizer)
 
     @classmethod
     def _set_keras_mixed_precision(cls, enable: bool) -> None:
-        """ Enable or disable Keras Mixed Precision.
+        """Enable or disable Keras Mixed Precision.
 
         Parameters
         ----------
-        enable: bool
+        enable
             ``True`` to enable mixed precision. ``False`` to disable.
-
-        Enables or disables the Keras Mixed Precision API if requested in the user configuration
-        file.
         """
         policy = dtype_policies.DTypePolicy("mixed_float16" if enable else "float32")
         k_config.set_dtype_policy(policy)
@@ -492,105 +481,17 @@ class Settings():
                      "Enabling" if enable else "Disabling",
                      policy.compute_dtype, policy.variable_dtype)
 
-#    def _get_strategy(self,
-#                      strategy: T.Literal["default", "central-storage", "mirrored"]
-#                      ) -> tf.distribute.Strategy | None:
-#        """ If we are running on Nvidia backend and the strategy is not ``None`` then return
-#        the correct tensorflow distribution strategy, otherwise return ``None``.
-#
-#        Notes
-#        -----
-#        By default Tensorflow defaults mirrored strategy to use the Nvidia NCCL method for
-#        reductions, however this is only available in Linux, so the method used falls back to
-#        `Hierarchical Copy All Reduce` if the OS is not Linux.
-#
-#        Central Storage strategy is not compatible with Mixed Precision. However, in testing it
-#        worked fine when using a single GPU, so we monkey-patch out the tests for Mixed-Precision
-#        when using this strategy with a single GPU
-#
-#        Parameters
-#        ----------
-#        strategy: str
-#            One of 'default', 'central-storage' or 'mirrored'.
-#
-#        Returns
-#        -------
-#        :class:`tensorflow.distribute.Strategy` or `None`
-#            The request Tensorflow Strategy if the backend is Nvidia and the strategy is not
-#            `"Default"` otherwise ``None``
-#        """
-#        if get_backend() not in ("nvidia", "rocm"):
-#            retval = None
-#        elif strategy == "mirrored":
-#            retval = self._get_mirrored_strategy()
-#        elif strategy == "central-storage":
-#            retval = self._get_central_storage_strategy()
-#        else:
-#            retval = tf.distribute.get_strategy()
-#        logger.debug("Using strategy: %s", retval)
-#        return retval
-
-#    @classmethod
-#    def _get_mirrored_strategy(cls) -> tf.distribute.MirroredStrategy:
-#        """ Obtain an instance of a Tensorflow Mirrored Strategy, setting the cross device
-#        operations appropriate for the OS in use.
-#
-#        Returns
-#        -------
-#        :class:`tensorflow.distribute.MirroredStrategy`
-#            The Mirrored Distribution Strategy object with correct cross device operations set
-#        """
-#        if platform.system().lower() == "linux":
-#            cross_device_ops = tf.distribute.NcclAllReduce()
-#        else:
-#            cross_device_ops = tf.distribute.HierarchicalCopyAllReduce()
-#        logger.debug("cross_device_ops: %s", cross_device_ops)
-#        return tf.distribute.MirroredStrategy(cross_device_ops=cross_device_ops)
-
-#    @classmethod
-#    def _get_central_storage_strategy(cls) -> tf.distribute.experimental.CentralStorageStrategy:
-#        """ Obtain an instance of a Tensorflow Central Storage Strategy. If the strategy is being
-#        run on a single GPU then monkey patch Tensorflows mixed-precision strategy checks to pass
-#        successfully.
-#
-#        Returns
-#        -------
-#        :class:`tensorflow.distribute.experimental.CentralStorageStrategy`
-#            The Central Storage Distribution Strategy object
-#        """
-#        gpus = tf.config.get_visible_devices("GPU")
-#        if len(gpus) == 1:
-#            # TODO Remove these monkey patches when Strategy supports mixed-precision
-#            # pylint:disable=import-outside-toplevel
-#            from keras.mixed_precision import loss_scale_optimizer
-#
-#            # Force a return of True on Loss Scale Optimizer Stategy check
-#            loss_scale_optimizer.strategy_supports_loss_scaling = lambda: True
-#
-#           # As LossScaleOptimizer aggregates gradients internally, it passes `False` as the value
-#           # for `experimental_aggregate_gradients` in `OptimizerV2.apply_gradients`. This causes
-#           # the optimizer to fail when checking against this strategy. We could monkey patch
-#           # `Optimizer.apply_gradients`, but it is a lot more code to check, so we just switch
-#           # the `experimental_aggregate_gradients` back to `True`. In brief testing this does not
-#           # appear to have a negative impact.
-#            func = lambda s, grads, wvars, name: s._optimizer.apply_gradients(  # noqa pylint:disable=protected-access,unnecessary-lambda-assignment
-#                 list(zip(grads, wvars.value)), name, experimental_aggregate_gradients=True)
-#            loss_scale_optimizer.LossScaleOptimizer._apply_gradients = func  # noqa pylint:disable=protected-access
-
-#        return tf.distribute.experimental.CentralStorageStrategy(parameter_device="/cpu:0")
-
     @classmethod
     def _dtype_from_config(cls, config: dict[str, T.Any]) -> str:
-        """ Obtain the dtype of a layer from the given layer config
+        """Obtain the dtype of a layer from the given layer config
 
         Parameters
         ----------
-        config: dict[str, Any] : The Keras layer configuration dictionary
+        config
 
         Returns
         -------
-        str
-            The datatype of the layer
+        The datatype of the layer
         """
         dtype = config["dtype"]
         logger.debug("Obtaining layer dtype from config: %s", dtype)
@@ -609,18 +510,17 @@ class Settings():
         return retval
 
     def _get_mixed_precision_layers(self, layers: list[dict]) -> list[str]:
-        """ Obtain the names of the layers in a mixed precision model that have their dtype policy
+        """Obtain the names of the layers in a mixed precision model that have their dtype policy
         explicitly set to mixed-float16.
 
         Parameters
         ----------
-        layers: List
+        layers
             The list of layers that appear in a keras's model configuration `dict`
 
         Returns
         -------
-        list
-            A list of layer names within the model that are assigned a float16 policy
+        A list of layer names within the model that are assigned a float16 policy
         """
         retval = []
         for layer in layers:
@@ -648,13 +548,13 @@ class Settings():
         return retval
 
     def _switch_precision(self, layers: list[dict], compatible: list[str]) -> None:
-        """ Switch a model's datatype between mixed-float16 and float32.
+        """Switch a model's datatype between mixed-float16 and float32.
 
         Parameters
         ----------
-        layers: List
+        layers
             The list of layers that appear in a keras's model configuration `dict`
-        compatible: List
+        compatible
             A list of layer names that are compatible to have their datatype switched
         """
         dtype = "mixed_float16" if self.use_mixed_precision else "float32"
@@ -679,20 +579,20 @@ class Settings():
                                                         keras.models.Model],
                                    inputs: list[keras.layers.Layer]
                                    ) -> tuple[keras.models.Model, list[str]]:
-        """ Get and store the mixed precision layers from a full precision enabled model.
+        """Get and store the mixed precision layers from a full precision enabled model.
 
         Parameters
         ----------
-        build_func: Callable
+        build_func
             The function to be called to compile the newly created model
-        inputs:
+        inputs
             The inputs to the model to be compiled
 
         Returns
         -------
-        model: :class:`keras.model`
+        model
             The built model in fp32
-        list
+        names
             The list of layer names within the full precision model that can be switched
             to mixed precision
         """
@@ -715,10 +615,10 @@ class Settings():
     def check_model_precision(self,
                               model: keras.models.Model,
                               state: "State") -> keras.models.Model:
-        """ Check the model's precision.
+        """Check the model's precision.
 
         If this is a new model, then
-        Rewrite an existing model's training precsion mode from mixed-float16 to float32 or
+        Rewrite an existing model's training precision mode from mixed-float16 to float32 or
         vice versa.
 
         This is not easy to do in keras, so we edit the model's config to change the dtype policy
@@ -727,15 +627,14 @@ class Settings():
 
         Parameters
         ----------
-        model: :class:`keras.models.Model`
+        model
             The original saved keras model to rewrite the dtype
-        state: ~:class:`plugins.train.model._base.model.State`
+        state
             The State information for the model
 
         Returns
         -------
-        :class:`keras.models.Model`
-            The original model with the datatype updated
+        The original model with the datatype updated
         """
         if self.use_mixed_precision and not state.mixed_precision_layers:
             # Switching to mixed precision on a model which was started in FP32 prior to the

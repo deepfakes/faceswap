@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Original Trainer """
+"""Original Trainer """
 from __future__ import annotations
 
 import logging
@@ -17,27 +17,26 @@ logger = logging.getLogger(__name__)
 
 
 class Trainer(TrainerBase):
-    """ Original trainer """
+    """Original trainer"""
 
     def _forward(self,
                  inputs: torch.Tensor,
                  targets: list[torch.Tensor]) -> torch.Tensor:
-        """ Perform the forward pass on the model
+        """Perform the forward pass on the model
 
         Parameters
         ----------
-        inputs : :class:`torch.Tensor`
+        inputs
             The batch of input image tensors to the model in shape `(side, batch_size,
             *dims)` with `side` 0 being input A and `side` 1 being input B
-        targets : list[:class:`torch.Tensor`]
+        targets
             The corresponding batch of target images for the model for each side's output(s). For
             each model output an array should exist in the order of model outputs in the format `(
             side, batch_size, *dims)` with `side` 0 being input A and `side` 1 being input B
 
         Returns
         -------
-        :class:`torch.Tensor`
-            The loss for each side of this batch in layout (A1, ..., An, B1, ..., Bn)
+        The loss for each side of this batch in layout (A1, ..., An, B1, ..., Bn)
         """
         feed_targets = [[t[i] for t in targets] for i in range(2)]
         preds = self.model.model((inputs[0], inputs[1]), training=True)
@@ -51,11 +50,11 @@ class Trainer(TrainerBase):
         return losses
 
     def _backwards_and_apply(self, all_loss: torch.Tensor) -> None:
-        """ Perform the backwards pass on the model
+        """Perform the backwards pass on the model
 
         Parameters
         ----------
-        all_loss : :class:`torch.Tensor`
+        all_loss
             The loss for each output from the model
         """
         total_loss = T.cast(torch.Tensor,
@@ -66,7 +65,7 @@ class Trainer(TrainerBase):
         gradients = [v.value.grad for v in trainable_weights]
 
         # Update weights
-        with torch.inference_mode():
+        with torch.no_grad():
             self.model.model.optimizer.apply(gradients, trainable_weights)
 
     def train_batch(self,
@@ -76,18 +75,17 @@ class Trainer(TrainerBase):
 
         Parameters
         ----------
-        inputs : :class:`torch.Tensor`
+        inputs
             The batch of input image tensors to the model in shape `(side, batch_size,
             *dims)` with `side` 0 being input A and `side` 1 being input B
-        targets : list[:class:`torch.Tensor`]
+        targets
             The corresponding batch of target images for the model for each side's output(s). For
             each model output an array should exist in the order of model outputs in the format `(
             side, batch_size, *dims)` with `side` 0 being input A and `side` 1 being input B
 
         Returns
         -------
-        :class:`torch.Tensor`
-            The loss for each side of this batch in layout (A1, ..., An, B1, ..., Bn)
+        The loss for each side of this batch in layout (A1, ..., An, B1, ..., Bn)
         """
         loss_tensor = self._forward(inputs, targets)
         self._backwards_and_apply(loss_tensor)
