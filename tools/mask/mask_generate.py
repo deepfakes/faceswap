@@ -100,11 +100,11 @@ class MaskGenerator:
         for media in loader.load():
             if self._input_thread.error_state.has_error:
                 self._input_thread.error_state.re_raise()
-            self._counts["face"] += len(media.detected_faces)
+            self._counts["face"] += len(media)
 
             if self._is_faces:
                 assert media.frame_metadata is not None
-                assert len(media.detected_faces) == 1
+                assert len(media) == 1
                 needs_update = self._needs_update(media.frame_metadata["source_filename"],
                                                   media.frame_metadata["face_index"],
                                                   media.detected_faces[0])
@@ -151,7 +151,7 @@ class MaskGenerator:
         media
             The FrameFaces object with updated masks
         """
-        assert len(media.detected_faces) == 1
+        assert len(media) == 1
         assert self._saver is not None
         assert media.frame_metadata is not None
 
@@ -180,7 +180,7 @@ class MaskGenerator:
         assert self._alignments is not None
         fname = os.path.basename(media.filename)
         logger.trace("Updating %s faces in frame '%s'",  # type:ignore[attr-defined]
-                     len(media.detected_faces), fname)
+                     len(media), fname)
         for idx, face in enumerate(media.detected_faces):
             self._alignments.update_face(fname, idx, face.to_alignment())
 
@@ -214,7 +214,7 @@ class MaskGenerator:
         for media in self._extractor:
             if self._input_thread.error_state.has_error:
                 self._input_thread.error_state.re_raise()
-            self._counts["update"] += len(media.detected_faces)
+            self._counts["update"] += len(media)
 
             if self._is_faces:
                 self._update_from_face(media)

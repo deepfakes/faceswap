@@ -816,13 +816,16 @@ class FrameFaces:  # pylint:disable=too-many-instance-attributes
                              top=int(box[1]),
                              width=int(box[2] - box[0]),
                              height=int(box[3] - box[1]),
-                             landmarks_xy=None if self.landmarks is None else self.landmarks[idx],
+                             landmarks_xy=(None if self.landmarks is None
+                                           or not self.landmarks.size
+                                           else self.landmarks[idx]),
                              mask={k: Mask(storage_size=m.storage_size,
                                            storage_centering=m.centering).add(
                                                m.masks[idx],
                                                m.matrices[idx])
                                    for k, m in self.masks.items()},
-                             identity={k: i[idx] for k, i in self.identities.items()})
+                             identity={k: i[idx] for k, i in self.identities.items()
+                                       if i.size})
                 for idx, box in enumerate(self.bboxes)]
 
     @detected_faces.setter
