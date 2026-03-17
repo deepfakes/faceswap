@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Thumbnail generator for the manual tool """
+"""Thumbnail generator for the manual tool"""
 from __future__ import annotations
 import logging
 import typing as T
@@ -26,20 +26,20 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ProgressBar:
-    """ Thread-safe progress bar for tracking thumbnail generation progress """
+    """Thread-safe progress bar for tracking thumbnail generation progress"""
     pbar: tqdm | None = None
     lock = Lock()
 
 
 @dataclass
 class VideoMeta:
-    """ Holds meta information about a video file
+    """Holds meta information about a video file
 
     Parameters
     ----------
-    key_frames: list[int]
+    key_frames
         List of key frame indices for the video
-    pts_times: list[float]
+    pts_times
         List of presentation timestams for the video
     """
     key_frames: list[int] | None = None
@@ -47,16 +47,16 @@ class VideoMeta:
 
 
 class ThumbsCreator():
-    """ Background loader to generate thumbnails for the alignments file. Generates low resolution
+    """Background loader to generate thumbnails for the alignments file. Generates low resolution
     thumbnails in parallel threads for faster processing.
 
     Parameters
     ----------
-    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+    detected_faces
         The :class:`~lib.align.DetectedFace` objects for this video
-    input_location: str
+    input_location
         The location of the input folder of frames or video file
-    single_process: bool
+    single_process
         ``True`` to generated thumbs in a single process otherwise ``False``
     """
     def __init__(self,
@@ -94,13 +94,12 @@ class ThumbsCreator():
 
     @property
     def has_thumbs(self) -> bool:
-        """ bool: ``True`` if the underlying alignments file holds thumbnail images
-        otherwise ``False``. """
+        """``True`` if the alignments file holds thumbnail images otherwise ``False``."""
         return self._alignments.thumbnails.has_thumbnails
 
     def generate_cache(self) -> None:
-        """ Extract the face thumbnails from a video or folder of images into the
-        alignments file. """
+        """Extract the face thumbnails from a video or folder of images into the
+        alignments file"""
         self._pbar.pbar = tqdm(desc="Caching Thumbnails",
                                leave=False,
                                total=len(self._frame_faces))
@@ -119,24 +118,29 @@ class ThumbsCreator():
 
     # << PRIVATE METHODS >> #
     def _check_and_raise_error(self) -> None:
-        """ Monitor the loading threads for errors and raise if any occur. """
+        """Monitor the loading threads for errors and raise if any occur."""
         for thread in self._threads:
             thread.check_and_raise_error()
 
     def _join_threads(self) -> None:
-        """ Join the loading threads """
+        """Join the loading threads"""
         logger.debug("Joining face viewer loading threads")
         for thread in self._threads:
             thread.join()
 
     def _launch_video(self) -> None:
-        """ Launch multiple :class:`lib.multithreading.MultiThread` objects to load faces from
+        """Launch multiple :class:`lib.multithreading.MultiThread` objects to load faces from
         a video file.
 
         Splits the video into segments and passes each of these segments to separate background
         threads for some speed up.
         """
         key_frames = self._meta.key_frames
+        assert key_frames is not None
+        if key_frames[0] != 0:
+            logger.warning("Your video does not start on a Key Frame. This can lead to issues.")
+            key_frames = key_frames[:]
+            key_frames[0] = 0
         pts_times = self._meta.pts_times
         assert key_frames is not None and pts_times is not None
         key_frame_split = len(key_frames) // self._num_threads
@@ -164,7 +168,7 @@ class ThumbsCreator():
             self._threads.append(thread)
 
     def _launch_folder(self) -> None:
-        """ Launch :class:`lib.multithreading.MultiThread` to retrieve faces from a
+        """Launch :class:`lib.multithreading.MultiThread` to retrieve faces from a
         folder of images.
 
         Goes through the file list one at a time, passing each file to a separate background
@@ -192,20 +196,20 @@ class ThumbsCreator():
                          pts_end: float,
                          start_index: int,
                          segment_count: int) -> None:
-        """ Loads faces from video for the given segment of the source video.
+        """Loads faces from video for the given segment of the source video.
 
         Each segment of the video is extracted from in a different background thread.
 
         Parameters
         ----------
-        pts_start: float
+        pts_start
             The start time to cut the segment out of the video
-        pts_end: float
+        pts_end
             The end time to cut the segment out of the video
-        start_index: int
+        start_index
             The frame index that this segment starts from. Used for calculating the actual frame
             index of each frame extracted
-        segment_count: int
+        segment_count
             The number of frames that appear in this segment. Used for ending early in case more
             frames come out of the segment than should appear (sometimes more frames are picked up
             at the end of the segment, so these are discarded)
@@ -229,19 +233,18 @@ class ThumbsCreator():
                      start_index, idx)
 
     def _get_reader(self, pts_start: float, pts_end: float):
-        """ Get an imageio iterator for this thread's segment.
+        """Get an imageio iterator for this thread's segment.
 
         Parameters
         ----------
-        pts_start: float
+        pts_start
             The start time to cut the segment out of the video
-        pts_end: float
+        pts_end
             The end time to cut the segment out of the video
 
         Returns
         -------
-        :class:`imageio.Reader`
-            A reader iterator for the requested segment of video
+        A reader iterator for the requested segment of video
         """
         input_params = ["-ss", str(pts_start)]
         if pts_end:
@@ -256,17 +259,17 @@ class ThumbsCreator():
                           reader: SingleFrameLoader,
                           start_index: int,
                           end_index: int) -> None:
-        """ Loads faces from the given range of frame indices from a folder of images.
+        """Loads faces from the given range of frame indices from a folder of images.
 
         Each frame range is extracted in a different background thread.
 
         Parameters
         ----------
-        reader: :class:`lib.image.SingleFrameLoader`
+        reader
             The reader that is used to retrieve the requested frame
-        start_index: int
+        start_index
             The starting frame index for the images to extract faces from
-        end_index: int
+        end_index
             The end frame index for the images to extract faces from
         """
         logger.debug("reader: %s, start_index: %s, end_index: %s",
@@ -278,15 +281,15 @@ class ThumbsCreator():
                      start_index, end_index - start_index)
 
     def _set_thumbail(self, filename: str, frame: np.ndarray, frame_index: int) -> None:
-        """ Extracts the faces from the frame and adds to alignments file
+        """Extracts the faces from the frame and adds to alignments file
 
         Parameters
         ----------
-        filename: str
+        filename
             The filename of the frame within the alignments file
-        frame: :class:`numpy.ndarray`
+        frame
             The frame that contains the faces
-        frame_index: int
+        frame_index
             The frame index of this frame in the :attr:`_frame_faces`
         """
         for face_idx, face in enumerate(self._frame_faces[frame_index]):

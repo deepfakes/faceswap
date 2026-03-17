@@ -18,7 +18,7 @@ if T.TYPE_CHECKING:
     from lib.infer.objects import FrameFaces
     from lib.infer.runner import ExtractRunner
     from lib.infer.handler import ExtractHandlerFace
-    from .loader import Loader
+    from . import loader
 
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ class MaskGenerator:
                  mask_type: str,
                  update_all: bool,
                  input_is_faces: bool,
-                 loader: Loader,
+                 loader: loader.Loader,
                  alignments: align.alignments.Alignments | None,
                  input_location: str,
                  config_file: str | None) -> None:
@@ -89,7 +89,7 @@ class MaskGenerator:
                      retval, frame, idx)
         return retval
 
-    def _feed_extractor(self, loader: Loader) -> None:
+    def _feed_extractor(self, loader: loader.Loader) -> None:
         """Process to feed the extractor from inside a thread
 
         Parameters
@@ -128,7 +128,7 @@ class MaskGenerator:
         logger.debug("Terminating loader thread")
         self._extractor.stop()
 
-    def _set_loader_thread(self, loader: Loader) -> FSThread:
+    def _set_loader_thread(self, loader: loader.Loader) -> FSThread:
         """Set the iterator to load FrameFaces objects into the mask extraction pipeline
         so we can just iterate through the output masks
 

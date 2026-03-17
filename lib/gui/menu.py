@@ -360,7 +360,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         success = False
         if self._check_for_updates():
             success = self._do_update()
-        update_deps.main(is_gui=True)
+        update_deps.update(is_gui=True)
         if success:
             logger.info("Please restart Faceswap to complete the update.")
         self.root.config(cursor="")

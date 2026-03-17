@@ -66,7 +66,7 @@ mask package
 identity package
 ================
 
-.. automodapi:: plugins.extract.identity.vgg_face2
+.. automodapi:: plugins.extract.identity.vggface2
    :include-all-objects:
 
 |
@@ -77,15 +77,5 @@ extract package
 ===============
 
 .. automodapi:: plugins.extract.extract_config
-   :include-all-objects:
-   :no-inheritance-diagram:
-
-|
-.. automodapi:: plugins.extract.extract_media
-   :include-all-objects:
-   :no-inheritance-diagram:
-
-|
-.. automodapi:: plugins.extract.pipeline
    :include-all-objects:
    :no-inheritance-diagram:

@@ -78,7 +78,7 @@ class Thumbnails():
         """
         logger.debug("frame: %s, face_index: %s, thumb shape: %s thumb dtype: %s",
                      frame, face_index, thumb.shape, thumb.dtype)
-        self._alignments_dict[frame]["faces"][face_index]["thumb"] = thumb
+        self._alignments_dict[frame]["faces"][face_index]["thumb"] = thumb.tolist()
 
 
 __all__ = get_module_objects(__name__)

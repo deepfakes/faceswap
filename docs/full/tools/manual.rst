@@ -6,47 +6,47 @@ tools.manual package
    :local:
    :depth: 2
 
-manual.faceviewer package
+manual.face_viewer package
 =========================
 
-.. automodapi:: tools.manual.faceviewer.frame
+.. automodapi:: tools.manual.face_viewer.frame
    :include-all-objects:
 
 |
-.. automodapi:: tools.manual.faceviewer.interact
+.. automodapi:: tools.manual.face_viewer.interact
    :include-all-objects:
    :no-inheritance-diagram:
 
 |
-.. automodapi:: tools.manual.faceviewer.viewport
+.. automodapi:: tools.manual.face_viewer.viewport
    :include-all-objects:
    :no-inheritance-diagram:
 
-manual.frameviewer package
+manual.frame_viewer package
 ==========================
 
-.. automodapi:: tools.manual.frameviewer.control
+.. automodapi:: tools.manual.frame_viewer.control
    :include-all-objects:
    :no-inheritance-diagram:
 
 |
-.. automodapi:: tools.manual.frameviewer.frame
+.. automodapi:: tools.manual.frame_viewer.frame
    :include-all-objects:
 
 |
-.. automodapi:: tools.manual.frameviewer.editor.bounding_box
+.. automodapi:: tools.manual.frame_viewer.editor.bounding_box
    :include-all-objects:
 
 |
-.. automodapi:: tools.manual.frameviewer.editor.extract_box
+.. automodapi:: tools.manual.frame_viewer.editor.extract_box
    :include-all-objects:
 
 |
-.. automodapi:: tools.manual.frameviewer.editor.landmarks
+.. automodapi:: tools.manual.frame_viewer.editor.landmarks
    :include-all-objects:
 
 |
-.. automodapi:: tools.manual.frameviewer.editor.mask
+.. automodapi:: tools.manual.frame_viewer.editor.mask
    :include-all-objects:
 
 manual package

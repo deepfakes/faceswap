@@ -16,7 +16,7 @@ from lib.utils import FaceswapError, get_module_objects
 from .alignments import (Alignments, AlignmentFileDict, PNGHeaderAlignmentsDict,
                          PNGHeaderDict, PNGHeaderSourceDict)
 from .aligned_face import AlignedFace
-from .aligned_mask import Mask
+from . import aligned_mask
 
 if T.TYPE_CHECKING:
     import numpy.typing as npt
@@ -63,7 +63,7 @@ class DetectedFace():  # pylint:disable=too-many-instance-attributes
                  top: int | None = None,
                  height: int | None = None,
                  landmarks_xy: np.ndarray | None = None,
-                 mask: dict[str, Mask] | None = None,
+                 mask: dict[str, aligned_mask.Mask] | None = None,
                  identity: dict[str, np.ndarray] | None = None) -> None:
         logger.trace(parse_class_init(locals()))  # type:ignore[attr-defined]
         self.image = image
@@ -169,7 +169,7 @@ class DetectedFace():  # pylint:disable=too-many-instance-attributes
         logger.trace("name: '%s', mask shape: %s, affine_matrix: %s, "  # type:ignore[attr-defined]
                      "storage_size: %s, storage_centering: %s)", name,
                      mask.shape, affine_matrix, storage_size, storage_centering)
-        fs_mask = Mask(storage_size=storage_size, storage_centering=storage_centering)
+        fs_mask = aligned_mask.Mask(storage_size=storage_size, storage_centering=storage_centering)
         fs_mask.add(mask, affine_matrix)
         self.mask[name] = fs_mask
 
@@ -347,7 +347,7 @@ class DetectedFace():  # pylint:disable=too-many-instance-attributes
             for name, mask_dict in alignment["mask"].items():
                 if name in ("components", "extended"):
                     continue  # Skip legacy stored LM based masks
-                self.mask[name] = Mask()
+                self.mask[name] = aligned_mask.Mask()
                 self.mask[name].from_dict(mask_dict)
         if image is not None and image.any():
             self._image_to_face(image)
@@ -394,7 +394,7 @@ class DetectedFace():  # pylint:disable=too-many-instance-attributes
         for name, mask_dict in alignment["mask"].items():
             if name in ("components", "extended"):
                 continue  # Skip legacy stored LM based masks
-            self.mask[name] = Mask()
+            self.mask[name] = aligned_mask.Mask()
             self.mask[name].from_dict(mask_dict)
         self._identity = {}
         for key, val in alignment.get("identity", {}).items():

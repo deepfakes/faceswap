@@ -17,11 +17,11 @@ from lib.utils import get_image_paths, get_module_objects
 
 if T.TYPE_CHECKING:
     import numpy as np
-    from .loader import Loader
     from lib.infer.objects import FrameFaces
     from lib import align
     from lib.align import DetectedFace
     from lib.align.aligned_face import CenteringType
+    from . import loader
 
 logger = logging.getLogger(__name__)
 # pylint:disable=duplicate-code
@@ -52,7 +52,7 @@ class Import:
                  centering: CenteringType,
                  storage_size: int,
                  input_is_faces: bool,
-                 loader: Loader,
+                 loader: loader.Loader,
                  alignments: align.alignments.Alignments | None,
                  input_location: str,
                  mask_type: str) -> None:
@@ -251,7 +251,7 @@ class Import:
                      len(source_files), mask_count, len(retval))
         return retval
 
-    def _generate_mapping(self, import_path: str, loader: Loader) -> dict[str, str]:
+    def _generate_mapping(self, import_path: str, loader: loader.Loader) -> dict[str, str]:
         """Generate the mapping between the source data and the masks to be imported
 
         Parameters
