@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-03-28 23:55+0000\n"
-"PO-Revision-Date: 2024-03-29 00:05+0000\n"
+"POT-Creation-Date: 2026-03-20 22:06+0000\n"
+"PO-Revision-Date: 2026-03-20 22:31+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -16,7 +16,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 3.4.2\n"
+"X-Generator: Poedit 3.8\n"
 
 #: tools/manual/cli.py:13
 msgid ""
@@ -71,26 +71,101 @@ msgstr ""
 "합니다. 일부 비디오의 경우 캐싱 프로세스가 중단될 수 있습니다. 이런 경우 이 "
 "옵션을 설정하여 더 느리지만 안정적인 단일 스레드에서 썸네일를 생성하십시오."
 
-#: tools/manual\faceviewer\frame.py:163
+#: tools/manual/face_viewer/frame.py:175
 msgid "Display the landmarks mesh"
 msgstr "특징점 망 보이기"
 
-#: tools/manual\faceviewer\frame.py:164
+#: tools/manual/face_viewer/frame.py:176
 msgid "Display the mask"
 msgstr "마스크 보이기"
 
-#: tools/manual\frameviewer\editor\_base.py:628
-#: tools/manual\frameviewer\editor\landmarks.py:44
-#: tools/manual\frameviewer\editor\mask.py:75
+#: tools/manual/frame_viewer/frame.py:79
+msgid "Play/Pause (SPACE)"
+msgstr "재생/멈춤 (스페이스 바)"
+
+#: tools/manual/frame_viewer/frame.py:80
+msgid "Go to First Frame (HOME)"
+msgstr "첫 번째 프레임으로 이동 (HOME)"
+
+#: tools/manual/frame_viewer/frame.py:81
+msgid "Go to Previous Frame (Z)"
+msgstr "이전 프레임으로 이동 (Z)"
+
+#: tools/manual/frame_viewer/frame.py:82
+msgid "Go to Next Frame (X)"
+msgstr "다음 프레임으로 이동 (X)"
+
+#: tools/manual/frame_viewer/frame.py:83
+msgid "Go to Last Frame (END)"
+msgstr "마지막 프레임으로 이동 (END)"
+
+#: tools/manual/frame_viewer/frame.py:84
+msgid "Extract the faces to a folder... (Ctrl+E)"
+msgstr "폴더에 얼굴 추출... (Ctrl+E)"
+
+#: tools/manual/frame_viewer/frame.py:85
+msgid "Save the Alignments file (Ctrl+S)"
+msgstr "_Alignments file 저장 (Ctrl + S"
+
+#: tools/manual/frame_viewer/frame.py:86
+msgid "Filter Frames to only those Containing the Selected Item (F)"
+msgstr "오로지 선택된 아이템들을 가지고 있는 필터 프레임 (F)"
+
+#: tools/manual/frame_viewer/frame.py:87
+msgid ""
+"Set the distance from an 'average face' to be considered misaligned. Higher "
+"distances are more restrictive"
+msgstr ""
+"'평균 얼굴'로부터의 거리를 잘못 정렬된 것으로 간주하도록 설정. 먼 거리에서 조"
+"금 더 제한적입니다"
+
+#: tools/manual/frame_viewer/frame.py:392
+msgid "View alignments"
+msgstr "보기 정렬"
+
+#: tools/manual/frame_viewer/frame.py:393
+msgid "Bounding box editor"
+msgstr "경계 상자 편집기"
+
+#: tools/manual/frame_viewer/frame.py:394
+msgid "Location editor"
+msgstr "위치 편집기"
+
+#: tools/manual/frame_viewer/frame.py:395
+msgid "Mask editor"
+msgstr "마스크 편집기"
+
+#: tools/manual/frame_viewer/frame.py:396
+msgid "Landmark point editor"
+msgstr "특징점 편집기"
+
+#: tools/manual/frame_viewer/frame.py:471
+msgid "Previous"
+msgstr "이전"
+
+#: tools/manual/frame_viewer/frame.py:472
+msgid "Next"
+msgstr "다음"
+
+#: tools/manual/frame_viewer/frame.py:483
+msgid "Revert to saved Alignments ({})"
+msgstr "저장된 Alignments로 돌아가기 ({})"
+
+#: tools/manual/frame_viewer/frame.py:489
+msgid "Copy {} Alignments ({})"
+msgstr "{} Alignments를 복사 ({})"
+
+#: tools/manual/frame_viewer/editor/_base.py:632
+#: tools/manual/frame_viewer/editor/landmarks.py:45
 msgid "Magnify/Demagnify the View"
 msgstr "보기를 확대/축소 합니다"
 
-#: tools/manual\frameviewer\editor\bounding_box.py:33
-#: tools/manual\frameviewer\editor\extract_box.py:32
+#: tools/manual/frame_viewer/editor/bounding_box.py:34
+#: tools/manual/frame_viewer/editor/extract_box.py:33
 msgid "Delete Face"
 msgstr "얼굴 삭제"
 
-#: tools/manual\frameviewer\editor\bounding_box.py:36
+#: tools/manual/frame_viewer/editor/bounding_box.py:37
 msgid ""
 "Bounding Box Editor\n"
 "Edit the bounding box being fed into the aligner to recalculate the "
@@ -109,16 +184,17 @@ msgstr ""
 "- 빈 공간을 클릭하여 새 경계 상자를 만듭니다.\n"
 "- 경계 상자를 마우스 오른쪽 단추로 클릭하여 얼굴을 삭제합니다."
 
-#: tools/manual\frameviewer\editor\bounding_box.py:70
+#: tools/manual/frame_viewer/editor/bounding_box.py:71
 msgid ""
-"Aligner to use. FAN will obtain better alignments, but cv2-dnn can be useful "
-"if FAN cannot get decent alignments and you want to set a base to edit from."
+"Aligner to use. HRNet and FAN will obtain better alignments, but cv2-dnn can "
+"be useful if these cannot get decent alignments and you want to set a base "
+"to edit from."
 msgstr ""
-"사용할 aligner. FAN은 더 나은 alignments을 얻을 수 있지만, 만약 FAN이 적절한 "
-"alignments을 얻을 수 없고 편집을 시작할 기준점을 설정하려는 경우 cv2-dnn이 유"
-"용할 수 있습니다."
+"사용할 정렬 도구를 선택하세요. HRNet과 FAN은 더 나은 정렬 결과를 제공하지만, "
+"이 두 도구로 적절한 정렬을 얻을 수 없고 기준점을 설정하여 편집하려는 경우 "
+"cv2-dnn도 유용할 수 있습니다."
 
-#: tools/manual\frameviewer\editor\bounding_box.py:83
+#: tools/manual/frame_viewer/editor/bounding_box.py:84
 msgid ""
 "Normalization method to use for feeding faces to the aligner. This can help "
 "the aligner better align faces with difficult lighting conditions. Different "
@@ -140,7 +216,7 @@ msgstr ""
 "\thist: RGB 채널의 히스토그램을 균등화합니다.\n"
 "\tmean: 얼굴 색상을 평균으로 정규화합니다."
 
-#: tools/manual\frameviewer\editor\extract_box.py:35
+#: tools/manual/frame_viewer/editor/extract_box.py:36
 msgid ""
 "Extract Box Editor\n"
 "Move the extract box that has been generated by the aligner. Click and "
@@ -157,7 +233,7 @@ msgstr ""
 "- 특징점들의 크기를 조정하는 corner anchors.\n"
 "- 모서리를 벗어나 특징점을 회전합니다."
 
-#: tools/manual\frameviewer\editor\landmarks.py:27
+#: tools/manual/frame_viewer/editor/landmarks.py:28
 msgid ""
 "Landmark Point Editor\n"
 "Edit the individual landmark points.\n"
@@ -171,7 +247,7 @@ msgstr ""
 " - 개별 특징점들을 클릭 & 드래그 하여 재배치합니다.\n"
 " - 재배치할 여러개의 점들을 박스를 그려서 선택합니다."
 
-#: tools/manual\frameviewer\editor\mask.py:33
+#: tools/manual/frame_viewer/editor/mask.py:43
 msgid ""
 "Mask Editor\n"
 "Edit the mask.\n"
@@ -186,98 +262,30 @@ msgstr ""
 "보다는 특징점이 올바른지 확인하는 것이 좋습니다. 마스크를 편집한 후 특징점들 "
 "변경하면 변경된 특징점들이 수동으로 편집한 마스크에 덮어 씌워집니다."
 
-#: tools/manual\frameviewer\editor\mask.py:77
+#: tools/manual/frame_viewer/editor/mask.py:91
+msgid "Magnify/De-magnify the View"
+msgstr "보기를 확대/축소 합니다"
+
+#: tools/manual/frame_viewer/editor/mask.py:93
 msgid "Draw Tool"
 msgstr "그리기 도구"
 
-#: tools/manual\frameviewer\editor\mask.py:78
+#: tools/manual/frame_viewer/editor/mask.py:94
 msgid "Erase Tool"
 msgstr "지우개 도구"
 
-#: tools/manual\frameviewer\editor\mask.py:97
+#: tools/manual/frame_viewer/editor/mask.py:115
 msgid "Select which mask to edit"
 msgstr "편집할 마스크를 선택"
 
-#: tools/manual\frameviewer\editor\mask.py:104
+#: tools/manual/frame_viewer/editor/mask.py:122
 msgid "Set the brush size. ([ - decrease, ] - increase)"
 msgstr "붓 크기 설정. ([ - decrease, ] - increase)"
 
-#: tools/manual\frameviewer\editor\mask.py:111
+#: tools/manual/frame_viewer/editor/mask.py:129
 msgid "Select the brush cursor color."
 msgstr "붓 커서 색깔 선택."
 
-#: tools/manual\frameviewer\frame.py:78
-msgid "Play/Pause (SPACE)"
-msgstr "재생/멈춤 (스페이스 바)"
-
-#: tools/manual\frameviewer\frame.py:79
-msgid "Go to First Frame (HOME)"
-msgstr "첫 번째 프레임으로 이동 (HOME)"
-
-#: tools/manual\frameviewer\frame.py:80
-msgid "Go to Previous Frame (Z)"
-msgstr "이전 프레임으로 이동 (Z)"
-
-#: tools/manual\frameviewer\frame.py:81
-msgid "Go to Next Frame (X)"
-msgstr "다음 프레임으로 이동 (X)"
-
-#: tools/manual\frameviewer\frame.py:82
-msgid "Go to Last Frame (END)"
-msgstr "마지막 프레임으로 이동 (END)"
-
-#: tools/manual\frameviewer\frame.py:83
-msgid "Extract the faces to a folder... (Ctrl+E)"
-msgstr "폴더에 얼굴 추출... (Ctrl+E)"
-
-#: tools/manual\frameviewer\frame.py:84
-msgid "Save the Alignments file (Ctrl+S)"
-msgstr "_Alignments file 저장 (Ctrl + S"
-
-#: tools/manual\frameviewer\frame.py:85
-msgid "Filter Frames to only those Containing the Selected Item (F)"
-msgstr "오로지 선택된 아이템들을 가지고 있는 필터 프레임 (F)"
-
-#: tools/manual\frameviewer\frame.py:86
-msgid ""
-"Set the distance from an 'average face' to be considered misaligned. Higher "
-"distances are more restrictive"
-msgstr ""
-"'평균 얼굴'로부터의 거리를 잘못 정렬된 것으로 간주하도록 설정. 먼 거리에서 조"
-"금 더 제한적입니다"
-
-#: tools/manual\frameviewer\frame.py:391
-msgid "View alignments"
-msgstr "보기 정렬"
-
-#: tools/manual\frameviewer\frame.py:392
-msgid "Bounding box editor"
-msgstr "경계 상자 편집기"
-
-#: tools/manual\frameviewer\frame.py:393
-msgid "Location editor"
-msgstr "위치 편집기"
-
-#: tools/manual\frameviewer\frame.py:394
-msgid "Mask editor"
-msgstr "마스크 편집기"
-
-#: tools/manual\frameviewer\frame.py:395
-msgid "Landmark point editor"
-msgstr "특징점 편집기"
-
-#: tools/manual\frameviewer\frame.py:470
-msgid "Next"
-msgstr "다음"
-
-#: tools/manual\frameviewer\frame.py:470
-msgid "Previous"
-msgstr "이전"
-
-#: tools/manual\frameviewer\frame.py:481
-msgid "Revert to saved Alignments ({})"
-msgstr "저장된 Alignments로 돌아가기 ({})"
-
-#: tools/manual\frameviewer\frame.py:487
-msgid "Copy {} Alignments ({})"
-msgstr "{} Alignments를 복사 ({})"
+#: tools/manual/frame_viewer/editor/mask.py:136
+msgid "Select a shape for masking cursor."
+msgstr "붓 커서 색깔 선택."

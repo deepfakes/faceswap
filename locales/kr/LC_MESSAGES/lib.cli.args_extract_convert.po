@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-03-16 17:40+0000\n"
-"PO-Revision-Date: 2026-03-16 18:08+0000\n"
+"PO-Revision-Date: 2026-03-20 22:03+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -55,6 +55,8 @@ msgid ""
 "Output directory. Location to save extracted faces. If not provided then "
 "don't save faces and just create an alignments file"
 msgstr ""
+"출력 디렉토리. 추출된 얼굴 이미지를 저장할 위치입니다. 지정하지 않으면 얼굴 "
+"이미지를 저장하지 않고 정렬 파일만 생성합니다."
 
 #: lib/cli/args_extract_convert.py:118
 msgid ""
@@ -69,7 +71,7 @@ msgstr ""
 #: lib/cli/args_extract_convert.py:127 lib/cli/args_extract_convert.py:215
 #: lib/cli/args_extract_convert.py:228 lib/cli/args_extract_convert.py:238
 msgid "Detect"
-msgstr ""
+msgstr "감지하다"
 
 #: lib/cli/args_extract_convert.py:129
 msgid ""
@@ -106,7 +108,7 @@ msgstr ""
 #: lib/cli/args_extract_convert.py:269 lib/cli/args_extract_convert.py:282
 #: lib/cli/args_extract_convert.py:292
 msgid "Align"
-msgstr ""
+msgstr "맞추다"
 
 #: lib/cli/args_extract_convert.py:151
 msgid ""
@@ -118,11 +120,14 @@ msgstr ""
 "R|사용할 Aligner.\n"
 "L|cv2-dnn: CPU만을 사용하는 특징점 감지기. 빠르고 자원을 덜 사용하지만 부정확"
 "합니다. GPU를 사용하지 않고 시간이 중요할 때에만 사용하세요.\n"
-"L|fan: 가장 좋은 aligner. GPU에선 빠르고 CPU에선 느립니다"
+"L|fan: 훌륭한 치아 정렬 도구입니다. aligner. GPU에선 빠르고 CPU에선 느립니"
+"다\n"
+"L|hrnet: 최고의 치아 정렬 도구. FAN보다 빠르고 성능이 뛰어납니다. 완전히 회전"
+"된 얼굴 데이터셋으로 학습되었습니다. GPU에서는 빠르고 CPU에서는 느립니다."
 
 #: lib/cli/args_extract_convert.py:161
 msgid "Mask"
-msgstr ""
+msgstr "마스크"
 
 #: lib/cli/args_extract_convert.py:163
 msgid ""
@@ -188,7 +193,7 @@ msgstr ""
 #: lib/cli/args_extract_convert.py:199 lib/cli/args_extract_convert.py:304
 #: lib/cli/args_extract_convert.py:317 lib/cli/args_extract_convert.py:331
 msgid "Identity"
-msgstr ""
+msgstr "신원"
 
 #: lib/cli/args_extract_convert.py:201
 msgid ""
@@ -199,6 +204,12 @@ msgid ""
 "L|vggface2: An older and lighter, but fairly reliable plugin based on the "
 "VGG Network."
 msgstr ""
+"R|얼굴 식별 인코딩을 획득하고 저장합니다. 추출 속도는 약간 느려지지만 '얼굴"
+"별 정렬'을 사용할 경우 시간을 절약할 수 있습니다. 얼굴 필터링에 필요합니다.\n"
+"L|t-face: InsightFace ResNet 기반 모델로, 경량 버전과 중량 버전이 있습니다(설"
+"정에서 구성 가능).\n"
+"L|vggface2: VGG 네트워크 기반의 구형 플러그인으로, 경량이지만 상당히 안정적입"
+"니다."
 
 #: lib/cli/args_extract_convert.py:217
 msgid ""
@@ -206,6 +217,9 @@ msgid ""
 "frame along the face detection box's longest edge. (eg: a value of 10 will "
 "filter out faces smaller than 72px from a 720p image). 0 for disabled."
 msgstr ""
+"얼굴 감지 박스의 가장 긴 변을 따라 프레임의 가장 짧은 변의 길이가 이 비율보"
+"다 작은 얼굴 감지를 필터링합니다. (예: 10이라는 값은 720p 이미지에서 72픽셀보"
+"다 작은 얼굴을 필터링합니다.) 0으로 설정하면 비활성화됩니다."
 
 #: lib/cli/args_extract_convert.py:230
 msgid ""
@@ -213,6 +227,9 @@ msgid ""
 "frame along the face detection box's longest edge. (eg: a value of 200 will "
 "filter out faces larger than 1440px from a 720p image). 0 for disabled."
 msgstr ""
+"얼굴 감지 박스의 가장 긴 변을 따라 프레임의 가장 짧은 변의 길이의 이 비율보"
+"다 큰 얼굴 감지를 필터링합니다. (예: 200이라는 값은 720p 이미지에서 1440픽셀"
+"보다 큰 얼굴을 필터링합니다.) 0으로 설정하면 비활성화됩니다."
 
 #: lib/cli/args_extract_convert.py:240
 msgid ""
@@ -277,6 +294,8 @@ msgid ""
 "certain statistics and characteristics. Configurable in extract settings. "
 "Slows down extraction."
 msgstr ""
+"정렬 필터를 활성화합니다. 특정 통계 및 특징을 기준으로 얼굴을 필터링할 수 있"
+"습니다. 추출 설정에서 구성 가능합니다. 추출 속도가 느려질 수 있습니다."
 
 #: lib/cli/args_extract_convert.py:306
 msgid ""
@@ -346,6 +365,14 @@ msgid ""
 "from 512px or above. A setting of 200 will only output faces that have been "
 "downscaled from 1024px or above."
 msgstr ""
+"지정된 추출 크기(`-z`, `--size`)에 맞춰 이 비율 이상으로 크기가 조정된 얼굴"
+"만 출력합니다. 저해상도 이미지를 학습 데이터 세트에서 제외하는 데 유용합니"
+"다. 모든 얼굴을 출력하려면 0으로 설정하십시오. 이 설정은 디스크에 출력되는 얼"
+"굴에만 영향을 미칩니다. 여기에 설정된 값과 관계없이 감지된 모든 얼굴은 정렬 "
+"파일에 저장됩니다. 예: 추출 크기가 512px인 경우, 50으로 설정하면 256px 이상에"
+"서 크기가 조정된 얼굴만 출력됩니다. 100으로 설정하면 512px 이상에서 크기가 조"
+"정된 얼굴만 출력됩니다. 200으로 설정하면 1024px 이상에서 크기가 조정된 얼굴"
+"만 출력됩니다."
 
 #: lib/cli/args_extract_convert.py:389
 msgid ""
@@ -379,6 +406,9 @@ msgid ""
 "faster processing. For large amounts of data this is worth enabling. For "
 "smaller extractions it is not."
 msgstr ""
+"PyTorch 모델을 컴파일하세요. 이렇게 하면 시작 시간은 느려지지만 처리 속도는 "
+"빨라집니다. 데이터 양이 많은 경우에는 이 기능을 활성화하는 것이 좋습니다. 하"
+"지만 데이터 추출량이 적은 경우에는 필요하지 않습니다."
 
 #: lib/cli/args_extract_convert.py:415
 msgid ""
@@ -387,6 +417,10 @@ msgid ""
 "should be used to find optimal settings for a given plugin combination and "
 "type of dataset rather than being used every time."
 msgstr ""
+"선택한 추출 플러그인의 최적 배치 크기를 벤치마킹합니다. 벤치마킹 프로파일러"
+"는 설정에서 구성할 수 있습니다. 참고: 이 작업은 시간이 오래 걸리므로 매번 사"
+"용하기보다는 특정 플러그인 조합과 데이터셋 유형에 대한 최적 설정을 찾을 때 사"
+"용하는 것이 좋습니다."
 
 #: lib/cli/args_extract_convert.py:426
 msgid ""

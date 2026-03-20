@@ -97,7 +97,7 @@ class ExtractArgs(ExtractConvertArgs):
             default_aligner = "cv2-dnn"
         else:
             default_detector = "retinaface"
-            default_aligner = "fan"
+            default_aligner = "hrnet"
 
         argument_list: list[dict[str, T.Any]] = []
         argument_list.append({
@@ -151,7 +151,9 @@ class ExtractArgs(ExtractConvertArgs):
                 "R|Aligner to use."
                 "\nL|cv2-dnn: A CPU only landmark detector. Faster, less resource intensive, but "
                 "less accurate. Only use this if not using a GPU and time is important."
-                "\nL|fan: Best aligner. Fast on GPU, slow on CPU.")})
+                "\nL|fan: Good aligner. Fast on GPU, slow on CPU."
+                "\nL|hrnet: Best aligner. Faster and more performant than FAN. Trained on a "
+                "custom set of fully rotated faces. Fast on GPU, slow on CPU")})
         argument_list.append({
             "opts": ("-M", "--masker"),
             "action": MultiOption,

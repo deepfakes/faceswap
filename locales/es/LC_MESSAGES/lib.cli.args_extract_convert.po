@@ -7,7 +7,7 @@ msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-03-16 17:40+0000\n"
-"PO-Revision-Date: 2026-03-16 18:08+0000\n"
+"PO-Revision-Date: 2026-03-20 22:02+0000\n"
 "Last-Translator: \n"
 "Language-Team: tokafondo\n"
 "Language: es\n"
@@ -56,6 +56,9 @@ msgid ""
 "Output directory. Location to save extracted faces. If not provided then "
 "don't save faces and just create an alignments file"
 msgstr ""
+"Directorio de salida. Ubicación donde se guardarán las caras extraídas. Si "
+"no se especifica, no se guardarán las caras y solo se creará un archivo de "
+"alineaciones."
 
 #: lib/cli/args_extract_convert.py:118
 msgid ""
@@ -70,7 +73,7 @@ msgstr ""
 #: lib/cli/args_extract_convert.py:127 lib/cli/args_extract_convert.py:215
 #: lib/cli/args_extract_convert.py:228 lib/cli/args_extract_convert.py:238
 msgid "Detect"
-msgstr ""
+msgstr "Detectar"
 
 #: lib/cli/args_extract_convert.py:129
 msgid ""
@@ -108,7 +111,7 @@ msgstr ""
 #: lib/cli/args_extract_convert.py:269 lib/cli/args_extract_convert.py:282
 #: lib/cli/args_extract_convert.py:292
 msgid "Align"
-msgstr ""
+msgstr "Alinear"
 
 #: lib/cli/args_extract_convert.py:151
 msgid ""
@@ -120,11 +123,14 @@ msgstr ""
 "R|Alineador a usar.\n"
 "L|cv2-dnn: Detector que usa sólo la CPU. Más rápido, usa menos recursos, "
 "pero es menos preciso. Elegir este si necesita rapidez y no usar la GPU.\n"
-"L|fan: El mejor alineador. Rápido en la GPU, y lento en la CPU."
+"L|fan: Buen alineador. Rápido en la GPU, y lento en la CPU.\n"
+"L|hrnet: El mejor alineador. Más rápido y con mejor rendimiento que FAN. "
+"Entrenado con un conjunto personalizado de caras completamente rotadas. "
+"Rápido en GPU, lento en CPU."
 
 #: lib/cli/args_extract_convert.py:161
 msgid "Mask"
-msgstr ""
+msgstr "Mascarilla"
 
 #: lib/cli/args_extract_convert.py:163
 msgid ""
@@ -199,7 +205,7 @@ msgstr ""
 #: lib/cli/args_extract_convert.py:199 lib/cli/args_extract_convert.py:304
 #: lib/cli/args_extract_convert.py:317 lib/cli/args_extract_convert.py:331
 msgid "Identity"
-msgstr ""
+msgstr "Identidad"
 
 #: lib/cli/args_extract_convert.py:201
 msgid ""
@@ -210,6 +216,13 @@ msgid ""
 "L|vggface2: An older and lighter, but fairly reliable plugin based on the "
 "VGG Network."
 msgstr ""
+"R|Obtiene y almacena las codificaciones de identidad facial. Ralentiza un "
+"poco la extracción, pero ahorra tiempo si se usa la opción \"ordenar por "
+"rostro\". Necesario para el filtrado facial.\n"
+"L|t-face: Un modelo InsightFace basado en ResNet con una variante más ligera "
+"y otra más pesada (configurable en los ajustes).\n"
+"L|vggface2: Un complemento más antiguo y ligero, pero bastante fiable, "
+"basado en la red VGG."
 
 #: lib/cli/args_extract_convert.py:217
 msgid ""
@@ -217,6 +230,10 @@ msgid ""
 "frame along the face detection box's longest edge. (eg: a value of 10 will "
 "filter out faces smaller than 72px from a 720p image). 0 for disabled."
 msgstr ""
+"Filtra las detecciones por debajo de este porcentaje del lado más corto del "
+"marco a lo largo del borde más largo del cuadro de detección de rostros. "
+"(Por ejemplo: un valor de 10 filtrará los rostros de menos de 72 píxeles en "
+"una imagen de 720p). 0 para deshabilitado."
 
 #: lib/cli/args_extract_convert.py:230
 msgid ""
@@ -224,6 +241,10 @@ msgid ""
 "frame along the face detection box's longest edge. (eg: a value of 200 will "
 "filter out faces larger than 1440px from a 720p image). 0 for disabled."
 msgstr ""
+"Filtra las detecciones que superen este porcentaje del lado más corto del "
+"marco a lo largo del borde más largo del cuadro de detección de rostros. "
+"(Por ejemplo: un valor de 200 filtrará los rostros de más de 1440 píxeles en "
+"una imagen de 720p). 0 para deshabilitado."
 
 #: lib/cli/args_extract_convert.py:240
 msgid ""
@@ -294,6 +315,9 @@ msgid ""
 "certain statistics and characteristics. Configurable in extract settings. "
 "Slows down extraction."
 msgstr ""
+"Habilitar filtros de alineación. Esto permite filtrar rostros según ciertas "
+"estadísticas y características. Se puede configurar en los ajustes de "
+"extracción. Ralentiza la extracción."
 
 #: lib/cli/args_extract_convert.py:306
 msgid ""
@@ -367,6 +391,17 @@ msgid ""
 "from 512px or above. A setting of 200 will only output faces that have been "
 "downscaled from 1024px or above."
 msgstr ""
+"Solo se mostrarán las caras que se hayan redimensionado en este porcentaje o "
+"más para cumplir con el tamaño de extracción especificado (`-z`, `--size`). "
+"Útil para excluir imágenes de baja resolución de un conjunto de "
+"entrenamiento. Establezca en 0 para mostrar todas las caras. Esto solo "
+"afecta a las caras que se guardan en el disco. Todas las caras detectadas se "
+"guardarán en el archivo de alineaciones independientemente de lo que se "
+"establezca aquí. Por ejemplo: para un tamaño de extracción de 512 px, una "
+"configuración de 50 mostrará solo las caras que se hayan redimensionado "
+"desde 256 px o más. Establecer en 100 mostrará solo las caras que se hayan "
+"redimensionado desde 512 px o más. Una configuración de 200 mostrará solo "
+"las caras que se hayan reducido de escala desde 1024 px o más."
 
 #: lib/cli/args_extract_convert.py:389
 msgid ""
@@ -402,6 +437,9 @@ msgid ""
 "faster processing. For large amounts of data this is worth enabling. For "
 "smaller extractions it is not."
 msgstr ""
+"Compila cualquier modelo de PyTorch. Esto ralentizará el inicio, pero "
+"acelerará el procesamiento. Para grandes cantidades de datos, vale la pena "
+"habilitar esta opción. Para extracciones más pequeñas, no."
 
 #: lib/cli/args_extract_convert.py:415
 msgid ""
@@ -410,6 +448,12 @@ msgid ""
 "should be used to find optimal settings for a given plugin combination and "
 "type of dataset rather than being used every time."
 msgstr ""
+"Evalúe el rendimiento de los complementos de extracción seleccionados para "
+"determinar el tamaño óptimo de los lotes. El analizador de rendimiento se "
+"puede configurar en los ajustes. Nota: Este proceso puede tardar bastante, "
+"por lo que se recomienda usarlo para encontrar la configuración óptima para "
+"una combinación específica de complementos y un tipo de conjunto de datos "
+"determinado, en lugar de usarlo siempre."
 
 #: lib/cli/args_extract_convert.py:426
 msgid ""

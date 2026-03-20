@@ -441,7 +441,7 @@ class Aligner():
         logger.debug("Initializing: %s (tk_globals: %s)",
                      self.__class__.__name__, tk_globals)
         self._globals = tk_globals
-        self._aligners: dict[T.Literal["FAN", "cv2-dnn"],  # type:ignore[type-var]
+        self._aligners: dict[T.Literal["FAN", "HRNet", "cv2-dnn"],  # type:ignore[type-var]
                              ExtractRunner[Align]] = {}
         self._detected_faces: DetectedFaces
         self._init_thread = self._background_init_aligner()
@@ -480,7 +480,7 @@ class Aligner():
     def _init_aligner(self) -> None:
         """Initialize Aligner in a background thread, and set it to :attr:`_aligners`."""
         logger.debug("Initialize Aligner")
-        for plugin in ("cv2-dnn", "FAN"):
+        for plugin in ("cv2-dnn", "FAN", "HRNet"):
             logger.debug("Initializing Aligner: %s", plugin)
             self._aligners[plugin] = Align(plugin, normalization="hist")()
             logger.debug("Initialized '%s' Aligner", plugin)
@@ -502,19 +502,21 @@ class Aligner():
         logger.debug("Linking detected_faces: %s", detected_faces)
         self._detected_faces = detected_faces
 
-    def get_landmarks(self, frame_index: int, face_index: int, aligner: T.Literal["FAN", "cv2-dnn"]
-                      ) -> np.ndarray:
+    def get_landmarks(self,
+                      frame_index: int,
+                      face_index: int,
+                      aligner: T.Literal["FAN", "HRNet", "cv2-dnn"]) -> np.ndarray:
         """Feed the detected face into the alignment pipeline and retrieve the landmarks.
 
         The face to feed into the aligner is generated from the given frame and face indices.
 
         Parameters
         ----------
-        frame_index: int
+        frame_index
             The frame index to extract the aligned face for
-        face_index: int
+        face_index
             The face index within the current frame to extract the face for
-        aligner: Literal["FAN", "cv2-dnn"]
+        aligner
             The aligner to use to extract the face
 
         Returns

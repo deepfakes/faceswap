@@ -674,7 +674,7 @@ class FaceUpdate():
                      width: int,
                      pnt_y: int,
                      height: int,
-                     aligner: T.Literal["FAN", "cv2-dnn"] = "FAN") -> None:
+                     aligner: T.Literal["FAN", "HRNet", "cv2-dnn"] = "HRNet") -> None:
         """Update the bounding box for the :class:`~lib.align.DetectedFace` object at the
         given frame and face indices, with the given dimensions and update the 68 point landmarks
         from the :class:`~tools.manual.manual.Aligner` for the updated bounding box.
@@ -693,8 +693,8 @@ class FaceUpdate():
             The top point of the bounding box
         height
             The height of the bounding box
-        aligne
-            The aligner to use to generate the landmarks. Default: "FAN"
+        aligner
+            The aligner to use to generate the landmarks. Default: "HRNet"
         """
         logger.trace("frame_index: %s, face_index %s, pnt_x %s, "  # type:ignore[attr-defined]
                      "width %s, pnt_y %s, height %s, aligner: %s",

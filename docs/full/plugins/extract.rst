@@ -24,8 +24,11 @@ align package
    :include-all-objects:
 
 |
-
 .. automodapi:: plugins.extract.align.fan
+   :include-all-objects:
+
+|
+.. automodapi:: plugins.extract.align.hrnet
    :include-all-objects:
 
 detect package

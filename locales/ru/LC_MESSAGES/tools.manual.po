@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-03-28 23:55+0000\n"
-"PO-Revision-Date: 2024-03-29 00:07+0000\n"
+"POT-Creation-Date: 2026-03-20 22:06+0000\n"
+"PO-Revision-Date: 2026-03-20 22:31+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ru\n"
@@ -17,7 +17,7 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 3.4.2\n"
+"X-Generator: Poedit 3.8\n"
 
 #: tools/manual/cli.py:13
 msgid ""
@@ -78,26 +78,101 @@ msgstr ""
 "кэширования. Если это происходит, установите этот параметр, чтобы "
 "генерировать эскизы в более медленном, но более стабильном одном потоке."
 
-#: tools/manual\faceviewer\frame.py:163
+#: tools/manual/face_viewer/frame.py:175
 msgid "Display the landmarks mesh"
 msgstr "Отображение сетки ориентиров"
 
-#: tools/manual\faceviewer\frame.py:164
+#: tools/manual/face_viewer/frame.py:176
 msgid "Display the mask"
 msgstr "Отображение маски"
 
-#: tools/manual\frameviewer\editor\_base.py:628
-#: tools/manual\frameviewer\editor\landmarks.py:44
-#: tools/manual\frameviewer\editor\mask.py:75
+#: tools/manual/frame_viewer/frame.py:79
+msgid "Play/Pause (SPACE)"
+msgstr "Воспроизвести/Приостановить (ПРОБЕЛ)"
+
+#: tools/manual/frame_viewer/frame.py:80
+msgid "Go to First Frame (HOME)"
+msgstr "Перейти к первому кадру (HOME)"
+
+#: tools/manual/frame_viewer/frame.py:81
+msgid "Go to Previous Frame (Z)"
+msgstr "Перейти к предыдущему кадру (Z/Я)"
+
+#: tools/manual/frame_viewer/frame.py:82
+msgid "Go to Next Frame (X)"
+msgstr "Перейти к следующему кадру (X/Ч)"
+
+#: tools/manual/frame_viewer/frame.py:83
+msgid "Go to Last Frame (END)"
+msgstr "Перейти к последнему кадру (END)"
+
+#: tools/manual/frame_viewer/frame.py:84
+msgid "Extract the faces to a folder... (Ctrl+E)"
+msgstr "Извлечь лица в папку... (Ctrl+E)"
+
+#: tools/manual/frame_viewer/frame.py:85
+msgid "Save the Alignments file (Ctrl+S)"
+msgstr "Сохранить файл выравнивания (Ctrl+S)"
+
+#: tools/manual/frame_viewer/frame.py:86
+msgid "Filter Frames to only those Containing the Selected Item (F)"
+msgstr "Отфильтровать кадры, содержащие только выбранный элемент (F/А)"
+
+#: tools/manual/frame_viewer/frame.py:87
+msgid ""
+"Set the distance from an 'average face' to be considered misaligned. Higher "
+"distances are more restrictive"
+msgstr ""
+"Установить расстояние от \"среднего лица\", на котором оно будет считаться "
+"смещенным. Большие расстояния являются более ограничительными"
+
+#: tools/manual/frame_viewer/frame.py:392
+msgid "View alignments"
+msgstr "Просмотреть выравнивания"
+
+#: tools/manual/frame_viewer/frame.py:393
+msgid "Bounding box editor"
+msgstr "Редактор ограничительных рамок"
+
+#: tools/manual/frame_viewer/frame.py:394
+msgid "Location editor"
+msgstr "Редактор расположения"
+
+#: tools/manual/frame_viewer/frame.py:395
+msgid "Mask editor"
+msgstr "Редактор маски"
+
+#: tools/manual/frame_viewer/frame.py:396
+msgid "Landmark point editor"
+msgstr "Редактор точек ориентира"
+
+#: tools/manual/frame_viewer/frame.py:471
+msgid "Previous"
+msgstr "Предыдущий"
+
+#: tools/manual/frame_viewer/frame.py:472
+msgid "Next"
+msgstr "Следующий"
+
+#: tools/manual/frame_viewer/frame.py:483
+msgid "Revert to saved Alignments ({})"
+msgstr "Откатить до сохраненных выравниваний ({})"
+
+#: tools/manual/frame_viewer/frame.py:489
+msgid "Copy {} Alignments ({})"
+msgstr "Копировать {} выравнивания ({})"
+
+#: tools/manual/frame_viewer/editor/_base.py:632
+#: tools/manual/frame_viewer/editor/landmarks.py:45
 msgid "Magnify/Demagnify the View"
 msgstr "Увеличение/уменьшение изображения"
 
-#: tools/manual\frameviewer\editor\bounding_box.py:33
-#: tools/manual\frameviewer\editor\extract_box.py:32
+#: tools/manual/frame_viewer/editor/bounding_box.py:34
+#: tools/manual/frame_viewer/editor/extract_box.py:33
 msgid "Delete Face"
 msgstr "Удалить лицо"
 
-#: tools/manual\frameviewer\editor\bounding_box.py:36
+#: tools/manual/frame_viewer/editor/bounding_box.py:37
 msgid ""
 "Bounding Box Editor\n"
 "Edit the bounding box being fed into the aligner to recalculate the "
@@ -118,16 +193,18 @@ msgstr ""
 "рамку.\n"
 "- Щелкните правой кнопкой мыши ограничительную рамку, чтобы удалить лицо."
 
-#: tools/manual\frameviewer\editor\bounding_box.py:70
+#: tools/manual/frame_viewer/editor/bounding_box.py:71
 msgid ""
-"Aligner to use. FAN will obtain better alignments, but cv2-dnn can be useful "
-"if FAN cannot get decent alignments and you want to set a base to edit from."
+"Aligner to use. HRNet and FAN will obtain better alignments, but cv2-dnn can "
+"be useful if these cannot get decent alignments and you want to set a base "
+"to edit from."
 msgstr ""
-"Выравниватель для использования. FAN получит лучшие выравнивания, но cv2-dnn "
-"может быть полезен, если FAN не может получить достойные выравнивания, и вы "
-"хотите установить базу для редактирования."
+"Инструмент выравнивания, который следует использовать. HRNet и FAN обеспечат "
+"лучшее выравнивание, но cv2-dnn может быть полезен, если эти инструменты не "
+"могут обеспечить приемлемое выравнивание, и вы хотите задать базовую модель "
+"для редактирования."
 
-#: tools/manual\frameviewer\editor\bounding_box.py:83
+#: tools/manual/frame_viewer/editor/bounding_box.py:84
 msgid ""
 "Normalization method to use for feeding faces to the aligner. This can help "
 "the aligner better align faces with difficult lighting conditions. Different "
@@ -149,7 +226,7 @@ msgstr ""
 "\thist: Выравнивание гистограмм по каналам RGB.\n"
 "\tmean: Нормализовать цвета лица к среднему значению."
 
-#: tools/manual\frameviewer\editor\extract_box.py:35
+#: tools/manual/frame_viewer/editor/extract_box.py:36
 msgid ""
 "Extract Box Editor\n"
 "Move the extract box that has been generated by the aligner. Click and "
@@ -167,7 +244,7 @@ msgstr ""
 "- По угловым опорам для изменения размера опорных точек.\n"
 "- За пределами углов, чтобы повернуть опорные точки."
 
-#: tools/manual\frameviewer\editor\landmarks.py:27
+#: tools/manual/frame_viewer/editor/landmarks.py:28
 msgid ""
 "Landmark Point Editor\n"
 "Edit the individual landmark points.\n"
@@ -181,7 +258,7 @@ msgstr ""
 " - Щелкните и перетащите отдельные точки для перемещения.\n"
 " - Нарисуйте рамку, чтобы выбрать несколько точек для перемещения."
 
-#: tools/manual\frameviewer\editor\mask.py:33
+#: tools/manual/frame_viewer/editor/mask.py:43
 msgid ""
 "Mask Editor\n"
 "Edit the mask.\n"
@@ -197,98 +274,30 @@ msgstr ""
 "маску напрямую. Любое изменение ориентиров после редактирования маски "
 "отменит ваши ручные правки."
 
-#: tools/manual\frameviewer\editor\mask.py:77
+#: tools/manual/frame_viewer/editor/mask.py:91
+msgid "Magnify/De-magnify the View"
+msgstr "Увеличение/уменьшение изображения"
+
+#: tools/manual/frame_viewer/editor/mask.py:93
 msgid "Draw Tool"
 msgstr "Инструмент рисования"
 
-#: tools/manual\frameviewer\editor\mask.py:78
+#: tools/manual/frame_viewer/editor/mask.py:94
 msgid "Erase Tool"
 msgstr "Инструмент \"Ластик\""
 
-#: tools/manual\frameviewer\editor\mask.py:97
+#: tools/manual/frame_viewer/editor/mask.py:115
 msgid "Select which mask to edit"
 msgstr "Выбрать, какую маску редактировать"
 
-#: tools/manual\frameviewer\editor\mask.py:104
+#: tools/manual/frame_viewer/editor/mask.py:122
 msgid "Set the brush size. ([ - decrease, ] - increase)"
 msgstr "Установить размер кисти. ([ - уменьшение, ] - увеличение)"
 
-#: tools/manual\frameviewer\editor\mask.py:111
+#: tools/manual/frame_viewer/editor/mask.py:129
 msgid "Select the brush cursor color."
 msgstr "Установить цвет курсора кисти."
 
-#: tools/manual\frameviewer\frame.py:78
-msgid "Play/Pause (SPACE)"
-msgstr "Воспроизвести/Приостановить (ПРОБЕЛ)"
-
-#: tools/manual\frameviewer\frame.py:79
-msgid "Go to First Frame (HOME)"
-msgstr "Перейти к первому кадру (HOME)"
-
-#: tools/manual\frameviewer\frame.py:80
-msgid "Go to Previous Frame (Z)"
-msgstr "Перейти к предыдущему кадру (Z/Я)"
-
-#: tools/manual\frameviewer\frame.py:81
-msgid "Go to Next Frame (X)"
-msgstr "Перейти к следующему кадру (X/Ч)"
-
-#: tools/manual\frameviewer\frame.py:82
-msgid "Go to Last Frame (END)"
-msgstr "Перейти к последнему кадру (END)"
-
-#: tools/manual\frameviewer\frame.py:83
-msgid "Extract the faces to a folder... (Ctrl+E)"
-msgstr "Извлечь лица в папку... (Ctrl+E)"
-
-#: tools/manual\frameviewer\frame.py:84
-msgid "Save the Alignments file (Ctrl+S)"
-msgstr "Сохранить файл выравнивания (Ctrl+S)"
-
-#: tools/manual\frameviewer\frame.py:85
-msgid "Filter Frames to only those Containing the Selected Item (F)"
-msgstr "Отфильтровать кадры, содержащие только выбранный элемент (F/А)"
-
-#: tools/manual\frameviewer\frame.py:86
-msgid ""
-"Set the distance from an 'average face' to be considered misaligned. Higher "
-"distances are more restrictive"
-msgstr ""
-"Установить расстояние от \"среднего лица\", на котором оно будет считаться "
-"смещенным. Большие расстояния являются более ограничительными"
-
-#: tools/manual\frameviewer\frame.py:391
-msgid "View alignments"
-msgstr "Просмотреть выравнивания"
-
-#: tools/manual\frameviewer\frame.py:392
-msgid "Bounding box editor"
-msgstr "Редактор ограничительных рамок"
-
-#: tools/manual\frameviewer\frame.py:393
-msgid "Location editor"
-msgstr "Редактор расположения"
-
-#: tools/manual\frameviewer\frame.py:394
-msgid "Mask editor"
-msgstr "Редактор маски"
-
-#: tools/manual\frameviewer\frame.py:395
-msgid "Landmark point editor"
-msgstr "Редактор точек ориентира"
-
-#: tools/manual\frameviewer\frame.py:470
-msgid "Next"
-msgstr "Следующий"
-
-#: tools/manual\frameviewer\frame.py:470
-msgid "Previous"
-msgstr "Предыдущий"
-
-#: tools/manual\frameviewer\frame.py:481
-msgid "Revert to saved Alignments ({})"
-msgstr "Откатить до сохраненных выравниваний ({})"
-
-#: tools/manual\frameviewer\frame.py:487
-msgid "Copy {} Alignments ({})"
-msgstr "Копировать {} выравнивания ({})"
+#: tools/manual/frame_viewer/editor/mask.py:136
+msgid "Select a shape for masking cursor."
+msgstr "Установить цвет курсора кисти."
