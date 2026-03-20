@@ -224,15 +224,24 @@ class Alignments(AlignmentsBase):
                            json_file, self._io.file)
         data = get_serializer("json").load(json_file)
         for k, v in data.items():
-            faces = T.cast(list["AlignmentFileDict"], [{"x": f["detected"][0],
-                                                        "y": f["detected"][1],
-                                                        "w": f["detected"][2] - f["detected"][0],
-                                                        "h": f["detected"][3] - f["detected"][1],
-                                                        "landmarks_xy": np.array(f["landmarks_2d"],
-                                                                                 dtype="float32"),
-                                                        "mask": {},
-                                                        "identity": {}}
-                                                       for f in v])
+            faces: list[AlignmentFileDict] = []
+            for face in v:
+                if "detected" not in face:
+                    lms = np.array(face["landmarks_2d"], dtype="float32")
+                    assert len(lms) == 4, (
+                        "Missing detection boxes are only valid for ROI 4 point landmarks")
+                    # Just place the box corners in the same location as the ROI box
+                    mins = np.rint(lms.min(axis=0)).astype(np.int32).tolist()
+                    maxes = np.rint(lms.max(axis=0)).astype(np.int32).tolist()
+                    face["detected"] = mins + maxes
+                faces.append(T.cast("AlignmentFileDict", {
+                    "x": face["detected"][0],
+                    "y": face["detected"][1],
+                    "w": face["detected"][2] - face["detected"][0],
+                    "h": face["detected"][3] - face["detected"][1],
+                    "landmarks_xy": np.array(face["landmarks_2d"], dtype="float32"),
+                    "mask": {},
+                    "identity": {}}))
             self._data[k] = {"faces": faces, "video_meta": {}}
         logger.info("Imported %s frames from '%s'", len(data), json_file)
 

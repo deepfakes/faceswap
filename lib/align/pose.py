@@ -102,7 +102,8 @@ class PoseEstimate():
                            "of '0'",)
         self._landmarks_type = landmarks_type
         self._camera_matrix = get_camera_matrix()
-        lms = landmarks if landmarks_type == LandmarkType.LM_2D_68 else points_to_68(landmarks)
+        lms = landmarks if landmarks_type in (LandmarkType.LM_2D_4,
+                                              LandmarkType.LM_2D_68) else points_to_68(landmarks)
         self._rotation, self._translation = self._solve_pnp(lms)
         self._offset = self._get_offset()
         self._pitch_yaw_roll: tuple[float, float, float] = (0, 0, 0)

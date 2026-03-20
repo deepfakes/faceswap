@@ -286,12 +286,13 @@ class AlignedFace():  # pylint:disable=too-many-instance-attributes
         aligning the image."""
         with self._cache.lock("average_distance"):
             if not self._cache.average_distance:
+                if self._landmark_type not in (LandmarkType.LM_2D_68, LandmarkType.LM_2D_98):
+                    return 0.0
                 mean_face = MEAN_FACE[self._mean_lookup]
                 lms = self.normalized_landmarks
                 if self._landmark_type != LandmarkType.LM_2D_68:
                     lms = points_to_68(lms)
-                if self._landmark_type in (LandmarkType.LM_2D_68, LandmarkType.LM_2D_98):
-                    lms = lms[17:]  # 68 point landmarks only use core face items
+                lms = lms[17:]  # 68 point landmarks only use core face items
                 average_distance = np.mean(np.abs(lms - mean_face))
                 logger.trace("average_distance: %s", average_distance)  # type:ignore[attr-defined]
                 self._cache.average_distance = float(average_distance)
@@ -348,7 +349,7 @@ class AlignedFace():  # pylint:disable=too-many-instance-attributes
         The default 'legacy' matrix
         """
         lms = self._frame_landmarks
-        if self._landmark_type != LandmarkType.LM_2D_68:
+        if self._landmark_type not in (LandmarkType.LM_2D_68, LandmarkType.LM_2D_4):
             lms = points_to_68(lms)
         if self._landmark_type in (LandmarkType.LM_2D_68, LandmarkType.LM_2D_98):
             lms = lms[17:]  # 68 point landmarks only use core face items
