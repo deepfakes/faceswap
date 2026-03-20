@@ -30,6 +30,7 @@ from lib.utils import (convert_to_secs, FaceswapError, get_image_paths,
 
 
 if T.TYPE_CHECKING:
+    import numpy.typing as npt
     from lib.multithreading import ErrorState
     from lib.align.alignments import PNGHeaderDict
 
@@ -268,30 +269,30 @@ imageio.plugins.ffmpeg.FfmpegFormat.Reader = FfmpegReader  # type: ignore
 @T.overload
 def read_image(filename: str,
                raise_error: T.Literal[False] = False,
-               with_metadata: T.Literal[False] = False) -> np.ndarray | None: ...
+               with_metadata: T.Literal[False] = False) -> npt.NDArray[np.uint8] | None: ...
 
 
 @T.overload
 def read_image(filename: str,
                raise_error: T.Literal[True],
-               with_metadata: T.Literal[False] = False) -> np.ndarray: ...
+               with_metadata: T.Literal[False] = False) -> npt.NDArray[np.uint8]: ...
 
 
 @T.overload
 def read_image(filename: str,
                raise_error: T.Literal[False] = False,
                *,
-               with_metadata: T.Literal[True]) -> tuple[np.ndarray, PNGHeaderDict]: ...
+               with_metadata: T.Literal[True]) -> tuple[npt.NDArray[np.uint8], PNGHeaderDict]: ...
 
 
 @T.overload
 def read_image(filename: str,
                raise_error: T.Literal[True],
-               with_metadata: T.Literal[True]) -> np.ndarray: ...
+               with_metadata: T.Literal[True]) -> npt.NDArray[np.uint8]: ...
 
 
-def read_image(filename: str, raise_error: bool = False, with_metadata: bool = False
-               ) -> np.ndarray | None | tuple[np.ndarray, PNGHeaderDict]:
+def read_image(filename: str, raise_error: bool = False, with_metadata: bool = False  # noqa[C901]
+               ) -> np.ndarray | None | tuple[npt.NDArray[np.uint8], PNGHeaderDict]:
     """ Read an image file from a file location.
 
     Extends the functionality of :func:`cv2.imread()` by ensuring that an image was actually
@@ -308,15 +309,13 @@ def read_image(filename: str, raise_error: bool = False, with_metadata: bool = F
         raised. Default: ``False``
     with_metadata : bool, optional
         Only returns a value if the images loaded are extracted Faceswap faces. If ``True`` then
-        returns the Faceswap metadata stored with in a Face images .png exif header.
+        returns the Faceswap metadata stored with in a Face images .png EXIF header.
         Default: ``False``
 
     Returns
     -------
-    Returns
-    -------
-    batch : :class:`numpy.ndarray`
-        The image in `BGR` channel order for the corresponding :attr:`filename`
+    image : :class:`numpy.ndarray`
+        The image in `BGR` channel order as UINT8 for the corresponding :attr:`filename`
     metadata : :class:`~lib.align.alignments.PNGHeaderDict`, optional
         The faceswap metadata corresponding to the image. Only returned if
         `with_metadata` is ``True``
@@ -336,14 +335,30 @@ def read_image(filename: str, raise_error: bool = False, with_metadata: bool = F
     try:
         with open(filename, "rb") as in_file:
             raw_file = in_file.read()
-            image = cv2.imdecode(np.frombuffer(raw_file, dtype="uint8"), cv2.IMREAD_COLOR)
-            if image is None:
-                raise ValueError("Image is None")
-            if with_metadata:
-                metadata = T.cast("PNGHeaderDict", png_read_meta(raw_file))
-                retval = (image, metadata)
-            else:
-                retval = image
+        image = cv2.imdecode(np.frombuffer(raw_file, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        if image is None:
+            raise ValueError("Image is None")
+        if image.ndim == 2:  # Convert grayscale to BGR
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        elif image.ndim == 2 and image.shape[2] == 4:  # Strip mask
+            image = image[:, :, :3]
+
+        if np.issubdtype(image.dtype, np.integer):
+            info = np.iinfo(T.cast(np.integer, image.dtype))  # Scale non UINT8 INT images to UINT8
+            if info.max != 255:
+                image = image.astype(np.float32) / info.max * 255.0
+        elif np.issubdtype(image.dtype, np.floating):
+            # Just naively clip floating images to 0-1 for now
+            image = (np.clip(image, 0.0, 1.0) * 255.).astype(np.float32)
+
+        if image.dtype != np.uint8:
+            image = np.clip(image, 0, 255).astype(np.uint8)
+
+        if with_metadata:
+            metadata = T.cast("PNGHeaderDict", png_read_meta(raw_file))
+            retval = (image, metadata)
+        else:
+            retval = image
     except TypeError as err:
         success = False
         msg = "Error while reading image (TypeError): '{}'".format(filename)
