@@ -21,17 +21,17 @@ class Output():
     ----------
     output_folder: str
         The full path to the output folder where the converted media should be saved
-    configfile: str, optional
+    config_file: str, optional
         The full path to a custom configuration ini file. If ``None`` is passed
         then the file is loaded from the default location. Default: ``None``.
     """
-    def __init__(self, output_folder: str, configfile: str | None = None) -> None:
+    def __init__(self, output_folder: str, config_file: str | None = None) -> None:
         logger.debug(parse_class_init(locals()))
-        convert_config.load_config(config_file=configfile)
+        convert_config.load_config(config_file=config_file)
         self.output_folder: str = output_folder
 
-        # For creating subfolders when separate mask is selected
-        self._subfolders_created: bool = False
+        # For creating sub_folders when separate mask is selected
+        self._sub_folders_created: bool = False
 
         # Methods for making sure frames are written out in frame order
         self.re_search = re.compile(r"(\d+)(?=\.\w+$)")  # Identify frame numbers
@@ -42,7 +42,7 @@ class Output():
     def is_stream(self) -> bool:
         """ bool: Whether the writer outputs a stream or a series images.
 
-        Writers that write to a stream have a frame_order paramater to dictate
+        Writers that write to a stream have a frame_order parameter to dictate
         the order in which frames should be written out (eg. gif/ffmpeg) """
         retval = hasattr(self, "_frame_order")
         return retval
@@ -112,7 +112,7 @@ class Output():
         if separate_mask:
             retval.append(os.path.join(self.output_folder, "masks", out_filename))
 
-        if separate_mask and not self._subfolders_created:
+        if separate_mask and not self._sub_folders_created:
             locations = [os.path.dirname(loc) for loc in retval]
             logger.debug("Creating sub-folders: %s", locations)
             for location in locations:
@@ -171,7 +171,7 @@ class Output():
         -------
         Any or ``None``
             If ``None`` then the writer does not support pre-encoding, otherwise return output of
-            the plugin specific pre-enccode function
+            the plugin specific pre-encode function
         """
         return None
 

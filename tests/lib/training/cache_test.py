@@ -243,36 +243,23 @@ def test_MaskProcessing_get_face_mask(mask_type: str | None,
     assert instance._config.mask_type == mask_type  # sanity check
 
     instance._check_mask_exists = mocker.MagicMock()  # type:ignore[method-assign]
-    preprocess_return = "test_preprocess_return"
-    instance._preprocess = mocker.MagicMock(  # type:ignore[method-assign]
-        return_value="test_preprocess_return")
-    crop_and_resize_return = mocker.MagicMock()
-    crop_and_resize_return.shape = (256, 256, 1)
-    instance._crop_and_resize = mocker.MagicMock(  # type:ignore[method-assign]
-        return_value=crop_and_resize_return)
+    instance._preprocess = mocker.MagicMock()  # type:ignore[method-assign]
+    instance._crop_and_resize = mocker.MagicMock()  # type:ignore[method-assign]
 
     filename = "test_filename"
-    detected_face = "test_detected_face"
+    detected_face = mocker.MagicMock()
 
+    instance._check_mask_exists.assert_not_called()  # type:ignore[attr-defined]
+    instance._preprocess.assert_not_called()  # type:ignore[attr-defined]
+    instance._crop_and_resize.assert_not_called()  # type:ignore[attr-defined]
+
+    retval = instance._get_face_mask(filename, detected_face)  # type:ignore[arg-type]
     if mask_type is None:  # Mask disabled
         assert not instance._config.mask_enabled
-        retval1 = instance._get_face_mask(filename, detected_face)  # type:ignore[arg-type]
-        assert retval1 is None
-        instance._check_mask_exists.assert_not_called()  # type:ignore[attr-defined]
-        instance._preprocess.assert_not_called()  # type:ignore[attr-defined]
-        instance._crop_and_resize.assert_not_called()  # type:ignore[attr-defined]
+        assert retval is None
     else:  # Mask enabled
         assert instance._config.mask_enabled
-        retval2 = instance._get_face_mask(filename, detected_face)  # type:ignore[arg-type]
-        assert retval2 is crop_and_resize_return
-        instance._check_mask_exists.assert_called_once_with(  # type:ignore[attr-defined]
-            filename, detected_face)
-
-        instance._preprocess.assert_called_once_with(  # type:ignore[attr-defined]
-            detected_face, instance._config.mask_type)
-
-        instance._crop_and_resize.assert_called_once_with(  # type:ignore[attr-defined]
-            detected_face, preprocess_return)
+        assert retval is detected_face.get_landmark_mask()
 
 
 @pytest.mark.parametrize(("eye_multiplier", "mouth_multiplier", "size", "enabled"),

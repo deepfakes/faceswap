@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" S3FD Face detection plugin
+"""S3FD Face detection plugin
 https://arxiv.org/abs/1708.05237
 
 Adapted from S3FD Port in FAN:
@@ -9,480 +9,85 @@ from __future__ import annotations
 import logging
 import typing as T
 
-from scipy.special import logsumexp
 import numpy as np
 
-from keras.layers import (Concatenate, Conv2D, Input, Layer, Maximum, MaxPooling2D, ZeroPadding2D)
-from keras.models import Model
-from keras import initializers, ops
+import torch
+from torch import nn
+from torch.nn import functional as F
 
-from lib.logger import parse_class_init
-from lib.utils import get_module_objects
-from ._base import BatchType, Detector
+from lib.utils import get_module_objects, GetModel
+from plugins.extract.base import ExtractPlugin
 from . import s3fd_defaults as cfg
 
-if T.TYPE_CHECKING:
-    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
+# pylint:disable=duplicate-code
 
 
-class Detect(Detector):
-    """ S3FD detector for face recognition """
-    def __init__(self, **kwargs) -> None:
-        git_model_id = 11
-        model_filename = "s3fd_keras_v2.h5"
-        super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
-        self.model: S3fd
-        self.name = "S3FD"
-        self.input_size = 640
-        self.vram = 1088  # 1034 in testing
-        self.vram_per_batch = 960  # 922 in testing
-        self.batchsize = cfg.batch_size()
+class S3FD(ExtractPlugin):
+    """S3FD detector for face detection"""
+    def __init__(self) -> None:
+        super().__init__(input_size=640,
+                         batch_size=cfg.batch_size(),
+                         is_rgb=False,
+                         dtype="float32",
+                         scale=(0, 255))
+        self.model: S3FDModel
+        self._model_path = self._get_weights_path()
+        self._average_img = np.array([104.0, 117.0, 123.0], dtype="float32")
+        self._confidence = cfg.confidence() / 100
 
-    def init_model(self) -> None:
-        """ Initialize S3FD Model"""
-        assert isinstance(self.model_path, str)
-        confidence = cfg.confidence() / 100
-        self.model = S3fd(self.model_path, self.batchsize, confidence)
-        placeholder_shape = (self.batchsize, self.input_size, self.input_size, 3)
-        placeholder = np.zeros(placeholder_shape, dtype="float32")
-        self.model(placeholder)
+    def _get_weights_path(self) -> str:
+        """Download the weights, if required, and return the path to the weights files
 
-    def process_input(self, batch: BatchType) -> None:
-        """ Compile the detection image(s) for prediction """
-        assert isinstance(self.model, S3fd)
-        batch.feed = self.model.prepare_batch(np.array(batch.image))
+        Returns
+        -------
+        The path to the downloaded S3FD weights file
+        """
+        model = GetModel(model_filename="s3fd_torch_v3.pth", git_model_id=11)
+        model_path = model.model_path
+        assert isinstance(model_path, str)
+        return model_path
 
-    def predict(self, feed: np.ndarray) -> np.ndarray:
-        """ Run model to get predictions """
-        assert isinstance(self.model, S3fd)
-        predictions = self.model(feed)
-        assert isinstance(predictions, list)
-        return self.model.finalize_predictions(predictions)
+    def load_model(self) -> S3FDModel:
+        """Load the S3FD Model
 
-    def process_output(self, batch) -> None:
-        """ Compile found faces for output """
-        return
+        Returns
+        -------
+        The loaded S3FD model
+        """
+        weights = GetModel(model_filename="s3fd_torch_v3.pth", git_model_id=11).model_path
+        assert isinstance(weights, str)
+        return T.cast(S3FDModel, self.load_torch_model(S3FDModel(), weights))
 
-
-################################################################################
-# CUSTOM KERAS LAYERS
-################################################################################
-class L2Norm(Layer):  # pylint:disable=too-many-ancestors,abstract-method
-    """ L2 Normalization layer for S3FD.
-
-    Parameters
-    ----------
-    n_channels: int
-        The number of channels to normalize
-    scale: float, optional
-        The scaling for initial weights. Default: `1.0`
-    """
-    def __init__(self, n_channels: int, scale: float = 1.0, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self._n_channels = n_channels
-        self._scale = scale
-        self.weight = self.add_weight(name="l2norm",
-                                      shape=(self._n_channels, ),
-                                      trainable=True,
-                                      initializer=initializers.Constant(value=self._scale),
-                                      dtype="float32")
-
-    def call(self, inputs: KerasTensor, **kwargs  # pylint:disable=arguments-differ
-             ) -> KerasTensor:
-        """ Call the L2 Normalization Layer.
+    def pre_process(self, batch: np.ndarray) -> np.ndarray:
+        """Compile the detection image(s) for prediction
 
         Parameters
         ----------
-        inputs: :class:`keras.KerasTensor`
-            The input to the L2 Normalization Layer
+        batch
+            The input batch of images at model input size in the correct color order, dtype and
+            scale
 
         Returns
         -------
-        :class:`keras.KerasTensor`:
-            The output from the L2 Normalization Layer
+        The batch of images ready for feeding the model
         """
-        norm = ops.sqrt(ops.sum(ops.power(inputs, 2), axis=-1, keepdims=True)) + 1e-10
-        var_x = inputs / norm * self.weight
-        return var_x
+        return (batch - self._average_img).transpose(0, 3, 1, 2)
 
-    def get_config(self) -> dict:
-        """ Returns the config of the layer.
-
-        Returns
-        -------
-        dict
-            The configuration for the layer
-        """
-        config = super().get_config()
-        config.update({"n_channels": self._n_channels,
-                       "scale": self._scale})
-        return config
-
-
-class SliceO2K(Layer):  # pylint:disable=too-many-ancestors,abstract-method
-    """ Custom Keras Slice layer generated by onnx2keras. """
-    def __init__(self,
-                 starts: list[int],
-                 ends: list[int],
-                 axes: list[int] | None = None,
-                 steps: list[int] | None = None,
-                 **kwargs) -> None:
-        self._starts = starts
-        self._ends = ends
-        self._axes = axes
-        self._steps = steps
-        super().__init__(**kwargs)
-
-    def _get_slices(self, dimensions: int) -> list[tuple[int, ...]]:
-        """ Obtain slices for the given number of dimensions.
+    def process(self, batch: np.ndarray) -> np.ndarray:
+        """Run model to get predictions
 
         Parameters
         ----------
-        dimensions: int
-            The number of dimensions to obtain slices for
+        batch
+            A batch of images ready to feed the model
 
         Returns
         -------
-        list
-            The slices for the given number of dimensions
+        The batch of detection results from the model
         """
-        axes = tuple(range(dimensions)) if self._axes is None else self._axes
-        steps = (1,) * len(axes) if self._steps is None else self._steps
-        assert len(axes) == len(steps) == len(self._starts) == len(self._ends)
-        return list(zip(axes, self._starts, self._ends, steps))
-
-    def compute_output_shape(self, input_shape: tuple[int, ...]  # pylint:disable=arguments-differ
-                             ) -> tuple[int, ...]:
-        """Computes the output shape of the layer.
-
-        Assumes that the layer will be built to match that input shape provided.
-
-        Parameters
-        ----------
-        input_shape: tuple or list of tuples
-            Shape tuple (tuple of integers) or list of shape tuples (one per output tensor of the
-            layer). Shape tuples can include ``None`` for free dimensions, instead of an integer.
-
-        Returns
-        -------
-        tuple
-            An output shape tuple.
-        """
-        in_shape = list(input_shape)
-        for a_x, start, end, steps in self._get_slices(len(in_shape)):
-            size = in_shape[a_x]
-            if a_x == 0:
-                raise AttributeError("Can not slice batch axis.")
-            if size is None:
-                if start < 0 or end < 0:
-                    raise AttributeError("Negative slices not supported on symbolic axes")
-                logger.warning("Slicing symbolic axis might lead to problems.")
-                in_shape[a_x] = (end - start) // steps
-                continue
-            if start < 0:
-                start = size - start
-            if end < 0:
-                end = size - end
-            in_shape[a_x] = (min(size, end) - start) // steps
-        return tuple(in_shape)
-
-    def call(self, inputs, **kwargs):  # pylint:disable=unused-argument,arguments-differ
-        """This is where the layer's logic lives.
-
-        Parameters
-        ----------
-        inputs: Input tensor, or list/tuple of input tensors.
-            The input to the layer
-        **kwargs: Additional keyword arguments.
-            Required for parent class but unused
-        Returns
-        -------
-        A tensor or list/tuple of tensors.
-            The layer output
-        """
-        ax_map = dict((x[0], slice(*x[1:])) for x in self._get_slices(ops.ndim(inputs)))
-        shape = inputs.shape
-        slices = [(ax_map[a] if a in ax_map else slice(None)) for a in range(len(shape))]
-        retval = inputs[tuple(slices)]
-        return retval
-
-    def get_config(self) -> dict:
-        """ Returns the config of the layer.
-
-        Returns
-        -------
-        dict
-            The configuration for the layer
-        """
-        config = super().get_config()
-        config.update({"starts": self._starts,
-                       "ends": self._ends,
-                       "axes": self._axes,
-                       "steps": self._steps})
-        return config
-
-
-class S3fd():
-    """ Keras Network
-
-    Parameters
-    ----------
-    weights_path: str
-        Full path to the S3FD weights file
-    batch_size: int
-        The batch size to feed the model
-    confidence: float
-        The confidence level to accept detections at
-    """
-    def __init__(self, weights_path: str, batch_size: int, confidence: float) -> None:
-        logger.debug(parse_class_init(locals()))
-        self._batch_size = batch_size
-        self._model = self._load_model(weights_path)
-        self.confidence = confidence
-        self.average_img = np.array([104.0, 117.0, 123.0])
-        logger.debug("Initialized: %s", self.__class__.__name__)
-
-    @classmethod
-    def conv_block(cls,
-                   inputs: KerasTensor,
-                   filters: int,
-                   idx: int,
-                   recursions: int) -> KerasTensor:
-        """ First round convolutions with zero padding added.
-
-        Parameters
-        ----------
-        inputs: :class:`keras.KerasTensor`
-            The input tensor to the convolution block
-        filters: int
-            The number of filters
-        idx: int
-            The layer index for naming
-        recursions: int
-            The number of recursions of the block to perform
-
-        Returns
-        -------
-        :class:`keras.KerasTensor`
-            The output tensor from the convolution block
-        """
-        name = f"conv{idx}"
-        var_x = inputs
-        for i in range(1, recursions + 1):
-            rec_name = f"{name}_{i}"
-            var_x = ZeroPadding2D(1, name=f"{rec_name}.zeropad")(var_x)
-            var_x = Conv2D(filters,
-                           kernel_size=3,
-                           strides=1,
-                           activation="relu",
-                           name=rec_name)(var_x)
-        return var_x
-
-    @classmethod
-    def conv_up(cls, inputs: KerasTensor, filters: int, idx: int) -> KerasTensor:
-        """ Convolution up filter blocks with zero padding added.
-
-        Parameters
-        ----------
-        inputs: :class:`keras.KerasTensor`
-            The input tensor to the convolution block
-        filters: int
-            The initial number of filters
-        idx: int
-            The layer index for naming
-
-        Returns
-        -------
-        :class:`keras.KerasTensor`
-            The output tensor from the convolution block
-        """
-        name = f"conv{idx}"
-        var_x = inputs
-        for i in range(1, 3):
-            rec_name = f"{name}_{i}"
-            size = 1 if i == 1 else 3
-            if i == 2:
-                var_x = ZeroPadding2D(1, name=f"{rec_name}.zeropad")(var_x)
-            var_x = Conv2D(filters * i,
-                           kernel_size=size,
-                           strides=i,
-                           activation="relu",
-                           name=rec_name)(var_x)
-        return var_x
-
-    def _load_model(self, weights_path: str) -> Model:
-        """ Keras S3FD Model Definition, adapted from FAN pytorch implementation.
-
-        Parameters
-        ----------
-        weights_path: str
-            Full path to the model's weights
-
-        Returns
-        -------
-        :class:`keras.models.Model`
-            The S3FD model
-        """
-        input_ = Input(shape=(640, 640, 3))
-        var_x = self.conv_block(input_, 64, 1, 2)
-        var_x = MaxPooling2D(pool_size=2, strides=2)(var_x)
-
-        var_x = self.conv_block(var_x, 128, 2, 2)
-        var_x = MaxPooling2D(pool_size=2, strides=2)(var_x)
-
-        var_x = self.conv_block(var_x, 256, 3, 3)
-        f3_3 = var_x
-        var_x = MaxPooling2D(pool_size=2, strides=2)(var_x)
-
-        var_x = self.conv_block(var_x, 512, 4, 3)
-        f4_3 = var_x
-        var_x = MaxPooling2D(pool_size=2, strides=2)(var_x)
-
-        var_x = self.conv_block(var_x, 512, 5, 3)
-        f5_3 = var_x
-        var_x = MaxPooling2D(pool_size=2, strides=2)(var_x)
-
-        var_x = ZeroPadding2D(3)(var_x)
-        var_x = Conv2D(1024, kernel_size=3, strides=1, activation="relu", name="fc6")(var_x)
-        var_x = Conv2D(1024, kernel_size=1, strides=1, activation="relu", name="fc7")(var_x)
-        ffc7 = var_x
-
-        f6_2 = self.conv_up(var_x, 256, 6)
-        f7_2 = self.conv_up(f6_2, 128, 7)
-
-        f3_3 = L2Norm(256, scale=10, name="conv3_3_norm")(f3_3)
-        f4_3 = L2Norm(512, scale=8, name="conv4_3_norm")(f4_3)
-        f5_3 = L2Norm(512, scale=5, name="conv5_3_norm")(f5_3)
-
-        classes = []
-        regs = []
-
-        f3_3 = ZeroPadding2D(1)(f3_3)
-        classes.append(Conv2D(4, kernel_size=3, strides=1, name="conv3_3_norm_mbox_conf")(f3_3))
-        regs.append(Conv2D(4, kernel_size=3, strides=1, name="conv3_3_norm_mbox_loc")(f3_3))
-
-        f4_3 = ZeroPadding2D(1)(f4_3)
-        classes.append(Conv2D(2, kernel_size=3, strides=1, name="conv4_3_norm_mbox_conf")(f4_3))
-        regs.append(Conv2D(4, kernel_size=3, strides=1, name="conv4_3_norm_mbox_loc")(f4_3))
-
-        f5_3 = ZeroPadding2D(1)(f5_3)
-        classes.append(Conv2D(2, kernel_size=3, strides=1, name="conv5_3_norm_mbox_conf")(f5_3))
-        regs.append(Conv2D(4, kernel_size=3, strides=1, name="conv5_3_norm_mbox_loc")(f5_3))
-
-        ffc7 = ZeroPadding2D(1)(ffc7)
-        classes.append(Conv2D(2, kernel_size=3, strides=1, name="fc7_mbox_conf")(ffc7))
-        regs.append(Conv2D(4, kernel_size=3, strides=1, name="fc7_mbox_loc")(ffc7))
-
-        f6_2 = ZeroPadding2D(1)(f6_2)
-        classes.append(Conv2D(2, kernel_size=3, strides=1, name="conv6_2_mbox_conf")(f6_2))
-        regs.append(Conv2D(4, kernel_size=3, strides=1, name="conv6_2_mbox_loc")(f6_2))
-
-        f7_2 = ZeroPadding2D(1)(f7_2)
-        classes.append(Conv2D(2, kernel_size=3, strides=1, name="conv7_2_mbox_conf")(f7_2))
-        regs.append(Conv2D(4, kernel_size=3, strides=1, name="conv7_2_mbox_loc")(f7_2))
-
-        # max-out background label
-        chunks = [SliceO2K(starts=[0], ends=[1], axes=[3], steps=None)(classes[0]),
-                  SliceO2K(starts=[1], ends=[2], axes=[3], steps=None)(classes[0]),
-                  SliceO2K(starts=[2], ends=[3], axes=[3], steps=None)(classes[0]),
-                  SliceO2K(starts=[3], ends=[4], axes=[3], steps=None)(classes[0])]
-
-        bmax = Maximum()([chunks[0], chunks[1], chunks[2]])
-        classes[0] = Concatenate()([bmax, chunks[3]])
-
-        retval = Model(input_,
-                       [classes[0],
-                        regs[0],
-                        classes[1],
-                        regs[1],
-                        classes[2],
-                        regs[2],
-                        classes[3],
-                        regs[3],
-                        classes[4],
-                        regs[4],
-                        classes[5],
-                        regs[5]])
-        retval.load_weights(weights_path)
-        retval.make_predict_function()
-        return retval
-
-    def prepare_batch(self, batch: np.ndarray) -> np.ndarray:
-        """ Prepare a batch for prediction.
-
-        Normalizes the feed images.
-
-        Parameters
-        ----------
-        batch: class:`numpy.ndarray`
-            The batch to be fed to the model
-
-        Returns
-        -------
-        class:`numpy.ndarray`
-            The normalized images for feeding to the model
-        """
-        batch = batch - self.average_img
-        return batch
-
-    def finalize_predictions(self, bounding_boxes_scales: list[np.ndarray]) -> np.ndarray:
-        """ Process the output from the model to obtain faces
-
-        Parameters
-        ----------
-        bounding_boxes_scales: list
-            The output predictions from the S3FD model
-        """
-        ret = []
-        batch_size = range(bounding_boxes_scales[0].shape[0])
-        for img in batch_size:
-            bboxlist = [scale[img:img+1] for scale in bounding_boxes_scales]
-            boxes = self._post_process(bboxlist)
-            finallist = self._nms(boxes, 0.5)
-            ret.append(finallist)
-        return np.array(ret, dtype="object")
-
-    def _process_bbox(self,
-                      ocls: np.ndarray,
-                      oreg: np.ndarray,
-                      stride: int) -> list[list[np.ndarray]]:
-        """ Process a bounding box """
-        retval = []
-        for pos in zip(*np.where(ocls[:, :, :, 1] > 0.05)):
-            a_c = stride / 2 + pos[2] * stride, stride / 2 + pos[1] * stride
-            score = ocls[0, pos[1], pos[2], 1]
-            if score >= self.confidence:
-                loc = np.ascontiguousarray(oreg[0, pos[1], pos[2], :]).reshape((1, 4))
-                priors = np.array([[a_c[0] / 1.0,
-                                    a_c[1] / 1.0,
-                                    stride * 4 / 1.0,
-                                    stride * 4 / 1.0]])
-                box = self.decode(loc, priors)
-                x_1, y_1, x_2, y_2 = box[0] * 1.0
-                retval.append([x_1, y_1, x_2, y_2, score])
-        return retval
-
-    def _post_process(self, bboxlist: list[np.ndarray]) -> np.ndarray:
-        """ Perform post processing on output
-            TODO: do this on the batch.
-        """
-        retval = []
-        for i in range(len(bboxlist) // 2):
-            bboxlist[i * 2] = self.softmax(bboxlist[i * 2], axis=3)
-        for i in range(len(bboxlist) // 2):
-            ocls, oreg = bboxlist[i * 2], bboxlist[i * 2 + 1]
-            stride = 2 ** (i + 2)    # 4,8,16,32,64,128
-            retval.extend(self._process_bbox(ocls, oreg, stride))
-
-        return_numpy = np.array(retval) if len(retval) != 0 else np.zeros((1, 5))
-        return return_numpy
-
-    @staticmethod
-    def softmax(inp, axis: int) -> np.ndarray:
-        """Compute softmax values for each sets of scores in x."""
-        return np.exp(inp - logsumexp(inp, axis=axis, keepdims=True))
+        return self.from_torch(batch)
 
     @staticmethod
     def decode(location: np.ndarray, priors: np.ndarray) -> np.ndarray:
@@ -491,15 +96,14 @@ class S3fd():
 
         Parameters
         ----------
-        location: tensor
+        location
             location predictions for location layers,
-        priors: tensor
+        priors
             Prior boxes in center-offset form.
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            decoded bounding box predictions
+        Decoded bounding box predictions
         """
         variances = [0.1, 0.2]
         boxes = np.concatenate((priors[:, :2] + location[:, :2] * variances[0] * priors[:, 2:],
@@ -508,9 +112,74 @@ class S3fd():
         boxes[:, 2:] += boxes[:, :2]
         return boxes
 
+    def _process_bbox(self,  # pylint:disable=too-many-locals
+                      o_cls: np.ndarray,
+                      o_reg: np.ndarray,
+                      stride: int) -> list[list[np.ndarray]]:
+        """Process a bounding box
+
+        Parameters
+        ----------
+        o_cls
+            The class outputs from S3FD
+        o_reg
+            The reg outputs from S3FD
+        stride
+            The stride to use
+
+        Returns
+        -------
+        The bounding boxes with scores
+        """
+        retval = []
+        for _, h_idx, w_idx in zip(*np.where(o_cls[:, 1, :, :] > 0.05)):
+            axc, ayc = stride / 2 + w_idx * stride, stride / 2 + h_idx * stride
+            score = o_cls[0, 1, h_idx, w_idx]
+            if score < self._confidence:
+                continue
+            loc = o_reg[:, :, h_idx, w_idx].copy()
+            priors = np.array([[axc / 1.0, ayc / 1.0, stride * 4 / 1.0, stride * 4 / 1.0]])
+            box = self.decode(loc, priors)
+            x_1, y_1, x_2, y_2 = box[0] * 1.0
+            retval.append([x_1, y_1, x_2, y_2, score])
+        return retval
+
+    def _post_process(self, bbox_list: list[np.ndarray]) -> np.ndarray:
+        """Perform post processing on output
+
+        Parameters
+        ----------
+        bbox_list
+            The class and reg outputs from the S3FD model
+
+        Returns
+        -------
+        The [N, left, top, right, bottom, score] bounding boxes from the model
+        """
+        retval = []
+        for i in range(len(bbox_list) // 2):
+            o_cls, o_reg = bbox_list[i * 2], bbox_list[i * 2 + 1]
+            stride = 2 ** (i + 2)    # 4,8,16,32,64,128
+            retval.extend(self._process_bbox(o_cls, o_reg, stride))
+
+        return_numpy = np.array(retval) if len(retval) != 0 else np.zeros((1, 5))
+        return return_numpy
+
     @staticmethod
     def _nms(boxes: np.ndarray, threshold: float) -> np.ndarray:
-        """ Perform Non-Maximum Suppression """
+        """Perform Non-Maximum Suppression
+
+        Parameters
+        ----------
+        boxes
+            The detection bounding boxes to process
+        threshold
+            The threshold to accept boxes
+
+        Returns
+        -------
+        The final bounding boxes
+        """
         retained_box_indices = []
 
         areas = (boxes[:, 2] - boxes[:, 0] + 1) * (boxes[:, 3] - boxes[:, 1] + 1)
@@ -536,20 +205,192 @@ class S3fd():
             ranked_indices = ranked_indices[non_overlapping_boxes + 1]
         return boxes[retained_box_indices]
 
-    def __call__(self, inputs: np.ndarray) -> np.ndarray:
-        """ Get predictions from the S3FD model
+    def post_process(self, batch: np.ndarray) -> np.ndarray:
+        """Process the output from the model to bounding boxes
 
         Parameters
         ----------
-        inputs: :class:`numpy.ndarray`
-            The input to S3FD
+        batch
+            The output predictions from the S3FD model
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The output from S3FD
+        The processed detection bounding box from the model at model input size
         """
-        return self._model.predict(inputs, verbose=0, batch_size=self._batch_size)
+        ret = []
+        batch_size = range(batch[0].shape[0])
+        for img in batch_size:
+            bbox_list = [scale[img:img+1] for scale in batch]
+            boxes = self._post_process(bbox_list)
+            final_list = self._nms(boxes, 0.5)
+            ret.append(final_list[..., :4])
+        retval = np.empty(len(ret), dtype=object)
+        retval[:] = ret
+        return retval
+
+
+################################################################################
+# S3FD Net
+################################################################################
+class L2Norm(nn.Module):
+    """L2 Normalization layer for S3FD.
+
+    Parameters
+    ----------
+    n_channels
+        The number of channels to normalize
+    scale
+        The scaling for initial weights. Default: `1.0`
+    """
+    def __init__(self, n_channels: int, scale: float) -> None:
+        super().__init__()
+        self.n_channels = n_channels
+        self.gamma = scale
+        self.eps = 1e-10
+        self.weight = nn.Parameter(torch.Tensor(self.n_channels))
+
+    def forward(self, inputs: torch.Tensor):
+        """Call the L2 Normalization Layer.
+
+        Parameters
+        ----------
+        inputs
+            The input to the L2 Normalization Layer
+
+        Returns
+        -------
+        The output from the L2 Normalization Layer
+        """
+        norm = inputs.pow(2).sum(dim=1, keepdim=True).sqrt() + self.eps
+        x = inputs / norm * self.weight.view(1, -1, 1, 1)
+        return x
+
+
+class S3FDModel(nn.Module):  # pylint:disable=too-many-instance-attributes
+    """The S3FD Model, adapted from https://github.com/1adrianb/face-alignment"""
+    def __init__(self) -> None:
+        super().__init__()
+        self.conv1_1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1)
+        self.conv1_2 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
+
+        self.conv2_1 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
+        self.conv2_2 = nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1)
+
+        self.conv3_1 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1)
+        self.conv3_2 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
+        self.conv3_3 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
+
+        self.conv4_1 = nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1)
+        self.conv4_2 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1)
+        self.conv4_3 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1)
+
+        self.conv5_1 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1)
+        self.conv5_2 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1)
+        self.conv5_3 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1)
+
+        self.fc6 = nn.Conv2d(512, 1024, kernel_size=3, stride=1, padding=3)
+        self.fc7 = nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
+
+        self.conv6_1 = nn.Conv2d(1024, 256, kernel_size=1, stride=1, padding=0)
+        self.conv6_2 = nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=1)
+
+        self.conv7_1 = nn.Conv2d(512, 128, kernel_size=1, stride=1, padding=0)
+        self.conv7_2 = nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)
+
+        self.conv3_3_norm = L2Norm(256, scale=10)
+        self.conv4_3_norm = L2Norm(512, scale=8)
+        self.conv5_3_norm = L2Norm(512, scale=5)
+
+        self.conv3_3_norm_mbox_conf = nn.Conv2d(256, 4, kernel_size=3, stride=1, padding=1)
+        self.conv3_3_norm_mbox_loc = nn.Conv2d(256, 4, kernel_size=3, stride=1, padding=1)
+        self.conv4_3_norm_mbox_conf = nn.Conv2d(512, 2, kernel_size=3, stride=1, padding=1)
+        self.conv4_3_norm_mbox_loc = nn.Conv2d(512, 4, kernel_size=3, stride=1, padding=1)
+        self.conv5_3_norm_mbox_conf = nn.Conv2d(512, 2, kernel_size=3, stride=1, padding=1)
+        self.conv5_3_norm_mbox_loc = nn.Conv2d(512, 4, kernel_size=3, stride=1, padding=1)
+
+        self.fc7_mbox_conf = nn.Conv2d(1024, 2, kernel_size=3, stride=1, padding=1)
+        self.fc7_mbox_loc = nn.Conv2d(1024, 4, kernel_size=3, stride=1, padding=1)
+        self.conv6_2_mbox_conf = nn.Conv2d(512, 2, kernel_size=3, stride=1, padding=1)
+        self.conv6_2_mbox_loc = nn.Conv2d(512, 4, kernel_size=3, stride=1, padding=1)
+        self.conv7_2_mbox_conf = nn.Conv2d(256, 2, kernel_size=3, stride=1, padding=1)
+        self.conv7_2_mbox_loc = nn.Conv2d(256, 4, kernel_size=3, stride=1, padding=1)
+
+    def forward(self,  # pylint:disable=too-many-locals,too-many-statements
+                inputs: torch.Tensor) -> list[torch.Tensor]:
+        """Run the forward pass through S3FD
+
+        Parameters
+        ----------
+        inputs
+            The (N, C, H, W) batch of images to process
+
+        Returns
+        -------
+        The predictions from the S3FD model
+        """
+        h = F.relu(self.conv1_1(inputs), inplace=True)
+        h = F.relu(self.conv1_2(h), inplace=True)
+        h = F.max_pool2d(h, 2, 2)
+
+        h = F.relu(self.conv2_1(h), inplace=True)
+        h = F.relu(self.conv2_2(h), inplace=True)
+        h = F.max_pool2d(h, 2, 2)
+
+        h = F.relu(self.conv3_1(h), inplace=True)
+        h = F.relu(self.conv3_2(h), inplace=True)
+        h = F.relu(self.conv3_3(h), inplace=True)
+        f3_3 = h
+        h = F.max_pool2d(h, 2, 2)
+
+        h = F.relu(self.conv4_1(h), inplace=True)
+        h = F.relu(self.conv4_2(h), inplace=True)
+        h = F.relu(self.conv4_3(h), inplace=True)
+        f4_3 = h
+        h = F.max_pool2d(h, 2, 2)
+
+        h = F.relu(self.conv5_1(h), inplace=True)
+        h = F.relu(self.conv5_2(h), inplace=True)
+        h = F.relu(self.conv5_3(h), inplace=True)
+        f5_3 = h
+        h = F.max_pool2d(h, 2, 2)
+
+        h = F.relu(self.fc6(h), inplace=True)
+        h = F.relu(self.fc7(h), inplace=True)
+        ffc7 = h
+        h = F.relu(self.conv6_1(h), inplace=True)
+        h = F.relu(self.conv6_2(h), inplace=True)
+        f6_2 = h
+        h = F.relu(self.conv7_1(h), inplace=True)
+        h = F.relu(self.conv7_2(h), inplace=True)
+        f7_2 = h
+
+        f3_3 = self.conv3_3_norm(f3_3)
+        f4_3 = self.conv4_3_norm(f4_3)
+        f5_3 = self.conv5_3_norm(f5_3)
+
+        cls1 = self.conv3_3_norm_mbox_conf(f3_3)
+        reg1 = self.conv3_3_norm_mbox_loc(f3_3)
+        cls2 = self.conv4_3_norm_mbox_conf(f4_3)
+        reg2 = self.conv4_3_norm_mbox_loc(f4_3)
+        cls3 = self.conv5_3_norm_mbox_conf(f5_3)
+        reg3 = self.conv5_3_norm_mbox_loc(f5_3)
+        cls4 = self.fc7_mbox_conf(ffc7)
+        reg4 = self.fc7_mbox_loc(ffc7)
+        cls5 = self.conv6_2_mbox_conf(f6_2)
+        reg5 = self.conv6_2_mbox_loc(f6_2)
+        cls6 = self.conv7_2_mbox_conf(f7_2)
+        reg6 = self.conv7_2_mbox_loc(f7_2)
+
+        # max-out background label
+        chunk = torch.chunk(cls1, 4, 1)
+        b_max = torch.max(torch.max(chunk[0], chunk[1]), chunk[2])
+        cls1 = torch.cat([b_max, chunk[3]], dim=1)
+
+        outputs = [cls1, reg1, cls2, reg2, cls3, reg3, cls4, reg4, cls5, reg5, cls6, reg6]
+        for i in range(len(outputs) // 2):
+            outputs[i * 2] = F.softmax(outputs[i * 2], dim=1)
+
+        return outputs
 
 
 __all__ = get_module_objects(__name__)

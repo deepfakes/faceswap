@@ -48,7 +48,7 @@ class ManualArgs(FaceSwapArgs):
         argument_list.append({
             "opts": ("-t", "--thumb-regen"),
             "action": "store_true",
-            "dest": "thumb_regen",
+            "dest": "thumb_regenerate",
             "default": False,
             "group": _("options"),
             "help": _(

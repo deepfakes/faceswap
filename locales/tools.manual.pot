@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-03-28 23:55+0000\n"
+"POT-Creation-Date: 2026-03-20 22:06+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -62,29 +62,103 @@ msgid ""
 "thumbnails in a slower, but more stable single thread."
 msgstr ""
 
-#: tools/manual\faceviewer\frame.py:163
+#: tools/manual/face_viewer/frame.py:175
 msgid "Display the landmarks mesh"
 msgstr ""
 
-#: tools/manual\faceviewer\frame.py:164
+#: tools/manual/face_viewer/frame.py:176
 msgid "Display the mask"
 msgstr ""
 
-#: tools/manual\frameviewer\editor\_base.py:628
-#: tools/manual\frameviewer\editor\landmarks.py:44
-#: tools/manual\frameviewer\editor\mask.py:75
+#: tools/manual/frame_viewer/frame.py:79
+msgid "Play/Pause (SPACE)"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:80
+msgid "Go to First Frame (HOME)"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:81
+msgid "Go to Previous Frame (Z)"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:82
+msgid "Go to Next Frame (X)"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:83
+msgid "Go to Last Frame (END)"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:84
+msgid "Extract the faces to a folder... (Ctrl+E)"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:85
+msgid "Save the Alignments file (Ctrl+S)"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:86
+msgid "Filter Frames to only those Containing the Selected Item (F)"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:87
+msgid ""
+"Set the distance from an 'average face' to be considered misaligned. Higher "
+"distances are more restrictive"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:392
+msgid "View alignments"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:393
+msgid "Bounding box editor"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:394
+msgid "Location editor"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:395
+msgid "Mask editor"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:396
+msgid "Landmark point editor"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:471
+msgid "Previous"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:472
+msgid "Next"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:483
+msgid "Revert to saved Alignments ({})"
+msgstr ""
+
+#: tools/manual/frame_viewer/frame.py:489
+msgid "Copy {} Alignments ({})"
+msgstr ""
+
+#: tools/manual/frame_viewer/editor/_base.py:632
+#: tools/manual/frame_viewer/editor/landmarks.py:45
 msgid "Magnify/Demagnify the View"
 msgstr ""
 
-#: tools/manual\frameviewer\editor\bounding_box.py:33
-#: tools/manual\frameviewer\editor\extract_box.py:32
+#: tools/manual/frame_viewer/editor/bounding_box.py:34
+#: tools/manual/frame_viewer/editor/extract_box.py:33
 msgid "Delete Face"
 msgstr ""
 
-#: tools/manual\frameviewer\editor\bounding_box.py:36
+#: tools/manual/frame_viewer/editor/bounding_box.py:37
 msgid ""
 "Bounding Box Editor\n"
-"Edit the bounding box being fed into the aligner to recalculate the landmarks.\n"
+"Edit the bounding box being fed into the aligner to recalculate the "
+"landmarks.\n"
 "\n"
 " - Grab the corner anchors to resize the bounding box.\n"
 " - Click and drag the bounding box to relocate.\n"
@@ -92,30 +166,38 @@ msgid ""
 " - Right click a bounding box to delete a face."
 msgstr ""
 
-#: tools/manual\frameviewer\editor\bounding_box.py:70
-msgid "Aligner to use. FAN will obtain better alignments, but cv2-dnn can be useful if FAN cannot get decent alignments and you want to set a base to edit from."
+#: tools/manual/frame_viewer/editor/bounding_box.py:71
+msgid ""
+"Aligner to use. HRNet and FAN will obtain better alignments, but cv2-dnn can "
+"be useful if these cannot get decent alignments and you want to set a base "
+"to edit from."
 msgstr ""
 
-#: tools/manual\frameviewer\editor\bounding_box.py:83
+#: tools/manual/frame_viewer/editor/bounding_box.py:84
 msgid ""
-"Normalization method to use for feeding faces to the aligner. This can help the aligner better align faces with difficult lighting conditions. Different methods will yield different results on different sets. NB: This does not impact the output face, just the input to the aligner.\n"
+"Normalization method to use for feeding faces to the aligner. This can help "
+"the aligner better align faces with difficult lighting conditions. Different "
+"methods will yield different results on different sets. NB: This does not "
+"impact the output face, just the input to the aligner.\n"
 "\tnone: Don't perform normalization on the face.\n"
-"\tclahe: Perform Contrast Limited Adaptive Histogram Equalization on the face.\n"
+"\tclahe: Perform Contrast Limited Adaptive Histogram Equalization on the "
+"face.\n"
 "\thist: Equalize the histograms on the RGB channels.\n"
 "\tmean: Normalize the face colors to the mean."
 msgstr ""
 
-#: tools/manual\frameviewer\editor\extract_box.py:35
+#: tools/manual/frame_viewer/editor/extract_box.py:36
 msgid ""
 "Extract Box Editor\n"
-"Move the extract box that has been generated by the aligner. Click and drag:\n"
+"Move the extract box that has been generated by the aligner. Click and "
+"drag:\n"
 "\n"
 " - Inside the bounding box to relocate the landmarks.\n"
 " - The corner anchors to resize the landmarks.\n"
 " - Outside of the corners to rotate the landmarks."
 msgstr ""
 
-#: tools/manual\frameviewer\editor\landmarks.py:27
+#: tools/manual/frame_viewer/editor/landmarks.py:28
 msgid ""
 "Landmark Point Editor\n"
 "Edit the individual landmark points.\n"
@@ -124,101 +206,40 @@ msgid ""
 " - Draw a box to select multiple points to relocate."
 msgstr ""
 
-#: tools/manual\frameviewer\editor\mask.py:33
+#: tools/manual/frame_viewer/editor/mask.py:43
 msgid ""
 "Mask Editor\n"
 "Edit the mask.\n"
-" - NB: For Landmark based masks (e.g. components/extended) it is better to make sure the landmarks are correct rather than editing the mask directly. Any change to the landmarks after editing the mask will override your manual edits."
+" - NB: For Landmark based masks (e.g. components/extended) it is better to "
+"make sure the landmarks are correct rather than editing the mask directly. "
+"Any change to the landmarks after editing the mask will override your manual "
+"edits."
 msgstr ""
 
-#: tools/manual\frameviewer\editor\mask.py:77
+#: tools/manual/frame_viewer/editor/mask.py:91
+msgid "Magnify/De-magnify the View"
+msgstr ""
+
+#: tools/manual/frame_viewer/editor/mask.py:93
 msgid "Draw Tool"
 msgstr ""
 
-#: tools/manual\frameviewer\editor\mask.py:78
+#: tools/manual/frame_viewer/editor/mask.py:94
 msgid "Erase Tool"
 msgstr ""
 
-#: tools/manual\frameviewer\editor\mask.py:97
+#: tools/manual/frame_viewer/editor/mask.py:115
 msgid "Select which mask to edit"
 msgstr ""
 
-#: tools/manual\frameviewer\editor\mask.py:104
+#: tools/manual/frame_viewer/editor/mask.py:122
 msgid "Set the brush size. ([ - decrease, ] - increase)"
 msgstr ""
 
-#: tools/manual\frameviewer\editor\mask.py:111
+#: tools/manual/frame_viewer/editor/mask.py:129
 msgid "Select the brush cursor color."
 msgstr ""
 
-#: tools/manual\frameviewer\frame.py:78
-msgid "Play/Pause (SPACE)"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:79
-msgid "Go to First Frame (HOME)"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:80
-msgid "Go to Previous Frame (Z)"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:81
-msgid "Go to Next Frame (X)"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:82
-msgid "Go to Last Frame (END)"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:83
-msgid "Extract the faces to a folder... (Ctrl+E)"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:84
-msgid "Save the Alignments file (Ctrl+S)"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:85
-msgid "Filter Frames to only those Containing the Selected Item (F)"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:86
-msgid "Set the distance from an 'average face' to be considered misaligned. Higher distances are more restrictive"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:391
-msgid "View alignments"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:392
-msgid "Bounding box editor"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:393
-msgid "Location editor"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:394
-msgid "Mask editor"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:395
-msgid "Landmark point editor"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:470
-msgid "Next"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:470
-msgid "Previous"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:481
-msgid "Revert to saved Alignments ({})"
-msgstr ""
-
-#: tools/manual\frameviewer\frame.py:487
-msgid "Copy {} Alignments ({})"
+#: tools/manual/frame_viewer/editor/mask.py:136
+msgid "Select a shape for masking cursor."
 msgstr ""

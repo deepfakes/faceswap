@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-04-12 11:56+0100\n"
-"PO-Revision-Date: 2024-04-12 12:02+0100\n"
+"POT-Creation-Date: 2026-03-16 17:40+0000\n"
+"PO-Revision-Date: 2026-03-20 22:02+0000\n"
 "Last-Translator: \n"
 "Language-Team: tokafondo\n"
 "Language: es\n"
@@ -16,15 +16,16 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 3.4.2\n"
+"X-Generator: Poedit 3.8\n"
 
-#: lib/cli/args_extract_convert.py:46 lib/cli/args_extract_convert.py:56
-#: lib/cli/args_extract_convert.py:64 lib/cli/args_extract_convert.py:122
-#: lib/cli/args_extract_convert.py:483 lib/cli/args_extract_convert.py:492
+#: lib/cli/args_extract_convert.py:47 lib/cli/args_extract_convert.py:58
+#: lib/cli/args_extract_convert.py:108 lib/cli/args_extract_convert.py:116
+#: lib/cli/args_extract_convert.py:488 lib/cli/args_extract_convert.py:496
+#: lib/cli/args_extract_convert.py:505
 msgid "Data"
 msgstr "Datos"
 
-#: lib/cli/args_extract_convert.py:48
+#: lib/cli/args_extract_convert.py:49
 msgid ""
 "Input directory or video. Either a directory containing the image files you "
 "wish to process or path to a video file. NB: This should be the source video/"
@@ -34,12 +35,7 @@ msgstr ""
 "imagen que desea procesar o la ruta a un archivo de vídeo. NB: Debe ser el "
 "vídeo/los fotogramas de origen, NO las caras de origen."
 
-#: lib/cli/args_extract_convert.py:57
-msgid "Output directory. This is where the converted files will be saved."
-msgstr ""
-"Directorio de salida. Aquí es donde se guardarán los archivos convertidos."
-
-#: lib/cli/args_extract_convert.py:66
+#: lib/cli/args_extract_convert.py:60
 msgid ""
 "Optional path to an alignments file. Leave blank if the alignments file is "
 "at the default location."
@@ -47,7 +43,7 @@ msgstr ""
 "Ruta opcional a un archivo de alineaciones. Dejar en blanco si el archivo de "
 "alineaciones está en la ubicación por defecto."
 
-#: lib/cli/args_extract_convert.py:97
+#: lib/cli/args_extract_convert.py:83
 msgid ""
 "Extract faces from image or video sources.\n"
 "Extraction plugins can be configured in the 'Settings' Menu"
@@ -55,38 +51,46 @@ msgstr ""
 "Extrae caras de fuentes de imagen o video.\n"
 "Los plugins de extracción pueden ser configuradas en el menú de 'Ajustes'"
 
-#: lib/cli/args_extract_convert.py:124
+#: lib/cli/args_extract_convert.py:109
 msgid ""
-"R|If selected then the input_dir should be a parent folder containing "
-"multiple videos and/or folders of images you wish to extract from. The faces "
-"will be output to separate sub-folders in the output_dir."
+"Output directory. Location to save extracted faces. If not provided then "
+"don't save faces and just create an alignments file"
+msgstr ""
+"Directorio de salida. Ubicación donde se guardarán las caras extraídas. Si "
+"no se especifica, no se guardarán las caras y solo se creará un archivo de "
+"alineaciones."
+
+#: lib/cli/args_extract_convert.py:118
+msgid ""
+"If selected then the input_dir should be a parent folder containing multiple "
+"videos and/or folders of images you wish to extract from. The faces will be "
+"output to separate sub-folders in the output_dir."
 msgstr ""
 "Si se selecciona, input_dir debe ser una carpeta principal que contenga "
 "varios videos y/o carpetas de imágenes de las que desea extraer. Las caras "
 "se enviarán a subcarpetas separadas en output_dir."
 
-#: lib/cli/args_extract_convert.py:133 lib/cli/args_extract_convert.py:152
-#: lib/cli/args_extract_convert.py:167 lib/cli/args_extract_convert.py:206
-#: lib/cli/args_extract_convert.py:224 lib/cli/args_extract_convert.py:237
-#: lib/cli/args_extract_convert.py:247 lib/cli/args_extract_convert.py:257
-#: lib/cli/args_extract_convert.py:503 lib/cli/args_extract_convert.py:529
-#: lib/cli/args_extract_convert.py:568
-msgid "Plugins"
-msgstr "Extensiones"
+#: lib/cli/args_extract_convert.py:127 lib/cli/args_extract_convert.py:215
+#: lib/cli/args_extract_convert.py:228 lib/cli/args_extract_convert.py:238
+msgid "Detect"
+msgstr "Detectar"
 
-#: lib/cli/args_extract_convert.py:135
+#: lib/cli/args_extract_convert.py:129
 msgid ""
 "R|Detector to use. Some of these have configurable settings in '/config/"
 "extract.ini' or 'Settings > Configure Extract 'Plugins':\n"
 "L|cv2-dnn: A CPU only extractor which is the least reliable and least "
-"resource intensive. Use this if not using a GPU and time is important.\n"
-"L|mtcnn: Good detector. Fast on CPU, faster on GPU. Uses fewer resources "
-"than other GPU detectors but can often return more false positives.\n"
-"L|s3fd: Best detector. Slow on CPU, faster on GPU. Can detect more faces and "
+"resource intensive. Use this only as a last resort. Both MTCNN and "
+"RetinaFace have variants that will perform better on CPU.\n"
+"L|mtcnn: Average detector. Fast on CPU, faster on GPU. Uses fewer resources "
+"than other GPU detectors but can often return more false positives or misses "
+"faces.\n"
+"L|retinaface: Good detector. Faster and lighter than S3FD but of similar "
+"quality. A ResNet and MobileNet version are available (configurable in "
+"Detect settings). The MobileNet version is light enough to run on CPU.\n"
+"L|s3fd: Good detector. Slow on CPU, faster on GPU. Can detect more faces and "
 "fewer false positives than other GPU detectors, but is a lot more resource "
-"intensive.\n"
-"L|external: Import a face detection bounding box from a json file. "
-"(configurable in Detect settings)"
+"intensive."
 msgstr ""
 "R|Detector de caras a usar. Algunos tienen ajustes configurables en '/config/"
 "extract.ini' o 'Ajustes > Configurar Extensiones de Extracción:\n"
@@ -98,27 +102,37 @@ msgstr ""
 "L|s3fd: El mejor detector. Lento en la CPU, y más rápido en la GPU. Puede "
 "detectar más caras y tiene menos falsos positivos que otros detectores "
 "basados en GPU, pero uso muchos más recursos.\n"
-"L|external: importe un cuadro de detección de detección de cara desde un "
-"archivo JSON. (configurable en la configuración de detección)"
+"L|retinaface: Buen detector. Más rápido y ligero que el S3FD, pero de "
+"calidad similar. Hay versiones para ResNet y MobileNet disponibles "
+"(configurables en los ajustes de detección). La versión para MobileNet es lo "
+"suficientemente ligera como para funcionar con la CPU."
 
-#: lib/cli/args_extract_convert.py:154
+#: lib/cli/args_extract_convert.py:149 lib/cli/args_extract_convert.py:251
+#: lib/cli/args_extract_convert.py:269 lib/cli/args_extract_convert.py:282
+#: lib/cli/args_extract_convert.py:292
+msgid "Align"
+msgstr "Alinear"
+
+#: lib/cli/args_extract_convert.py:151
 msgid ""
 "R|Aligner to use.\n"
 "L|cv2-dnn: A CPU only landmark detector. Faster, less resource intensive, "
 "but less accurate. Only use this if not using a GPU and time is important.\n"
-"L|fan: Best aligner. Fast on GPU, slow on CPU.\n"
-"L|external: Import 68 point 2D landmarks or an aligned bounding box from a "
-"json file. (configurable in Align settings)"
+"L|fan: Best aligner. Fast on GPU, slow on CPU."
 msgstr ""
 "R|Alineador a usar.\n"
 "L|cv2-dnn: Detector que usa sólo la CPU. Más rápido, usa menos recursos, "
 "pero es menos preciso. Elegir este si necesita rapidez y no usar la GPU.\n"
-"L|fan: El mejor alineador. Rápido en la GPU, y lento en la CPU.\n"
-"L|external: importar 68 puntos 2D Modos de referencia o un cuadro "
-"delimitador alineado de un archivo JSON. (configurable en la configuración "
-"alineada)"
+"L|fan: Buen alineador. Rápido en la GPU, y lento en la CPU.\n"
+"L|hrnet: El mejor alineador. Más rápido y con mejor rendimiento que FAN. "
+"Entrenado con un conjunto personalizado de caras completamente rotadas. "
+"Rápido en GPU, lento en CPU."
 
-#: lib/cli/args_extract_convert.py:169
+#: lib/cli/args_extract_convert.py:161
+msgid "Mask"
+msgstr "Mascarilla"
+
+#: lib/cli/args_extract_convert.py:163
 msgid ""
 "R|Additional Masker(s) to use. The masks generated here will all take up GPU "
 "RAM. You can select none, one or multiple masks, but the extraction may take "
@@ -188,7 +202,63 @@ msgstr ""
 "referencia y la máscara se extiende hacia arriba en la frente.\n"
 "(eg: `-M unet-dfl vgg-clear`, `--masker vgg-obstructed`)"
 
-#: lib/cli/args_extract_convert.py:208
+#: lib/cli/args_extract_convert.py:199 lib/cli/args_extract_convert.py:304
+#: lib/cli/args_extract_convert.py:317 lib/cli/args_extract_convert.py:331
+msgid "Identity"
+msgstr "Identidad"
+
+#: lib/cli/args_extract_convert.py:201
+msgid ""
+"R|Obtain and store face identity encodings. Slows down extract a little but "
+"will save time if using 'sort by face'. Required for face filtering.\n"
+"L|t-face: An InsightFace ResNet based model with a lighter and heavier "
+"variant (configurable in settings).\n"
+"L|vggface2: An older and lighter, but fairly reliable plugin based on the "
+"VGG Network."
+msgstr ""
+"R|Obtiene y almacena las codificaciones de identidad facial. Ralentiza un "
+"poco la extracción, pero ahorra tiempo si se usa la opción \"ordenar por "
+"rostro\". Necesario para el filtrado facial.\n"
+"L|t-face: Un modelo InsightFace basado en ResNet con una variante más ligera "
+"y otra más pesada (configurable en los ajustes).\n"
+"L|vggface2: Un complemento más antiguo y ligero, pero bastante fiable, "
+"basado en la red VGG."
+
+#: lib/cli/args_extract_convert.py:217
+msgid ""
+"Filters out detections below this percentage of the shortest side of the "
+"frame along the face detection box's longest edge. (eg: a value of 10 will "
+"filter out faces smaller than 72px from a 720p image). 0 for disabled."
+msgstr ""
+"Filtra las detecciones por debajo de este porcentaje del lado más corto del "
+"marco a lo largo del borde más largo del cuadro de detección de rostros. "
+"(Por ejemplo: un valor de 10 filtrará los rostros de menos de 72 píxeles en "
+"una imagen de 720p). 0 para deshabilitado."
+
+#: lib/cli/args_extract_convert.py:230
+msgid ""
+"Filters out detections above this percentage of the shortest side of the "
+"frame along the face detection box's longest edge. (eg: a value of 200 will "
+"filter out faces larger than 1440px from a 720p image). 0 for disabled."
+msgstr ""
+"Filtra las detecciones que superen este porcentaje del lado más corto del "
+"marco a lo largo del borde más largo del cuadro de detección de rostros. "
+"(Por ejemplo: un valor de 200 filtrará los rostros de más de 1440 píxeles en "
+"una imagen de 720p). 0 para deshabilitado."
+
+#: lib/cli/args_extract_convert.py:240
+msgid ""
+"If a face isn't found, rotate the images to try to find a face. Can find "
+"more faces at the cost of extraction speed. Pass in a single number to use "
+"increments of that size up to 360, or pass in a list of numbers to enumerate "
+"exactly what angles to check."
+msgstr ""
+"Si no se encuentra una cara, gira las imágenes para intentar encontrar una "
+"cara. Puede encontrar más caras a costa de la velocidad de extracción. Pase "
+"un solo número para usar incrementos de ese tamaño hasta 360, o pase una "
+"lista de números para enumerar exactamente qué ángulos comprobar."
+
+#: lib/cli/args_extract_convert.py:253
 msgid ""
 "R|Performing normalization can help the aligner better align faces with "
 "difficult lighting conditions at an extraction speed cost. Different methods "
@@ -211,7 +281,7 @@ msgstr ""
 "L|hist: Iguala los histogramas de los canales RGB.\n"
 "L|mean: Normalizar los colores de la cara a la media."
 
-#: lib/cli/args_extract_convert.py:226
+#: lib/cli/args_extract_convert.py:271
 msgid ""
 "The number of times to re-feed the detected face into the aligner. Each time "
 "the face is re-fed into the aligner the bounding box is adjusted by a small "
@@ -228,7 +298,7 @@ msgstr ""
 "más veces se vuelva a introducir la cara en el alineador, menos "
 "microfluctuaciones se producirán, pero la extracción será más larga."
 
-#: lib/cli/args_extract_convert.py:239
+#: lib/cli/args_extract_convert.py:284
 msgid ""
 "Re-feed the initially found aligned face through the aligner. Can help "
 "produce better alignments for faces that are rotated beyond 45 degrees in "
@@ -239,44 +309,17 @@ msgstr ""
 "se giran más de 45 grados en el marco o se encuentran en ángulos extremos. "
 "Ralentiza la extracción."
 
-#: lib/cli/args_extract_convert.py:249
+#: lib/cli/args_extract_convert.py:294
 msgid ""
-"If a face isn't found, rotate the images to try to find a face. Can find "
-"more faces at the cost of extraction speed. Pass in a single number to use "
-"increments of that size up to 360, or pass in a list of numbers to enumerate "
-"exactly what angles to check."
+"Enable aligner filters. This allows the filtering out of faces based on "
+"certain statistics and characteristics. Configurable in extract settings. "
+"Slows down extraction."
 msgstr ""
-"Si no se encuentra una cara, gira las imágenes para intentar encontrar una "
-"cara. Puede encontrar más caras a costa de la velocidad de extracción. Pase "
-"un solo número para usar incrementos de ese tamaño hasta 360, o pase una "
-"lista de números para enumerar exactamente qué ángulos comprobar."
+"Habilitar filtros de alineación. Esto permite filtrar rostros según ciertas "
+"estadísticas y características. Se puede configurar en los ajustes de "
+"extracción. Ralentiza la extracción."
 
-#: lib/cli/args_extract_convert.py:259
-msgid ""
-"Obtain and store face identity encodings from VGGFace2. Slows down extract a "
-"little, but will save time if using 'sort by face'"
-msgstr ""
-"Obtenga y almacene codificaciones de identidad facial de VGGFace2. Ralentiza "
-"un poco la extracción, pero ahorrará tiempo si usa 'sort by face'"
-
-#: lib/cli/args_extract_convert.py:269 lib/cli/args_extract_convert.py:280
-#: lib/cli/args_extract_convert.py:293 lib/cli/args_extract_convert.py:307
-#: lib/cli/args_extract_convert.py:614 lib/cli/args_extract_convert.py:623
-#: lib/cli/args_extract_convert.py:638 lib/cli/args_extract_convert.py:651
-#: lib/cli/args_extract_convert.py:665
-msgid "Face Processing"
-msgstr "Proceso de Caras"
-
-#: lib/cli/args_extract_convert.py:271
-msgid ""
-"Filters out faces detected below this size. Length, in pixels across the "
-"diagonal of the bounding box. Set to 0 for off"
-msgstr ""
-"Filtra las caras detectadas por debajo de este tamaño. Longitud, en píxeles "
-"a lo largo de la diagonal del cuadro delimitador. Establecer a 0 para "
-"desactivar"
-
-#: lib/cli/args_extract_convert.py:282
+#: lib/cli/args_extract_convert.py:306
 msgid ""
 "Optionally filter out people who you do not wish to extract by passing in "
 "images of those people. Should be a small variety of images at different "
@@ -289,7 +332,7 @@ msgstr ""
 "contenga las imágenes requeridas o múltiples archivos de imágenes, separados "
 "por espacios."
 
-#: lib/cli/args_extract_convert.py:295
+#: lib/cli/args_extract_convert.py:319
 msgid ""
 "Optionally select people you wish to extract by passing in images of that "
 "person. Should be a small variety of images at different angles and in "
@@ -302,7 +345,7 @@ msgstr ""
 "contenga las imágenes requeridas o múltiples archivos de imágenes, separados "
 "por espacios."
 
-#: lib/cli/args_extract_convert.py:309
+#: lib/cli/args_extract_convert.py:333
 msgid ""
 "For use with the optional nfilter/filter files. Threshold for positive face "
 "recognition. Higher values are stricter."
@@ -310,12 +353,13 @@ msgstr ""
 "Para usar con los archivos nfilter/filter opcionales. Umbral para el "
 "reconocimiento facial positivo. Los valores más altos son más estrictos."
 
-#: lib/cli/args_extract_convert.py:318 lib/cli/args_extract_convert.py:331
-#: lib/cli/args_extract_convert.py:344 lib/cli/args_extract_convert.py:356
+#: lib/cli/args_extract_convert.py:342 lib/cli/args_extract_convert.py:355
+#: lib/cli/args_extract_convert.py:368 lib/cli/args_extract_convert.py:387
+#: lib/cli/args_extract_convert.py:399
 msgid "output"
 msgstr "salida"
 
-#: lib/cli/args_extract_convert.py:320
+#: lib/cli/args_extract_convert.py:344
 msgid ""
 "The output size of extracted faces. Make sure that the model you intend to "
 "train supports your required size. This will only need to be changed for hi-"
@@ -325,7 +369,7 @@ msgstr ""
 "pretende entrenar admite el tamaño deseado. Esto sólo tendrá que ser "
 "cambiado para los modelos de alta resolución."
 
-#: lib/cli/args_extract_convert.py:333
+#: lib/cli/args_extract_convert.py:357
 msgid ""
 "Extract every 'nth' frame. This option will skip frames when extracting "
 "faces. For example a value of 1 will extract faces from every frame, a value "
@@ -335,7 +379,31 @@ msgstr ""
 "extraer las caras. Por ejemplo, un valor de 1 extraerá las caras de cada "
 "fotograma, un valor de 10 extraerá las caras de cada 10 fotogramas."
 
-#: lib/cli/args_extract_convert.py:346
+#: lib/cli/args_extract_convert.py:370
+msgid ""
+"Only output faces that have been resized by this percent or more to meet the "
+"specified extract size (`-z`, `--size`). Useful for excluding low-res images "
+"from a training set. Set to 0 to output all faces. This only impacts faces "
+"that are output to disk. All detected faces will still be saved to the "
+"alignments file regardless of what is set here. Eg: For an extract size of "
+"512px, A setting of 50 will only output faces that have been resized from "
+"256px or above. Setting to 100 will only output faces that have been resized "
+"from 512px or above. A setting of 200 will only output faces that have been "
+"downscaled from 1024px or above."
+msgstr ""
+"Solo se mostrarán las caras que se hayan redimensionado en este porcentaje o "
+"más para cumplir con el tamaño de extracción especificado (`-z`, `--size`). "
+"Útil para excluir imágenes de baja resolución de un conjunto de "
+"entrenamiento. Establezca en 0 para mostrar todas las caras. Esto solo "
+"afecta a las caras que se guardan en el disco. Todas las caras detectadas se "
+"guardarán en el archivo de alineaciones independientemente de lo que se "
+"establezca aquí. Por ejemplo: para un tamaño de extracción de 512 px, una "
+"configuración de 50 mostrará solo las caras que se hayan redimensionado "
+"desde 256 px o más. Establecer en 100 mostrará solo las caras que se hayan "
+"redimensionado desde 512 px o más. Una configuración de 200 mostrará solo "
+"las caras que se hayan reducido de escala desde 1024 px o más."
+
+#: lib/cli/args_extract_convert.py:389
 msgid ""
 "Automatically save the alignments file after a set amount of frames. By "
 "default the alignments file is only saved at the end of the extraction "
@@ -351,29 +419,43 @@ msgstr ""
 "ADVERTENCIA: No interrumpa el script al escribir el archivo porque podría "
 "corromperse. Poner a 0 para desactivar"
 
-#: lib/cli/args_extract_convert.py:357
-msgid "Draw landmarks on the ouput faces for debugging purposes."
+#: lib/cli/args_extract_convert.py:400
+msgid "Draw landmarks on the output faces for debugging purposes."
 msgstr ""
 "Dibujar puntos de referencia en las caras de salida para fines de depuración."
 
-#: lib/cli/args_extract_convert.py:363 lib/cli/args_extract_convert.py:373
-#: lib/cli/args_extract_convert.py:381 lib/cli/args_extract_convert.py:388
-#: lib/cli/args_extract_convert.py:678 lib/cli/args_extract_convert.py:691
-#: lib/cli/args_extract_convert.py:712 lib/cli/args_extract_convert.py:718
+#: lib/cli/args_extract_convert.py:405 lib/cli/args_extract_convert.py:414
+#: lib/cli/args_extract_convert.py:424 lib/cli/args_extract_convert.py:432
+#: lib/cli/args_extract_convert.py:693 lib/cli/args_extract_convert.py:706
+#: lib/cli/args_extract_convert.py:727 lib/cli/args_extract_convert.py:733
 msgid "settings"
 msgstr "ajustes"
 
-#: lib/cli/args_extract_convert.py:365
+#: lib/cli/args_extract_convert.py:406
 msgid ""
-"Don't run extraction in parallel. Will run each part of the extraction "
-"process separately (one after the other) rather than all at the same time. "
-"Useful if VRAM is at a premium."
+"Compile any PyTorch models. This will lead to slower start up time, but "
+"faster processing. For large amounts of data this is worth enabling. For "
+"smaller extractions it is not."
 msgstr ""
-"No ejecute la extracción en paralelo. Ejecutará cada parte del proceso de "
-"extracción por separado (una tras otra) en lugar de hacerlo todo al mismo "
-"tiempo. Útil si la VRAM es escasa."
+"Compila cualquier modelo de PyTorch. Esto ralentizará el inicio, pero "
+"acelerará el procesamiento. Para grandes cantidades de datos, vale la pena "
+"habilitar esta opción. Para extracciones más pequeñas, no."
 
-#: lib/cli/args_extract_convert.py:375
+#: lib/cli/args_extract_convert.py:415
+msgid ""
+"Benchmark the chosen extract plugins for optimal batch sizes. The benchmark "
+"profiler can be configured in settings. Note: This will take a long time, so "
+"should be used to find optimal settings for a given plugin combination and "
+"type of dataset rather than being used every time."
+msgstr ""
+"Evalúe el rendimiento de los complementos de extracción seleccionados para "
+"determinar el tamaño óptimo de los lotes. El analizador de rendimiento se "
+"puede configurar en los ajustes. Nota: Este proceso puede tardar bastante, "
+"por lo que se recomienda usarlo para encontrar la configuración óptima para "
+"una combinación específica de complementos y un tipo de conjunto de datos "
+"determinado, en lugar de usarlo siempre."
+
+#: lib/cli/args_extract_convert.py:426
 msgid ""
 "Skips frames that have already been extracted and exist in the alignments "
 "file"
@@ -381,19 +463,13 @@ msgstr ""
 "Omite los fotogramas que ya han sido extraídos y que existen en el archivo "
 "de alineaciones"
 
-#: lib/cli/args_extract_convert.py:382
+#: lib/cli/args_extract_convert.py:433
 msgid "Skip frames that already have detected faces in the alignments file"
 msgstr ""
 "Omitir los fotogramas que ya tienen caras detectadas en el archivo de "
 "alineaciones"
 
-#: lib/cli/args_extract_convert.py:389
-msgid "Skip saving the detected faces to disk. Just create an alignments file"
-msgstr ""
-"No guardar las caras detectadas en el disco. Crear sólo un archivo de "
-"alineaciones"
-
-#: lib/cli/args_extract_convert.py:463
+#: lib/cli/args_extract_convert.py:469
 msgid ""
 "Swap the original faces in a source video/images to your final faces.\n"
 "Conversion plugins can be configured in the 'Settings' Menu"
@@ -403,7 +479,12 @@ msgstr ""
 "Los plugins de conversión pueden ser configurados en el menú "
 "\"Configuración\""
 
-#: lib/cli/args_extract_convert.py:485
+#: lib/cli/args_extract_convert.py:489
+msgid "Output directory. This is where the converted files will be saved."
+msgstr ""
+"Directorio de salida. Aquí es donde se guardarán los archivos convertidos."
+
+#: lib/cli/args_extract_convert.py:498
 msgid ""
 "Only required if converting from images to video. Provide The original video "
 "that the source frames were extracted from (for extracting the fps and "
@@ -413,7 +494,7 @@ msgstr ""
 "original del que se extrajeron los fotogramas de origen (para extraer los "
 "fps y el audio)."
 
-#: lib/cli/args_extract_convert.py:494
+#: lib/cli/args_extract_convert.py:507
 msgid ""
 "Model directory. The directory containing the trained model you wish to use "
 "for conversion."
@@ -421,7 +502,12 @@ msgstr ""
 "Directorio del modelo. El directorio que contiene el modelo entrenado que "
 "desea utilizar para la conversión."
 
-#: lib/cli/args_extract_convert.py:505
+#: lib/cli/args_extract_convert.py:516 lib/cli/args_extract_convert.py:544
+#: lib/cli/args_extract_convert.py:583
+msgid "Plugins"
+msgstr "Extensiones"
+
+#: lib/cli/args_extract_convert.py:518
 msgid ""
 "R|Performs color adjustment to the swapped face. Some of these options have "
 "configurable settings in '/config/convert.ini' or 'Settings > Configure "
@@ -461,7 +547,7 @@ msgstr ""
 "colores. Generalmente no da resultados muy satisfactorios.\n"
 "L|none: No realice el ajuste de color."
 
-#: lib/cli/args_extract_convert.py:531
+#: lib/cli/args_extract_convert.py:546
 msgid ""
 "R|Masker to use. NB: The mask you require must exist within the alignments "
 "file. You can add additional masks with the Mask Tool.\n"
@@ -537,7 +623,7 @@ msgstr ""
 "L|predicted: Si la opción 'Learn Mask' se habilitó durante el entrenamiento, "
 "esto usará la máscara que fue creada por el modelo entrenado."
 
-#: lib/cli/args_extract_convert.py:570
+#: lib/cli/args_extract_convert.py:585
 msgid ""
 "R|The plugin to use to output the converted images. The writers are "
 "configurable in '/config/convert.ini' or 'Settings > Configure Convert "
@@ -570,12 +656,12 @@ msgstr ""
 "L|pillow: [images] Más lento que opencv, pero tiene más opciones y soporta "
 "más formatos."
 
-#: lib/cli/args_extract_convert.py:591 lib/cli/args_extract_convert.py:600
-#: lib/cli/args_extract_convert.py:703
+#: lib/cli/args_extract_convert.py:606 lib/cli/args_extract_convert.py:615
+#: lib/cli/args_extract_convert.py:718
 msgid "Frame Processing"
 msgstr "Proceso de fotogramas"
 
-#: lib/cli/args_extract_convert.py:593
+#: lib/cli/args_extract_convert.py:608
 #, python-format
 msgid ""
 "Scale the final output frames by this amount. 100%% will output the frames "
@@ -585,7 +671,7 @@ msgstr ""
 "a los fotogramas a las dimensiones de origen. 50%% a la mitad de tamaño. "
 "200%% al doble de tamaño"
 
-#: lib/cli/args_extract_convert.py:602
+#: lib/cli/args_extract_convert.py:617
 msgid ""
 "Frame ranges to apply transfer to e.g. For frames 10 to 50 and 90 to 100 use "
 "--frame-ranges 10-50 90-100. Frames falling outside of the selected range "
@@ -599,7 +685,13 @@ msgstr ""
 "imágenes, ¡los nombres de los archivos deben terminar con el número de "
 "fotograma!"
 
-#: lib/cli/args_extract_convert.py:616
+#: lib/cli/args_extract_convert.py:629 lib/cli/args_extract_convert.py:638
+#: lib/cli/args_extract_convert.py:653 lib/cli/args_extract_convert.py:666
+#: lib/cli/args_extract_convert.py:680
+msgid "Face Processing"
+msgstr "Proceso de Caras"
+
+#: lib/cli/args_extract_convert.py:631
 msgid ""
 "Scale the swapped face by this percentage. Positive values will enlarge the "
 "face, Negative values will shrink the face."
@@ -607,7 +699,7 @@ msgstr ""
 "Escale la cara intercambiada según este porcentaje. Los valores positivos "
 "agrandarán la cara, los valores negativos la reducirán."
 
-#: lib/cli/args_extract_convert.py:625
+#: lib/cli/args_extract_convert.py:640
 msgid ""
 "If you have not cleansed your alignments file, then you can filter out faces "
 "by defining a folder here that contains the faces extracted from your input "
@@ -623,7 +715,7 @@ msgstr ""
 "especificada. Si se deja en blanco, se convertirán todas las caras que "
 "existan en el archivo de alineaciones."
 
-#: lib/cli/args_extract_convert.py:640
+#: lib/cli/args_extract_convert.py:655
 msgid ""
 "Optionally filter out people who you do not wish to process by passing in an "
 "image of that person. Should be a front portrait with a single person in the "
@@ -637,7 +729,7 @@ msgstr ""
 "uso del filtro de caras disminuirá significativamente la velocidad de "
 "extracción y no se puede garantizar su precisión."
 
-#: lib/cli/args_extract_convert.py:653
+#: lib/cli/args_extract_convert.py:668
 msgid ""
 "Optionally select people you wish to process by passing in an image of that "
 "person. Should be a front portrait with a single person in the image. "
@@ -651,7 +743,7 @@ msgstr ""
 "del filtro facial disminuirá significativamente la velocidad de extracción y "
 "no se puede garantizar su precisión."
 
-#: lib/cli/args_extract_convert.py:667
+#: lib/cli/args_extract_convert.py:682
 msgid ""
 "For use with the optional nfilter/filter files. Threshold for positive face "
 "recognition. Lower values are stricter. NB: Using face filter will "
@@ -663,7 +755,7 @@ msgstr ""
 "NB: El uso del filtro facial disminuirá significativamente la velocidad de "
 "extracción y no se puede garantizar su precisión."
 
-#: lib/cli/args_extract_convert.py:680
+#: lib/cli/args_extract_convert.py:695
 msgid ""
 "The maximum number of parallel processes for performing conversion. "
 "Converting images is system RAM heavy so it is possible to run out of memory "
@@ -680,7 +772,7 @@ msgstr ""
 "procesos que los disponibles en su sistema. Si 'singleprocess' está "
 "habilitado, este ajuste será ignorado."
 
-#: lib/cli/args_extract_convert.py:693
+#: lib/cli/args_extract_convert.py:708
 msgid ""
 "Enable On-The-Fly Conversion. NOT recommended. You should generate a clean "
 "alignments file for your destination video. However, if you wish you can "
@@ -695,7 +787,7 @@ msgstr ""
 "de baja calidad. Si se encuentra un archivo de alineaciones, esta opción "
 "será ignorada."
 
-#: lib/cli/args_extract_convert.py:705
+#: lib/cli/args_extract_convert.py:720
 msgid ""
 "When used with --frame-ranges outputs the unchanged frames that are not "
 "processed instead of discarding them."
@@ -703,14 +795,45 @@ msgstr ""
 "Cuando se usa con --frame-ranges, la salida incluye los fotogramas no "
 "procesados en vez de descartarlos."
 
-#: lib/cli/args_extract_convert.py:713
+#: lib/cli/args_extract_convert.py:728
 msgid "Swap the model. Instead converting from of A -> B, converts B -> A"
 msgstr ""
 "Intercambiar el modelo. En vez de convertir de A a B, convierte de B a A"
 
-#: lib/cli/args_extract_convert.py:719
+#: lib/cli/args_extract_convert.py:734
 msgid "Disable multiprocessing. Slower but less resource intensive."
 msgstr "Desactiva el multiproceso. Es más lento, pero usa menos recursos."
+
+#~ msgid ""
+#~ "Obtain and store face identity encodings from VGGFace2. Slows down "
+#~ "extract a little, but will save time if using 'sort by face'"
+#~ msgstr ""
+#~ "Obtenga y almacene codificaciones de identidad facial de VGGFace2. "
+#~ "Ralentiza un poco la extracción, pero ahorrará tiempo si usa 'sort by "
+#~ "face'"
+
+#~ msgid ""
+#~ "Filters out faces detected below this size. Length, in pixels across the "
+#~ "diagonal of the bounding box. Set to 0 for off"
+#~ msgstr ""
+#~ "Filtra las caras detectadas por debajo de este tamaño. Longitud, en "
+#~ "píxeles a lo largo de la diagonal del cuadro delimitador. Establecer a 0 "
+#~ "para desactivar"
+
+#~ msgid ""
+#~ "Don't run extraction in parallel. Will run each part of the extraction "
+#~ "process separately (one after the other) rather than all at the same "
+#~ "time. Useful if VRAM is at a premium."
+#~ msgstr ""
+#~ "No ejecute la extracción en paralelo. Ejecutará cada parte del proceso de "
+#~ "extracción por separado (una tras otra) en lugar de hacerlo todo al mismo "
+#~ "tiempo. Útil si la VRAM es escasa."
+
+#~ msgid ""
+#~ "Skip saving the detected faces to disk. Just create an alignments file"
+#~ msgstr ""
+#~ "No guardar las caras detectadas en el disco. Crear sólo un archivo de "
+#~ "alineaciones"
 
 #~ msgid ""
 #~ "[LEGACY] This only needs to be selected if a legacy model is being loaded "

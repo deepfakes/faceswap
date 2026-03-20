@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-A tool that allows for sorting and grouping images in different ways.
-"""
+"""A tool that allows for sorting and grouping images in different ways."""
 from __future__ import annotations
 import logging
 import os
@@ -15,7 +13,7 @@ from tqdm import tqdm
 
 # faceswap imports
 from lib.serializer import Serializer, get_serializer_from_filename
-from lib.utils import get_module_objects, handle_deprecated_cliopts
+from lib.utils import get_module_objects, handle_deprecated_cli_opts
 
 from .sort_methods import SortBlur, SortColor, SortFace, SortHistogram, SortMultiMethod
 from .sort_methods_aligned import SortDistance, SortFaceCNN, SortPitch, SortSize, SortYaw, SortRoll
@@ -27,30 +25,29 @@ logger = logging.getLogger(__name__)
 
 
 class Sort():
-    """ Sorts folders of faces based on input criteria
+    """Sorts folders of faces based on input criteria
 
     Wrapper for the sort process to run in either batch mode or single use mode
 
     Parameters
     ----------
-    arguments: :class:`argparse.Namespace`
+    arguments
         The arguments to be passed to the extraction process as generated from Faceswap's command
         line arguments
     """
     def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing: %s (args: %s)", self.__class__.__name__, arguments)
-        self._args = handle_deprecated_cliopts(arguments)
+        self._args = handle_deprecated_cli_opts(arguments)
         self._input_locations = self._get_input_locations()
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def _get_input_locations(self) -> list[str]:
-        """ Obtain the full path to input locations. Will be a list of locations if batch mode is
+        """Obtain the full path to input locations. Will be a list of locations if batch mode is
         selected, or a containing a single location if batch mode is not selected.
 
         Returns
         -------
-        list:
-            The list of input location paths
+        The list of input location paths
         """
         if not self._args.batch_mode:
             return [self._args.input_dir]
@@ -62,7 +59,7 @@ class Sort():
         return retval
 
     def _output_for_input(self, input_location: str) -> str:
-        """ Obtain the path to an output folder for faces for a given input location.
+        """Obtain the path to an output folder for faces for a given input location.
 
         If not running in batch mode, then the user supplied output location will be returned,
         otherwise a sub-folder within the user supplied output location will be returned based on
@@ -70,7 +67,7 @@ class Sort():
 
         Parameters
         ----------
-        input_location: str
+        input_location
             The full path to an input video or folder of images
         """
         if not self._args.batch_mode or self._args.output_dir is None:
@@ -81,7 +78,7 @@ class Sort():
         return retval
 
     def process(self) -> None:
-        """ The entry point for triggering the Sort Process.
+        """The entry point for triggering the Sort Process.
 
         Should only be called from  :class:`lib.cli.launcher.ScriptExecutor`
         """
@@ -102,7 +99,7 @@ class Sort():
 
 
 class _Sort():
-    """ Sorts folders of faces based on input criteria """
+    """Sorts folders of faces based on input criteria"""
     def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: arguments: %s", self.__class__.__name__, arguments)
         self._processes = {"blur": SortBlur,
@@ -134,16 +131,16 @@ class _Sort():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _set_output_folder(self, arguments):
-        """ Set the output folder correctly if it has not been provided
+        """Set the output folder correctly if it has not been provided
+
         Parameters
         ----------
-        arguments: :class:`argparse.Namespace`
+        arguments
             The command line arguments passed to the sort process
 
         Returns
         -------
-        :class:`argparse.Namespace`
-            The command line arguments with output folder correctly set
+        The command line arguments with output folder correctly set
         """
         logger.debug("setting output folder: %s", arguments.output_dir)
         input_dir = arguments.input_dir
@@ -168,17 +165,16 @@ class _Sort():
         return arguments
 
     def _parse_arguments(self, arguments):
-        """ Parse the arguments and update/format relevant choices
+        """Parse the arguments and update/format relevant choices
 
         Parameters
         ----------
-        arguments: :class:`argparse.Namespace`
+        arguments
             The command line arguments passed to the sort process
 
         Returns
         -------
-        :class:`argparse.Namespace`
-            The formatted command line arguments
+        The formatted command line arguments
         """
         logger.debug("Cleaning arguments: %s", arguments)
         if arguments.sort_method == "none" and arguments.group_method == "none":
@@ -199,12 +195,11 @@ class _Sort():
         return arguments
 
     def _get_sorter(self) -> SortMethod:
-        """ Obtain a sorter/grouper combo for the selected sort/group by options
+        """Obtain a sorter/grouper combo for the selected sort/group by options
 
         Returns
         -------
-        :class:`SortMethod`
-            The sorter or combined sorter for sorting and grouping based on user selections
+        The sorter or combined sorter for sorting and grouping based on user selections
         """
         sort_method = self._args.sort_method
         group_method = self._args.group_method
@@ -226,12 +221,12 @@ class _Sort():
         return retval
 
     def _write_to_log(self, changes):
-        """ Write the changes to log file """
+        """Write the changes to log file """
         logger.info("Writing sort log to: '%s'", self._args.log_file_path)
         self.serializer.save(self._args.log_file_path, changes)
 
     def process(self) -> None:
-        """ Main processing function of the sort tool
+        """Main processing function of the sort tool
 
         This method dynamically assigns the functions that will be used to run
         the core process of sorting, optionally grouping, renaming/moving into
@@ -249,14 +244,14 @@ class _Sort():
         logger.info("Done.")
 
     def _sort_file(self, source: str, destination: str) -> None:
-        """ Copy or move a file based on whether 'keep original' has been selected and log changes
+        """Copy or move a file based on whether 'keep original' has been selected and log changes
         if required.
 
         Parameters
         ----------
-        source: str
+        source
             The full path to the source file that is being sorted
-        destination: str
+        destination
             The full path to where the source file should be moved/renamed
         """
         try:
@@ -272,7 +267,7 @@ class _Sort():
             self._changes[source] = destination
 
     def _output_groups(self) -> None:
-        """ Move the files to folders.
+        """Move the files to folders.
 
         Obtains the bins and original filenames from :attr:`_sorter` and outputs into appropriate
         bins in the output location
@@ -314,7 +309,7 @@ class _Sort():
 
     # Output methods
     def _output_non_grouped(self) -> None:
-        """ Output non-grouped files.
+        """Output non-grouped files.
 
         These are files which are sorted but not binned, so just the filename gets updated
         """

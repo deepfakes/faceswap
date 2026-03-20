@@ -64,13 +64,12 @@ class AlignmentsArgs(FaceSwapArgs):
                 "subfolder will be created within the frames folder to hold the output.{0}"
                 "\nL|'export': Export the contents of an alignments file to a json file. Can be "
                 "used for editing alignment information in external tools and then re-importing "
-                "by using Faceswap's Extract 'Import' plugins. Note: masks and identity vectors "
-                "will not be included in the exported file, so will be re-generated when the json "
-                "file is imported back into Faceswap. All data is exported with the origin (0, 0) "
-                "at the top left of the canvas."
-                "\nL|'extract': Re-extract faces from the source frames/video based on "
-                "alignment data. This is a lot quicker than re-detecting faces. Can pass in "
-                "the '-een' (--extract-every-n) parameter to only extract every nth frame.{1}"
+                "by using Faceswap's Extract 'file' plugins for detector and aligner. Note: masks "
+                "and identity vectors will not be included in the exported file, so can be re-"
+                "generated when the json file is imported back into Faceswap. All data is "
+                "exported with the origin (0, 0) at the top left of the canvas."
+                "\nL|'extract': [DEPRECATED] Use 'python faceswap.py extract' instead and select "
+                "'file' as the aligner plugin. {1}"
                 "\nL|'from-faces': Generate alignment file(s) from a folder of extracted "
                 "faces. if the folder of faces comes from multiple sources, then multiple "
                 "alignments files will be created. NB: for faces which have been extracted "
@@ -175,9 +174,9 @@ class AlignmentsArgs(FaceSwapArgs):
             "rounding": 1,
             "group": _("extract"),
             "help": _(
-                "[Extract only] Extract every 'nth' frame. This option will skip frames when "
-                "extracting faces. For example a value of 1 will extract faces from every frame, "
-                "a value of 10 will extract faces from every 10th frame.")})
+                "[DEPRECTATED. Extract only] Extract every 'nth' frame. This option will skip "
+                "frames when extracting faces. For example a value of 1 will extract faces from "
+                "every frame, a value of 10 will extract faces from every 10th frame.")})
         argument_list.append({
             "opts": ("-z", "--size"),
             "type": int,
@@ -186,7 +185,7 @@ class AlignmentsArgs(FaceSwapArgs):
             "rounding": 64,
             "default": 512,
             "group": _("extract"),
-            "help": _("[Extract only] The output size of extracted faces.")})
+            "help": _("[DEPRECTATED. Extract only] The output size of extracted faces.")})
         argument_list.append({
             "opts": ("-m", "--min-size"),
             "type": int,
@@ -197,8 +196,8 @@ class AlignmentsArgs(FaceSwapArgs):
             "dest": "min_size",
             "group": _("extract"),
             "help": _(
-                "[Extract only] Only extract faces that have been resized by this percent or "
-                "more to meet the specified extract size (`-sz`, `--size`). Useful for "
+                "[DEPRECTATED. Extract only] Only extract faces that have been resized by this "
+                "percent or more to meet the specified extract size (`-z`, `--size`). Useful for "
                 "excluding low-res images from a training set. Set to 0 to extract all faces. "
                 "Eg: For an extract size of 512px, A setting of 50 will only include faces "
                 "that have been resized from 256px or above. Setting to 100 will only extract "

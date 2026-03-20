@@ -23,7 +23,7 @@ from .viewport import Viewport
 
 if T.TYPE_CHECKING:
     from tools.manual.detected_faces import DetectedFaces
-    from tools.manual.frameviewer.frame import DisplayFrame
+    from tools.manual.frame_viewer.frame import DisplayFrame
     from tools.manual.manual import TkGlobals
 
 logger = logging.getLogger(__name__)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-""" Handles loading of faces/frames from source locations and pairing with alignments
-information """
+"""Handles loading of faces/frames from source locations and pairing with alignments
+information"""
 from __future__ import annotations
 
 import logging
@@ -13,7 +13,7 @@ from tqdm import tqdm
 from lib.align import alignments, DetectedFace, update_legacy_png_header
 from lib.image import FacesLoader, ImagesLoader
 from lib.utils import get_module_objects
-from plugins.extract import ExtractMedia
+from lib.infer.objects import FrameFaces
 
 if T.TYPE_CHECKING:
     from lib.align.alignments import PNGHeaderDict
@@ -21,14 +21,14 @@ logger = logging.getLogger(__name__)
 
 
 class Loader:
-    """ Loader for reading source data from disk, and yielding the output paired with alignment
+    """Loader for reading source data from disk, and yielding the output paired with alignment
     information
 
     Parameters
     ----------
-    location: str
+    location
         Full path to the source files location
-    is_faces: bool
+    is_faces
         ``True`` if the source is a folder of faceswap extracted faces
     """
     def __init__(self, location: str, is_faces: bool) -> None:
@@ -44,74 +44,54 @@ class Loader:
 
     @property
     def file_list(self) -> list[str]:
-        """list[str]: Full file list of source files to be loaded """
+        """Full file list of source files to be loaded """
         return self._loader.file_list
 
     @property
     def is_video(self) -> bool:
-        """bool: ``True`` if the source is a video file otherwise ``False`` """
+        """``True`` if the source is a video file otherwise ``False`` """
         return self._loader.is_video
 
     @property
     def location(self) -> str:
-        """str: Full path to the source folder/video file location """
+        """Full path to the source folder/video file location """
         return self._loader.location
 
     @property
     def skip_count(self) -> int:
-        """int: The number of faces/frames that have been skipped due to no match in alignments
-        file """
+        """The number of faces/frames that have been skipped due to no match in alignments file"""
         return self._skip_count
 
     def add_alignments(self, alignments_object: alignments.Alignments | None) -> None:
-        """ Add the loaded alignments to :attr:`_alignments` for content matching
+        """Add the loaded alignments to :attr:`_alignments` for content matching
 
         Parameters
         ----------
-        alignments_object: :class:`~lib.align.Alignments` | None
+        alignments_object
             The alignments file object or ``None`` if not provided
         """
         logger.debug("Adding alignments to loader: %s", alignments_object)
         self._alignments = alignments_object
 
-    @classmethod
-    def _get_detected_face(cls, alignment: alignments.AlignmentFileDict) -> DetectedFace:
-        """ Convert an alignment dict item to a detected_face object
-
-        Parameters
-        ----------
-        alignment: :class:`lib.align.alignments.AlignmentFileDict`
-            The alignment dict for a face
-
-        Returns
-        -------
-        :class:`~lib.align.detected_face.DetectedFace`:
-            The corresponding detected_face object for the alignment
-        """
-        detected_face = DetectedFace()
-        detected_face.from_alignment(alignment)
-        return detected_face
-
     def _process_face(self,
                       filename: str,
                       image: np.ndarray,
-                      metadata: PNGHeaderDict) -> ExtractMedia | None:
-        """ Process a single face when masking from face images
+                      metadata: PNGHeaderDict) -> FrameFaces | None:
+        """Process a single face when masking from face images
 
         Parameters
         ----------
-        filename: str
+        filename
             the filename currently being processed
-        image: :class:`numpy.ndarray`
+        image
             The current face being processed
-        metadata: dict
+        metadata
             The source frame metadata from the PNG header
 
         Returns
         -------
-        :class:`plugins.pipeline.ExtractMedia` | None
-            the extract media object for the processed face or ``None`` if alignment information
-            could not be found
+        the extract media object for the processed face or ``None`` if alignment information
+        could not be found
         """
         frame_name = metadata["source"]["source_filename"]
         face_index = metadata["source"]["face_index"]
@@ -128,19 +108,16 @@ class Loader:
                 return None
 
         alignment = aligns[lookup_index]
-        detected_face = self._get_detected_face(alignment)
-
-        retval = ExtractMedia(filename, image, detected_faces=[detected_face], is_aligned=True)
-        retval.add_frame_metadata(metadata["source"])
+        retval = FrameFaces(filename, image, is_aligned=True, frame_metadata=metadata["source"])
+        retval.detected_faces = [DetectedFace().from_alignment(alignment)]
         return retval
 
-    def _from_faces(self) -> T.Generator[ExtractMedia, None, None]:
-        """ Load content from pre-aligned faces and pair with corresponding metadata
+    def _from_faces(self) -> T.Generator[FrameFaces, None, None]:
+        """Load content from pre-aligned faces and pair with corresponding metadata
 
         Yields
         ------
-        :class:`plugins.pipeline.ExtractMedia`
-            the extract media object for the processed face
+        The extract media object for the processed face
         """
         log_once = False
         for filename, image, metadata in tqdm(self._loader.load(), total=self._loader.count):
@@ -174,13 +151,12 @@ class Loader:
 
             yield retval
 
-    def _from_frames(self) -> T.Generator[ExtractMedia, None, None]:
-        """ Load content from frames and and pair with corresponding metadata
+    def _from_frames(self) -> T.Generator[FrameFaces, None, None]:
+        """Load content from frames and and pair with corresponding metadata
 
         Yields
         ------
-        :class:`plugins.pipeline.ExtractMedia`
-            the extract media object for the processed face
+        The extract media object for the processed face
         """
         assert self._alignments is not None
         for filename, image in tqdm(self._loader.load(), total=self._loader.count):
@@ -196,17 +172,20 @@ class Loader:
                 continue
 
             faces_in_frame = self._alignments.get_faces_in_frame(frame)
-            detected_faces = [self._get_detected_face(alignment) for alignment in faces_in_frame]
-            retval = ExtractMedia(filename, image, detected_faces=detected_faces)
+            detected_faces = [DetectedFace().from_alignment(alignment)
+                              for alignment in faces_in_frame]
+
+            retval = FrameFaces(filename, image)
+            retval.detected_faces = detected_faces
+
             yield retval
 
-    def load(self) -> T.Generator[ExtractMedia, None, None]:
-        """ Load content from source and pair with corresponding alignment data
+    def load(self) -> T.Generator[FrameFaces, None, None]:
+        """Load content from source and pair with corresponding alignment data
 
         Yields
         ------
-        :class:`plugins.pipeline.ExtractMedia`
-            the extract media object for the processed face
+        The extract media object for the processed face
         """
         if self._is_faces:
             iterator = self._from_faces

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-04-19 11:28+0100\n"
+"POT-Creation-Date: 2026-03-13 15:17+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -45,15 +45,15 @@ msgstr ""
 
 #: tools/alignments/cli.py:47
 msgid ""
-" Must Pass in a frames folder/source video file AND a faces folder (-r and -"
-"c)."
+" Must Pass in a frames folder/source video file AND a faces folder (-r and "
+"-c)."
 msgstr ""
 
 #: tools/alignments/cli.py:49
 msgid " Use the output option (-o) to process results."
 msgstr ""
 
-#: tools/alignments/cli.py:58 tools/alignments/cli.py:104
+#: tools/alignments/cli.py:58 tools/alignments/cli.py:103
 msgid "processing"
 msgstr ""
 
@@ -66,14 +66,13 @@ msgid ""
 "will be created within the frames folder to hold the output.{0}\n"
 "L|'export': Export the contents of an alignments file to a json file. Can be "
 "used for editing alignment information in external tools and then re-"
-"importing by using Faceswap's Extract 'Import' plugins. Note: masks and "
-"identity vectors will not be included in the exported file, so will be re-"
-"generated when the json file is imported back into Faceswap. All data is "
-"exported with the origin (0, 0) at the top left of the canvas.\n"
-"L|'extract': Re-extract faces from the source frames/video based on "
-"alignment data. This is a lot quicker than re-detecting faces. Can pass in "
-"the '-een' (--extract-every-n) parameter to only extract every nth frame."
-"{1}\n"
+"importing by using Faceswap's Extract 'file' plugins for detector and "
+"aligner. Note: masks and identity vectors will not be included in the "
+"exported file, so can be re-generated when the json file is imported back "
+"into Faceswap. All data is exported with the origin (0, 0) at the top left "
+"of the canvas.\n"
+"L|'extract': [DEPRECATED] Use 'python faceswap.py extract' instead and "
+"select 'file' as the aligner plugin. {1}\n"
 "L|'from-faces': Generate alignment file(s) from a folder of extracted faces. "
 "if the folder of faces comes from multiple sources, then multiple alignments "
 "files will be created. NB: for faces which have been extracted from folders "
@@ -100,7 +99,7 @@ msgid ""
 "(EXPERIMENTAL!)"
 msgstr ""
 
-#: tools/alignments/cli.py:107
+#: tools/alignments/cli.py:106
 msgid ""
 "R|How to output discovered items ('faces' and 'frames' only):\n"
 "L|'console': Print the list of frames to the screen. (DEFAULT)\n"
@@ -110,12 +109,12 @@ msgid ""
 "directory."
 msgstr ""
 
-#: tools/alignments/cli.py:118 tools/alignments/cli.py:141
-#: tools/alignments/cli.py:148
+#: tools/alignments/cli.py:117 tools/alignments/cli.py:140
+#: tools/alignments/cli.py:147
 msgid "data"
 msgstr ""
 
-#: tools/alignments/cli.py:125
+#: tools/alignments/cli.py:124
 msgid ""
 "Full path to the alignments file to be processed. If you have input a "
 "'frames_dir' and don't provide this option, the process will try to find the "
@@ -124,11 +123,11 @@ msgid ""
 "generated in the specified faces folder."
 msgstr ""
 
-#: tools/alignments/cli.py:142
+#: tools/alignments/cli.py:141
 msgid "Directory containing source frames that faces were extracted from."
 msgstr ""
 
-#: tools/alignments/cli.py:150
+#: tools/alignments/cli.py:149
 msgid ""
 "R|Run the aligmnents tool on multiple sources. The following jobs support "
 "batch mode:\n"
@@ -150,29 +149,30 @@ msgid ""
 "ignored."
 msgstr ""
 
-#: tools/alignments/cli.py:176 tools/alignments/cli.py:188
-#: tools/alignments/cli.py:198
+#: tools/alignments/cli.py:175 tools/alignments/cli.py:187
+#: tools/alignments/cli.py:197
 msgid "extract"
 msgstr ""
 
-#: tools/alignments/cli.py:178
+#: tools/alignments/cli.py:177
 msgid ""
-"[Extract only] Extract every 'nth' frame. This option will skip frames when "
-"extracting faces. For example a value of 1 will extract faces from every "
-"frame, a value of 10 will extract faces from every 10th frame."
+"[DEPRECTATED. Extract only] Extract every 'nth' frame. This option will skip "
+"frames when extracting faces. For example a value of 1 will extract faces "
+"from every frame, a value of 10 will extract faces from every 10th frame."
 msgstr ""
 
-#: tools/alignments/cli.py:189
-msgid "[Extract only] The output size of extracted faces."
+#: tools/alignments/cli.py:188
+msgid "[DEPRECTATED. Extract only] The output size of extracted faces."
 msgstr ""
 
-#: tools/alignments/cli.py:200
+#: tools/alignments/cli.py:199
 msgid ""
-"[Extract only] Only extract faces that have been resized by this percent or "
-"more to meet the specified extract size (`-sz`, `--size`). Useful for "
-"excluding low-res images from a training set. Set to 0 to extract all faces. "
-"Eg: For an extract size of 512px, A setting of 50 will only include faces "
-"that have been resized from 256px or above. Setting to 100 will only extract "
-"faces that have been resized from 512px or above. A setting of 200 will only "
-"extract faces that have been downscaled from 1024px or above."
+"[DEPRECTATED. Extract only] Only extract faces that have been resized by "
+"this percent or more to meet the specified extract size (`-z`, `--size`). "
+"Useful for excluding low-res images from a training set. Set to 0 to extract "
+"all faces. Eg: For an extract size of 512px, A setting of 50 will only "
+"include faces that have been resized from 256px or above. Setting to 100 "
+"will only extract faces that have been resized from 512px or above. A "
+"setting of 200 will only extract faces that have been downscaled from 1024px "
+"or above."
 msgstr ""

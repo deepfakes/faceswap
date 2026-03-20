@@ -1,5 +1,5 @@
 #!/usr/bin python3
-""" Utilities available across all scripts """
+"""Utilities available across all scripts"""
 # NOTE: Do not import keras/pytorch in this script, as it is accessed before they should be loaded
 
 from __future__ import annotations
@@ -34,8 +34,8 @@ if T.TYPE_CHECKING:
 
 # Global variables
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-""" str : Full path to the root faceswap folder """
-IMAGE_EXTENSIONS = [".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
+"""str : Full path to the root faceswap folder """
+IMAGE_EXTENSIONS = [".bmp", ".exr", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
 VIDEO_EXTENSIONS = [".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
                     ".ts", ".vob"]
 ValidBackends = T.Literal["nvidia", "cpu", "apple_silicon", "rocm"]
@@ -43,7 +43,7 @@ _FS_BACKEND: ValidBackends | None = None
 
 
 class _Backend():  # pylint:disable=too-few-public-methods
-    """ Return the backend from config/.faceswap of from the `FACESWAP_BACKEND` Environment
+    """Return the backend from config/.faceswap of from the `FACESWAP_BACKEND` Environment
     Variable.
 
     If file doesn't exist and a variable hasn't been set, create the config file. """
@@ -58,25 +58,23 @@ class _Backend():  # pylint:disable=too-few-public-methods
 
     @classmethod
     def _get_config_file(cls) -> str:
-        """ Obtain the location of the main Faceswap configuration file.
+        """Obtain the location of the main Faceswap configuration file.
 
         Returns
         -------
-        str
-            The path to the Faceswap configuration file
+        The path to the Faceswap configuration file
         """
         config_file = os.path.join(PROJECT_ROOT, "config", ".faceswap")
         return config_file
 
     def _get_backend(self) -> ValidBackends:
-        """ Return the backend from either the `FACESWAP_BACKEND` Environment Variable or from
+        """Return the backend from either the `FACESWAP_BACKEND` Environment Variable or from
         the :file:`config/.faceswap` configuration file. If neither of these exist, prompt the user
         to select a backend.
 
         Returns
         -------
-        str
-            The backend configuration in use by Faceswap
+        The backend configuration in use by Faceswap
         """
         # Check if environment variable is set, if so use that
         if "FACESWAP_BACKEND" in os.environ:
@@ -106,12 +104,11 @@ class _Backend():  # pylint:disable=too-few-public-methods
         return fs_backend
 
     def _configure_backend(self) -> ValidBackends:
-        """ Get user input to select the backend that Faceswap should use.
+        """Get user input to select the backend that Faceswap should use.
 
         Returns
         -------
-        str
-            The backend configuration in use by Faceswap
+        The backend configuration in use by Faceswap
         """
         print("First time configuration. Please select the required backend")
         while True:
@@ -131,13 +128,12 @@ class _Backend():  # pylint:disable=too-few-public-methods
 
 
 def get_backend() -> ValidBackends:
-    """ Get the backend that Faceswap is currently configured to use.
+    """Get the backend that Faceswap is currently configured to use.
 
     Returns
     -------
-    str
-        The backend configuration in use by Faceswap. One of  ["cpu", "nvidia", "rocm",
-        "apple_silicon"]
+    The backend configuration in use by Faceswap. One of  ["cpu", "nvidia", "rocm",
+    "apple_silicon"]
 
     Example
     -------
@@ -152,11 +148,11 @@ def get_backend() -> ValidBackends:
 
 
 def set_backend(backend: str) -> None:
-    """ Override the configured backend with the given backend.
+    """Override the configured backend with the given backend.
 
     Parameters
     ----------
-    backend: ["cpu", "nvidia", "rocm", "apple_silicon"]
+    backend
         The backend to set faceswap to
 
     Example
@@ -173,12 +169,11 @@ _versions: dict[T.Literal["torch", "keras"], tuple[int, int]] = {}
 
 
 def get_torch_version() -> tuple[int, int]:
-    """ Obtain the major. minor version of currently installed PyTorch.
+    """Obtain the major. minor version of currently installed PyTorch.
 
     Returns
     -------
-    tuple[int, int]
-        A tuple of the form (major, minor) representing the version of PyTorch that is installed
+    A tuple of the form (major, minor) representing the version of PyTorch that is installed
 
     Example
     -------
@@ -194,12 +189,11 @@ def get_torch_version() -> tuple[int, int]:
 
 
 def get_keras_version() -> tuple[int, int]:
-    """ Obtain the major. minor version of currently installed Keras.
+    """Obtain the major. minor version of currently installed Keras.
 
     Returns
     -------
-    tuple[int, int]
-        A tuple of the form (major, minor) representing the version of Keras that is installed
+    A tuple of the form (major, minor) representing the version of Keras that is installed
 
     Example
     -------
@@ -215,29 +209,28 @@ def get_keras_version() -> tuple[int, int]:
 
 
 def get_folder(path: str, make_folder: bool = True) -> str:
-    """ Return a path to a folder, creating it if it doesn't exist
+    """Return a path to a folder, creating it if it doesn't exist
 
     Parameters
     ----------
-    path: str
+    path
         The path to the folder to obtain
-    make_folder: bool, optional
+    make_folder
         ``True`` if the folder should be created if it does not already exist, ``False`` if the
         folder should not be created
 
     Returns
     -------
-    str or `None`
-        The path to the requested folder. If `make_folder` is set to ``False`` and the requested
-        path does not exist, then ``None`` is returned
+    The path to the requested folder. If `make_folder` is set to ``False`` and the requested path
+    does not exist, then ``None`` is returned
 
     Example
     -------
     >>> from lib.utils import get_folder
-    >>> get_folder('/tmp/myfolder')
-    '/tmp/myfolder'
+    >>> get_folder('/tmp/my_folder')
+    '/tmp/my_folder'
 
-    >>> get_folder('/tmp/myfolder', make_folder=False)
+    >>> get_folder('/tmp/my_folder', make_folder=False)
     ''
     """
     logger = logging.getLogger(__name__)
@@ -251,7 +244,7 @@ def get_folder(path: str, make_folder: bool = True) -> str:
 
 
 def get_image_paths(directory: str, extension: str | None = None) -> list[str]:
-    """ Gets the image paths from a given directory.
+    """Gets the image paths from a given directory.
 
     The function searches for files with the specified extension(s) in the given directory, and
     returns a list of their paths. If no extension is provided, the function will search for files
@@ -259,16 +252,15 @@ def get_image_paths(directory: str, extension: str | None = None) -> list[str]:
 
     Parameters
     ----------
-    directory: str
+    directory
         The directory to search in
-    extension: str
+    extension
         The file extension to search for. If not provided, all image file types will be searched
         for
 
     Returns
     -------
-    list[str]
-        The list of full paths to the images contained within the given folder
+    The list of full paths to the images contained within the given folder
 
     Example
     -------
@@ -290,23 +282,22 @@ def get_image_paths(directory: str, extension: str | None = None) -> list[str]:
     logger.debug("Scanned Folder contains %s files", len(dir_scanned))
     logger.trace("Scanned Folder Contents: %s", dir_scanned)  # type:ignore[attr-defined]
 
-    for chkfile in dir_scanned:
-        if any(chkfile.name.lower().endswith(ext) for ext in image_extensions):
-            logger.trace("Adding '%s' to image list", chkfile.path)  # type:ignore[attr-defined]
-            dir_contents.append(chkfile.path)
+    for chk_file in dir_scanned:
+        if any(chk_file.name.lower().endswith(ext) for ext in image_extensions):
+            logger.trace("Adding '%s' to image list", chk_file.path)  # type:ignore[attr-defined]
+            dir_contents.append(chk_file.path)
 
     logger.debug("Returning %s images", len(dir_contents))
     return dir_contents
 
 
 def get_dpi() -> float | None:
-    """ Gets the DPI (dots per inch) of the display screen.
+    """Gets the DPI (dots per inch) of the display screen.
 
     Returns
     -------
-    float or ``None``
-        The DPI of the display screen or ``None`` if the dpi couldn't be obtained (ie: if the
-        function is called on a headless system)
+    The DPI of the display screen or ``None`` if the dpi couldn't be obtained (ie: if the function
+    is called on a headless system)
 
     Example
     -------
@@ -326,17 +317,16 @@ def get_dpi() -> float | None:
 
 
 def get_module_objects(module: str) -> list[str]:
-    """ Return a list of all public objects within the given module
+    """Return a list of all public objects within the given module
 
     Parameters
     ----------
-    module : str
+    module
         The module to parse for public objects
 
     Returns
     -------
-    list[str]
-        A list of object names that exist within the given module
+    A list of object names that exist within the given module
 
     Example
     -------
@@ -349,11 +339,11 @@ def get_module_objects(module: str) -> list[str]:
 
 
 def convert_to_secs(*args: int) -> int:
-    """  Convert time in hours, minutes, and seconds to seconds.
+    """ Convert time in hours, minutes, and seconds to seconds.
 
     Parameters
     ----------
-    *args: int
+    *args
         1, 2 or 3 ints. If 2 ints are supplied, then (`minutes`, `seconds`) is implied. If 3 ints
         are supplied then (`hours`, `minutes`, `seconds`) is implied.
 
@@ -387,17 +377,16 @@ def convert_to_secs(*args: int) -> int:
 
 
 def full_path_split(path: str) -> list[str]:
-    """ Split a file path into all of its parts.
+    """Split a file path into all of its parts.
 
     Parameters
     ----------
-    path: str
+    path
         The full path to be split
 
     Returns
     -------
-    list
-        The full path split into a separate item for each part
+    The full path split into a separate item for each part
 
     Example
     -------
@@ -408,34 +397,34 @@ def full_path_split(path: str) -> list[str]:
     ['relative', 'path', 'to', 'file.txt']]
     """
     logger = logging.getLogger(__name__)
-    allparts: list[str] = []
+    all_parts: list[str] = []
     while True:
         parts = os.path.split(path)
         if parts[0] == path:   # sentinel for absolute paths
-            allparts.insert(0, parts[0])
+            all_parts.insert(0, parts[0])
             break
         if parts[1] == path:  # sentinel for relative paths
-            allparts.insert(0, parts[1])
+            all_parts.insert(0, parts[1])
             break
         path = parts[0]
-        allparts.insert(0, parts[1])
-    logger.trace("path: %s, allparts: %s", path, allparts)  # type:ignore[attr-defined]
+        all_parts.insert(0, parts[1])
+    logger.trace("path: %s, all_parts: %s", path, all_parts)  # type:ignore[attr-defined]
     # Remove any empty strings which may have got inserted
-    allparts = [part for part in allparts if part]
-    return allparts
+    all_parts = [part for part in all_parts if part]
+    return all_parts
 
 
 def deprecation_warning(function: str, additional_info: str | None = None) -> None:
-    """ Log a deprecation warning message.
+    """Log a deprecation warning message.
 
     This function logs a warning message to indicate that the specified function has been
     deprecated and will be removed in future. An optional additional message can also be included.
 
     Parameters
     ----------
-    function: str
+    function
         The name of the function that will be deprecated.
-    additional_info: str, optional
+    additional_info
         Any additional information to display with the deprecation message. Default: ``None``
 
     Example
@@ -451,24 +440,32 @@ def deprecation_warning(function: str, additional_info: str | None = None) -> No
     logger.warning(msg)
 
 
-def handle_deprecated_cliopts(arguments: Namespace) -> Namespace:
-    """ Handle deprecated command line arguments and update to correct argument.
+def handle_deprecated_cli_opts(arguments: Namespace,
+                               additional: dict[str, tuple[str | bool | T.Any, ...]] | None = None
+                               ) -> Namespace:
+    """Handle deprecated command line arguments and update to correct argument.
 
     Deprecated cli opts will be provided in the following format:
     `"depr_<option_key>_<deprecated_opt>_<new_opt>"`
 
     Parameters
     ----------
-    arguments: :class:`argpares.Namespace`
+    arguments
         The passed in faceswap cli arguments
+    additional
+        Additional information in format {deprecated_argument: (additional_text, should_update,
+        [new_value])} where deprecated_argument is the command line argument, additional_text is
+        any additional text to display, should_update is whether the deprecated argument should be
+        replaced with the new argument and new_value is an optional value that can be passed in
+        that the new argument should be set to.
+        Default: ``None`` (no additional information)
 
     Returns
     -------
-    :class:`argpares.Namespace`
-        The cli arguments with deprecated values mapped to the correct entry
+    The cli arguments with deprecated values mapped to the correct entry
     """
     logger = logging.getLogger(__name__)
-
+    additional = {} if additional is None else additional
     for key, selected in vars(arguments).items():
         if not key.startswith("depr_") or key.startswith("depr_") and selected is None:
             continue  # Not a deprecated opt
@@ -476,29 +473,48 @@ def handle_deprecated_cliopts(arguments: Namespace) -> Namespace:
             continue  # store-true opt with default value
 
         opt, old, new = key.replace("depr_", "").rsplit("_", maxsplit=2)
-        deprecation_warning(f"Command line option '-{old}'", f"Use '-{new}, --{opt}' instead")
 
+        if opt == "removed":
+            deprecation_warning(f"Command line option '-{old}' ('--{new}')",
+                                "This option no longer performs any action")
+            continue
+
+        opt_additional = additional.get(old, ("", True))
+        add_msg = opt_additional[0]
+        should_update = opt_additional[1]
+        assert isinstance(add_msg, str)
+        assert isinstance(should_update, bool)
+        value = selected if len(opt_additional) < 3 else opt_additional[2]
+
+        add_msg = f" {add_msg}" if add_msg else ""
+        msg = f"Use '-{new}, --{opt}' instead{add_msg}"
+        deprecation_warning(f"Command line option '-{old}'", msg)
+
+        opt = opt.replace("-", "_")
         exist = getattr(arguments, opt)
-        if exist == selected:
-            logger.debug("Keeping existing '%s' value of '%s'", opt, exist)
+        if not should_update:
+            logger.debug("Keeping existing '%s' value '%s' from additional dict", opt, exist)
+        elif exist == value:
+            logger.debug("Keeping existing '%s' value of %s", opt, repr(exist))
         else:
-            logger.debug("Updating arg '%s' from '%s' to '%s' from deprecated opt",
-                         opt, exist, selected)
+            log_at_level = logger.info if old in additional else logger.debug
+            log_at_level("Updating arg '%s' from %s to %s from deprecated option '-%s'",
+                         opt, repr(exist), repr(value), old)
+            setattr(arguments, opt, value)
 
     return arguments
 
 
 def camel_case_split(identifier: str) -> list[str]:
-    """ Split a camelCase string into a list of its individual parts
+    """Split a camelCase string into a list of its individual parts
 
     Parameters
     ----------
-    identifier: str
+    identifier
         The camelCase text to be split
 
     Returns
     -------
-    list[str]
         A list of the individual parts of the camelCase string.
 
     References
@@ -518,7 +534,7 @@ def camel_case_split(identifier: str) -> list[str]:
 
 
 def safe_shutdown(got_error: bool = False) -> None:
-    """ Safely shut down the system.
+    """Safely shut down the system.
 
     This function terminates the queue manager and exits the program in a clean and orderly manner.
     An optional boolean parameter can be used to indicate whether an error occurred during the
@@ -526,7 +542,7 @@ def safe_shutdown(got_error: bool = False) -> None:
 
     Parameters
     ----------
-    got_error: bool, optional
+    got_error
         ``True`` if this function is being called as the result of raised error. Default: ``False``
 
     Example
@@ -544,7 +560,7 @@ def safe_shutdown(got_error: bool = False) -> None:
 
 
 class FaceswapError(Exception):
-    """ Faceswap Error for handling specific errors with useful information.
+    """Faceswap Error for handling specific errors with useful information.
 
     Raises
     ------
@@ -564,15 +580,15 @@ class FaceswapError(Exception):
 
 
 class GetModel():
-    """ Check for models in the cache path.
+    """Check for models in the cache path.
 
     If available, return the path, if not available, get, unzip and install model
 
     Parameters
     ----------
-    model_filename: str or list
+    model_filename
         The name of the model to be loaded (see notes below)
-    git_model_id: int
+    git_model_id
         The second digit in the github tag that identifies this model. See
         https://github.com/deepfakes-models/faceswap-models for more information
 
@@ -607,29 +623,29 @@ class GetModel():
 
     @property
     def _model_full_name(self) -> str:
-        """ str: The full model name from the filename(s). """
+        """The full model name from the filename(s)."""
         common_prefix = os.path.commonprefix(self._model_filename)
         retval = os.path.splitext(common_prefix)[0]
-        self.logger.trace(retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] full name: %s", repr(retval))  # type:ignore[attr-defined]
         return retval
 
     @property
     def _model_name(self) -> str:
-        """ str: The model name from the model's full name. """
+        """The model name from the model's full name."""
         retval = self._model_full_name[:self._model_full_name.rfind("_")]
-        self.logger.trace(retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] name: %s", repr(retval))  # type:ignore[attr-defined]
         return retval
 
     @property
     def _model_version(self) -> int:
-        """ int: The model's version number from the model full name. """
+        """The model's version number from the model full name."""
         retval = int(self._model_full_name[self._model_full_name.rfind("_") + 2:])
-        self.logger.trace(retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] id: %s", repr(retval))  # type:ignore[attr-defined]
         return retval
 
     @property
     def model_path(self) -> str | list[str]:
-        """ str or list[str]: The model path(s) in the cache folder.
+        """The model path(s) in the cache folder.
 
         Example
         -------
@@ -640,54 +656,54 @@ class GetModel():
         """
         paths = [os.path.join(self._cache_dir, fname) for fname in self._model_filename]
         retval: str | list[str] = paths[0] if len(paths) == 1 else paths
-        self.logger.trace(retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] path: %s", repr(retval))  # type:ignore[attr-defined]
         return retval
 
     @property
     def _model_zip_path(self) -> str:
-        """ str: The full path to downloaded zip file. """
+        """The full path to downloaded zip file."""
         retval = os.path.join(self._cache_dir, f"{self._model_full_name}.zip")
-        self.logger.trace(retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] zip path: %s", repr(retval))  # type:ignore[attr-defined]
         return retval
 
     @property
     def _model_exists(self) -> bool:
-        """ bool: ``True`` if the model exists in the cache folder otherwise ``False``. """
+        """``True`` if the model exists in the cache folder otherwise ``False``."""
         if isinstance(self.model_path, list):
             retval = all(os.path.exists(pth) for pth in self.model_path)
         else:
             retval = os.path.exists(self.model_path)
-        self.logger.trace(retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] exists: %s", repr(retval))  # type:ignore[attr-defined]
         return retval
 
     @property
     def _url_download(self) -> str:
-        """ strL Base download URL for models. """
+        """Base download URL for models."""
         tag = f"v{self._git_model_id}.{self._model_version}"
         retval = f"{self._url_base}/{tag}/{self._model_full_name}.zip"
-        self.logger.trace("Download url: %s", retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] Download url: %s", repr(retval))  # type:ignore[attr-defined]
         return retval
 
     @property
     def _url_partial_size(self) -> int:
-        """ int: How many bytes have already been downloaded. """
+        """How many bytes have already been downloaded."""
         zip_file = self._model_zip_path
         retval = os.path.getsize(zip_file) if os.path.exists(zip_file) else 0
-        self.logger.trace(retval)  # type:ignore[attr-defined]
+        self.logger.trace("[GetModel] Partial size: %s", retval)  # type:ignore[attr-defined]
         return retval
 
     def _get(self) -> None:
-        """ Check the model exists, if not, download the model, unzip it and place it in the
-        model's cache folder. """
+        """Check the model exists, if not, download the model, unzip it and place it in the
+        model's cache folder."""
         if self._model_exists:
-            self.logger.debug("Model exists: %s", self.model_path)
+            self.logger.debug("[GetModel] Model exists: %s", repr(self.model_path))
             return
         self._download_model()
         self._unzip_model()
         os.remove(self._model_zip_path)
 
     def _download_model(self) -> None:
-        """ Download the model zip from github to the cache folder. """
+        """Download the model zip from github to the cache folder."""
         self.logger.info("Downloading model: '%s' from: %s", self._model_name, self._url_download)
         for attempt in range(self._retries):
             try:
@@ -696,8 +712,8 @@ class GetModel():
                 if downloaded_size != 0:
                     req.add_header("Range", f"bytes={downloaded_size}-")
                 with request.urlopen(req, timeout=10) as response:
-                    self.logger.debug("header info: {%s}", response.info())
-                    self.logger.debug("Return Code: %s", response.getcode())
+                    self.logger.debug("[GetModel] header info: {%s}", response.info())
+                    self.logger.debug("[GetModel] Return Code: %s", response.getcode())
                     self._write_zipfile(response, downloaded_size)
                 break
             except (socket_error, socket_timeout,
@@ -715,13 +731,13 @@ class GetModel():
                     sys.exit(1)
 
     def _write_zipfile(self, response: HTTPResponse, downloaded_size: int) -> None:
-        """ Write the model zip file to disk.
+        """Write the model zip file to disk.
 
         Parameters
         ----------
-        response: :class:`http.client.HTTPResponse`
+        response
             The response from the model download task
-        downloaded_size: int
+        downloaded_size
             The amount of bytes downloaded so far
         """
         content_length = response.getheader("content-length")
@@ -733,23 +749,23 @@ class GetModel():
         write_type = "wb" if downloaded_size == 0 else "ab"
         assert tqdm is not None
         with open(self._model_zip_path, write_type) as out_file:
-            pbar = tqdm(desc="Downloading",
-                        unit="B",
-                        total=length,
-                        unit_scale=True,
-                        unit_divisor=1024)
+            p_bar = tqdm(desc="Downloading",
+                         unit="B",
+                         total=length,
+                         unit_scale=True,
+                         unit_divisor=1024)
             if downloaded_size != 0:
-                pbar.update(downloaded_size)
+                p_bar.update(downloaded_size)
             while True:
                 buffer = response.read(self._chunk_size)
                 if not buffer:
                     break
-                pbar.update(len(buffer))
+                p_bar.update(len(buffer))
                 out_file.write(buffer)
-            pbar.close()
+            p_bar.close()
 
     def _unzip_model(self) -> None:
-        """ Unzip the model file to the cache folder """
+        """Unzip the model file to the cache folder"""
         self.logger.info("Extracting: '%s'", self._model_name)
         try:
             with zipfile.ZipFile(self._model_zip_path, "r") as zip_file:
@@ -759,46 +775,47 @@ class GetModel():
             sys.exit(1)
 
     def _write_model(self, zip_file: zipfile.ZipFile) -> None:
-        """ Extract files from zip file and write, with progress bar.
+        """Extract files from zip file and write, with progress bar.
 
         Parameters
         ----------
-        zip_file: :class:`zipfile.ZipFile`
+        zip_file
             The downloaded model zip file
         """
         length = sum(f.file_size for f in zip_file.infolist())
-        fnames = zip_file.namelist()
-        self.logger.debug("Zipfile: Filenames: %s, Total Size: %s", fnames, length)
+        f_names = zip_file.namelist()
+        self.logger.debug("[GetModel] Zipfile: Filenames: %s, Total Size: %s", f_names, length)
         assert tqdm is not None
-        pbar = tqdm(desc="Decompressing",
-                    unit="B",
-                    total=length,
-                    unit_scale=True,
-                    unit_divisor=1024)
-        for fname in fnames:
+        p_bar = tqdm(desc="Decompressing",
+                     unit="B",
+                     total=length,
+                     unit_scale=True,
+                     unit_divisor=1024)
+        for fname in f_names:
             out_fname = os.path.join(self._cache_dir, fname)
-            self.logger.debug("Extracting from: '%s' to '%s'", self._model_zip_path, out_fname)
+            self.logger.debug("[GetModel] Extracting from: '%s' to '%s'",
+                              self._model_zip_path, out_fname)
             zipped = zip_file.open(fname)
             with open(out_fname, "wb") as out_file:
                 while True:
                     buffer = zipped.read(self._chunk_size)
                     if not buffer:
                         break
-                    pbar.update(len(buffer))
+                    p_bar.update(len(buffer))
                     out_file.write(buffer)
-        pbar.close()
+        p_bar.close()
 
 
 class DebugTimes():
-    """ A simple tool to help debug timings.
+    """A simple tool to help debug timings.
 
     Parameters
     ----------
-    min: bool, Optional
+    min
         Display minimum time taken in summary stats. Default: ``True``
-    mean: bool, Optional
+    mean
         Display mean time taken in summary stats. Default: ``True``
-    max: bool, Optional
+    max
         Display maximum time taken in summary stats. Default: ``True``
 
     Example
@@ -822,13 +839,13 @@ class DebugTimes():
         self._display = {"min": show_min, "mean": show_mean, "max": show_max}
 
     def step_start(self, name: str, record: bool = True) -> None:
-        """ Start the timer for the given step name.
+        """Start the timer for the given step name.
 
         Parameters
         ----------
-        name: str
+        name
             The name of the step to start the timer for
-        record: bool, optional
+        record
             ``True`` to record the step time, ``False`` to not record it.
             Used for when you have conditional code to time, but do not want to insert if/else
             statements in the code. Default: `True`
@@ -847,13 +864,13 @@ class DebugTimes():
         self._steps[storename] = time()
 
     def step_end(self, name: str, record: bool = True) -> None:
-        """ Stop the timer and record elapsed time for the given step name.
+        """Stop the timer and record elapsed time for the given step name.
 
         Parameters
         ----------
-        name: str
+        name
             The name of the step to end the timer for
-        record: bool, optional
+        record
             ``True`` to record the step time, ``False`` to not record it.
             Used for when you have conditional code to time, but do not want to insert if/else
             statements in the code. Default: `True`
@@ -873,30 +890,29 @@ class DebugTimes():
 
     @classmethod
     def _format_column(cls, text: str, width: int) -> str:
-        """ Pad the given text to be aligned to the given width.
+        """Pad the given text to be aligned to the given width.
 
         Parameters
         ----------
-        text: str
+        text
             The text to be formatted
-        width: int
+        width
             The size of the column to insert the text into
 
         Returns
         -------
-        str
-            The text with the correct amount of padding applied
+        The text with the correct amount of padding applied
         """
         return f"{text}{' ' * (width - len(text))}"
 
     def summary(self, decimal_places: int = 6, interval: int = 1) -> None:
-        """ Print a summary of step times.
+        """Print a summary of step times.
 
         Parameters
         ----------
-        decimal_places: int, optional
+        decimal_places
             The number of decimal places to display the summary elapsed times to. Default: 6
-        interval: int, optional
+        interval
             How many times summary must be called before printing to console. Default: 1
 
         Example

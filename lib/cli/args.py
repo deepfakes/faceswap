@@ -202,9 +202,10 @@ class FaceSwapArgs():
             "action": FileFullPaths,
             "filetypes": "ini",
             "type": str,
+            "dest": "config_file",
             "group": _("Global Options"),
             "help": _(
-                "Optionally overide the saved config with the path to a custom config file.")})
+                "Optionally override the saved config with the path to a custom config file.")})
         global_args.append({
             "opts": ("-L", "--loglevel"),
             "type": str.upper,

@@ -8,6 +8,11 @@ The Extract Package handles the various plugins available for extracting face se
    :local:
    :depth: 2
 
+.. automodapi:: plugins.extract.base
+   :include-all-objects:
+
+|
+
 align package
 =============
 
@@ -15,11 +20,15 @@ align package
    :include-all-objects:
 
 |
-.. automodapi:: plugins.extract.align.external
+.. automodapi:: plugins.extract.align.dark_decoder
    :include-all-objects:
 
 |
 .. automodapi:: plugins.extract.align.fan
+   :include-all-objects:
+
+|
+.. automodapi:: plugins.extract.align.hrnet
    :include-all-objects:
 
 detect package
@@ -29,11 +38,11 @@ detect package
    :include-all-objects:
 
 |
-.. automodapi:: plugins.extract.detect.external
+.. automodapi:: plugins.extract.detect.mtcnn
    :include-all-objects:
 
 |
-.. automodapi:: plugins.extract.detect.mtcnn
+.. automodapi:: plugins.extract.detect.retinaface
    :include-all-objects:
 
 |
@@ -47,15 +56,7 @@ mask package
    :include-all-objects:
 
 |
-.. automodapi:: plugins.extract.mask.components
-   :include-all-objects:
-
-|
 .. automodapi:: plugins.extract.mask.custom
-   :include-all-objects:
-
-|
-.. automodapi:: plugins.extract.mask.extended
    :include-all-objects:
 
 |
@@ -70,25 +71,19 @@ mask package
 .. automodapi:: plugins.extract.mask.vgg_obstructed
    :include-all-objects:
 
-recognition package
-===================
+identity package
+================
 
-.. automodapi:: plugins.extract.recognition.vgg_face2
+.. automodapi:: plugins.extract.identity.vggface2
+   :include-all-objects:
+
+|
+.. automodapi:: plugins.extract.identity.t_face
    :include-all-objects:
 
 extract package
 ===============
 
 .. automodapi:: plugins.extract.extract_config
-   :include-all-objects:
-   :no-inheritance-diagram:
-
-|
-.. automodapi:: plugins.extract.extract_media
-   :include-all-objects:
-   :no-inheritance-diagram:
-
-|
-.. automodapi:: plugins.extract.pipeline
    :include-all-objects:
    :no-inheritance-diagram:

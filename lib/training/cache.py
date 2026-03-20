@@ -179,10 +179,24 @@ class _MaskProcessing:
         if not self._config.mask_enabled:
             return None
 
-        assert self._config.mask_type is not None
-        self._check_mask_exists(filename, detected_face)
-        mask = self._preprocess(detected_face, self._config.mask_type)
-        retval = self._crop_and_resize(detected_face, mask)
+        mask_type = self._config.mask_type
+        assert mask_type is not None
+        if mask_type in ("components", "extended"):
+            name = T.cast(T.Literal["face", "face_extended"],
+                          "face_extended" if mask_type == "extended" else "face")
+            try:
+                retval = detected_face.get_landmark_mask(name,
+                                                         self._config.kernel,
+                                                         self._config.dilation)
+            except FaceswapError as err:
+                logger.error(str(err))
+                raise FaceswapError(f"'{mask_type}' masks could not be generated due to missing "
+                                    f"landmark data. The file that failed was: '{filename}'"
+                                    ) from err
+        else:
+            self._check_mask_exists(filename, detected_face)
+            mask = self._preprocess(detected_face, mask_type)
+            retval = self._crop_and_resize(detected_face, mask)
         logger.trace("Obtained face mask for: %s %s",  # type:ignore[attr-defined]
                      filename, retval.shape)
         return retval
@@ -420,9 +434,9 @@ class Cache():
 
         if (self._extract_version == 1.0 and alignment_version > 1.0) or (
                 alignment_version == 1.0 and self._extract_version > 1.0):
-            raise FaceswapError("Mixing legacy and full head extracted facesets is not supported. "
-                                "The following folder contains a mix of extracted face types: "
-                                f"'{os.path.dirname(filename)}'")
+            raise FaceswapError("Mixing legacy and full head extracted face sets is not "
+                                "supported. The following folder contains a mix of extracted face "
+                                f"types: '{os.path.dirname(filename)}'")
 
         self._extract_version = min(alignment_version, self._extract_version)
 

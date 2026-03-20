@@ -17,7 +17,7 @@ from lib.image import read_image_meta
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread, FSThread
 from lib.training import Preview, PreviewBuffer, TriggerType
-from lib.utils import (get_folder, get_image_paths, get_module_objects, handle_deprecated_cliopts,
+from lib.utils import (get_folder, get_image_paths, get_module_objects, handle_deprecated_cli_opts,
                        FaceswapError, IMAGE_EXTENSIONS)
 from plugins.plugin_loader import PluginLoader
 from plugins.train.training import Trainer
@@ -48,7 +48,7 @@ class Train():
     """
     def __init__(self, arguments: argparse.Namespace) -> None:
         logger.debug("Initializing %s: (args: %s", self.__class__.__name__, arguments)
-        self._args = handle_deprecated_cliopts(arguments)
+        self._args = handle_deprecated_cli_opts(arguments)
 
         if self._args.summary:
             # If just outputting summary we don't need to initialize everything

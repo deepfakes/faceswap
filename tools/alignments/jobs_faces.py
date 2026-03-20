@@ -14,7 +14,7 @@ from tqdm import tqdm
 from lib.align import DetectedFace
 from lib.image import update_existing_metadata  # TODO remove
 from lib.utils import get_module_objects
-from scripts.fsmedia import Alignments
+from scripts.fs_media import Alignments
 
 from .media import Faces
 
@@ -106,7 +106,7 @@ class FromFaces():
         tuple
             The alignment's source frame name in position 0. The index of the face within the
             alignment file in position 1. The alignment data correctly formatted for writing to an
-            alignments file in positin 2
+            alignments file in position 2
         """
         alignment = metadata["alignments"]
         alignment["landmarks_xy"] = np.array(alignment["landmarks_xy"], dtype="float32")
@@ -136,7 +136,7 @@ class FromFaces():
         alignments: dict
             The unsorted alignments file(s) as generated from the face PNG headers, including the
             face index of the face within it's respective frame, the original face filename and
-            the orignal face header source information
+            the original face header source information
 
         Returns
         -------
@@ -149,12 +149,12 @@ class FromFaces():
             this_file: dict[str, AlignmentDict] = {}
             for frame in tqdm(sorted(frames), desc=f"Sorting {fname}", leave=False):
                 this_file[frame] = {"video_meta": {}, "faces": []}
-                for real_idx, (f_id, almt, f_path, f_src) in enumerate(sorted(frames[frame],
-                                                                              key=itemgetter(0))):
+                for real_idx, (f_id, aln, f_path, f_src) in enumerate(sorted(frames[frame],
+                                                                             key=itemgetter(0))):
                     if real_idx != f_id:
                         full_path = os.path.join(self._faces_dir, f_path)
-                        self._update_png_header(full_path, real_idx, almt, f_src)
-                    this_file[frame]["faces"].append(almt)
+                        self._update_png_header(full_path, real_idx, aln, f_src)
+                    this_file[frame]["faces"].append(aln)
             aln_sorted[fname] = this_file
         return aln_sorted
 
@@ -197,7 +197,7 @@ class FromFaces():
     def _save_alignments(self,
                          all_alignments: dict[str, dict[str, AlignmentDict]],
                          versions: dict[str, float]) -> None:
-        """ Save the newely generated alignments file(s).
+        """ Save the newly generated alignments file(s).
 
         If an alignments file already exists in the source faces folder, back it up rather than
         overwriting
@@ -214,8 +214,7 @@ class FromFaces():
         for fname, alignments in all_alignments.items():
             version = versions[fname]
             alignments_path = os.path.join(self._faces_dir, fname)
-            dummy_args = Namespace(alignments_path=alignments_path)
-            aln = Alignments(dummy_args, is_extract=True)
+            aln = Alignments(alignments_path, "", is_extract=True)
             aln.update_from_dict(alignments)
             aln._io._version = version  # pylint:disable=protected-access
             aln._io.update_legacy()  # pylint:disable=protected-access
@@ -267,8 +266,8 @@ class Rename():
         logger.info("%s faces renamed", rename_count)
 
         filelist = T.cast(list[tuple[str, "PNGHeaderDict"]], self._faces.file_list_sorted)
-        copyback = FaceToFile(self._alignments, [val[1] for val in filelist])
-        if copyback():
+        copy_back = FaceToFile(self._alignments, [val[1] for val in filelist])
+        if copy_back():
             self._alignments.save()
 
     def _rename_faces(self, filename_mappings: list[tuple[str, str]]) -> int:
@@ -368,15 +367,15 @@ class RemoveFaces():
 
         Notes
         -----
-        This could be quicker if parellizing in threads, however, Windows (at least) does not seem
-        to like this and has a tendency to throw permission errors, so this remains single threaded
-        for now.
+        This could be quicker if parallelizing in threads, however, Windows (at least) does not
+        seem to like this and has a tendency to throw permission errors, so this remains single
+        threaded for now.
         """
         items = T.cast(dict[str, list[int]], self._items.items)
-        srcs = [(x[0], x[1]["source"])
-                for x in T.cast(list[tuple[str, "PNGHeaderDict"]], self._items.file_list_sorted)]
+        src = [(x[0], x[1]["source"])
+               for x in T.cast(list[tuple[str, "PNGHeaderDict"]], self._items.file_list_sorted)]
         to_update = [  # Items whose face index has changed
-            x for x in srcs
+            x for x in src
             if x[1]["face_index"] != items[x[1]["source_filename"]].index(x[1]["face_index"])]
 
         for item in tqdm(to_update, desc="Updating PNG Headers", leave=False):

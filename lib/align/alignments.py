@@ -122,13 +122,13 @@ class PNGAlignments:
 
     def __repr__(self) -> str:
         """Pretty print for logging"""
-        params = {}
+        params: dict[str, T.Any] = {}
         for k, v in self.__dict__.items():
             if k in ("landmarks_xy", "thumb"):
                 params[k] = f"{type(v)}[{len(v)}]"
                 continue
             if k == "identity":
-                params[k] = repr({n: f"{type(i)}[{len(i)}]" for n, i in v.items()})
+                params[k] = {n: f"{type(i)}[{len(i)}]" for n, i in v.items()}
                 continue
             params[k] = v
         s_params = ", ".join(f"{k}={v}" for k, v in params.items())

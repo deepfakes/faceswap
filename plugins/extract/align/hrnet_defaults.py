@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-""" The default options for the faceswap VGG Face2 recognition plugin.
-
+""" The default options for the faceswap HRNet Alignments plugin.
 
 Defaults files should be named `<plugin_name>_defaults.py`
 
@@ -26,13 +25,14 @@ Items will be grouped together as per their `group` parameter, but otherwise wil
 the order that they are added to this module.
 from lib.config import ConfigItem
 """
+# pylint:disable=duplicate-code
 from lib.config import ConfigItem
 
 
 HELPTEXT = (
-    "VGG Face 2 identity recognition.\n"
-    "A Keras port of the model trained for VGGFace2: A dataset for recognising faces across pose "
-    "and age. (https://arxiv.org/abs/1710.08092)"
+    "HRNet Aligner options.\n"
+    "Trained on 128k heavily augmented faces with full 360 degree rotation. Fast on GPU, slow on "
+    "CPU."
     )
 
 
@@ -41,15 +41,13 @@ batch_size = ConfigItem(
     default=16,
     group="settings",
     info="The batch size to use. To a point, higher batch sizes equal better performance, "
-          "but setting it too high can harm performance.\n"
-          "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
-          "accomodate then this will automatically be lowered.",
+         "but setting it too high can harm performance.",
     rounding=1,
-    min_max=(1, 64))
+    min_max=(1, 256))
 
-cpu = ConfigItem(
+dark_decoder = ConfigItem(
     datatype=bool,
-    default=False,
+    default=True,
     group="settings",
-    info="VGG Face2 still runs fairly quickly on CPU on some setups. Enable "
-         "CPU mode here to use the CPU for this plugin to save some VRAM at a speed cost.")
+    info=("Use DARK decoder. A more refined method for obtaining landmarks from generated "
+          "heatmaps. (Ref: https://arxiv.org/abs/1910.06278)."))

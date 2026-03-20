@@ -13,6 +13,8 @@ import typing as T
 from ast import literal_eval
 from bisect import bisect
 from concurrent import futures
+from queue import Empty as QueueEmpty, Full as QueueFull, Queue
+from threading import current_thread, main_thread
 from zlib import crc32
 
 import cv2
@@ -21,13 +23,15 @@ import imageio_ffmpeg as im_ffm
 import numpy as np
 from tqdm import tqdm
 
-from lib.multithreading import MultiThread
-from lib.queue_manager import queue_manager, QueueEmpty
+from lib.logger import parse_class_init
+from lib.multithreading import FSThread
 from lib.utils import (convert_to_secs, FaceswapError, get_image_paths,
                        get_module_objects, VIDEO_EXTENSIONS)
 
 
 if T.TYPE_CHECKING:
+    import numpy.typing as npt
+    from lib.multithreading import ErrorState
     from lib.align.alignments import PNGHeaderDict
 
 logger = logging.getLogger(__name__)
@@ -107,10 +111,10 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):  # type:ignore
         frame_pts = []
         key_frames = []
         last_update = 0
-        pbar = tqdm(desc="Analyzing Video",
-                    leave=False,
-                    total=int(self._meta["duration"]),
-                    unit="secs")
+        p_bar = tqdm(desc="Analyzing Video",
+                     leave=False,
+                     total=int(self._meta["duration"]),
+                     unit="secs")
         while True:
             output = process.stdout.readline().strip()
             if output == "" and process.poll() is not None:
@@ -131,9 +135,9 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):  # type:ignore
                 # Floating points make TQDM display poorly, so only update on full
                 # second increments
                 continue
-            pbar.update(int(pts_time) - last_update)
+            p_bar.update(int(pts_time) - last_update)
             last_update = int(pts_time)
-        pbar.close()
+        p_bar.close()
         return_code = process.poll()
         frame_count = len(frame_pts)
         logger.debug("Return code: %s, frame_pts: %s, keyframes: %s, frame_count: %s",
@@ -153,7 +157,7 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):  # type:ignore
         return prev_pts_time, prev_keyframe
 
     def _initialize(self, index=0):  # noqa:C901
-        """ Replace ImageIO _initialize with a version that explictly uses keyframes.
+        """ Replace ImageIO _initialize with a version that explicitly uses keyframes.
 
         Notes
         -----
@@ -167,18 +171,18 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):  # type:ignore
         if self._read_gen is not None:
             self._read_gen.close()
 
-        iargs = []
-        oargs = []
+        i_args = []
+        o_args = []
         skip_frames = 0
 
         # Create input args
-        iargs += self._arg_input_params
+        i_args += self._arg_input_params
         if self.request._video:
-            iargs += ["-f", CAM_FORMAT]  # noqa
+            i_args += ["-f", CAM_FORMAT]  # noqa
             if self._arg_pixelformat:
-                iargs += ["-pix_fmt", self._arg_pixelformat]
+                i_args += ["-pix_fmt", self._arg_pixelformat]
             if self._arg_size:
-                iargs += ["-s", self._arg_size]
+                i_args += ["-s", self._arg_size]
         elif index > 0:  # re-initialize  / seek
             # Note: only works if we initialized earlier, and now have meta. Some info here:
             # https://trac.ffmpeg.org/wiki/Seeking
@@ -206,17 +210,17 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):  # type:ignore
             # We used to have this epsilon earlier, when we did not use
             # the slow seek. I don't think we need it anymore.
             # epsilon = -1 / self._meta["fps"] * 0.1
-            iargs += ["-ss", "%.06f" % (seek_fast)]
+            i_args += ["-ss", "%.06f" % (seek_fast)]
             if not self.use_patch:
-                oargs += ["-ss", "%.06f" % (seek_slow)]
+                o_args += ["-ss", "%.06f" % (seek_slow)]
 
         # Output args, for writing to pipe
         if self._arg_size:
-            oargs += ["-s", self._arg_size]
+            o_args += ["-s", self._arg_size]
         if self.request.kwargs.get("fps", None):
             fps = float(self.request.kwargs["fps"])
-            oargs += ["-r", "%.02f" % fps]
-        oargs += self._arg_output_params
+            o_args += ["-r", "%.02f" % fps]
+        o_args += self._arg_output_params
 
         # Get pixelformat and bytes per pixel
         pix_fmt = self._pix_fmt
@@ -225,7 +229,7 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):  # type:ignore
         # Create generator
         rf = self._ffmpeg_api.read_frames
         self._read_gen = rf(
-            self._filename, pix_fmt, bpp, input_params=iargs, output_params=oargs
+            self._filename, pix_fmt, bpp, input_params=i_args, output_params=o_args
         )
 
         # Read meta data. This start the generator (and ffmpeg subprocess)
@@ -265,30 +269,30 @@ imageio.plugins.ffmpeg.FfmpegFormat.Reader = FfmpegReader  # type: ignore
 @T.overload
 def read_image(filename: str,
                raise_error: T.Literal[False] = False,
-               with_metadata: T.Literal[False] = False) -> np.ndarray | None: ...
+               with_metadata: T.Literal[False] = False) -> npt.NDArray[np.uint8] | None: ...
 
 
 @T.overload
 def read_image(filename: str,
                raise_error: T.Literal[True],
-               with_metadata: T.Literal[False] = False) -> np.ndarray: ...
+               with_metadata: T.Literal[False] = False) -> npt.NDArray[np.uint8]: ...
 
 
 @T.overload
 def read_image(filename: str,
                raise_error: T.Literal[False] = False,
                *,
-               with_metadata: T.Literal[True]) -> tuple[np.ndarray, PNGHeaderDict]: ...
+               with_metadata: T.Literal[True]) -> tuple[npt.NDArray[np.uint8], PNGHeaderDict]: ...
 
 
 @T.overload
 def read_image(filename: str,
                raise_error: T.Literal[True],
-               with_metadata: T.Literal[True]) -> np.ndarray: ...
+               with_metadata: T.Literal[True]) -> npt.NDArray[np.uint8]: ...
 
 
-def read_image(filename: str, raise_error: bool = False, with_metadata: bool = False
-               ) -> np.ndarray | None | tuple[np.ndarray, PNGHeaderDict]:
+def read_image(filename: str, raise_error: bool = False, with_metadata: bool = False  # noqa[C901]
+               ) -> np.ndarray | None | tuple[npt.NDArray[np.uint8], PNGHeaderDict]:
     """ Read an image file from a file location.
 
     Extends the functionality of :func:`cv2.imread()` by ensuring that an image was actually
@@ -305,15 +309,13 @@ def read_image(filename: str, raise_error: bool = False, with_metadata: bool = F
         raised. Default: ``False``
     with_metadata : bool, optional
         Only returns a value if the images loaded are extracted Faceswap faces. If ``True`` then
-        returns the Faceswap metadata stored with in a Face images .png exif header.
+        returns the Faceswap metadata stored with in a Face images .png EXIF header.
         Default: ``False``
 
     Returns
     -------
-    Returns
-    -------
-    batch : :class:`numpy.ndarray`
-        The image in `BGR` channel order for the corresponding :attr:`filename`
+    image : :class:`numpy.ndarray`
+        The image in `BGR` channel order as UINT8 for the corresponding :attr:`filename`
     metadata : :class:`~lib.align.alignments.PNGHeaderDict`, optional
         The faceswap metadata corresponding to the image. Only returned if
         `with_metadata` is ``True``
@@ -331,16 +333,32 @@ def read_image(filename: str, raise_error: bool = False, with_metadata: bool = F
     image = None
     retval: np.ndarray | tuple[np.ndarray, PNGHeaderDict] | None = None
     try:
-        with open(filename, "rb") as infile:
-            raw_file = infile.read()
-            image = cv2.imdecode(np.frombuffer(raw_file, dtype="uint8"), cv2.IMREAD_COLOR)
-            if image is None:
-                raise ValueError("Image is None")
-            if with_metadata:
-                metadata = T.cast("PNGHeaderDict", png_read_meta(raw_file))
-                retval = (image, metadata)
-            else:
-                retval = image
+        with open(filename, "rb") as in_file:
+            raw_file = in_file.read()
+        image = cv2.imdecode(np.frombuffer(raw_file, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        if image is None:
+            raise ValueError("Image is None")
+        if image.ndim == 2:  # Convert grayscale to BGR
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        elif image.ndim == 2 and image.shape[2] == 4:  # Strip mask
+            image = image[:, :, :3]
+
+        if np.issubdtype(image.dtype, np.integer):
+            info = np.iinfo(T.cast(np.integer, image.dtype))  # Scale non UINT8 INT images to UINT8
+            if info.max != 255:
+                image = image.astype(np.float32) / info.max * 255.0
+        elif np.issubdtype(image.dtype, np.floating):
+            # Just naively clip floating images to 0-1 for now
+            image = (np.clip(image, 0.0, 1.0) * 255.).astype(np.float32)
+
+        if image.dtype != np.uint8:
+            image = np.clip(image, 0, 255).astype(np.uint8)
+
+        if with_metadata:
+            metadata = T.cast("PNGHeaderDict", png_read_meta(raw_file))
+            retval = (image, metadata)
+        else:
+            retval = image
     except TypeError as err:
         success = False
         msg = "Error while reading image (TypeError): '{}'".format(filename)
@@ -403,7 +421,7 @@ def read_image_batch(filenames: list[str], with_metadata: bool = False
     Notes
     -----
     As the images are compiled into a batch, they should be all of the same dimensions, otherwise a
-    homongenous array will be returned
+    homogenous array will be returned
 
     Example
     -------
@@ -411,7 +429,7 @@ def read_image_batch(filenames: list[str], with_metadata: bool = False
     >>> images = read_image_batch(image_filenames)
     >>> print(images.shape)
     ... (3, 64, 64, 3)
-    >>> images, metatdata = read_image_batch(image_filenames, with_metadata=True)
+    >>> images, metadata = read_image_batch(image_filenames, with_metadata=True)
     >>> print(images.shape)
     ... (3, 64, 64, 3)
     >>> print(len(metadata))
@@ -475,16 +493,16 @@ def read_image_meta(filename):
     """
     retval = dict()
     if os.path.splitext(filename)[-1].lower() != ".png":
-        # Get the dimensions directly from the image for non-pngs
+        # Get the dimensions directly from the image for non-png
         logger.trace(  # type:ignore[attr-defined]
             "Non png found. Loading file for dimensions: '%s'",
             filename)
         img = cv2.imread(filename)
         retval["height"], retval["width"] = img.shape[:2]
         return retval
-    with open(filename, "rb") as infile:
+    with open(filename, "rb") as in_file:
         try:
-            chunk = infile.read(8)
+            chunk = in_file.read(8)
         except PermissionError:
             raise PermissionError(f"PermissionError while reading: {filename}")
 
@@ -492,7 +510,7 @@ def read_image_meta(filename):
             raise ValueError(f"Invalid header found in png: {filename}")
 
         while True:
-            chunk = infile.read(8)
+            chunk = in_file.read(8)
             length, field = struct.unpack(">I4s", chunk)
             logger.trace(  # type:ignore[attr-defined]
                 "Read chunk: (chunk: %s, length: %s, field: %s",
@@ -501,11 +519,11 @@ def read_image_meta(filename):
                 break
             if field == b"IHDR":
                 # Get dimensions
-                chunk = infile.read(8)
+                chunk = in_file.read(8)
                 retval["width"], retval["height"] = struct.unpack(">II", chunk)
                 length -= 8
             elif field == b"iTXt":
-                keyword, value = infile.read(length).split(b"\0", 1)
+                keyword, value = in_file.read(length).split(b"\0", 1)
                 if keyword == b"faceswap":
                     retval["itxt"] = literal_eval(value[4:].decode("utf-8", errors="replace"))
                     break
@@ -513,7 +531,7 @@ def read_image_meta(filename):
                     logger.trace("Skipping iTXt chunk: '%s'",  # type:ignore[attr-defined]
                                  keyword.decode("latin-1", errors="ignore"))
                     length = 0  # Reset marker for next chunk
-            infile.seek(length + 4, 1)
+            in_file.seek(length + 4, 1)
     logger.trace("filename: %s, metadata: %s", filename, retval)  # type:ignore[attr-defined]
     return retval
 
@@ -552,7 +570,7 @@ def read_image_meta_batch(filenames):
         logger.debug("Submitting %s items to executor", len(filenames))
         read_meta = {executor.submit(read_image_meta, filename): filename
                      for filename in filenames}
-        logger.debug("Succesfully submitted %s items to executor", len(filenames))
+        logger.debug("Successfully submitted %s items to executor", len(filenames))
         for future in futures.as_completed(read_meta):
             retval = (read_meta[future], future.result())
             logger.trace("Yielding: %s", retval)  # type:ignore[attr-defined]
@@ -714,7 +732,7 @@ def tiff_write_meta(image: bytes, data: PNGHeaderDict | dict[str, T.Any] | bytes
     Notes
     -----
     This handles a very specific task of adding, and populating, an ImageDescription field in a
-    Tiff file generated by OpenCV. For any other usecases it will likely fail
+    Tiff file generated by OpenCV. For any other use cases it will likely fail
     """
     if not isinstance(data, bytes):
         data = json.dumps(data, ensure_ascii=True).encode("ascii")
@@ -866,14 +884,14 @@ def generate_thumbnail(image, size=96, quality=60):
                  image.shape, size, quality)
     orig_size = image.shape[0]
     if orig_size != size:
-        interp = cv2.INTER_AREA if orig_size > size else cv2.INTER_CUBIC
-        image = cv2.resize(image, (size, size), interpolation=interp)
+        interpolator = cv2.INTER_AREA if orig_size > size else cv2.INTER_CUBIC
+        image = cv2.resize(image, (size, size), interpolation=interpolator)
     retval = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])[1]
     logger.trace("Output shape: %s", retval.shape)  # type:ignore[attr-defined]
     return retval
 
 
-def batch_convert_color(batch, colorspace):
+def batch_convert_color(batch, color_space):
     """ Convert a batch of images from one color space to another.
 
     Converts a batch of images by reshaping the batch prior to conversion rather than iterating
@@ -883,7 +901,7 @@ def batch_convert_color(batch, colorspace):
     ----------
     batch: numpy.ndarray
         A batch of images.
-    colorspace: str
+    color_space: str
         The OpenCV Color Conversion Code suffix. For example for BGR to LAB this would be
         ``'BGR2LAB'``.
         See https://docs.opencv.org/4.1.1/d8/d01/group__imgproc__color__conversions.html for a full
@@ -910,20 +928,20 @@ def batch_convert_color(batch, colorspace):
     before an operation and then convert back.
     """
     logger.trace(  # type:ignore[attr-defined]
-        "Batch converting: (batch shape: %s, colorspace: %s)",
-        batch.shape, colorspace)
+        "Batch converting: (batch shape: %s, color_space: %s)",
+        batch.shape, color_space)
     original_shape = batch.shape
     batch = batch.reshape((original_shape[0] * original_shape[1], *original_shape[2:]))
-    batch = cv2.cvtColor(batch, getattr(cv2, "COLOR_{}".format(colorspace)))
+    batch = cv2.cvtColor(batch, getattr(cv2, "COLOR_{}".format(color_space)))
     return batch.reshape(original_shape)
 
 
-def hex_to_rgb(hexcode):
+def hex_to_rgb(hex_code):
     """ Convert a hex number to it's RGB counterpart.
 
     Parameters
     ----------
-    hexcode: str
+    hex_code: str
         The hex code to convert (e.g. `"#0d25ac"`)
 
     Returns
@@ -931,7 +949,7 @@ def hex_to_rgb(hexcode):
     tuple
         The hex code as a 3 integer (`R`, `G`, `B`) tuple
     """
-    value = hexcode.lstrip("#")
+    value = hex_code.lstrip("#")
     chars = len(value)
     return tuple(int(value[i:i + chars // 3], 16) for i in range(0, chars, chars // 3))
 
@@ -996,7 +1014,7 @@ def count_frames(filename, fast=False):
                                stderr=subprocess.STDOUT,
                                stdout=subprocess.PIPE,
                                universal_newlines=True, encoding="utf8")
-    pbar = None
+    p_bar = None
     duration = None
     init_tqdm = False
     update = 0
@@ -1015,7 +1033,7 @@ def count_frames(filename, fast=False):
             logger.debug("frame line: %s", output)
             if not init_tqdm:
                 logger.debug("Initializing tqdm")
-                pbar = tqdm(desc="Analyzing Video", leave=False, total=duration, unit="secs")
+                p_bar = tqdm(desc="Analyzing Video", leave=False, total=duration, unit="secs")
                 init_tqdm = True
             time_idx = output.find("time=") + len("time=")
             frame_idx = output.find("frame=") + len("frame=")
@@ -1024,9 +1042,9 @@ def count_frames(filename, fast=False):
             logger.debug("frames: %s, vid_time: %s", frames, vid_time)
             prev_update = update
             update = vid_time
-            pbar.update(update - prev_update)
-    if pbar is not None:
-        pbar.close()
+            p_bar.update(update - prev_update)
+    if p_bar is not None:
+        p_bar.close()
     return_code = process.poll()
     logger.debug("Return code: %s, frames: %s", return_code, frames)
     return frames
@@ -1055,19 +1073,14 @@ class ImageIO():
     """
 
     def __init__(self, path, queue_size, args=None):
-        logger.debug("Initializing %s: (path: %s, queue_size: %s, args: %s)",
-                     self.__class__.__name__, path, queue_size, args)
-
+        logger.debug(parse_class_init(locals()))
+        self._name = self.__class__.__name__
         self._args = tuple() if args is None else args
-
         self._location = path
         self._check_location_exists()
-
-        queue_name = queue_manager.add_queue(name=self.__class__.__name__,
-                                             maxsize=queue_size,
-                                             create_new=True)
-        self._queue = queue_manager.get_queue(queue_name)
+        self._queue = Queue(maxsize=queue_size)
         self._thread = None
+        self._error_state: ErrorState | None = None
 
     @property
     def location(self):
@@ -1090,16 +1103,16 @@ class ImageIO():
 
     def _set_thread(self):
         """ Set the background thread for the load and save iterators and launch it. """
-        logger.trace("Setting thread")  # type:ignore[attr-defined]
+        logger.trace("[%s] Setting thread", self._name)  # type:ignore[attr-defined]
         if self._thread is not None and self._thread.is_alive():
-            logger.trace("Thread pre-exists and is alive: %s",  # type:ignore[attr-defined]
-                         self._thread)
+            logger.trace("[%s] Thread pre-exists and is alive: %s",  # type:ignore[attr-defined]
+                         self._name, self._thread)
             return
-        self._thread = MultiThread(self._process,
-                                   self._queue,
-                                   name=self.__class__.__name__,
-                                   thread_count=1)
-        logger.debug("Set thread: %s", self._thread)
+        self._thread = FSThread(self._process,
+                                name=self.__class__.__name__,
+                                args=(self._queue, ))
+        self._error_state = self._thread.error_state
+        logger.debug("[%s] Set thread: %s", self._name, self._thread)
         self._thread.start()
 
     def _process(self, queue):
@@ -1114,12 +1127,12 @@ class ImageIO():
 
     def close(self):
         """ Closes down and joins the internal threads """
-        logger.debug("Received Close")
+        logger.debug("[%s] Received Close", self._name)
         if self._thread is not None:
             self._thread.join()
         del self._thread
         self._thread = None
-        logger.debug("Closed")
+        logger.debug("[%s] Closed", self._name)
 
 
 class ImagesLoader(ImageIO):
@@ -1166,15 +1179,11 @@ class ImagesLoader(ImageIO):
                  fast_count: bool = True,
                  skip_list: list[int] | None = None,
                  count: int | None = None) -> None:
-        logger.debug("Initializing %s: (path: %s, queue_size: %s, fast_count: %s, skip_list: %s, "
-                     "count: %s)", self.__class__.__name__, path, queue_size, fast_count,
-                     skip_list, count)
-
+        logger.debug(parse_class_init(locals()))
         super().__init__(path, queue_size=queue_size)
         self._skip_list = set() if skip_list is None else set(skip_list)
         self._is_video = self._check_for_video()
         self._fps = self._get_fps()
-
         self._count = None
         self._file_list: list[str] = []
         self._get_count_and_filelist(fast_count, count)
@@ -1225,7 +1234,7 @@ class ImagesLoader(ImageIO):
             A list of indices corresponding to the frame indices that should be skipped by the
             :func:`load` function.
         """
-        logger.debug(skip_list)
+        logger.debug("[%s] skip_list: %s", self._name, skip_list)
         self._skip_list = set(skip_list)
 
     def _check_for_video(self):
@@ -1247,7 +1256,7 @@ class ImagesLoader(ImageIO):
             retval = True
         else:
             raise FaceswapError("The input file '{}' is not a valid video".format(self.location))
-        logger.debug("Input '%s' is_video: %s", self.location, retval)
+        logger.debug("[%s] Input '%s' is_video: %s", self._name, self.location, retval)
         return retval
 
     def _get_fps(self):
@@ -1266,7 +1275,7 @@ class ImagesLoader(ImageIO):
             reader.close()
         else:
             retval = 25.0
-        logger.debug(retval)
+        logger.debug("[%s] fps: %s", self._name, retval)
         return retval
 
     def _get_count_and_filelist(self, fast_count, count):
@@ -1289,16 +1298,15 @@ class ImagesLoader(ImageIO):
         if self._is_video:
             self._count = int(count_frames(self.location,
                                            fast=fast_count)) if count is None else count
-            self._file_list = [self._dummy_video_framename(i) for i in range(self.count)]
+            self._file_list = [self._dummy_video_frame_name(i) for i in range(self.count)]
         else:
             if isinstance(self.location, (list, tuple)):
                 self._file_list = self.location
             else:
                 self._file_list = get_image_paths(self.location)
             self._count = len(self.file_list) if count is None else count
-
-        logger.debug("count: %s", self.count)
-        logger.trace("filelist: %s", self.file_list)  # type:ignore[attr-defined]
+        logger.debug("[%s] count: %s", self._name, self.count)
+        logger.trace("[%s] file_list: %s", self._name, self.file_list)  # type:ignore[attr-defined]
 
     def _process(self, queue):
         """ The load thread.
@@ -1311,17 +1319,29 @@ class ImagesLoader(ImageIO):
             The ImageIO Queue
         """
         iterator = self._from_video if self._is_video else self._from_folder
-        logger.debug("Load iterator: %s", iterator)
+        logger.debug("[%s] Load iterator: %s", self._name, iterator)
+        assert self._error_state is not None
         for retval in iterator():
             filename, image = retval[:2]
             if image is None or (not image.any() and image.ndim not in (2, 3)):
                 # All black frames will return not numpy.any() so check dims too
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
-            logger.trace("Putting to queue: %s",  # type:ignore[attr-defined]
-                         [v.shape if isinstance(v, np.ndarray) else v for v in retval])
-            queue.put(retval)
-        logger.trace("Putting EOF")  # type:ignore[attr-defined]
+            logger.trace("[%s] Putting to queue: %s",  # type:ignore[attr-defined]
+                         self._name, [v.shape if isinstance(v, np.ndarray) else v for v in retval])
+
+            while True:
+                if self._error_state.has_error:
+                    logger.debug("[%s] Thread error detected in worker thread", self._name)
+                    return
+                try:
+                    queue.put(retval, timeout=0.2)
+                    break
+                except QueueFull:
+                    logger.trace("[%s] Queue full. Waiting",  # type:ignore[attr-defined]
+                                 self._name)
+                    continue
+        logger.trace("[%s] Putting EOF", self._name)  # type:ignore[attr-defined]
         queue.put("EOF")
 
     def _from_video(self):
@@ -1334,21 +1354,22 @@ class ImagesLoader(ImageIO):
         image: numpy.ndarray
             The loaded video frame.
         """
-        logger.debug("Loading frames from video: '%s'", self.location)
+        logger.debug("[%s] Loading frames from video: '%s'", self._name, self.location)
         reader = imageio.get_reader(self.location, "ffmpeg")
         for idx, frame in enumerate(reader):
             if idx in self._skip_list:
-                logger.trace("Skipping frame %s due to skip list",  # type:ignore[attr-defined]
-                             idx)
+                logger.trace(  # type:ignore[attr-defined]
+                    "[%s] Skipping frame %s due to skip list", self._name, idx)
                 continue
             # Convert to BGR for cv2 compatibility
             frame = frame[:, :, ::-1]
-            filename = self._dummy_video_framename(idx)
-            logger.trace("Loading video frame: '%s'", filename)  # type:ignore[attr-defined]
+            filename = self._dummy_video_frame_name(idx)
+            logger.trace("[%s] Loading video frame: '%s'",  # type:ignore[attr-defined]
+                         self._name, filename)
             yield filename, frame
         reader.close()
 
-    def _dummy_video_framename(self, index):
+    def _dummy_video_frame_name(self, index):
         """ Return a dummy filename for video files. The file name is made up of:
         <video_filename>_<frame_number>.<video_extension>
 
@@ -1365,8 +1386,8 @@ class ImagesLoader(ImageIO):
         Returns
         -------
         str: A dummied filename for a video frame """
-        vidname, ext = os.path.splitext(os.path.basename(self.location))
-        return f"{vidname}_{index + 1:06d}{ext}"
+        vid_name, ext = os.path.splitext(os.path.basename(self.location))
+        return f"{vid_name}_{index + 1:06d}{ext}"
 
     def _from_folder(self):
         """ Generator for loading images from a folder
@@ -1378,10 +1399,11 @@ class ImagesLoader(ImageIO):
         image: numpy.ndarray
             The loaded image.
         """
-        logger.debug("Loading frames from folder: '%s'", self.location)
+        logger.debug("[%s] Loading frames from folder: '%s'", self._name, self.location)
         for idx, filename in enumerate(self.file_list):
             if idx in self._skip_list:
-                logger.trace("Skipping frame %s due to skip list")  # type:ignore[attr-defined]
+                logger.trace(  # type:ignore[attr-defined]
+                    "[%s] Skipping frame %s due to skip list", self._name, filename)
                 continue
             image_read = read_image(filename, raise_error=False)
             retval = filename, image_read
@@ -1405,21 +1427,29 @@ class ImagesLoader(ImageIO):
         metadata: dict, (:class:`FacesLoader` only)
             The Faceswap metadata associated with the loaded image.
         """
-        logger.debug("Initializing Load Generator")
+        logger.debug("[%s] Initializing Load Generator", self._name)
         self._set_thread()
+        assert self._error_state is not None
         while True:
-            self._thread.check_and_raise_error()
+            if self._error_state.has_error:
+                current = current_thread()
+                if current is main_thread():
+                    self._error_state.re_raise()
+                else:
+                    logger.debug("[%s.%s] Thread error detected in worker thread",
+                                 current.name, self._name)
+                    break
             try:
                 retval = self._queue.get(True, 1)
             except QueueEmpty:
                 continue
             if retval == "EOF":
-                logger.trace("Got EOF")  # type:ignore[attr-defined]
+                logger.trace("[%s] Got EOF", self._name)  # type:ignore[attr-defined]
                 break
-            logger.trace("Yielding: %s",  # type:ignore[attr-defined]
-                         [v.shape if isinstance(v, np.ndarray) else v for v in retval])
+            logger.trace("[%s] Yielding: %s",  # type:ignore[attr-defined]
+                         self._name, [v.shape if isinstance(v, np.ndarray) else v for v in retval])
             yield retval
-        logger.debug("Closing Load Generator")
+        logger.debug("[%s] Closing Load Generator", self._name)
         self.close()
 
 
@@ -1435,8 +1465,7 @@ class FacesLoader(ImagesLoader):
     >>>     <do processing>
     """
     def __init__(self, path, skip_list=None, count=None):
-        logger.debug("Initializing %s: (path: %s, count: %s)", self.__class__.__name__,
-                     path, count)
+        logger.debug(parse_class_init(locals()))
         super().__init__(path, queue_size=8, skip_list=skip_list, count=count)
 
     def _get_count_and_filelist(self, fast_count, count):
@@ -1459,8 +1488,8 @@ class FacesLoader(ImagesLoader):
                            if os.path.splitext(fname)[-1].lower() == ".png"]
         self._count = len(self.file_list) if count is None else count
 
-        logger.debug("count: %s", self.count)
-        logger.trace("filelist: %s", self.file_list)  # type:ignore[attr-defined]
+        logger.debug("[%s] count: %s", self._name, self.count)
+        logger.trace("[%s] file_list: %s", self._name, self.file_list)  # type:ignore[attr-defined]
 
     def _from_folder(self):
         """ Generator for loading images from a folder
@@ -1476,10 +1505,11 @@ class FacesLoader(ImagesLoader):
         metadata: dict
             The Faceswap metadata associated with the loaded image.
         """
-        logger.debug("Loading images from folder: '%s'", self.location)
+        logger.debug("[%s] Loading images from folder: '%s'", self._name, self.location)
         for idx, filename in enumerate(self.file_list):
             if idx in self._skip_list:
-                logger.trace("Skipping face %s due to skip list")  # type:ignore[attr-defined]
+                logger.trace(  # type:ignore[attr-defined]
+                    "[%s] Skipping face %s due to skip list", self._name, idx)
                 continue
             image_read = read_image(filename, raise_error=False, with_metadata=True)
             retval = filename, *image_read
@@ -1504,8 +1534,7 @@ class SingleFrameLoader(ImagesLoader):
         scanned. Default: ``None``
      """
     def __init__(self, path, video_meta_data=None):
-        logger.debug("Initializing %s: (path: %s, video_meta_data: %s)",
-                     self.__class__.__name__, path, video_meta_data)
+        logger.debug(parse_class_init(locals()))
         self._video_meta_data = dict() if video_meta_data is None else video_meta_data
         self._reader = None
         super().__init__(path, queue_size=1, fast_count=False)
@@ -1560,7 +1589,7 @@ class SingleFrameLoader(ImagesLoader):
         """
         if self.is_video:
             image = self._reader.get_data(index)[..., ::-1]
-            filename = self._dummy_video_framename(index)
+            filename = self._dummy_video_frame_name(index)
         else:
             file_list = [f for idx, f in enumerate(self._file_list)
                          if idx not in self._skip_list] if self._skip_list else self._file_list
@@ -1568,8 +1597,9 @@ class SingleFrameLoader(ImagesLoader):
             filename = file_list[index]
             image = read_image(filename, raise_error=True)
             filename = os.path.basename(filename)
-        logger.trace("index: %s, filename: %s image shape: %s",  # type:ignore[attr-defined]
-                     index, filename, image.shape)
+        logger.trace(  # type:ignore[attr-defined]
+            "[%s] index: %s, filename: %s image shape: %s",
+            self._name, index, filename, image.shape)
         return filename, image
 
 
@@ -1599,9 +1629,7 @@ class ImagesSaver(ImageIO):
     """
 
     def __init__(self, path, queue_size=8, as_bytes=False):
-        logger.debug("Initializing %s: (path: %s, queue_size: %s, as_bytes: %s)",
-                     self.__class__.__name__, path, queue_size, as_bytes)
-
+        logger.debug(parse_class_init(locals()))
         super().__init__(path, queue_size=queue_size)
         self._as_bytes = as_bytes
 
@@ -1629,12 +1657,17 @@ class ImagesSaver(ImageIO):
             The ImageIO Queue
         """
         executor = futures.ThreadPoolExecutor(thread_name_prefix=self.__class__.__name__)
+        assert self._error_state is not None
         while True:
+            if self._error_state.has_error:
+                logger.debug("[%s] Thread error detected in worker thread", self._name)
+                executor.shutdown(cancel_futures=True)
+                return
             item = queue.get()
             if item == "EOF":
-                logger.debug("EOF received")
+                logger.debug("[%s] EOF received", self._name)
                 break
-            logger.trace("Submitting: '%s'", item[0])  # type:ignore[attr-defined]
+            logger.trace("[%s] Submitting: '%s'", self._name, item[0])  # type:ignore[attr-defined]
             executor.submit(self._save, *item)
         executor.shutdown()
 
@@ -1668,7 +1701,8 @@ class ImagesSaver(ImageIO):
             else:
                 assert isinstance(image, np.ndarray)
                 cv2.imwrite(filename, image)
-            logger.trace("Saved image: '%s'", filename)  # type:ignore[attr-defined]
+            logger.trace("[%s] Saved image: '%s'",  # type:ignore[attr-defined]
+                         self._name, filename)
         except Exception as err:  # pylint:disable=broad-except
             logger.error("Failed to save image '%s'. Original Error: %s", filename, str(err))
         del image
@@ -1693,14 +1727,19 @@ class ImagesSaver(ImageIO):
             If the file should be saved in a subfolder in the output location, the subfolder should
             be provided here. ``None`` for no subfolder. Default: ``None``
         """
+        if self._error_state is not None and self._error_state.has_error:
+            logger.debug("[%s.%s] Thread error detected in worker thread. Not putting",
+                         current_thread().name, self._name)
+            return
         self._set_thread()
-        logger.trace("Putting to save queue: '%s'", filename)  # type:ignore[attr-defined]
+        logger.trace("[%s] Putting to save queue: '%s'",  # type:ignore[attr-defined]
+                     self._name, filename)
         self._queue.put((filename, image, sub_folder))
 
     def close(self):
         """ Signal to the Save Threads that they should be closed and cleanly shutdown
         the saver """
-        logger.debug("Putting EOF to save queue")
+        logger.debug("[%s] Putting EOF to save queue", self._name)
         self._queue.put("EOF")
         super().close()
 

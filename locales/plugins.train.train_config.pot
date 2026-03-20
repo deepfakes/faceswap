@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-12-13 13:39+0000\n"
+"POT-Creation-Date: 2026-03-13 15:17+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -289,8 +289,8 @@ msgstr ""
 
 #: plugins/train/train_config.py:283
 msgid ""
-"Multiscale Structural Similarity Index Metric is similar to SSIM except that "
-"it performs the calculations along multiple scales of the input image."
+"Multi-scale Structural Similarity Index Metric is similar to SSIM except "
+"that it performs the calculations along multiple scales of the input image."
 msgstr ""
 
 #: plugins/train/train_config.py:286
@@ -367,7 +367,7 @@ msgid ""
 "its full amount towards the overall loss score. \n"
 "\t 25 - The loss calculated for the second loss function will be reduced by "
 "a quarter prior to adding to the overall loss score. \n"
-"\t 400 - The loss calculated for the second loss function will be mulitplied "
+"\t 400 - The loss calculated for the second loss function will be multiplied "
 "4 times prior to adding to the overall loss score. \n"
 "\t 0 - Disables the second loss function altogether."
 msgstr ""
@@ -395,7 +395,7 @@ msgid ""
 "its full amount towards the overall loss score. \n"
 "\t 25 - The loss calculated for the third loss function will be reduced by a "
 "quarter prior to adding to the overall loss score. \n"
-"\t 400 - The loss calculated for the third loss function will be mulitplied "
+"\t 400 - The loss calculated for the third loss function will be multiplied "
 "4 times prior to adding to the overall loss score. \n"
 "\t 0 - Disables the third loss function altogether."
 msgstr ""
@@ -423,7 +423,7 @@ msgid ""
 "its full amount towards the overall loss score. \n"
 "\t 25 - The loss calculated for the fourth loss function will be reduced by "
 "a quarter prior to adding to the overall loss score. \n"
-"\t 400 - The loss calculated for the fourth loss function will be mulitplied "
+"\t 400 - The loss calculated for the fourth loss function will be multiplied "
 "4 times prior to adding to the overall loss score. \n"
 "\t 0 - Disables the fourth loss function altogether."
 msgstr ""
@@ -474,9 +474,9 @@ msgid ""
 "attention on the core face area."
 msgstr ""
 
-#: plugins/train/train_config.py:473 plugins/train/train_config.py:514
-#: plugins/train/train_config.py:525 plugins/train/train_config.py:539
-#: plugins/train/train_config.py:549
+#: plugins/train/train_config.py:473 plugins/train/train_config.py:515
+#: plugins/train/train_config.py:526 plugins/train/train_config.py:540
+#: plugins/train/train_config.py:550
 msgid "mask"
 msgstr ""
 
@@ -487,45 +487,45 @@ msgid ""
 "required mask should have been selected as part of the Extract process. If "
 "it does not exist in the alignments file then it will be generated prior to "
 "training commencing.\n"
-"\tnone: Don't use a mask.\n"
-"\tbisenet-fp_face: Relatively lightweight NN based mask that provides more "
+"\t none: Don't use a mask.\n"
+"\t bisenet-fp_face: Relatively lightweight NN based mask that provides more "
 "refined control over the area to be masked (configurable in mask settings). "
 "Use this version of bisenet-fp if your model is trained with 'face' or "
 "'legacy' centering.\n"
-"\tbisenet-fp_head: Relatively lightweight NN based mask that provides more "
+"\t bisenet-fp_head: Relatively lightweight NN based mask that provides more "
 "refined control over the area to be masked (configurable in mask settings). "
 "Use this version of bisenet-fp if your model is trained with 'head' "
 "centering.\n"
-"\tcomponents: Mask designed to provide facial segmentation based on the "
+"\t components: Mask designed to provide facial segmentation based on the "
 "positioning of landmark locations. A convex hull is constructed around the "
 "exterior of the landmarks to create a mask.\n"
-"\tcustom_face: Custom user created, face centered mask.\n"
-"\tcustom_head: Custom user created, head centered mask.\n"
-"\textended: Mask designed to provide facial segmentation based on the "
+"\t custom_face: Custom user created, face centered mask.\n"
+"\t custom_head: Custom user created, head centered mask.\n"
+"\t extended: Mask designed to provide facial segmentation based on the "
 "positioning of landmark locations. A convex hull is constructed around the "
 "exterior of the landmarks and the mask is extended upwards onto the "
 "forehead.\n"
-"\tvgg-clear: Mask designed to provide smart segmentation of mostly frontal "
+"\t vgg-clear: Mask designed to provide smart segmentation of mostly frontal "
 "faces clear of obstructions. Profile faces and obstructions may result in "
 "sub-par performance.\n"
-"\tvgg-obstructed: Mask designed to provide smart segmentation of mostly "
+"\t vgg-obstructed: Mask designed to provide smart segmentation of mostly "
 "frontal faces. The mask model has been specifically trained to recognize "
 "some facial obstructions (hands and eyeglasses). Profile faces may result in "
 "sub-par performance.\n"
-"\tunet-dfl: Mask designed to provide smart segmentation of mostly frontal "
+"\t unet-dfl: Mask designed to provide smart segmentation of mostly frontal "
 "faces. The mask model has been trained by community members and will need "
 "testing for further description. Profile faces may result in sub-par "
 "performance."
 msgstr ""
 
-#: plugins/train/train_config.py:516
+#: plugins/train/train_config.py:517
 msgid ""
 "Dilate or erode the mask. Negative values erode the mask (make it smaller). "
 "Positive values dilate the mask (make it larger). The value given is a "
 "percentage of the total mask size."
 msgstr ""
 
-#: plugins/train/train_config.py:527
+#: plugins/train/train_config.py:528
 msgid ""
 "Apply gaussian blur to the mask input. This has the effect of smoothing the "
 "edges of the mask, which can help with poorly calculated masks and give less "
@@ -535,34 +535,34 @@ msgid ""
 "number."
 msgstr ""
 
-#: plugins/train/train_config.py:541
+#: plugins/train/train_config.py:542
 msgid ""
 "Sets pixels that are near white to white and near black to black. Set to 0 "
 "for off."
 msgstr ""
 
-#: plugins/train/train_config.py:551
+#: plugins/train/train_config.py:552
 msgid ""
 "Dedicate a portion of the model to learning how to duplicate the input mask. "
 "Increases VRAM usage in exchange for learning a quick ability to try to "
 "replicate more complex mask models."
 msgstr ""
 
-#: plugins/train/train_config.py:559
+#: plugins/train/train_config.py:560
 msgid ""
 "Optimizer configuration options\n"
 "The optimizer applies the output of the loss function to the model.\n"
 msgstr ""
 
-#: plugins/train/train_config.py:565 plugins/train/train_config.py:600
-#: plugins/train/train_config.py:613 plugins/train/train_config.py:634
+#: plugins/train/train_config.py:566 plugins/train/train_config.py:601
+#: plugins/train/train_config.py:614 plugins/train/train_config.py:635
 msgid "optimizer"
 msgstr ""
 
-#: plugins/train/train_config.py:567
+#: plugins/train/train_config.py:568
 msgid ""
 "The optimizer to use.\n"
-"\t adabelief - Adapting Stepsizes by the Belief in Observed Gradients. An "
+"\t adabelief - Adapting Step-sizes by the Belief in Observed Gradients. An "
 "optimizer with the aim to converge faster, generalize better and remain more "
 "stable. (https://arxiv.org/abs/2010.07468). NB: Epsilon for AdaBelief needs "
 "to be set to a smaller value than other Optimizers. Generally setting the "
@@ -590,7 +590,7 @@ msgid ""
 "this average."
 msgstr ""
 
-#: plugins/train/train_config.py:602
+#: plugins/train/train_config.py:603
 msgid ""
 "Learning rate - how fast your network will learn (how large are the "
 "modifications to the model weights after one batch of training). Values that "
@@ -599,7 +599,7 @@ msgid ""
 "escape from dead-ends and find the best global minimum."
 msgstr ""
 
-#: plugins/train/train_config.py:615
+#: plugins/train/train_config.py:616
 msgid ""
 "The epsilon adds a small constant to weight updates to attempt to avoid "
 "'divide by zero' errors. Unless you are using the AdaBelief Optimizer, then "
@@ -616,7 +616,7 @@ msgid ""
 "Note: Not used by the Lion optimizer"
 msgstr ""
 
-#: plugins/train/train_config.py:636
+#: plugins/train/train_config.py:637
 msgid ""
 "When to save the Optimizer Weights. Saving the optimizer weights is not "
 "necessary and will increase the model file size 3x (and by extension the "
@@ -635,27 +635,27 @@ msgid ""
 "optimizer weights will NOT be saved."
 msgstr ""
 
-#: plugins/train/train_config.py:657 plugins/train/train_config.py:676
-#: plugins/train/train_config.py:695
+#: plugins/train/train_config.py:658 plugins/train/train_config.py:677
+#: plugins/train/train_config.py:696
 msgid "clipping"
 msgstr ""
 
-#: plugins/train/train_config.py:659
+#: plugins/train/train_config.py:660
 msgid ""
 "Apply clipping to the gradients. Can help prevent NaNs and improve model "
 "optimization at the expense of VRAM.\n"
-"\tautoclip: Analyzes the gradient weights and adjusts the normalization "
+"\t autoclip: Analyzes the gradient weights and adjusts the normalization "
 "value dynamically to fit the data\n"
-"\tglobal_norm: Clips the gradient of each weight so that the global norm is "
+"\t global_norm: Clips the gradient of each weight so that the global norm is "
 "no higher than the given value.\n"
-"\tnorm: Clips the gradient of each weight so that its norm is no higher than "
-"the given value.\n"
-"\tvalue: Clips the gradient of each weight so that it is no higher than the "
+"\t norm: Clips the gradient of each weight so that its norm is no higher "
+"than the given value.\n"
+"\t value: Clips the gradient of each weight so that it is no higher than the "
 "given value.\n"
-"\tnone: Don't perform any clipping to the gradients."
+"\t none: Don't perform any clipping to the gradients."
 msgstr ""
 
-#: plugins/train/train_config.py:678
+#: plugins/train/train_config.py:679
 msgid ""
 "The amount of clipping to perform.\n"
 "\tautoclip: The percentile to clip at. A value of 1.0 will clip at the 10th "
@@ -670,24 +670,24 @@ msgid ""
 "\tnone: This option is ignored."
 msgstr ""
 
-#: plugins/train/train_config.py:697
+#: plugins/train/train_config.py:698
 msgid ""
-"The maximum number of prior iterations for autoclipper to analyze when "
+"The maximum number of prior iterations for auto-clipper to analyze when "
 "calculating the normalization amount. 0 to always include all prior "
 "iterations."
 msgstr ""
 
-#: plugins/train/train_config.py:706 plugins/train/train_config.py:715
+#: plugins/train/train_config.py:707 plugins/train/train_config.py:716
 msgid "updates"
 msgstr ""
 
-#: plugins/train/train_config.py:707
+#: plugins/train/train_config.py:708
 msgid ""
 "If set, weight decay is applied. 0.0 for no weight decay. Default is 0.0 for "
 "all optimizers except AdamW (0.004)"
 msgstr ""
 
-#: plugins/train/train_config.py:717
+#: plugins/train/train_config.py:718
 msgid ""
 "Values above 1 will enable Gradient Accumulation. Updates will not be at "
 "every iteration; instead they will occur every number of iterations given "
@@ -696,12 +696,12 @@ msgid ""
 "gradient noise at each update iteration."
 msgstr ""
 
-#: plugins/train/train_config.py:728 plugins/train/train_config.py:738
-#: plugins/train/train_config.py:749
+#: plugins/train/train_config.py:729 plugins/train/train_config.py:739
+#: plugins/train/train_config.py:750
 msgid "exponential moving average"
 msgstr ""
 
-#: plugins/train/train_config.py:730
+#: plugins/train/train_config.py:731
 msgid ""
 "Enable exponential moving average (EMA). EMA consists of computing an "
 "exponential moving average of the weights of the model (as the weight values "
@@ -709,39 +709,39 @@ msgid ""
 "with their moving average"
 msgstr ""
 
-#: plugins/train/train_config.py:740
+#: plugins/train/train_config.py:741
 msgid ""
 "Only used if use_ema is enabled. This is the momentum to use when computing "
 "the EMA of the model's weights: new_average = ema_momentum * old_average + "
 "(1 - ema_momentum) * current_variable_value."
 msgstr ""
 
-#: plugins/train/train_config.py:751
+#: plugins/train/train_config.py:752
 msgid ""
 "Only used if use_ema is enabled. Set the number of iterations, to overwrite "
 "the model variable by its moving average. "
 msgstr ""
 
-#: plugins/train/train_config.py:759 plugins/train/train_config.py:770
-#: plugins/train/train_config.py:781
+#: plugins/train/train_config.py:760 plugins/train/train_config.py:771
+#: plugins/train/train_config.py:782
 msgid "optimizer specific"
 msgstr ""
 
-#: plugins/train/train_config.py:761
+#: plugins/train/train_config.py:762
 msgid ""
 "The exponential decay rate for the 1st moment estimates. Used for the "
 "following Optimizers: AdaBelief, Adam, Adamax, AdamW, Lion, nAdam. Ignored "
 "for all others."
 msgstr ""
 
-#: plugins/train/train_config.py:772
+#: plugins/train/train_config.py:773
 msgid ""
 "The exponential decay rate for the 2nd moment estimates. Used for the "
 "following Optimizers:  AdaBelief, Adam, Adamax, AdamW, Lion, nAdam. Ignored "
 "for all others."
 msgstr ""
 
-#: plugins/train/train_config.py:783
+#: plugins/train/train_config.py:784
 msgid ""
 "Whether to apply AMSGrad variant of the algorithm from the paper 'On the "
 "Convergence of Adam and beyond. Used for the following Optimizers: "

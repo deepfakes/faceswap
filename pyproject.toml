@@ -29,6 +29,7 @@ module = [
     "sklearn.*",
     "tensorboard.*",
     "torch.*",
+    "torchvision.*",
     "tqdm.*",
     "win32console.*",
     "winpty.*",]

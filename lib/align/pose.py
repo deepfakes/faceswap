@@ -11,6 +11,7 @@ import numpy as np
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
 
+from .aligned_utils import points_to_68
 from .constants import MEAN_FACE, LandmarkType
 
 logger = logging.getLogger(__name__)
@@ -95,12 +96,15 @@ class PoseEstimate():
         logger.trace(parse_class_init(locals()))  # type:ignore[attr-defined]
         self._xyz_2d: np.ndarray | None = None
 
-        if landmarks_type != LandmarkType.LM_2D_68:
-            self._log_once("Pose estimation is not available for non-68 point landmarks. Pose and "
-                           "offset data will all be returned as the incorrect value of '0'")
+        if landmarks_type not in (LandmarkType.LM_2D_68, LandmarkType.LM_2D_98):
+            self._log_once(f"Pose estimation is not available for {landmarks_type} landmarks. "
+                           "Pose and offset data will all be returned as the incorrect value "
+                           "of '0'",)
         self._landmarks_type = landmarks_type
         self._camera_matrix = get_camera_matrix()
-        self._rotation, self._translation = self._solve_pnp(landmarks)
+        lms = landmarks if landmarks_type in (LandmarkType.LM_2D_4,
+                                              LandmarkType.LM_2D_68) else points_to_68(landmarks)
+        self._rotation, self._translation = self._solve_pnp(lms)
         self._offset = self._get_offset()
         self._pitch_yaw_roll: tuple[float, float, float] = (0, 0, 0)
         logger.trace("Initialized %s", self.__class__.__name__)  # type:ignore[attr-defined]
@@ -176,7 +180,7 @@ class PoseEstimate():
         translation
             The solved translation vector
         """
-        if self._landmarks_type != LandmarkType.LM_2D_68:
+        if self._landmarks_type not in (LandmarkType.LM_2D_68, LandmarkType.LM_2D_98):
             points: np.ndarray = np.empty([])
             rotation = np.array([[0.0], [0.0], [0.0]])
             translation = rotation.copy()
@@ -201,7 +205,7 @@ class PoseEstimate():
         """
         legacy = np.array([0.0, 0.0], dtype="float32")
         offset: dict[CenteringType, npt.NDArray[np.float32]] = {}
-        if self._landmarks_type != LandmarkType.LM_2D_68:
+        if self._landmarks_type not in (LandmarkType.LM_2D_68, LandmarkType.LM_2D_98):
             offset["legacy"] = legacy
             offset["face"] = np.array([0.0, 0.0], dtype="float32")
             offset["head"] = np.array([0.0, 0.0], dtype="float32")

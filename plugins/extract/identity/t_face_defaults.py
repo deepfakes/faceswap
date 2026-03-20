@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-""" The default options for the faceswap Import Alignments plugin.
+""" The default options for the faceswap VGG Face2 recognition plugin.
+
 
 Defaults files should be named `<plugin_name>_defaults.py`
 
@@ -30,31 +31,35 @@ from lib.config import ConfigItem
 
 
 HELPTEXT = (
-    "Import Detector options.\n"
-    "Imports a detected face bounding box from an external .json file.\n"
+    "Tencent TFace identity recognition.\n"
+    "(https://github.com/Tencent/TFace)"
     )
 
 
-file_name = ConfigItem(
-    datatype=str,
-    default="import.json",
+batch_size = ConfigItem(
+    datatype=int,
+    default=16,
     group="settings",
-    info="The import file should be stored in the same folder as the video (if extracting "
-         "from a video file) or inside the folder of images (if importing from a folder of "
-         "images)")
+    info="The batch size to use. To a point, higher batch sizes equal better performance, "
+         "but setting it too high can harm performance.",
+    rounding=1,
+    min_max=(1, 256))
 
-origin = ConfigItem(
+cpu = ConfigItem(
+    datatype=bool,
+    default=False,
+    group="settings",
+    info="The IR-50 backbone still runs fairly quickly on CPU on some setups. Enable "
+         "CPU mode here to use the CPU for this plugin to save some VRAM at a speed cost.")
+
+backbone = ConfigItem(
     datatype=str,
-    default="top-left",
-    group="output",
-    info="The origin (0, 0) location of the co-ordinates system used. "
-         "\n\t top-left: The origin (0, 0) of the canvas is at the top left "
-         "corner."
-         "\n\t bottom-left: The origin (0, 0) of the canvas is at the bottom "
-         "left corner."
-         "\n\t top-right: The origin (0, 0) of the canvas is at the top right "
-         "corner."
-         "\n\t bottom-right: The origin (0, 0) of the canvas is at the bottom "
-         "right corner.",
-    choices=["top-left", "bottom-left", "top-right", "bottom-right"],
+    default="ir-101",
+    group="settings",
+    info="The model backbone to use."
+         "\n\tir-50 - InsightFace ResNet-50 (50 layers). Can run at a reasonable speed "
+         r"on CPU. Reports 95%-96% accuracy."
+         "\n\tir-101 - InsightFace ResNet-101 (100 layers). "
+         r"Reports ~97% accuracy",
+    choices=["ir-50", "ir-101"],
     gui_radio=True)

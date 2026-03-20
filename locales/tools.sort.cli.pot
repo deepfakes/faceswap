@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-03-28 23:53+0000\n"
+"POT-Creation-Date: 2026-03-13 15:17+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,140 +17,148 @@ msgstr ""
 "Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: tools/sort/cli.py:15
+#: tools/sort/cli.py:17
 msgid "This command lets you sort images using various methods."
 msgstr ""
 
-#: tools/sort/cli.py:21
+#: tools/sort/cli.py:23
 msgid ""
 " Adjust the '-t' ('--threshold') parameter to control the strength of "
 "grouping."
 msgstr ""
 
-#: tools/sort/cli.py:22
+#: tools/sort/cli.py:24
 msgid ""
 " Adjust the '-b' ('--bins') parameter to control the number of bins for "
 "grouping. Each image is allocated to a bin by the percentage of color pixels "
 "that appear in the image."
 msgstr ""
 
-#: tools/sort/cli.py:25
+#: tools/sort/cli.py:27
 msgid ""
 " Adjust the '-b' ('--bins') parameter to control the number of bins for "
 "grouping. Each image is allocated to a bin by the number of degrees the face "
 "is orientated from center."
 msgstr ""
 
-#: tools/sort/cli.py:28
+#: tools/sort/cli.py:30
 msgid ""
 " Adjust the '-b' ('--bins') parameter to control the number of bins for "
 "grouping. The minimum and maximum values are taken for the chosen sort "
 "metric. The bins are then populated with the results from the group sorting."
 msgstr ""
 
-#: tools/sort/cli.py:32
+#: tools/sort/cli.py:34
 msgid "faces by blurriness."
 msgstr ""
 
-#: tools/sort/cli.py:33
+#: tools/sort/cli.py:35
 msgid "faces by fft filtered blurriness."
 msgstr ""
 
-#: tools/sort/cli.py:34
+#: tools/sort/cli.py:36
 msgid ""
 "faces by the estimated distance of the alignments from an 'average' face. "
 "This can be useful for eliminating misaligned faces. Sorts from most like an "
 "average face to least like an average face."
 msgstr ""
 
-#: tools/sort/cli.py:37
+#: tools/sort/cli.py:39
 msgid ""
 "faces using VGG Face2 by face similarity. This uses a pairwise clustering "
 "algorithm to check the distances between 512 features on every face in your "
 "set and order them appropriately."
 msgstr ""
 
-#: tools/sort/cli.py:40
+#: tools/sort/cli.py:42
 msgid "faces by their landmarks."
 msgstr ""
 
-#: tools/sort/cli.py:41
+#: tools/sort/cli.py:43
 msgid "Like 'face-cnn' but sorts by dissimilarity."
 msgstr ""
 
-#: tools/sort/cli.py:42
+#: tools/sort/cli.py:44
 msgid "faces by Yaw (rotation left to right)."
 msgstr ""
 
-#: tools/sort/cli.py:43
+#: tools/sort/cli.py:45
 msgid "faces by Pitch (rotation up and down)."
 msgstr ""
 
-#: tools/sort/cli.py:44
+#: tools/sort/cli.py:46
 msgid ""
 "faces by Roll (rotation). Aligned faces should have a roll value close to "
 "zero. The further the Roll value from zero the higher liklihood the face is "
 "misaligned."
 msgstr ""
 
-#: tools/sort/cli.py:46
+#: tools/sort/cli.py:48
 msgid "faces by their color histogram."
 msgstr ""
 
-#: tools/sort/cli.py:47
+#: tools/sort/cli.py:49
 msgid "Like 'hist' but sorts by dissimilarity."
 msgstr ""
 
-#: tools/sort/cli.py:48
+#: tools/sort/cli.py:50
 msgid ""
 "images by the average intensity of the converted grayscale color channel."
 msgstr ""
 
-#: tools/sort/cli.py:49
+#: tools/sort/cli.py:51
 msgid ""
 "images by their number of black pixels. Useful when faces are near borders "
 "and a large part of the image is black."
 msgstr ""
 
-#: tools/sort/cli.py:51
+#: tools/sort/cli.py:53
 msgid ""
 "images by the average intensity of the converted Y color channel. Bright "
 "lighting and oversaturated images will be ranked first."
 msgstr ""
 
-#: tools/sort/cli.py:53
+#: tools/sort/cli.py:55
 msgid ""
 "images by the average intensity of the converted Cg color channel. Green "
 "images will be ranked first and red images will be last."
 msgstr ""
 
-#: tools/sort/cli.py:55
+#: tools/sort/cli.py:57
 msgid ""
 "images by the average intensity of the converted Co color channel. Orange "
 "images will be ranked first and blue images will be last."
 msgstr ""
 
-#: tools/sort/cli.py:57
+#: tools/sort/cli.py:59
 msgid ""
 "images by their size in the original frame. Faces further from the camera "
 "and from lower resolution sources will be sorted first, whilst faces closer "
 "to the camera and from higher resolution sources will be sorted last."
 msgstr ""
 
-#: tools/sort/cli.py:81
+#: tools/sort/cli.py:72
+msgid "Sort"
+msgstr ""
+
+#: tools/sort/cli.py:73
+msgid "Group"
+msgstr ""
+
+#: tools/sort/cli.py:83
 msgid "Sort faces using a number of different techniques"
 msgstr ""
 
-#: tools/sort/cli.py:91 tools/sort/cli.py:98 tools/sort/cli.py:110
-#: tools/sort/cli.py:150
+#: tools/sort/cli.py:93 tools/sort/cli.py:100 tools/sort/cli.py:112
+#: tools/sort/cli.py:152
 msgid "data"
 msgstr ""
 
-#: tools/sort/cli.py:92
+#: tools/sort/cli.py:94
 msgid "Input directory of aligned faces."
 msgstr ""
 
-#: tools/sort/cli.py:100
+#: tools/sort/cli.py:102
 msgid ""
 "Output directory for sorted aligned faces. If not provided and 'keep' is "
 "selected then a new folder called 'sorted' will be created within the input "
@@ -159,18 +167,18 @@ msgid ""
 "'input_dir'"
 msgstr ""
 
-#: tools/sort/cli.py:112
+#: tools/sort/cli.py:114
 msgid ""
 "R|If selected then the input_dir should be a parent folder containing "
 "multiple folders of faces you wish to sort. The faces will be output to "
 "separate sub-folders in the output_dir"
 msgstr ""
 
-#: tools/sort/cli.py:121
+#: tools/sort/cli.py:123
 msgid "sort settings"
 msgstr ""
 
-#: tools/sort/cli.py:124
+#: tools/sort/cli.py:126
 msgid ""
 "R|Choose how images are sorted. Selecting a sort method gives the images a "
 "new filename based on the order the image appears within the given method.\n"
@@ -180,11 +188,11 @@ msgid ""
 "'none' for both 'sort-by' and 'group-by' will do nothing"
 msgstr ""
 
-#: tools/sort/cli.py:136 tools/sort/cli.py:164 tools/sort/cli.py:184
+#: tools/sort/cli.py:138 tools/sort/cli.py:166 tools/sort/cli.py:186
 msgid "group settings"
 msgstr ""
 
-#: tools/sort/cli.py:139
+#: tools/sort/cli.py:141
 msgid ""
 "R|Selecting a group by method will move/copy files into numbered bins based "
 "on the selected method.\n"
@@ -193,7 +201,7 @@ msgid ""
 "folder. Selecting 'none' for both 'sort-by' and 'group-by' will do nothing"
 msgstr ""
 
-#: tools/sort/cli.py:152
+#: tools/sort/cli.py:154
 msgid ""
 "Whether to keep the original files in their original location. Choosing a "
 "'sort-by' method means that the files have to be renamed. Selecting 'keep' "
@@ -203,7 +211,7 @@ msgid ""
 "criteria."
 msgstr ""
 
-#: tools/sort/cli.py:167
+#: tools/sort/cli.py:169
 msgid ""
 "R|Float value. Minimum threshold to use for grouping comparison with 'face-"
 "cnn' 'hist' and 'face' methods.\n"
@@ -218,7 +226,7 @@ msgid ""
 "face-cnn 7.2, hist 0.3, face 0.25"
 msgstr ""
 
-#: tools/sort/cli.py:187
+#: tools/sort/cli.py:189
 #, python-format
 msgid ""
 "R|Integer value. Used to control the number of bins created for grouping by: "
@@ -242,11 +250,21 @@ msgid ""
 "Default value: 5"
 msgstr ""
 
-#: tools/sort/cli.py:207 tools/sort/cli.py:217
+#: tools/sort/cli.py:211 tools/sort/cli.py:223 tools/sort/cli.py:233
 msgid "settings"
 msgstr ""
 
-#: tools/sort/cli.py:210
+#: tools/sort/cli.py:214
+msgid ""
+"R|The identity plugin to use when sorting/grouping by face. \n"
+"L|t-face: An InsightFace ResNet based model with a lighter and heavier "
+"variant (configurable in settings).\n"
+"L|vggface2: An older and lighter, but fairly reliable plugin based on the "
+"VGG Network.\n"
+"Default: t-face"
+msgstr ""
+
+#: tools/sort/cli.py:226
 msgid ""
 "Logs file renaming changes if grouping by renaming, or it logs the file "
 "copying/movement if grouping by folders. If no log file is specified  with "
@@ -254,7 +272,7 @@ msgid ""
 "directory."
 msgstr ""
 
-#: tools/sort/cli.py:221
+#: tools/sort/cli.py:237
 msgid ""
 "Specify a log file to use for saving the renaming or grouping information. "
 "If specified extension isn't 'json' or 'yaml', then json will be used as the "

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Output processing for faceswap's mask tool """
+"""Output processing for faceswap's mask tool"""
 from __future__ import annotations
 
 import logging
@@ -17,7 +17,7 @@ from lib.align.alignments import AlignmentDict
 
 from lib.image import ImagesSaver, read_image_meta_batch
 from lib.utils import get_folder, get_module_objects
-from scripts.fsmedia import Alignments as ExtractAlignments
+from scripts.fs_media import Alignments as ExtractAlignments
 
 if T.TYPE_CHECKING:
     from lib import align
@@ -28,15 +28,15 @@ logger = logging.getLogger(__name__)
 
 
 class Output:
-    """ Handles outputting of masks for preview/editting to disk
+    """Handles outputting of masks for preview/editing to disk
 
     Parameters
     ----------
-    arguments: :class:`argparse.Namespace`
+    arguments
         The command line arguments that the mask tool was called with
-    alignments: :class:`~lib.align.alignments.Alignments` | None
+    alignments
         The alignments file object (or ``None`` if not provided and input is faces)
-    file_list: list[str]
+    file_list
         Full file list for the loader. Used for extracting alignments from faces
     """
     def __init__(self, arguments: Namespace,
@@ -62,22 +62,21 @@ class Output:
 
     @property
     def should_save(self) -> bool:
-        """bool: ``True`` if mask images should be output otherwise ``False`` """
+        """``True`` if mask images should be output otherwise ``False``"""
         return self._saver is not None
 
     def _get_subfolder(self, output: str) -> str:
-        """ Obtain a subfolder within the output folder to save the output based on selected
+        """Obtain a subfolder within the output folder to save the output based on selected
         output options.
 
         Parameters
         ----------
-        output: str
+        output
             Full path to the root output folder
 
         Returns
         -------
-        str:
-            The full path to where masks should be saved
+        The full path to where masks should be saved
         """
         out_type = "frame" if self._full_frame else "face"
         retval = os.path.join(output,
@@ -86,20 +85,18 @@ class Output:
         return retval
 
     def _set_saver(self, output: str | None, processing: str) -> ImagesSaver | None:
-        """ set the saver in a background thread
+        """set the saver in a background thread
 
         Parameters
         ----------
-        output: str
+        output
             Full path to the root output folder if provided
-        processing: str
+        processing
             The processing that has been selected
 
         Returns
         -------
-        ``None`` or :class:`lib.image.ImagesSaver`:
-            If output is requested, returns a :class:`lib.image.ImagesSaver` otherwise
-            returns ``None``
+        If output is requested, returns a :class:`lib.image.ImagesSaver` otherwise returns ``None``
         """
         if output is None or not output:
             if processing == "output":
@@ -115,20 +112,19 @@ class Output:
     def _get_alignments(self,
                         alignments: align.alignments.Alignments | None,
                         file_list: list[str]) -> align.alignments.Alignments | None:
-        """ Obtain the alignments file. If input is faces and full frame output is requested then
+        """Obtain the alignments file. If input is faces and full frame output is requested then
         the file needs to be generated from the input faces, if not provided
 
         Parameters
         ----------
-        alignments: :class:`~lib.align.alignments.Alignments` | None
+        alignments
             The alignments file object (or ``None`` if not provided and input is faces)
-        file_list: list[str]
+        file_list
             Full paths to ihe mask tool input files
 
         Returns
         -------
-        :class:`~lib.align.alignments.Alignments` | None
-            The alignments file if provided and/or is required otherwise ``None``
+        The alignments file if provided and/or is required otherwise ``None``
         """
         if alignments is not None or not self._full_frame:
             return alignments
@@ -144,14 +140,13 @@ class Output:
             data.setdefault(fname, {}).setdefault("faces",  # type:ignore[typeddict-item]
                                                   []).append(aln)
 
-        dummy_args = Namespace(alignments_path="/dummy/alignments.fsa")
-        retval = ExtractAlignments(dummy_args, is_extract=True)
+        retval = ExtractAlignments("/dummy/alignments.fsa", "", is_extract=True)
         retval.update_from_dict(data)
         return retval
 
     def _get_background_frame(self, detected_faces: list[DetectedFace], frame_dims: tuple[int, int]
                               ) -> np.ndarray:
-        """ Obtain the background image when final output is in full frame format. There will only
+        """Obtain the background image when final output is in full frame format. There will only
         ever be one background, even when there are multiple faces
 
         The output image will depend on the requested output type and whether the input is faces
@@ -159,15 +154,14 @@ class Output:
 
         Parameters
         ----------
-        detected_faces: list[:class:`~lib.align.detected_face.DetectedFace`]
+        detected_faces
             Detected face objects for the output image
-        frame_dims: tuple[int, int]
+        frame_dims
             The size of the original frame
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The full frame background image for applying masks to
+        The full frame background image for applying masks to
         """
         if self._type == "mask":
             return np.zeros(frame_dims, dtype="uint8")
@@ -199,24 +193,23 @@ class Output:
                              detected_face: DetectedFace,
                              mask_centering: CenteringType,
                              mask_size: int) -> np.ndarray:
-        """ Obtain the background images when the output is faces
+        """Obtain the background images when the output is faces
 
         The output image will depend on the requested output type and whether the input is faces
         or frames
 
         Parameters
         ----------
-        detected_face: :class:`~lib.align.detected_face.DetectedFace`
+        detected_face
             Detected face object for the output image
-        mask_centering: Literal["face", "head", "legacy"]
+        mask_centering
             The centering of the stored mask
-        mask_size: int
+        mask_size
             The pixel size of the stored mask
 
         Returns
         -------
-        list[]:class:`numpy.ndarray`]
-            The face background image for applying masks to for each detected face object
+        The face background image for applying masks to for each detected face object
         """
         if self._type == "mask":
             return np.zeros((mask_size, mask_size), dtype="uint8")
@@ -230,12 +223,9 @@ class Output:
                                  size=mask_size,
                                  is_aligned=True).face
         else:
-            centering: CenteringType = ("legacy" if self._alignments is not None and
-                                        self._alignments.version == 1.0
-                                        else mask_centering)
             detected_face.load_aligned(detected_face.image,
                                        size=mask_size,
-                                       centering=centering,
+                                       centering=mask_centering,
                                        force=True)
             retval = detected_face.aligned.face
 
@@ -247,23 +237,22 @@ class Output:
                         frame_dims: tuple[int, int],
                         mask_centering: CenteringType,
                         mask_size: int) -> np.ndarray:
-        """ Obtain the background image that the final outut will be placed on
+        """Obtain the background image that the final output will be placed on
 
         Parameters
         ----------
-        detected_faces: list[:class:`~lib.align.detected_face.DetectedFace`]
+        detected_faces
             Detected face objects for the output image
-        frame_dims: tuple[int, int]
+        frame_dims
             The size of the original frame
-        mask_centering: Literal["face", "head", "legacy"]
+        mask_centering
             The centering of the stored mask
-        mask_size: int
+        mask_size
             The pixel size of the stored mask
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The background image for the mask output
+        The background image for the mask output
         """
         if self._full_frame:
             retval = self._get_background_frame(detected_faces, frame_dims)
@@ -279,21 +268,20 @@ class Output:
                   detected_faces: list[DetectedFace],
                   mask_type: str,
                   mask_dims: tuple[int, int]) -> np.ndarray:
-        """ Generate the mask to be applied to the final output frame
+        """Generate the mask to be applied to the final output frame
 
         Parameters
         ----------
-        detected_faces: list[:class:`~lib.align.detected_face.DetectedFace`]
+        detected_faces
             Detected face objects to generate the masks from
-        mask_type: str
+        mask_type
             The mask-type to use
-        mask_dims : tuple[int, int]
+        mask_dims
             The size of the mask to output
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The final mask to apply to the output image
+        The final mask to apply to the output image
         """
         retval = np.zeros(mask_dims, dtype="uint8")
         for face in detected_faces:
@@ -310,20 +298,19 @@ class Output:
         return retval
 
     def _build_output_image(self, background: np.ndarray, mask: np.ndarray) -> np.ndarray:
-        """ Collate the mask and images for the final output image, depending on selected output
+        """Collate the mask and images for the final output image, depending on selected output
         type
 
         Parameters
         ----------
-        background: :class:`numpy.ndarray`
+        background
             The image that the mask will be applied to
-        mask: :class:`numpy.ndarray`
+        mask
             The mask to output
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The final output image
+        The final output image
         """
         if self._type == "mask":
             return mask
@@ -346,24 +333,23 @@ class Output:
                       detected_faces: list[DetectedFace],
                       mask_type: str,
                       frame_dims: tuple[int, int] | None) -> np.ndarray:
-        """ Create a mask preview image for saving out to disk
+        """Create a mask preview image for saving out to disk
 
         Parameters
         ----------
-        detected_faces: list[:class:`~lib.align.detected_face.DetectedFace`]
+        detected_faces
             Detected face objects for the output image
-        mask_type: str
+        mask_type
             The mask_type to process
-        frame_dims: tuple[int, int] | None
+        frame_dims
             The size of the original frame, if input is faces otherwise ``None``
 
         Returns
         -------
-        :class:`numpy.ndarray`:
-            A preview image depending on the output type in one of the following forms:
-              - Containing 3 sub images: The original face, the masked face and the mask
-              - The mask only
-              - The masked face
+        A preview image depending on the output type in one of the following forms:
+          - Containing 3 sub images: The original face, the masked face and the mask
+          - The mask only
+          - The masked face
         """
         assert detected_faces[0].image is not None
         dims = T.cast(tuple[int, int],
@@ -387,22 +373,21 @@ class Output:
                       frame: str,
                       idx: int,
                       detected_face: DetectedFace) -> list[tuple[int, DetectedFace]]:
-        """ For full frame output, cache any faces until all detected faces have been seen. For
+        """For full frame output, cache any faces until all detected faces have been seen. For
         face output, just return the detected_face object inside a list
 
         Parameters
         ----------
-        frame: str
+        frame
             The frame name in the alignments file
-        idx: int
+        idx
             The index of the face for this frame in the alignments file
-        detected_face: :class:`~lib.align.detected_face.DetectedFace`
+        detected_face
             A detected_face object for a face
 
         Returns
         -------
-        list[tuple[int, :class:`~lib.align.detected_face.DetectedFace`]]
-            Face index and detected face objects to be processed for this output, if any
+        Face index and detected face objects to be processed for this output, if any
         """
         if not self._full_frame:
             return [(idx, detected_face)]
@@ -425,22 +410,21 @@ class Output:
     def _get_mask_types(self,
                         frame: str,
                         detected_faces: list[tuple[int, DetectedFace]]) -> list[str]:
-        """ Get the mask type names for the select mask type. Remove any detected faces where
+        """Get the mask type names for the select mask type. Remove any detected faces where
         the selected mask does not exist
 
         Parameters
         ----------
-        frame: str
+        frame
             The frame name in the alignments file
-        idx: int
+        idx
             The index of the face for this frame in the alignments file
-        detected_face: list[tuple[int, :class:`~lib.align.detected_face.DetectedFace`]
+        detected_face
             The face index and detected_face object for output
 
         Returns
         -------
-        list[str]
-            List of mask type names to be processed
+        List of mask type names to be processed
         """
         if self._mask_type == "bisenet-fp":
             mask_types = [f"{self._mask_type}_{area}" for area in ("face", "head")]
@@ -470,17 +454,17 @@ class Output:
              idx: int,
              detected_face: DetectedFace,
              frame_dims: tuple[int, int] | None = None) -> None:
-        """ Build the mask preview image and save
+        """Build the mask preview image and save
 
         Parameters
         ----------
-        frame: str
+        frame
             The frame name in the alignments file
-        idx: int
+        idx
             The index of the face for this frame in the alignments file
-        detected_face: :class:`~lib.align.detected_face.DetectedFace`
+        detected_face
             A detected_face object for a face
-        frame_dims: tuple[int, int] | None, optional
+        frame_dims
             The size of the original frame, if input is faces otherwise ``None``. Default: ``None``
         """
         assert self._saver is not None
@@ -509,11 +493,12 @@ class Output:
             if not self._full_frame:
                 filename += f"_{idx}"
             filename = os.path.join(self._saver.location, f"{filename}.png")
-            logger.trace("filename: '%s', image_shape: %s", filename, image.shape)  # type: ignore
+            logger.trace("filename: '%s', image_shape: %s",  # type:ignore[attr-defined]
+                         filename, image.shape)
             self._saver.save(filename, image)
 
     def close(self) -> None:
-        """ Shut down the image saver if it is open """
+        """Shut down the image saver if it is open"""
         if self._saver is None:
             return
         logger.debug("Shutting down saver")

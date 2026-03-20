@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Launches the correct script with the given Command Line Arguments """
+"""Launches the correct script with the given Command Line Arguments"""
 from __future__ import annotations
 import logging
 import os
@@ -22,22 +22,22 @@ logger = logging.getLogger(__name__)
 
 
 class ScriptExecutor():
-    """ Loads the relevant script modules and executes the script.
+    """Loads the relevant script modules and executes the script.
 
-        This class is initialized in each of the argparsers for the relevant
+        This class is initialized in each of the arg parsers for the relevant
         command, then execute script is called within their set_default
         function.
 
         Parameters
         ----------
-        command: str
+        command
             The faceswap command that is being executed
         """
     def __init__(self, command: str) -> None:
         self._command = command.lower()
 
     def _set_environment_variables(self) -> None:
-        """ Set the number of threads that numexpr can use. """
+        """Set the number of threads that numexpr can use. """
         # Allocate a decent number of threads to numexpr to suppress warnings
         cpu_count = os.cpu_count()
         allocate = max(1, cpu_count - cpu_count // 3 if cpu_count is not None else 1)
@@ -47,18 +47,18 @@ class ScriptExecutor():
             os.environ.pop("OMP_NUM_THREADS")
         logger.debug("Setting NUMEXPR_MAX_THREADS to %s", allocate)
         os.environ["NUMEXPR_MAX_THREADS"] = str(allocate)
+        os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 
         if get_backend() == "apple_silicon":  # Let apple put unsupported ops on the CPU
             logger.debug("Enabling unsupported Ops on CPU for Apple Silicon")
             os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
     def _import_script(self) -> Callable:
-        """ Imports the relevant script as indicated by :attr:`_command` from the scripts folder.
+        """Imports the relevant script as indicated by :attr:`_command` from the scripts folder.
 
         Returns
         -------
-        class: Faceswap Script
-            The uninitialized script from the faceswap scripts folder.
+        The uninitialized script from the faceswap scripts folder.
         """
         self._set_environment_variables()
         self._test_for_torch_version()
@@ -71,7 +71,7 @@ class ScriptExecutor():
         return script
 
     def _test_for_torch_version(self) -> None:
-        """ Check that the required PyTorch version is installed.
+        """Check that the required PyTorch version is installed.
 
         Raises
         ------
@@ -101,12 +101,12 @@ class ScriptExecutor():
 
     @classmethod
     def _handle_import_error(cls, message: str) -> None:
-        """ Display the error message to the console and wait for user input to dismiss it, if
+        """Display the error message to the console and wait for user input to dismiss it, if
         running GUI under Windows, otherwise use standard error handling.
 
         Parameters
         ----------
-        message: str
+        message
             The error message to display
         """
         if "gui" in sys.argv and platform.system() == "Windows":
@@ -118,7 +118,7 @@ class ScriptExecutor():
             raise FaceswapError(message)
 
     def _test_for_gui(self) -> None:
-        """ If running the gui, performs check to ensure necessary prerequisites are present. """
+        """If running the gui, performs check to ensure necessary prerequisites are present."""
         if self._command != "gui":
             return
         self._test_tkinter()
@@ -126,7 +126,7 @@ class ScriptExecutor():
 
     @classmethod
     def _test_tkinter(cls) -> None:
-        """ If the user is running the GUI, test whether the tkinter app is available on their
+        """If the user is running the GUI, test whether the tkinter app is available on their
         machine. If not exit gracefully.
 
         This avoids having to import every tkinter function within the GUI in a wrapper and
@@ -154,14 +154,14 @@ class ScriptExecutor():
 
     @classmethod
     def _check_display(cls) -> None:
-        """ Check whether there is a display to output the GUI to.
+        """Check whether there is a display to output the GUI to.
 
         If running on Windows then it is assumed that we are not running in headless mode
 
         Raises
         ------
         FaceswapError
-            If a DISPLAY environmental cannot be found
+            If a DISPLAY environmental variable cannot be found
         """
         if not os.environ.get("DISPLAY", None) and os.name != "nt":
             if platform.system() == "Darwin":
@@ -170,14 +170,14 @@ class ScriptExecutor():
             raise FaceswapError("No display detected. GUI mode has been disabled.")
 
     def execute_script(self, arguments: argparse.Namespace) -> None:
-        """ Performs final set up and launches the requested :attr:`_command` with the given
+        """Performs final set up and launches the requested :attr:`_command` with the given
         command line arguments.
 
         Monitors for errors and attempts to shut down the process cleanly on exit.
 
         Parameters
         ----------
-        arguments: :class:`argparse.Namespace`
+        arguments
             The command line arguments to be passed to the executing script.
         """
         is_gui = hasattr(arguments, "redirect_gui") and arguments.redirect_gui
@@ -210,7 +210,7 @@ class ScriptExecutor():
             safe_shutdown(got_error=not success)
 
     def _configure_backend(self, arguments: argparse.Namespace) -> None:
-        """ Configure the backend.
+        """Configure the backend.
 
         Exclude any GPUs for use by Faceswap when requested.
 
@@ -218,7 +218,7 @@ class ScriptExecutor():
 
         Parameters
         ----------
-        arguments: :class:`argparse.Namespace`
+        arguments
             The command line arguments passed to Faceswap.
         """
         if not hasattr(arguments, "exclude_gpus"):

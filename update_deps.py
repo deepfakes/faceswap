@@ -14,7 +14,7 @@ from setup import Environment, Install
 logger = logging.getLogger(__name__)
 
 
-def main(is_gui=False) -> None:
+def update(is_gui=False) -> None:
     """ Check for and update dependencies
 
     Parameters
@@ -24,15 +24,15 @@ def main(is_gui=False) -> None:
         which get scrambled in the GUI
     """
     logger.info("Updating dependencies...")
-    update = Environment(updater=True)
-    Install(update, is_gui=is_gui)
+    updater = Environment(updater=True)
+    Install(updater, is_gui=is_gui)
     logger.info("Dependencies updated")
 
 
 if __name__ == "__main__":
     logfile = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "faceswap_update.log")
     log_setup("INFO", logfile, "setup")
-    main()
+    update()
 
 
 __all__ = get_module_objects(__name__)

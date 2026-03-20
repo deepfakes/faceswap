@@ -2,6 +2,7 @@
 """ The Command Line Argument options for extracting and converting with faceswap.py """
 import gettext
 import typing as T
+from argparse import SUPPRESS
 
 from lib.utils import get_module_objects
 from lib.utils import get_backend
@@ -49,13 +50,6 @@ class ExtractConvertArgs(FaceSwapArgs):
                 "to process or path to a video file. NB: This should be the source video/frames "
                 "NOT the source faces.")})
         argument_list.append({
-            "opts": ("-o", "--output-dir"),
-            "action": DirFullPaths,
-            "dest": "output_dir",
-            "required": True,
-            "group": _("Data"),
-            "help": _("Output directory. This is where the converted files will be saved.")})
-        argument_list.append({
             "opts": ("-p", "--alignments"),
             "action": FileFullPaths,
             "filetypes": "alignments",
@@ -102,10 +96,18 @@ class ExtractArgs(ExtractConvertArgs):
             default_detector = "mtcnn"
             default_aligner = "cv2-dnn"
         else:
-            default_detector = "s3fd"
-            default_aligner = "fan"
+            default_detector = "retinaface"
+            default_aligner = "hrnet"
 
         argument_list: list[dict[str, T.Any]] = []
+        argument_list.append({
+            "opts": ("-o", "--output-dir"),
+            "action": DirFullPaths,
+            "dest": "output_dir",
+            "required": False,
+            "group": _("Data"),
+            "help": _("Output directory. Location to save extracted faces. If not provided then "
+                      "don't save faces and just create an alignments file")})
         argument_list.append({
             "opts": ("-b", "--batch-mode"),
             "action": "store_true",
@@ -113,7 +115,7 @@ class ExtractArgs(ExtractConvertArgs):
             "default": False,
             "group": _("Data"),
             "help": _(
-                "R|If selected then the input_dir should be a parent folder containing multiple "
+                "If selected then the input_dir should be a parent folder containing multiple "
                 "videos and/or folders of images you wish to extract from. The faces will be "
                 "output to separate sub-folders in the output_dir.")})
         argument_list.append({
@@ -121,42 +123,44 @@ class ExtractArgs(ExtractConvertArgs):
             "action": Radio,
             "type": str.lower,
             "default": default_detector,
-            "choices": PluginLoader.get_available_extractors("detect"),
-            "group": _("Plugins"),
+            "choices": PluginLoader.get_available_extractors("detect") + ["file"],
+            "group": _("Detect"),
             "help": _(
                 "R|Detector to use. Some of these have configurable settings in "
                 "'/config/extract.ini' or 'Settings > Configure Extract 'Plugins':"
                 "\nL|cv2-dnn: A CPU only extractor which is the least reliable and least resource "
-                "intensive. Use this if not using a GPU and time is important."
-                "\nL|mtcnn: Good detector. Fast on CPU, faster on GPU. Uses fewer resources than "
-                "other GPU detectors but can often return more false positives."
-                "\nL|s3fd: Best detector. Slow on CPU, faster on GPU. Can detect more faces and "
+                "intensive. Use this only as a last resort. Both MTCNN and RetinaFace have "
+                "variants that will perform better on CPU."
+                "\nL|mtcnn: Average detector. Fast on CPU, faster on GPU. Uses fewer resources "
+                "than other GPU detectors but can often return more false positives or misses "
+                "faces."
+                "\nL|retinaface: Good detector. Faster and lighter than S3FD but of similar "
+                "quality. A ResNet and MobileNet version are available (configurable in Detect "
+                "settings). The MobileNet version is light enough to run on CPU."
+                "\nL|s3fd: Good detector. Slow on CPU, faster on GPU. Can detect more faces and "
                 "fewer false positives than other GPU detectors, but is a lot more resource "
-                "intensive."
-                "\nL|external: Import a face detection bounding box from a json file. ("
-                "configurable in Detect settings)")})
+                "intensive.")})
         argument_list.append({
             "opts": ("-A", "--aligner"),
             "action": Radio,
             "type": str.lower,
             "default": default_aligner,
-            "choices": PluginLoader.get_available_extractors("align"),
-            "group": _("Plugins"),
+            "choices": PluginLoader.get_available_extractors("align") + ["file"],
+            "group": _("Align"),
             "help": _(
                 "R|Aligner to use."
                 "\nL|cv2-dnn: A CPU only landmark detector. Faster, less resource intensive, but "
                 "less accurate. Only use this if not using a GPU and time is important."
-                "\nL|fan: Best aligner. Fast on GPU, slow on CPU."
-                "\nL|external: Import 68 point 2D landmarks or an aligned bounding box from a "
-                "json file. (configurable in Align settings)")})
+                "\nL|fan: Good aligner. Fast on GPU, slow on CPU."
+                "\nL|hrnet: Best aligner. Faster and more performant than FAN. Trained on a "
+                "custom set of fully rotated faces. Fast on GPU, slow on CPU")})
         argument_list.append({
             "opts": ("-M", "--masker"),
             "action": MultiOption,
             "type": str.lower,
             "nargs": "+",
-            "choices": [mask for mask in PluginLoader.get_available_extractors("mask")
-                        if mask not in ("components", "extended")],
-            "group": _("Plugins"),
+            "choices": PluginLoader.get_available_extractors("mask"),
+            "group": _("Mask"),
             "help": _(
                 "R|Additional Masker(s) to use. The masks generated here will all take up GPU "
                 "RAM. You can select none, one or multiple masks, but the extraction may take "
@@ -189,13 +193,64 @@ class ExtractArgs(ExtractConvertArgs):
                 "exterior of the landmarks and the mask is extended upwards onto the forehead."
                 "\n(eg: `-M unet-dfl vgg-clear`, `--masker vgg-obstructed`)")})
         argument_list.append({
+            "opts": ("-I", "--identity"),
+            "action": MultiOption,
+            "type": str.lower,
+            "nargs": "+",
+            "choices": PluginLoader.get_available_extractors("identity"),
+            "group": _("Identity"),
+            "help": _(
+                "R|Obtain and store face identity encodings. Slows down extract a little but will "
+                "save time if using 'sort by face'. Required for face filtering."
+                "\nL|t-face: An InsightFace ResNet based model with a lighter and heavier variant "
+                "(configurable in settings)."
+                "\nL|vggface2: An older and lighter, but fairly reliable plugin based on the VGG "
+                "Network.")})
+        argument_list.append({
+            "opts": ("-m", "--min-size"),
+            "action": Slider,
+            "min_max": (0, 100),
+            "rounding": 1,
+            "type": int,
+            "dest": "min_size",
+            "default": 0,
+            "group": _("Detect"),
+            "help": _(
+                "Filters out detections below this percentage of the shortest side of the frame "
+                "along the face detection box's longest edge. (eg: a value of 10 will filter "
+                "out faces smaller than 72px from a 720p image). 0 for disabled.")})
+        argument_list.append({
+            "opts": ("-x", "--max-size"),
+            "action": Slider,
+            "min_max": (0, 500),
+            "rounding": 1,
+            "type": int,
+            "dest": "max_size",
+            "default": 0,
+            "group": _("Detect"),
+            "help": _(
+                "Filters out detections above this percentage of the shortest side of the frame "
+                "along the face detection box's longest edge. (eg: a value of 200 will filter "
+                "out faces larger than 1440px from a 720p image). 0 for disabled.")})
+        argument_list.append({
+            "opts": ("-r", "--rotate-images"),
+            "type": str,
+            "dest": "rotate_images",
+            "default": None,
+            "group": _("Detect"),
+            "help": _(
+                "If a face isn't found, rotate the images to try to find a face. Can find more "
+                "faces at the cost of extraction speed. Pass in a single number to use increments "
+                "of that size up to 360, or pass in a list of numbers to enumerate exactly what "
+                "angles to check.")})
+        argument_list.append({
             "opts": ("-O", "--normalization"),
             "action": Radio,
             "type": str.lower,
             "dest": "normalization",
             "default": "none",
             "choices": ["none", "clahe", "hist", "mean"],
-            "group": _("Plugins"),
+            "group": _("Align"),
             "help": _(
                 "R|Performing normalization can help the aligner better align faces with "
                 "difficult lighting conditions at an extraction speed cost. Different methods "
@@ -213,7 +268,7 @@ class ExtractArgs(ExtractConvertArgs):
             "type": int,
             "dest": "re_feed",
             "default": 0,
-            "group": _("Plugins"),
+            "group": _("Align"),
             "help": _(
                 "The number of times to re-feed the detected face into the aligner. Each time the "
                 "face is re-fed into the aligner the bounding box is adjusted by a small amount. "
@@ -226,42 +281,21 @@ class ExtractArgs(ExtractConvertArgs):
             "action": "store_true",
             "dest": "re_align",
             "default": False,
-            "group": _("Plugins"),
+            "group": _("Align"),
             "help": _(
                 "Re-feed the initially found aligned face through the aligner. Can help produce "
                 "better alignments for faces that are rotated beyond 45 degrees in the frame or "
                 "are at extreme angles. Slows down extraction.")})
         argument_list.append({
-            "opts": ("-r", "--rotate-images"),
-            "type": str,
-            "dest": "rotate_images",
-            "default": None,
-            "group": _("Plugins"),
-            "help": _(
-                "If a face isn't found, rotate the images to try to find a face. Can find more "
-                "faces at the cost of extraction speed. Pass in a single number to use increments "
-                "of that size up to 360, or pass in a list of numbers to enumerate exactly what "
-                "angles to check.")})
-        argument_list.append({
-            "opts": ("-I", "--identity"),
+            "opts": ("-g", "--align-filters"),
             "action": "store_true",
+            "dest": "align_filters",
             "default": False,
-            "group": _("Plugins"),
+            "group": _("Align"),
             "help": _(
-                "Obtain and store face identity encodings from VGGFace2. Slows down extract a "
-                "little, but will save time if using 'sort by face'")})
-        argument_list.append({
-            "opts": ("-m", "--min-size"),
-            "action": Slider,
-            "min_max": (0, 1080),
-            "rounding": 20,
-            "type": int,
-            "dest": "min_size",
-            "default": 0,
-            "group": _("Face Processing"),
-            "help": _(
-                "Filters out faces detected below this size. Length, in pixels across the "
-                "diagonal of the bounding box. Set to 0 for off")})
+                "Enable aligner filters. This allows the filtering out of faces based on certain "
+                "statistics and characteristics. Configurable in extract settings. Slows down "
+                "extraction.")})
         argument_list.append({
             "opts": ("-n", "--nfilter"),
             "action": DirOrFilesFullPaths,
@@ -269,7 +303,7 @@ class ExtractArgs(ExtractConvertArgs):
             "dest": "nfilter",
             "default": None,
             "nargs": "+",
-            "group": _("Face Processing"),
+            "group": _("Identity"),
             "help": _(
                 "Optionally filter out people who you do not wish to extract by passing in images "
                 "of those people. Should be a small variety of images at different angles and in "
@@ -282,7 +316,7 @@ class ExtractArgs(ExtractConvertArgs):
             "dest": "filter",
             "default": None,
             "nargs": "+",
-            "group": _("Face Processing"),
+            "group": _("Identity"),
             "help": _(
                 "Optionally select people you wish to extract by passing in images of that "
                 "person. Should be a small variety of images at different angles and in different "
@@ -296,7 +330,7 @@ class ExtractArgs(ExtractConvertArgs):
             "type": float,
             "dest": "ref_threshold",
             "default": 0.60,
-            "group": _("Face Processing"),
+            "group": _("Identity"),
             "help": _(
                 "For use with the optional nfilter/filter files. Threshold for positive face "
                 "recognition. Higher values are stricter.")})
@@ -326,6 +360,25 @@ class ExtractArgs(ExtractConvertArgs):
                 "For example a value of 1 will extract faces from every frame, a value of 10 will "
                 "extract faces from every 10th frame.")})
         argument_list.append({
+            "opts": ("-u", "--min-scale"),
+            "action": Slider,
+            "min_max": (0, 200),
+            "rounding": 1,
+            "type": int,
+            "dest": "min_scale",
+            "default": 0,
+            "group": _("output"),
+            "help": _(
+                "Only output faces that have been resized by this percent or more to meet the "
+                "specified extract size (`-z`, `--size`). Useful for excluding low-res images "
+                "from a training set. Set to 0 to output all faces. This only impacts faces that "
+                "are output to disk. All detected faces will still be saved to the alignments "
+                "file regardless of what is set here. Eg: For an extract size of 512px, A setting "
+                "of 50 will only output faces that have been resized from 256px or above. Setting "
+                "to 100 will only output faces that have been resized from 512px or above. A "
+                "setting of 200 will only output faces that have been downscaled from 1024px or "
+                "above.")})
+        argument_list.append({
             "opts": ("-v", "--save-interval"),
             "action": Slider,
             "min_max": (0, 1000),
@@ -346,17 +399,25 @@ class ExtractArgs(ExtractConvertArgs):
             "dest": "debug_landmarks",
             "default": False,
             "group": _("output"),
-            "help": _("Draw landmarks on the ouput faces for debugging purposes.")})
+            "help": _("Draw landmarks on the output faces for debugging purposes.")})
         argument_list.append({
-            "opts": ("-P", "--singleprocess"),
+            "opts": ("-c", "--compile"),
             "action": "store_true",
             "default": False,
-            "backend": ("nvidia", "rocm", "apple_silicon"),
             "group": _("settings"),
-            "help": _(
-                "Don't run extraction in parallel. Will run each part of the extraction process "
-                "separately (one after the other) rather than all at the same time. Useful if "
-                "VRAM is at a premium.")})
+            "help": _("Compile any PyTorch models. This will lead to slower start up time, but "
+                      "faster processing. For large amounts of data this is worth enabling. For "
+                      "smaller extractions it is not.")})
+        argument_list.append({
+            "opts": ("-k", "--benchmark"),
+            "action": "store_true",
+            "default": False,
+            "backend": ("nvidia", "rocm"),
+            "group": _("settings"),
+            "help": _("Benchmark the chosen extract plugins for optimal batch sizes. The "
+                      "benchmark profiler can be configured in settings. Note: This will take a "
+                      "long time, so should be used to find optimal settings for a given plugin "
+                      "combination and type of dataset rather than being used every time.")})
         argument_list.append({
             "opts": ("-s", "--skip-existing"),
             "action": "store_true",
@@ -372,13 +433,20 @@ class ExtractArgs(ExtractConvertArgs):
             "default": False,
             "group": _("settings"),
             "help": _("Skip frames that already have detected faces in the alignments file")})
+        # Deprecated options
         argument_list.append({
             "opts": ("-K", "--skip-saving-faces"),
             "action": "store_true",
-            "dest": "skip_saving_faces",
+            "dest": "depr_output-dir_K_o",
+            "required": False,
+            "help": SUPPRESS})
+        argument_list.append({
+            "opts": ("-P", "--singleprocess"),
+            "action": "store_true",
             "default": False,
-            "group": _("settings"),
-            "help": _("Skip saving the detected faces to disk. Just create an alignments file")})
+            "dest": "depr_removed_P_singleprocess",
+            "required": False,
+            "help": SUPPRESS})
         return argument_list
 
 
@@ -414,6 +482,13 @@ class ConvertArgs(ExtractConvertArgs):
         """
 
         argument_list: list[dict[str, T.Any]] = []
+        argument_list.append({
+            "opts": ("-o", "--output-dir"),
+            "action": DirFullPaths,
+            "dest": "output_dir",
+            "required": True,
+            "group": _("Data"),
+            "help": _("Output directory. This is where the converted files will be saved.")})
         argument_list.append({
             "opts": ("-r", "--reference-video"),
             "action": FileFullPaths,
@@ -463,9 +538,11 @@ class ConvertArgs(ExtractConvertArgs):
             "type": str.lower,
             "dest": "mask_type",
             "default": "extended",
-            "choices": PluginLoader.get_available_extractors("mask",
-                                                             add_none=True,
-                                                             extend_plugin=True) + ["predicted"],
+            "choices": list(sorted(
+                ["extended", "components"] + PluginLoader.get_available_extractors(
+                    "mask",
+                    add_none=True,
+                    extend_plugin=True))) + ["predicted"],
             "group": _("Plugins"),
             "help": _(
                 "R|Masker to use. NB: The mask you require must exist within the alignments file. "

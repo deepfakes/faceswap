@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Multithreading/processing utils for faceswap """
+"""Multithreading/processing utils for faceswap"""
 from __future__ import annotations
 import logging
 import typing as T
@@ -18,27 +18,26 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 _ErrorType: T.TypeAlias = tuple[type[BaseException],
                                 BaseException,
-                                TracebackType] | tuple[T.Any, T.Any, T.Any] | None
+                                TracebackType] | tuple[T.Any, T.Any, T.Any]
 _THREAD_NAMES: set[str] = set()
 
 
-def total_cpus():
-    """ Return total number of cpus """
+def total_cpus() -> int:
+    """Return total number of cpus"""
     return cpu_count()
 
 
 def _get_name(name: str) -> str:
-    """ Obtain a unique name for a thread
+    """Obtain a unique name for a thread
 
     Parameters
     ----------
-    name: str
+    name
         The requested name
 
     Returns
     -------
-    str
-        The request name with "_#" appended (# being an integer) making the name unique
+    The request name with "_#" appended (# being an integer) making the name unique
     """
     idx = 0
     real_name = name
@@ -51,27 +50,75 @@ def _get_name(name: str) -> str:
         return real_name
 
 
+class ErrorState:
+    """An object for tracking error state across threads
+
+    The "set" method should be called from within a thread to set the thread error traceback
+
+    The "check_and_raise" method should be called from the main thread to check for and re-raise
+    any errors"""
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.errors: list[_ErrorType] = []
+        """list of errors that have been detected within threads"""
+
+    @property
+    def has_error(self) -> bool:
+        """Check whether any running FSThread thread has an error.
+
+        Returns
+        -------
+        ``True`` if an FSThread has an error
+        """
+        with self._lock:
+            return bool(self.errors)
+
+    def set(self, exc_info: _ErrorType) -> None:
+        """Set the error traceback information to the error state object. Errors are appended to
+        the error list in the order that they are received
+
+        Parameters
+        ----------
+        The traceback error information to set
+        """
+        with self._lock:
+            if self.errors:
+                logger.debug("An error has already been captured and is waiting to be handled.")
+            logger.debug("Recording error state:", exc_info=exc_info)
+            self.errors.append(exc_info)
+
+    def re_raise(self) -> None:
+        """Check if a thread error is stored and re-raise it if so. Should be called from main
+        thread. Only the first error received is re-raised (in the event of multiple errors)"""
+        assert self.errors, "No error stored. You must check if :attr:`has_error` first"
+        logger.debug("Thread error(s) caught: %s", self.errors)
+        err = self.errors[0]
+        raise err[1].with_traceback(err[2])
+
+    def clear(self) -> None:
+        """Clear any stored errors """
+        with self._lock:
+            self.errors = []
+
+
 class FSThread(threading.Thread):
-    """ Subclass of thread that passes errors back to parent
+    """Subclass of thread that passes errors back to parent
 
     Parameters
     ----------
-    target: callable object, Optional
+    target
         The callable object to be invoked by the run() method. If ``None`` nothing is called.
         Default: ``None``
-    name: str, optional
+    name
         The thread name. if ``None`` a unique name is constructed of the form "Thread-N" where N
         is a small decimal number. Default: ``None``
-    args: tuple
+    args
         The argument tuple for the target invocation. Default: ().
-    kwargs: dict
+    kwargs
         keyword arguments for the target invocation. Default: {}.
     """
-    _target: Callable
-    _args: tuple
-    _kwargs: dict[str, T.Any]
-    _name: str
-
+    error_state = ErrorState()
+    """Class attribute to track error state across multiple threads"""
     def __init__(self,
                  target: Callable | None = None,
                  name: str | None = None,
@@ -80,50 +127,58 @@ class FSThread(threading.Thread):
                  *,
                  daemon: bool | None = None) -> None:
         super().__init__(target=target, name=name, args=args, kwargs=kwargs, daemon=daemon)
-        self.err: _ErrorType = None
+        self.target = target
+        self.args = args
+        self.kwargs = kwargs = {} if kwargs is None else kwargs
 
     def check_and_raise_error(self) -> None:
-        """ Checks for errors in thread and raises them in caller.
+        """Checks for errors in thread and raises them in caller.
 
         Raises
         ------
         Error
             Re-raised error from within the thread
         """
-        if not self.err:
+        if not self.error_state.has_error:
             return
-        logger.debug("Thread error caught: %s", self.err)
-        raise self.err[1].with_traceback(self.err[2])
+        self.error_state.re_raise()
 
     def run(self) -> None:
-        """ Runs the target, reraising any errors from within the thread in the caller. """
+        """Runs the target, and captures any thread errors for re-raising in the caller.
+
+        Errors are also captured in a class attribute so that threads in any other running
+        FSThreads can be captured"""
         try:
-            if self._target is not None:
-                self._target(*self._args, **self._kwargs)
-        except Exception as err:  # pylint:disable=broad-except
-            self.err = sys.exc_info()
-            logger.debug("Error in thread (%s): %s", self._name, str(err))
+            if self.target is not None:
+                self.target(*self.args, **self.kwargs)
+        except Exception:  # pylint:disable=broad-except
+            exc_info = sys.exc_info()
+            self.error_state.set(exc_info)
+            assert exc_info[0] is not None
+            logger.critical("Error in thread (%s): %s(%s)",
+                            self.name, exc_info[0].__name__, exc_info[1])
         finally:
-            # Avoid a refcycle if the thread is running a function with
+            # Avoid a ref-cycle if the thread is running a function with
             # an argument that has a member that points to the thread.
-            del self._target, self._args, self._kwargs
+            del self.target, self.args, self.kwargs
+            del self._target, self._args, self._kwargs  # type:ignore[attr-defined]
 
 
 class MultiThread():
-    """ Threading for IO heavy ops. Catches errors in thread and rethrows to parent.
+    """Threading for IO heavy ops. Catches errors in thread and rethrows to parent.
 
     Parameters
     ----------
-    target: callable object
+    target
         The callable object to be invoked by the run() method.
-    args: tuple
+    args
         The argument tuple for the target invocation. Default: ().
-    thread_count: int, optional
+    thread_count
         The number of threads to use. Default: 1
-    name: str, optional
+    name
         The thread name. if ``None`` a unique name is constructed of the form {target.__name__}_N
         where N is an incrementing integer. Default: ``None``
-    kwargs: dict
+    kwargs
         keyword arguments for the target invocation. Default: {}.
     """
     def __init__(self,
@@ -146,21 +201,25 @@ class MultiThread():
 
     @property
     def has_error(self) -> bool:
-        """ bool: ``True`` if a thread has errored, otherwise ``False`` """
-        return any(thread.err for thread in self._threads)
+        """``True`` if a thread has errored, otherwise ``False``"""
+        if not self._threads:
+            return False
+        return self._threads[0].error_state.has_error
 
     @property
     def errors(self) -> list[_ErrorType]:
-        """ list: List of thread error values """
-        return [thread.err for thread in self._threads if thread.err]
+        """list: List of thread error values """
+        if not self._threads:
+            return []
+        return self._threads[0].error_state.errors
 
     @property
     def name(self) -> str:
-        """ :str: The name of the thread """
+        """The name of the thread"""
         return self._name
 
     def check_and_raise_error(self) -> None:
-        """ Checks for errors in thread and raises them in caller.
+        """Checks for errors in thread and raises them in caller.
 
         Raises
         ------
@@ -175,17 +234,16 @@ class MultiThread():
         raise error[1].with_traceback(error[2])
 
     def is_alive(self) -> bool:
-        """ Check if any threads are still alive
+        """Check if any threads are still alive
 
         Returns
         -------
-        bool
-            ``True`` if any threads are alive. ``False`` if no threads are alive
+        ``True`` if any threads are alive. ``False`` if no threads are alive
         """
         return any(thread.is_alive() for thread in self._threads)
 
     def start(self) -> None:
-        """ Start all the threads for the given method, args and kwargs """
+        """Start all the threads for the given method, args and kwargs """
         logger.debug("Starting thread(s): '%s'", self._name)
         for idx in range(self._thread_count):
             name = self._name if self._thread_count == 1 else f"{self._name}_{idx}"
@@ -201,7 +259,7 @@ class MultiThread():
         logger.debug("Started all threads '%s': %s", self._name, len(self._threads))
 
     def completed(self) -> bool:
-        """ Check if all threads have completed
+        """Check if all threads have completed
 
         Returns
         -------
@@ -212,38 +270,37 @@ class MultiThread():
         return retval
 
     def join(self) -> None:
-        """ Join the running threads, catching and re-raising any errors
+        """Join the running threads, catching and re-raising any errors
 
-        Clear the list of threads for class instance re-use
-        """
+        Clear the list of threads for class instance re-use"""
         logger.debug("Joining Threads: '%s'", self._name)
         for thread in self._threads:
-            logger.debug("Joining Thread: '%s'", thread._name)  # pylint:disable=protected-access
+            logger.debug("Joining Thread: '%s'", thread.name)  # pylint:disable=protected-access
             thread.join()
-            if thread.err:
+            if thread.error_state.has_error:
                 logger.error("Caught exception in thread: '%s'",
-                             thread._name)  # pylint:disable=protected-access
-                raise thread.err[1].with_traceback(thread.err[2])
+                             thread.name)  # pylint:disable=protected-access
+                thread.error_state.re_raise()
         del self._threads
         self._threads = []
         logger.debug("Joined all Threads: '%s'", self._name)
 
 
 class BackgroundGenerator(MultiThread):
-    """ Run a task in the background background and queue data for consumption
+    """Run a task in the background background and queue data for consumption
 
     Parameters
     ----------
-    generator: iterable
+    generator
         The generator to run in the background
-    prefetch, int, optional
+    prefetch
         The number of items to pre-fetch from the generator before blocking (see Notes). Default: 1
-    name: str, optional
+    name
         The thread name. if ``None`` a unique name is constructed of the form
         {generator.__name__}_N where N is an incrementing integer. Default: ``None``
-    args: tuple, Optional
+    args
         The argument tuple for generator invocation. Default: ``None``.
-    kwargs: dict, Optional
+    kwargs
         keyword arguments for the generator invocation. Default: ``None``.
 
     Notes
@@ -270,7 +327,7 @@ class BackgroundGenerator(MultiThread):
         self.start()
 
     def _run(self) -> None:
-        """ Run the :attr:`_generator` and put into the queue until until queue size is reached.
+        """Run the :attr:`_generator` and put into the queue until until queue size is reached.
 
         Raises
         ------
@@ -286,12 +343,11 @@ class BackgroundGenerator(MultiThread):
             raise
 
     def iterator(self) -> Generator:
-        """ Iterate items out of the queue
+        """Iterate items out of the queue
 
         Yields
         ------
-        Any
-            The items from the generator
+        The items from the generator
         """
         while True:
             next_item = self.queue.get()

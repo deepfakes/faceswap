@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-03-28 18:06+0000\n"
-"PO-Revision-Date: 2024-03-28 18:23+0000\n"
+"POT-Creation-Date: 2026-03-13 15:17+0000\n"
+"PO-Revision-Date: 2026-03-16 18:10+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ru\n"
@@ -17,14 +17,14 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
-"X-Generator: Poedit 3.4.2\n"
+"X-Generator: Poedit 3.8\n"
 
-#: lib/cli/args.py:188 lib/cli/args.py:199 lib/cli/args.py:208
-#: lib/cli/args.py:219
+#: lib/cli/args.py:194 lib/cli/args.py:206 lib/cli/args.py:215
+#: lib/cli/args.py:226
 msgid "Global Options"
 msgstr "Глобальные Настройки"
 
-#: lib/cli/args.py:190
+#: lib/cli/args.py:196
 msgid ""
 "R|Exclude GPUs from use by Faceswap. Select the number(s) which correspond "
 "to any GPU(s) that you do not wish to be made available to Faceswap. "
@@ -36,14 +36,14 @@ msgstr ""
 "Если выбрать здесь все GPU, Faceswap перейдет в режим CPU.\n"
 "L|{}"
 
-#: lib/cli/args.py:201
+#: lib/cli/args.py:208
 msgid ""
-"Optionally overide the saved config with the path to a custom config file."
+"Optionally override the saved config with the path to a custom config file."
 msgstr ""
 "Опционально переопределите сохраненную конфигурацию, указав путь к "
 "пользовательскому файлу конфигурации."
 
-#: lib/cli/args.py:210
+#: lib/cli/args.py:217
 msgid ""
 "Log level. Stick with INFO or VERBOSE unless you need to file an error "
 "report. Be careful with TRACE as it will generate a lot of data"
@@ -52,12 +52,12 @@ msgstr ""
 "нужно отправить отчет об ошибке. Будьте осторожны с TRACE, поскольку он "
 "генерирует много данных"
 
-#: lib/cli/args.py:220
+#: lib/cli/args.py:227
 msgid "Path to store the logfile. Leave blank to store in the faceswap folder"
 msgstr ""
 "Путь для хранения файла журнала. Оставьте пустым, чтобы хранить в папке "
 "faceswap"
 
-#: lib/cli/args.py:319
+#: lib/cli/args.py:311
 msgid "Output to Shell console instead of GUI console"
 msgstr "Вывод в консоль Shell вместо консоли GUI"

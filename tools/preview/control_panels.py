@@ -33,15 +33,14 @@ class ConfigTools():
 
     Parameters
     ----------
-    config_file : str | None
+    config_file
         Path to a custom config .ini file or ``None`` to load the default config file
 
     Attributes
     ----------
-    tk_vars : dict[str, dict[str, tk.BooleanVar | tk.StringVar | tk.IntVar | tk.DoubleVar]]]
+    tk_vars
         Global tkinter variables. `Refresh` and `Busy` :class:`tkinter.BooleanVar`
     """
-
     def __init__(self, config_file: str | None) -> None:
         logger.debug(parse_class_init(locals()))
         self._config = convert_config.load_config(config_file=config_file)
@@ -50,20 +49,19 @@ class ConfigTools():
 
     @property
     def config_dicts(self) -> dict[str, dict[str, ControlPanelOption]]:
-        """dict[str, dict[str, ControlPanelOption]] : The convert configuration options in
-        dictionary form."""
+        """The convert configuration options in dictionary form."""
         return self._config_dicts
 
     @property
     def sections(self) -> list[str]:
-        """list: The sorted section names that exist within the convert Configuration options."""
+        """The sorted section names that exist within the convert Configuration options."""
         return sorted(set(sect.split(".")[0] for sect in self._config.sections
                           if sect.split(".")[0] != "writer"))
 
     @property
     def plugins_dict(self) -> dict[str, list[str]]:
-        """dict[str, list[str]] : Dictionary of configuration option sections as key with a list
-        of containing plugin names as the value"""
+        """Dictionary of configuration option sections as key with a list of containing plugin
+        names as the value"""
         return {section: sorted([sect.split(".")[1] for sect in self._config.sections
                                  if sect.split(".")[0] == section])
                 for section in self.sections}
@@ -74,9 +72,8 @@ class ConfigTools():
 
         Returns
         -------
-        dict[str, str | dict[str, ControlPanelOption]]
-            Each configuration section as keys, with the values as a dict of option_name to
-            :class:`lib.gui.control_helper.ControlOption`."""
+        Each configuration section as keys, with the values as a dict of option_name to
+        :class:`lib.gui.control_helper.ControlOption`."""
         logger.debug("Formatting Config for GUI")
         config_dicts: dict[str, dict[str, ControlPanelOption]] = {}
         for section_name, section in self._config.sections.items():
@@ -118,7 +115,7 @@ class ConfigTools():
 
         Parameters
         ----------
-        section : str | None, optional
+        section
             The configuration section to reset the values for, If ``None`` provided then all
             sections are reset. Default: ``None``
         """
@@ -138,7 +135,7 @@ class ConfigTools():
 
         Parameters
         ----------
-        section : str | None, optional
+        section
             The configuration section to reset the values for, If ``None`` provided then all
             sections are reset. Default: ``None``
         """
@@ -158,7 +155,7 @@ class ConfigTools():
 
         Parameters
         ----------
-        section : str | None, optional
+        section
             The configuration section to save, If ``None`` provided then all sections are saved.
             Default: ``None``
         """
@@ -190,13 +187,12 @@ class BusyProgressBar():
 
         Parameters
         ----------
-        parent: tkinter object
+        parent
             The tkinter object that holds the busy indicator
 
         Returns
         -------
-        ttk.Progressbar
-            A Progress bar to indicate that the Preview tool is busy
+        A Progress bar to indicate that the Preview tool is busy
         """
         logger.debug("Placing busy indicator")
         pbar = ttk.Progressbar(parent, mode="indeterminate")
@@ -229,9 +225,9 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     Parameters
     ----------
-    app: :class:`Preview`
+    app
         The main tkinter Preview app
-    parent: tkinter object
+    parent
         The parent tkinter object that holds the Action Frame
     """
     def __init__(self, app: Preview, parent: ttk.Frame) -> None:
@@ -257,7 +253,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     @property
     def convert_args(self) -> dict[str, T.Any]:
-        """dict: Currently selected Command line arguments from the :class:`ActionFrame`."""
+        """Currently selected Command line arguments from the :class:`ActionFrame`."""
         retval = {opt if opt != "color" else "color_adjustment":
                   self._format_from_display(self._tk_vars[opt].get())
                   for opt in self._options if opt != "face_scale"}
@@ -266,10 +262,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     @property
     def busy_progress_bar(self) -> BusyProgressBar:
-        """
-        :class:`BusyProgressBar`: The progress bar that appears on the left hand side whilst a
-        swap/patch is being applied.
-        """
+        """The progress bar on the left hand side whilst a swap/patch is being applied."""
         return self._busy_bar
 
     @staticmethod
@@ -278,13 +271,12 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         Parameters
         ----------
-        var: str
+        var
             The variable name to format
 
         Returns
         -------
-        str
-            The formatted variable name
+        The formatted variable name
         """
         return var.replace(" ", "_").lower()
 
@@ -294,13 +286,12 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         Parameters
         ----------
-        var: str
+        var
             The variable name to format
 
         Returns
         -------
-        str
-            The formatted variable name
+        The formatted variable name
         """
         return var.replace("_", " ").replace("-", " ").title()
 
@@ -314,21 +305,20 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         Parameters
         ----------
-        defaults: dict
+        defaults
             The default command line options
-        patch_callback: python function
+        patch_callback
             The function to execute when a patch callback is received
-        refresh_callback: python function
+        refresh_callback
             The function to execute when a refresh callback is received
-        available_masks: list
+        available_masks
             The available masks that exist within the alignments file
-        has_predicted_mask: bool
+        has_predicted_mask
             Whether the model was trained with a mask
 
         Returns
         -------
-        ttk.Progressbar
-            A Progress bar to indicate that the Preview tool is busy
+        A Progress bar to indicate that the Preview tool is busy
         """
         logger.debug("Building Action frame")
 
@@ -353,13 +343,13 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                          has_predicted_mask: bool) -> None:
         """Create :class:`lib.gui.control_helper.ControlPanel` object for the command line options.
 
-        parent: :class:`ttk.Frame`
+        parent
             The frame to hold the command line choices
-        defaults: dict
+        defaults
             The default command line options
-        available_masks: list
+        available_masks
             The available masks that exist within the alignments file
-        has_predicted_mask: bool
+        has_predicted_mask
             Whether the model was trained with a mask
         """
         cp_options = self._get_control_panel_options(defaults, available_masks, has_predicted_mask)
@@ -372,17 +362,16 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                                    has_predicted_mask: bool) -> list[ControlPanelOption]:
         """Create :class:`lib.gui.control_helper.ControlPanelOption` objects for the cli options.
 
-        defaults: dict
+        defaults
             The default command line options
-        available_masks: list
+        available_masks
             The available masks that exist within the alignments file
-        has_predicted_mask: bool
+        has_predicted_mask
             Whether the model was trained with a mask
 
         Returns
         -------
-        list
-            The list of `lib.gui.control_helper.ControlPanelOption` objects for the Action Frame
+        The list of `lib.gui.control_helper.ControlPanelOption` objects for the Action Frame
         """
         cp_options: list[ControlPanelOption] = []
         for opt in self._options:
@@ -419,11 +408,11 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         Parameters
         ----------
-        defaults: dict
+        defaults
             The default command line options
-        available_masks: list
+        available_masks
             The available masks that exist within the alignments file
-        has_predicted_mask: bool
+        has_predicted_mask
             Whether the model was trained with a mask
 
         Returns
@@ -432,6 +421,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             The masks that are available to use from the alignments file
         """
         logger.debug("Initial mask choices: %s", available_masks)
+        available_masks += ["components", "extended"]
         if has_predicted_mask:
             available_masks += ["predicted"]
         if "none" not in available_masks:
@@ -450,7 +440,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         Parameters
         ----------
-        refresh_callback: python function
+        refresh_callback
             The function to execute when the refresh button is pressed
         """
         btn = ttk.Button(parent, text="Update Samples", command=refresh_callback)
@@ -461,7 +451,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         Parameters
         ----------
-        patch_callback: python function
+        patch_callback
             The function to execute when the images require patching
         """
         for tk_var in self._tk_vars.values():
@@ -472,7 +462,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         Parameters
         ----------
-        parent: tkinter object
+        parent
             The tkinter object that holds the action buttons
         """
         logger.debug("Adding util buttons")
@@ -508,16 +498,16 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
 
     Parameters
     ----------
-    parent: tkinter object
+    parent
         The parent tkinter object that holds the Options book
-    config_tools: :class:`ConfigTools`
+    config_tools
         Tools for loading and saving configuration files
-    patch_callback: python function
+    patch_callback
         The function to execute when a patch callback is received
 
     Attributes
     ----------
-    config_tools: :class:`ConfigTools`
+    config_tools
         Tools for loading and saving configuration files
     """
     def __init__(self,
@@ -560,7 +550,7 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
 
         Parameters
         ----------
-        patch_callback: python function
+        patch_callback
             The function to execute when the images require patching
         """
         for plugins in self.config_tools.tk_vars.values():
@@ -573,11 +563,11 @@ class ConfigFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     Parameters
     ----------
-    parent: tkinter object
+    parent
         The tkinter object that will hold this configuration frame
-    config_key: str
+    config_key
         The section/plugin key for these configuration options
-    options: dict
+    options
         The options for this section/plugin
     """
 
@@ -603,9 +593,9 @@ class ConfigFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         Parameters
         ----------
-        parent: tkinter object
+        parent
             The tkinter object that will hold this configuration frame
-        config_key: str
+        config_key
             The section/plugin key for these configuration options
         """
         logger.debug("Add Config Frame")
@@ -619,19 +609,19 @@ class ConfigFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _add_frame_separator(self) -> None:
         """Add a separator between top and bottom frames."""
-        logger.debug("Add frame seperator")
+        logger.debug("Add frame separator")
         sep = ttk.Frame(self._action_frame, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=5, side=tk.TOP)
-        logger.debug("Added frame seperator")
+        logger.debug("Added frame separator")
 
     def _add_actions(self, parent: OptionsBook, config_key: str) -> None:
         """Add Action Buttons.
 
         Parameters
         ----------
-        parent: tkinter object
+        parent
             The tkinter object that will hold this configuration frame
-        config_key: str
+        config_key
             The section/plugin key for these configuration options
         """
         logger.debug("Adding util buttons")

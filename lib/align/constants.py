@@ -17,7 +17,8 @@ class LandmarkType(Enum):
     LM_2D_4 = 1
     LM_2D_51 = 2
     LM_2D_68 = 3
-    LM_3D_26 = 4
+    LM_2D_98 = 4
+    LM_3D_26 = 5
 
     @classmethod
     def from_shape(cls, shape: tuple[int, int]) -> LandmarkType:
@@ -40,6 +41,7 @@ class LandmarkType(Enum):
         shapes: dict[tuple[int, int], LandmarkType] = {(4, 2): cls.LM_2D_4,
                                                        (51, 2): cls.LM_2D_51,
                                                        (68, 2): cls.LM_2D_68,
+                                                       (98, 2): cls.LM_2D_98,
                                                        (26, 3): cls.LM_3D_26}
         if shape not in shapes:
             raise ValueError(f"The given shape {shape} is not valid. Valid shapes: {list(shapes)}")
@@ -48,7 +50,6 @@ class LandmarkType(Enum):
 
 EXTRACT_RATIOS: dict[CenteringType, float] = {"legacy": 0.375, "face": 0.5, "head": 0.625}
 """The amount of padding applied to each centering type when generating aligned faces"""
-
 
 MEAN_FACE: dict[LandmarkType, np.ndarray] = {
     LandmarkType.LM_2D_4: np.array(
@@ -105,7 +106,16 @@ LANDMARK_PARTS: dict[LandmarkType, dict[str, tuple[int, int, bool]]] = {
                             "left_eye": (42, 48, True),
                             "nose": (27, 36, False),
                             "jaw": (0, 17, False),
-                            "chin": (8, 11, False)},
+                            "chin": (7, 9, False)},
+    LandmarkType.LM_2D_98: {"mouth_outer": (76, 88, True),
+                            "mouth_inner": (88, 96, True),
+                            "right_eyebrow": (33, 42, True),
+                            "left_eyebrow": (42, 51, True),
+                            "right_eye": (60, 68, True),
+                            "left_eye": (68, 76, True),
+                            "nose": (51, 60, False),
+                            "jaw": (0, 33, False),
+                            "chin": (14, 19, False)},
     LandmarkType.LM_2D_4: {"face": (0, 4, True)}
 }
 """For each landmark type, stores the (start index, end index, is polygon) information about each
@@ -119,10 +129,30 @@ LANDMARK_MASK_PARTS: dict[LandmarkType, dict[str, list[tuple[int, int]]]] = {
                             "nose_ridge": [(19, 25), (8, 9)],
                             "right_eye": [(17, 22), (27, 28), (31, 36), (8, 9)],
                             "left_eye": [(22, 27), (27, 28), (31, 36), (8, 9)],
-                            "nose": [(27, 31), (31, 36)]}
+                            "nose": [(27, 31), (31, 36)]},
+    LandmarkType.LM_2D_98: {"right_jaw": [(0, 17), (33, 34)],
+                            "left_jaw": [(16, 33), (46, 47)],
+                            "right_cheek": [(33, 36), (16, 17)],
+                            "left_cheek": [(44, 47), (16, 17)],
+                            "nose_ridge": [(35, 45), (16, 17)],
+                            "right_eye": [(33, 38), (51, 52), (55, 60), (16, 17)],
+                            "left_eye": [(42, 47), (51, 52), (55, 60), (16, 17)],
+                            "nose": [(51, 55), (55, 60)]}
+
 }
 """For each landmark type, stores the (start index, end index) information about each part of the
 face that makes a face mask."""
 
+MAP_2D_68 = {
+    LandmarkType.LM_2D_98: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32,  # Jaw
+                            33, 34, 35, 36, 37,                                     # Right eyebrow
+                            42, 43, 44, 45, 46,                                     # Left eyebrow
+                            51, 52, 53, 54, 55, 56, 57, 58, 59,                     # Nose
+                            60, 61, 63, 64, 65, 67,                                 # Right eye
+                            68, 69, 71, 72, 73, 75,                                 # Left eye
+                            76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87,         # Outer mouth
+                            88, 89, 90, 91, 92, 93, 94, 95]                         # Inner mouth
+}
+"""Mapping of non 68 point 2D landmarks to 68 point landmarks"""
 
 __all__ = get_module_objects(__name__)

@@ -15,7 +15,7 @@ The Scripts Package is the entry point into Faceswap.
    :include-all-objects:
    :no-inheritance-diagram:
 
-.. automodapi:: scripts.fsmedia
+.. automodapi:: scripts.fs_media
    :include-all-objects:
 
 .. automodapi:: scripts.gui
