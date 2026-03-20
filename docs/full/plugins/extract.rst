@@ -20,6 +20,11 @@ align package
    :include-all-objects:
 
 |
+.. automodapi:: plugins.extract.align.dark_decoder
+   :include-all-objects:
+
+|
+
 .. automodapi:: plugins.extract.align.fan
    :include-all-objects:
 

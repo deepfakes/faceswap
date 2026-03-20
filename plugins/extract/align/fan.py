@@ -15,7 +15,9 @@ from torch.nn import functional as F
 
 from lib.utils import get_module_objects, GetModel
 from plugins.extract.base import ExtractPlugin
+
 from . import fan_defaults as cfg
+from . dark_decoder import Dark
 
 
 logger = logging.getLogger(__name__)
@@ -34,6 +36,7 @@ class FAN(ExtractPlugin):
         # Original reference scale leads to some fairly unsatisfying landmarks so tightened up
         # self._reference_scale = 200. / 195.
         self._reference_scale = 0.8
+        self._dark = Dark(68, 64) if cfg.dark_decoder() else None
 
     def load_model(self) -> FaceAlignmentNetwork:
         """Load the FAN model
@@ -110,6 +113,8 @@ class FAN(ExtractPlugin):
         -------
         The final landmarks in 0-1 space
         """
+        if self._dark is not None:
+            return self._dark(batch) / 64.
         num_images, num_landmarks, height, width = batch.shape
         assert height == width, "Heatmaps must be square"
         resolution = height

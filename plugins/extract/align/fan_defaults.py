@@ -43,3 +43,10 @@ batch_size = ConfigItem(
          "but setting it too high can harm performance.",
     rounding=1,
     min_max=(1, 256))
+
+dark_decoder = ConfigItem(
+    datatype=bool,
+    default=True,
+    group="settings",
+    info=("Use DARK decoder. A more refined method for obtaining landmarks from generated "
+          "heatmaps. (Ref: https://arxiv.org/abs/1910.06278)."))
