@@ -27,8 +27,8 @@ from lib.infer.objects import FrameFaces, frame_faces_to_alignment
 from lib.image import encode_image, ImagesLoader, ImagesSaver
 from lib.logger import parse_class_init
 from lib.multithreading import FSThread
-from lib.utils import (get_folder, get_module_objects, handle_deprecated_cli_opts,
-                       IMAGE_EXTENSIONS, VIDEO_EXTENSIONS)
+from lib.utils import get_folder, get_module_objects, handle_deprecated_cli_opts, IMAGE_EXTENSIONS
+from lib.video import VIDEO_EXTENSIONS
 
 from .fs_media import Alignments, finalize
 
@@ -501,7 +501,8 @@ class Loader:  # pylint:disable=too-many-instance-attributes
     def _load(self) -> None:
         """ Load images from disk and pass to a queue for the extraction pipeline """
         logger.debug("[Extract.Loader] start")
-        for filename, image in self._images.load():
+        for filename_image in self._images.load():
+            filename, image = filename_image[:2]
             faces = self._get_detected_faces(filename)
             self._pipeline.put(filename, image, source=self.location, detected_faces=faces)
         if self.error_state.has_error:

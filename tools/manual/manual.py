@@ -74,7 +74,8 @@ class Manual(tk.Tk):
                                              extractor)
 
         video_meta_data = self._detected_faces.video_meta_data
-        valid_meta = all(val is not None for val in video_meta_data.values())
+        valid_meta = video_meta_data is not None and all(val is not None
+                                                         for val in video_meta_data.values())
 
         loader = FrameLoader(self._globals,
                              arguments.frames,
@@ -566,7 +567,7 @@ class FrameLoader():
     def __init__(self,
                  tk_globals: TkGlobals,
                  frames_location: str,
-                 video_meta_data: dict[str, list[int] | list[float] | None],
+                 video_meta_data: dict[T.Literal["pts_time", "keyframes"], list[int]] | None,
                  file_list: list[str]) -> None:
         logger.debug(parse_class_init(locals()))
         self._globals = tk_globals
@@ -590,15 +591,16 @@ class FrameLoader():
         return not thread_is_alive
 
     @property
-    def video_meta_data(self) -> dict[str, list[int] | list[float] | None]:
+    def video_meta_data(self) -> dict[T.Literal["pts_time", "keyframes"], list[int]] | None:
         """The pts_time and key frames for the loader. """
         assert self._loader is not None
         return self._loader.video_meta_data
 
-    def _background_init_frames(self,
-                                frames_location: str,
-                                video_meta_data: dict[str, list[int] | list[float] | None],
-                                frame_list: list[str]) -> MultiThread:
+    def _background_init_frames(
+            self,
+            frames_location: str,
+            video_meta_data: dict[T.Literal["pts_time", "keyframes"], list[int]] | None,
+            frame_list: list[str]) -> MultiThread:
         """Launch the images loader in a background thread so we can run other tasks whilst
         waiting for initialization.
 
@@ -622,7 +624,7 @@ class FrameLoader():
 
     def _load_images(self,
                      frames_location: str,
-                     video_meta_data: dict[str, list[int] | list[float] | None],
+                     video_meta_data: dict[T.Literal["pts_time", "keyframes"], list[int]],
                      frame_list: list[str]) -> None:
         """Load the images in a background thread.
 

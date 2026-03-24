@@ -14,7 +14,8 @@ import numpy as np
 
 from lib.gui.utils import get_config
 from lib.logger import parse_class_init
-from lib.utils import get_module_objects, VIDEO_EXTENSIONS
+from lib.utils import get_module_objects
+from lib.video import VIDEO_EXTENSIONS
 
 logger = logging.getLogger(__name__)
 

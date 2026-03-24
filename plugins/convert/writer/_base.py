@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-""" Parent class for output writers for faceswap.py converter """
+"""Parent class for output writers for faceswap.py converter"""
 
 import logging
 import os
 import re
 import typing as T
+from collections import deque
 
 import numpy as np
 
@@ -15,13 +16,13 @@ logger = logging.getLogger(__name__)
 
 
 class Output():
-    """ Parent class for writer plugins.
+    """Parent class for writer plugins.
 
     Parameters
     ----------
-    output_folder: str
+    output_folder
         The full path to the output folder where the converted media should be saved
-    config_file: str, optional
+    config_file
         The full path to a custom configuration ini file. If ``None`` is passed
         then the file is loaded from the default location. Default: ``None``.
     """
@@ -40,7 +41,7 @@ class Output():
 
     @property
     def is_stream(self) -> bool:
-        """ bool: Whether the writer outputs a stream or a series images.
+        """Whether the writer outputs a stream or a series images.
 
         Writers that write to a stream have a frame_order parameter to dictate
         the order in which frames should be written out (eg. gif/ffmpeg) """
@@ -49,35 +50,34 @@ class Output():
 
     @property
     def output_alpha(self) -> bool:
-        """ bool : Override if the plugin can output an alpha channel and the user configuration
+        """Override if the plugin can output an alpha channel and the user configuration
         option is set to use it. Default ``False`` """
         return False
 
     @classmethod
     def _set_frame_order(cls,
                          total_count: int,
-                         frame_ranges: list[tuple[int, int]] | None) -> list[int]:
-        """ Obtain the full list of frames to be converted in order.
+                         frame_ranges: list[tuple[int, int]] | None) -> deque[int]:
+        """Obtain the full list of frames to be converted in order.
 
         Used for FFMPEG and Gif writers to ensure correct frame order
 
         Parameters
         ----------
-        total_count: int
+        total_count
             The total number of frames to be converted
-        frame_ranges: list or ``None``
+        frame_ranges
             List of tuples for starting and end values of each frame range to be converted or
             ``None`` if all frames are to be converted
 
         Returns
         -------
-        list
-            Full list of all frame indices to be converted
+        Full Deque of all frame indices to be converted
         """
         if frame_ranges is None:
-            retval = list(range(1, total_count + 1))
+            retval = deque(range(1, total_count + 1))
         else:
-            retval = []
+            retval = deque()
             for rng in frame_ranges:
                 retval.extend(list(range(rng[0], rng[1] + 1)))
         logger.debug("frame_order: %s", retval)
@@ -87,23 +87,22 @@ class Output():
                             filename: str,
                             extension: str,
                             separate_mask: bool = False) -> list[str]:
-        """ Obtain the full path for the output file, including the correct extension, for the
+        """Obtain the full path for the output file, including the correct extension, for the
         given input filename.
 
         Parameters
         ----------
-        filename : str
+        filename
             The input frame filename to generate the output file name for
-        extension : str
+        extension
             The extension to use for the output file
-        separate_mask: bool, optional
+        separate_mask
             ``True`` if the mask should be saved out to a sub-folder otherwise ``False``
 
         Returns
         -------
-        list
-            The full path for the output converted frame to be saved to in position 1. The full
-            path for the mask to be output to in position 2 (if requested)
+        The full path for the output converted frame to be saved to in position 1. The full path
+        for the mask to be output to in position 2 (if requested)
         """
         extension = extension.strip(".")
         filename = os.path.splitext(os.path.basename(filename))[0]
@@ -122,16 +121,16 @@ class Output():
         return retval
 
     def cache_frame(self, filename: str, image: np.ndarray) -> None:
-        """ Add the incoming converted frame to the cache ready for writing out.
+        """Add the incoming converted frame to the cache ready for writing out.
 
         Used for ffmpeg and gif writers to ensure that the frames are written out in the correct
         order.
 
         Parameters
         ----------
-        filename: str
+        filename
             The filename of the incoming frame, where the frame index can be extracted from
-        image: class:`numpy.ndarray`
+        image
             The converted frame corresponding to the given filename
         """
         re_frame = re.search(self.re_search, filename)
@@ -142,13 +141,13 @@ class Output():
         logger.trace("Current cache: %s", sorted(self.cache.keys()))  # type:ignore
 
     def write(self, filename: str, image: T.Any) -> None:
-        """ Override for specific frame writing method.
+        """Override for specific frame writing method.
 
         Parameters
         ----------
-        filename: str
+        filename
             The incoming frame filename.
-        image: Any
+        image
             The converted image to be written. Could be a numpy array, a bytes encoded image or
             any other plugin specific format
         """
@@ -164,17 +163,16 @@ class Output():
 
         Parameters
         ----------
-        image: :class:`numpy.ndarray`
+        image
             The converted image that is to be run through the pre-encoding function
 
         Returns
         -------
-        Any or ``None``
-            If ``None`` then the writer does not support pre-encoding, otherwise return output of
-            the plugin specific pre-encode function
+        If ``None`` then the writer does not support pre-encoding, otherwise return output of the
+        plugin specific pre-encode function
         """
         return None
 
     def close(self) -> None:
-        """ Override for specific converted frame writing close methods """
+        """Override for specific converted frame writing close methods"""
         raise NotImplementedError

@@ -225,9 +225,10 @@ class Extract():
         frames is returned. In all other cases ``None`` is returned
         """
         meta = self._alignments.video_meta_data
-        has_meta = all(val is not None for val in meta.values())
+        has_meta = meta is not None and all(val is not None for val in meta.values())
         if has_meta:
-            retval: int | None = len(T.cast(dict[str, list[int] | list[float]], meta["pts_time"]))
+            assert meta is not None
+            retval: int | None = len(T.cast(dict[str, list[int]], meta["pts_time"]))
         else:
             retval = None
         logger.debug("Frame count from alignments file: (has_meta: %s, %s", has_meta, retval)
