@@ -76,7 +76,7 @@ class PNGHeaderSourceDict(T.TypedDict):
 class AlignmentDict(T.TypedDict):
     """Dictionary for holding all of the alignment information within a single alignment file."""
     faces: list[AlignmentFileDict]
-    video_meta: dict[str, float | int]
+    video_meta: dict[str, int]
 
 
 class PNGHeaderDict(T.TypedDict):
@@ -268,17 +268,20 @@ class Alignments():  # pylint:disable=too-many-public-methods
         return masks
 
     @property
-    def video_meta_data(self) -> dict[str, list[int] | list[float] | None]:
+    def video_meta_data(self) -> dict[T.Literal["pts_time", "keyframes"], list[int]] | None:
         """The frame meta data stored in the alignments file. If data does not exist in the
-        alignments file then ``None`` is returned for each Key"""
-        retval: dict[str, list[int] | list[float] | None] = {"pts_time": None, "keyframes": None}
-        pts_time: list[float] = []
+        alignments file then ``None`` is returned"""
+        retval: dict[T.Literal["pts_time", "keyframes"], list[int]] = {}
+        pts_time: list[int] = []
         keyframes: list[int] = []
         for idx, key in enumerate(sorted(self.data)):
             if not self.data[key].get("video_meta", {}):
-                return retval
+                return None
             meta = self.data[key]["video_meta"]
-            pts_time.append(T.cast(float, meta["pts_time"]))
+            if not isinstance(meta["pts_time"], int):
+                # pts_time is now stored as ints so let it regenerate
+                return None
+            pts_time.append(meta["pts_time"])
             if meta["keyframe"]:
                 keyframes.append(idx)
         retval = {"pts_time": pts_time, "keyframes": keyframes}
@@ -320,7 +323,7 @@ class Alignments():  # pylint:disable=too-many-public-methods
         """
         return self._io.backup()
 
-    def save_video_meta_data(self, pts_time: list[float], keyframes: list[int]) -> None:
+    def save_video_meta_data(self, pts_time: list[int], keyframes: list[int]) -> None:
         """Save video meta data to the alignments file.
 
         If the alignments file does not have an entry for every frame (e.g. if Extract Every N
@@ -330,14 +333,11 @@ class Alignments():  # pylint:disable=too-many-public-methods
         Parameters
         ----------
         pts_time
-            A list of presentation timestamps (`float`) in frame index order for every frame in
+            A list of presentation timestamps (`int`) in frame index order for every frame in
             the input video
         keyframes
             A list of frame indices corresponding to the key frames in the input video
         """
-        if pts_time[0] != 0:
-            pts_time, keyframes = self._pad_leading_frames(pts_time, keyframes)
-
         sample_filename = next(fname for fname in self.data)
         basename = sample_filename[:sample_filename.rfind("_")]
         ext = os.path.splitext(sample_filename)[-1]
@@ -346,7 +346,7 @@ class Alignments():  # pylint:disable=too-many-public-methods
         logger.info("Saving video meta information to Alignments file")
 
         for idx, pts in enumerate(pts_time):
-            meta: dict[str, float | int] = {"pts_time": pts, "keyframe": idx in keyframes}
+            meta = {"pts_time": pts, "keyframe": idx in keyframes}
             key = f"{basename}_{idx + 1:06d}{ext}"
             if key not in self.data:
                 self.data[key] = {"video_meta": meta, "faces": []}
@@ -367,47 +367,6 @@ class Alignments():  # pylint:disable=too-many-public-methods
                 "video at a constant frame rate and re-run extraction or work with a dedicated "
                 "alignments file for your requested video.")
         self._io.save()
-
-    @classmethod
-    def _pad_leading_frames(cls, pts_time: list[float], keyframes: list[int]) -> tuple[list[float],
-                                                                                       list[int]]:
-        """Calculate the number of frames to pad the video by when the first frame is not
-        a key frame.
-
-        A somewhat crude method by obtaining the gaps between existing frames and calculating
-        how many frames should be inserted at the beginning based on the first presentation
-        timestamp.
-
-        Parameters
-        ----------
-        pts_time
-            A list of presentation timestamps (`float`) in frame index order for every frame in
-            the input video
-        keyframes
-            A list of keyframes (`int`) for the input video
-
-        Returns
-        -------
-        The presentation time stamps with extra frames padded to the beginning and the keyframes
-        adjusted to include the new frames
-        """
-        start_pts = pts_time[0]
-        logger.debug("Video not cut on keyframe. Start pts: %s", start_pts)
-        gaps: list[float] = []
-        prev_time = None
-        for item in pts_time:
-            if prev_time is not None:
-                gaps.append(item - prev_time)
-            prev_time = item
-        data_points = len(gaps)
-        avg_gap = sum(gaps) / data_points
-        frame_count = int(round(start_pts / avg_gap))
-        pad_pts = [avg_gap * i for i in range(frame_count)]
-        logger.debug("data_points: %s, avg_gap: %s, frame_count: %s, pad_pts: %s",
-                     data_points, avg_gap, frame_count, pad_pts)
-        pts_time = pad_pts + pts_time
-        keyframes = [i + frame_count for i in keyframes]
-        return pts_time, keyframes
 
     # << VALIDATION >> #
     def frame_exists(self, frame_name: str) -> bool:

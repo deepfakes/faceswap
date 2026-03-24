@@ -121,7 +121,7 @@ class DetectedFaces():
         return self._frame_faces
 
     @property
-    def video_meta_data(self) -> dict[str, list[int] | list[float] | None]:
+    def video_meta_data(self) -> dict[T.Literal["pts_time", "keyframes"], list[int]] | None:
         """The frame meta data stored in the alignments file. If data does not exist in the
         alignments file then ``None`` is returned for each Key"""
         return self._alignments.video_meta_data
@@ -172,7 +172,7 @@ class DetectedFaces():
         """Extract the faces in the current video to a user supplied folder."""
         self._io.extract()
 
-    def save_video_meta_data(self, pts_time: list[float], keyframes: list[int]) -> None:
+    def save_video_meta_data(self, pts_time: list[int], keyframes: list[int]) -> None:
         """Save video meta data to the alignments file. This is executed if the video meta data
         does not already exist in the alignments file, so the video does not need to be scanned
         on every use of the Manual Tool.
@@ -429,7 +429,8 @@ class _DiskIO():
         """
         saver = ImagesSaver(get_folder(output_folder), as_bytes=True)
         loader = ImagesLoader(self._input_location, count=self._alignments.frames_count)
-        for frame_idx, (filename, image) in enumerate(loader.load()):
+        for frame_idx, filename_image in enumerate(loader.load()):
+            filename, image = filename_image[:2]
             logger.trace("Outputting frame: %s: %s",  # type:ignore[attr-defined]
                          frame_idx, filename)
             src_filename = os.path.basename(filename)

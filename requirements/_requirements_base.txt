@@ -8,10 +8,8 @@ pillow>=12.1.0
 scikit-learn>=1.8.0
 fastcluster>=1.3.0
 matplotlib>=3.10.0
-imageio>=2.37.0
-# ffmpeg binary >=0.6.0 breaks convert.
-# TODO fix convert to use latest binary
-imageio-ffmpeg>=0.4.9,<0.6.0
+av>=17.0
+ffmpeg-binaries>=1.1
 ffmpy>=1.0.0
 pywin32>=305 ; sys_platform == "win32"
 #torchvision>=0.18.0,<0.25.0

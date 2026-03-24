@@ -13,14 +13,14 @@ max-attributes = 10
 max-positional-arguments = 10
 
 [tool.pylint.TYPECHECK]
-generated-members = ["cv2"]
+generated-members = ["av", "cv2"]
 
 [[tool.mypy.overrides]]
 module = [
     "fastcluster.*",
+    "ffmpeg.*",
     "ffmpy.*",
     "h5py.*",
-    "imageio_ffmpeg.*",
     "keras.*",
     "numexpr.*",
     "pexpect.*",

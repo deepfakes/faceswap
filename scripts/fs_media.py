@@ -11,20 +11,14 @@ import os
 import sys
 import typing as T
 
-from collections.abc import Iterator
-
 import numpy as np
-import imageio
 
 from lib.align import Alignments as AlignmentsBase
-from lib.image import count_frames, read_image
 from lib.logger import parse_class_init
 from lib.serializer import get_serializer
-from lib.utils import get_image_paths, get_module_objects, VIDEO_EXTENSIONS
+from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
-    from collections.abc import Generator
-    from argparse import Namespace
     from lib.align.alignments import AlignmentFileDict
 
 logger = logging.getLogger(__name__)
@@ -244,181 +238,6 @@ class Alignments(AlignmentsBase):
                     "identity": {}}))
             self._data[k] = {"faces": faces, "video_meta": {}}
         logger.info("Imported %s frames from '%s'", len(data), json_file)
-
-
-class Images():
-    """Handles the loading of frames from a folder of images or a video file for extract
-    and convert processes.
-
-    Parameters
-    ----------
-    arguments
-        The command line arguments that were passed to Faceswap
-    """
-    def __init__(self, arguments: Namespace) -> None:
-        logger.debug("Initializing %s", self.__class__.__name__)
-        self._args = arguments
-        self._is_video = self._check_input_folder()
-        self._input_images = self._get_input_images()
-        self._images_found = self._count_images()
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def is_video(self) -> bool:
-        """``True`` if the input is a video file otherwise ``False``. """
-        return self._is_video
-
-    @property
-    def input_images(self) -> str | list[str]:
-        """Path to the video file if the input is a video otherwise list of image paths."""
-        return self._input_images
-
-    @property
-    def images_found(self) -> int:
-        """The number of frames that exist in the video file, or the folder of images."""
-        return self._images_found
-
-    def _count_images(self) -> int:
-        """Get the number of Frames from a video file or folder of images.
-
-        Returns
-        -------
-        The number of frames in the image source
-        """
-        if self._is_video:
-            retval = int(count_frames(self._args.input_dir, fast=True))
-        else:
-            retval = len(self._input_images)
-        return retval
-
-    def _check_input_folder(self) -> bool:
-        """Check whether the input is a folder or video.
-
-        Returns
-        -------
-        ``True`` if the input is a video otherwise ``False``
-        """
-        if not os.path.exists(self._args.input_dir):
-            logger.error("Input location %s not found.", self._args.input_dir)
-            sys.exit(1)
-        if (os.path.isfile(self._args.input_dir) and
-                os.path.splitext(self._args.input_dir)[1].lower() in VIDEO_EXTENSIONS):
-            logger.info("Input Video: %s", self._args.input_dir)
-            retval = True
-        else:
-            logger.info("Input Directory: %s", self._args.input_dir)
-            retval = False
-        return retval
-
-    def _get_input_images(self) -> str | list[str]:
-        """Return the list of images or path to video file that is to be processed.
-
-        Returns
-        -------
-        Path to the video file if the input is a video otherwise list of image paths.
-        """
-        if self._is_video:
-            input_images = self._args.input_dir
-        else:
-            input_images = get_image_paths(self._args.input_dir)
-
-        return input_images
-
-    def load(self) -> Generator[tuple[str, np.ndarray], None, None]:
-        """Generator to load frames from a folder of images or from a video file.
-
-        Yields
-        ------
-        filename
-            The filename of the current frame
-        image
-            A single frame
-        """
-        iterator = self._load_video_frames if self._is_video else self._load_disk_frames
-        for filename, image in iterator():
-            yield filename, image
-
-    def _load_disk_frames(self) -> Generator[tuple[str, np.ndarray], None, None]:
-        """Generator to load frames from a folder of images.
-
-        Yields
-        ------
-        filename
-            The filename of the current frame
-        image
-            A single frame
-        """
-        logger.debug("Input is separate Frames. Loading images")
-        for filename in self._input_images:
-            image = read_image(filename, raise_error=False)
-            if image is None:
-                continue
-            yield filename, image
-
-    def _load_video_frames(self) -> Generator[tuple[str, np.ndarray], None, None]:
-        """Generator to load frames from a video file.
-
-        Yields
-        ------
-        filename
-            The filename of the current frame
-        image
-            A single frame
-        """
-        logger.debug("Input is video. Capturing frames")
-        vid_name, ext = os.path.splitext(os.path.basename(self._args.input_dir))
-        reader = imageio.get_reader(self._args.input_dir, "ffmpeg")  # type:ignore[arg-type]
-        for i, frame in enumerate(T.cast(Iterator[np.ndarray], reader)):
-            # Convert to BGR for cv2 compatibility
-            frame = frame[:, :, ::-1]
-            filename = f"{vid_name}_{i + 1:06d}{ext}"
-            logger.trace("Loading video frame: '%s'", filename)  # type:ignore[attr-defined]
-            yield filename, frame
-        reader.close()
-
-    def load_one_image(self, filename) -> np.ndarray:
-        """Obtain a single image for the given filename.
-
-        Parameters
-        ----------
-        filename
-            The filename to return the image for
-
-        Returns
-        ------
-        The image for the requested filename,
-        """
-        logger.trace("Loading image: '%s'", filename)  # type:ignore[attr-defined]
-        if self._is_video:
-            if filename.isdigit():
-                frame_no = filename
-            else:
-                frame_no = os.path.splitext(filename)[0][filename.rfind("_") + 1:]
-                logger.trace(  # type:ignore[attr-defined]
-                    "Extracted frame_no %s from filename '%s'", frame_no, filename)
-            retval = self._load_one_video_frame(int(frame_no))
-        else:
-            retval = read_image(filename, raise_error=True)
-        return retval
-
-    def _load_one_video_frame(self, frame_no: int) -> np.ndarray:
-        """Obtain a single frame from a video file.
-
-        Parameters
-        ----------
-        frame_no
-            The frame index for the required frame
-
-        Returns
-        ------
-        The image for the requested frame index,
-        """
-        logger.trace("Loading video frame: %s", frame_no)  # type:ignore[attr-defined]
-        reader = imageio.get_reader(self._args.input_dir, "ffmpeg")  # type:ignore[arg-type]
-        reader.set_image_index(frame_no - 1)
-        frame = reader.get_next_data()[:, :, ::-1]  # type:ignore[index]
-        reader.close()
-        return frame
 
 
 __all__ = get_module_objects(__name__)

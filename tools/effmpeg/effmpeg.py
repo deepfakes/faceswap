@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# vim: set fileencoding=utf-8 :
 """
 Created on 2018-03-16 15:14
 
@@ -9,27 +8,26 @@ import logging
 import os
 import subprocess
 import sys
+import typing as T
 import datetime
 from collections import OrderedDict
 
-import imageio
-import imageio_ffmpeg as im_ffm
+import av
+import ffmpeg
 from ffmpy import FFmpeg, FFRuntimeError
 
 # faceswap imports
-from lib.utils import (get_module_objects, handle_deprecated_cli_opts, IMAGE_EXTENSIONS,
-                       VIDEO_EXTENSIONS)
+from lib.utils import get_module_objects, handle_deprecated_cli_opts, IMAGE_EXTENSIONS
+from lib.video import VIDEO_EXTENSIONS
 
 logger = logging.getLogger(__name__)
 
 
 class DataItem():
-    """
-    A simple class used for storing the media data items and directories that
-    Effmpeg uses for 'input', 'output' and 'ref_vid'.
-    """
+    """A simple class used for storing the media data items and directories that Effmpeg uses for
+    'input', 'output' and 'ref_vid'."""
     vid_ext = VIDEO_EXTENSIONS
-    # future option in effmpeg to use audio file for muxing
+    # future option in effmpeg to use audio file for mux
     audio_ext = [".aiff", ".flac", ".mp3", ".wav"]
     img_ext = IMAGE_EXTENSIONS
 
@@ -51,7 +49,7 @@ class DataItem():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_name(self, name=None):
-        """ Set the name """
+        """Set the name"""
         if name is None and self.path is not None:
             self.name = os.path.basename(self.path)
         elif name is not None and self.path is None:
@@ -63,7 +61,7 @@ class DataItem():
         logger.debug(self.name)
 
     def set_type_ext(self, path=None):
-        """ Set the extension """
+        """Set the extension"""
         if path is not None:
             self.path = path
         if self.path is not None:
@@ -79,7 +77,7 @@ class DataItem():
             logger.debug("path: '%s', type: '%s', ext: '%s'", self.path, self.type, self.ext)
 
     def set_dirname(self, path=None):
-        """ Set the folder name """
+        """Set the folder name"""
         if path is None and self.path is not None:
             self.dirname = os.path.dirname(self.path)
         elif path is not None and self.path is None:
@@ -91,7 +89,7 @@ class DataItem():
         logger.debug("path: '%s', dirname: '%s'", path, self.dirname)
 
     def is_type(self, item_type=None):
-        """ Get the type """
+        """Get the type"""
         if item_type == "media":
             chk_type = self.type in "vid audio"
         elif item_type == "dir":
@@ -108,7 +106,7 @@ class DataItem():
         return chk_type
 
     def set_fps(self):
-        """ Set the Frames Per Second """
+        """Set the Frames Per Second"""
         try:
             self.fps = Effmpeg.get_fps(self.path)
         except FFRuntimeError:
@@ -117,11 +115,8 @@ class DataItem():
 
 
 class Effmpeg():
-    """
-    Class that allows for "easy" ffmpeg use. It provides a nice cli interface
-    for common video operations.
-    """
-
+    """Class that allows for "easy" ffmpeg use. It provides a nice cli interface for common video
+    operations. """
     _actions_req_fps = ["extract", "gen_vid"]
     _actions_req_ref_video = ["mux_audio"]
     _actions_can_use_ref_video = ["gen_vid"]
@@ -134,7 +129,7 @@ class Effmpeg():
                                "rotate", "slice"]
 
     # Class variable that stores the target executable (ffmpeg or ffplay)
-    _executable = im_ffm.get_ffmpeg_exe()
+    _executable = str(ffmpeg.FFMPEG_PATH)
 
     # Class variable that stores the common ffmpeg arguments based on verbosity
     __common_ffmpeg_args_dict = {"normal": "-hide_banner ",
@@ -149,7 +144,7 @@ class Effmpeg():
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self.args = handle_deprecated_cli_opts(arguments)
-        self.exe = im_ffm.get_ffmpeg_exe()
+        self.exe = str(ffmpeg.FFMPEG_PATH)
         self.input = DataItem()
         self.output = DataItem()
         self.ref_vid = DataItem()
@@ -160,7 +155,7 @@ class Effmpeg():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _set_output(self) -> None:
-        """ Set :attr:`output` based on input arguments """
+        """Set :attr:`output` based on input arguments"""
         if self.args.action in self._actions_have_dir_output:
             self.output = DataItem(path=self.__get_default_output())
         elif self.args.action in self._actions_have_vid_output:
@@ -171,21 +166,20 @@ class Effmpeg():
                 self.output = DataItem(path=self.__get_default_output())
 
     def _set_ref_video(self) -> None:
-        """ Set :attr:`ref_vid` based on input arguments """
+        """Set :attr:`ref_vid` based on input arguments"""
         if self.args.ref_vid is None or self.args.ref_vid == "":
             self.args.ref_vid = None
 
         self.ref_vid = DataItem(path=self.args.ref_vid)
 
     def _check_inputs(self) -> None:
-        """ Validate provided arguments are valid
+        """Validate provided arguments are valid
 
         Raises
         ------
         ValueError
             If provided arguments are not valid
         """
-
         if self.args.action in self._actions_have_dir_input and not self.input.is_type("dir"):
             raise ValueError("The chosen action requires a directory as its input, but you "
                              f"entered: {self.input.path}")
@@ -211,7 +205,7 @@ class Effmpeg():
                                "intentional then ignore this warning.")
 
     def _set_times(self) -> None:
-        """Set start, end and duration attributes """
+        """Set start, end and duration attributes"""
         self.start = self.parse_time(self.args.start)
         self.end = self.parse_time(self.args.end)
         if not self.__check_equals_time(self.args.end, "00:00:00"):
@@ -220,7 +214,7 @@ class Effmpeg():
             self.duration = self.parse_time(str(self.args.duration))
 
     def _set_fps(self) -> None:
-        """ Set :attr:`arguments.fps` based on input arguments"""
+        """Set :attr:`arguments.fps` based on input arguments"""
         # If fps was left blank in gui, set it to default -1.0 value
         if self.args.fps == "":
             self.args.fps = str(-1.0)
@@ -241,7 +235,7 @@ class Effmpeg():
                 self.args.fps = self.input.fps
 
     def process(self):
-        """ EFFMPEG Process """
+        """EFFMPEG Process"""
         logger.debug("Running Effmpeg")
         # Format action to match the method name
         self.args.action = self.args.action.replace("-", "_")
@@ -296,7 +290,7 @@ class Effmpeg():
         logger.debug("Finished Effmpeg process")
 
     def effmpeg_process(self):
-        """ The effmpeg process """
+        """The effmpeg process"""
         kwargs = {"input_": self.input,
                   "output": self.output,
                   "ref_vid": self.ref_vid,
@@ -316,7 +310,7 @@ class Effmpeg():
     @staticmethod
     def extract(input_=None, output=None, fps=None,  # pylint:disable=unused-argument
                 extract_ext=None, start=None, duration=None, **kwargs):
-        """ Extract video to image frames """
+        """Extract video to image frames"""
         logger.debug("input_: %s, output: %s, fps: %s, extract_ext: '%s', start: %s, duration: %s",
                      input_, output, fps, extract_ext, start, duration)
         _input_opts = Effmpeg._common_ffmpeg_args[:]
@@ -333,7 +327,7 @@ class Effmpeg():
     @staticmethod
     def gen_vid(input_=None, output=None, fps=None,  # pylint:disable=unused-argument
                 mux_audio=False, ref_vid=None, exe=None, **kwargs):
-        """ Generate Video """
+        """Generate Video"""
         logger.debug("input: %s, output: %s, fps: %s, mux_audio: %s, ref_vid: '%s'exe: '%s'",
                      input, output, fps, mux_audio, ref_vid, exe)
         filename = Effmpeg.__get_extracted_filename(input_.path)
@@ -354,39 +348,59 @@ class Effmpeg():
 
     @staticmethod
     def get_fps(input_=None, print_=False, **kwargs):
-        """ Get Frames per Second """
+        """Get Frames per Second"""
         logger.debug("input_: %s, print_: %s, kwargs: %s", input_, print_, kwargs)
         input_ = input_ if isinstance(input_, str) else input_.path
         logger.debug("input: %s", input_)
-        reader = imageio.get_reader(input_, "ffmpeg")
-        _fps = reader.get_meta_data()["fps"]
+        with av.open(input_, "r") as container:
+            _fps = container.streams.video[0].average_rate
+            assert _fps is not None
+            _fps = float(_fps)
         logger.debug(_fps)
-        reader.close()
         if print_:
             logger.info("Video fps: %s", _fps)
         return _fps
 
     @staticmethod
     def get_info(input_=None, print_=False, **kwargs):
-        """ Get video Info """
+        """Get video Info"""
         logger.debug("input_: %s, print_: %s, kwargs: %s", input_, print_, kwargs)
         input_ = input_ if isinstance(input_, str) else input_.path
         logger.debug("input: %s", input_)
-        reader = imageio.get_reader(input_, "ffmpeg")
-        out = reader.get_meta_data()
-        logger.debug(out)
-        reader.close()
+        data: dict[str, list[dict[str, T.Any]]] = {}
+        with av.open(input_, "r") as container:
+            for stream in container.streams:
+                info: dict[str, T.Any] = stream.metadata
+                info["frames"] = stream.frames
+                info["codec"] = stream.codec_context.name
+                info["profile"] = stream.profile
+                info["bitrate"] = stream.codec_context.bit_rate
+                if stream.duration and stream.time_base:
+                    info["duration"] = float(stream.duration * stream.time_base)
+                if stream.type == "video":
+                    codec = T.cast(av.VideoCodecContext, stream.codec_context)
+                    if stream.average_rate:
+                        info["fps"] = float(stream.average_rate)
+                    info["pix_fmt"] = codec.pix_fmt
+                    info["size"] = (codec.width, codec.height)
+                data.setdefault(stream.type, []).append(info)
+
+        logger.debug(data)
         if print_:
             logger.info("======== Video Info ========",)
             logger.info("path: %s", input_)
-            for key, val in out.items():
-                logger.info("%s: %s", key, val)
-        return out
+            for stream_type, info in data.items():
+                logger.info("---- %s ----", stream_type)
+                for idx, stream_data in enumerate(info):
+                    logger.info("index: %s", idx)
+                    for key, val in stream_data.items():
+                        logger.info("  %s: %s", key, val)
+#        return out
 
     @staticmethod
     def rescale(input_=None, output=None, scale=None,  # pylint:disable=unused-argument
                 exe=None, **kwargs):
-        """ Rescale Video """
+        """Rescale Video"""
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _output_opts = '-y -vf scale="' + str(scale) + '"'
         _inputs = {input_.path: _input_opts}
@@ -396,7 +410,7 @@ class Effmpeg():
     @staticmethod
     def rotate(input_=None, output=None, degrees=None,  # pylint:disable=unused-argument
                transpose=None, exe=None, **kwargs):
-        """ Rotate Video """
+        """Rotate Video"""
         if transpose is None and degrees is None:
             raise ValueError("You have not supplied a valid transpose or degrees value:\n"
                              f"transpose: {transpose}\ndegrees: {degrees}")
@@ -419,7 +433,7 @@ class Effmpeg():
     @staticmethod
     def mux_audio(input_=None, output=None, ref_vid=None,  # pylint:disable=unused-argument
                   exe=None, **kwargs):
-        """ Mux Audio """
+        """Mux Audio"""
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _ref_vid_opts = None
         _output_opts = "-y -c copy -map 0:0 -map 1:1 -shortest"
@@ -430,7 +444,7 @@ class Effmpeg():
     @staticmethod
     def slice(input_=None, output=None, start=None,  # pylint:disable=unused-argument
               duration=None, exe=None, **kwargs):
-        """ Slice Video """
+        """Slice Video"""
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _input_opts += "-ss " + start
         _output_opts = "-t " + duration + " "
@@ -449,8 +463,7 @@ class Effmpeg():
             cls._common_ffmpeg_args = cls.__common_ffmpeg_args_dict["normal"]
 
     def __get_default_output(self):
-        """ Set output to the same directory as input
-            if the user didn't specify it. """
+        """Set output to the same directory as input if the user didn't specify it."""
         retval = ""
         if self.args.output == "":
             if self.args.action in self._actions_have_dir_output:
@@ -480,8 +493,8 @@ class Effmpeg():
         return all(getattr(self, i).fps is None for i in items_to_check)
 
     @staticmethod
-    def __run_ffmpeg(exe=im_ffm.get_ffmpeg_exe(), inputs=None, outputs=None):
-        """ Run ffmpeg """
+    def __run_ffmpeg(exe=str(ffmpeg.FFMPEG_PATH), inputs=None, outputs=None):
+        """Run ffmpeg"""
         logger.debug("Running ffmpeg: (exe: '%s', inputs: %s, outputs: %s", exe, inputs, outputs)
         ffm = FFmpeg(executable=exe, inputs=inputs, outputs=outputs)
         try:
@@ -498,7 +511,7 @@ class Effmpeg():
 
     @staticmethod
     def __convert_fps(fps):
-        """ Convert to Frames per Second """
+        """Convert to Frames per Second"""
         if "/" in fps:
             _fps = fps.split("/")
             retval = float(_fps[0]) / float(_fps[1])
@@ -509,7 +522,7 @@ class Effmpeg():
 
     @staticmethod
     def __get_duration(start_time, end_time):
-        """ Get the duration """
+        """Get the duration"""
         start = [int(i) for i in start_time.split(":")]
         end = [int(i) for i in end_time.split(":")]
         start = datetime.timedelta(hours=start[0], minutes=start[1], seconds=start[2])
@@ -522,7 +535,7 @@ class Effmpeg():
 
     @staticmethod
     def __get_extracted_filename(path):
-        """ Get the extracted filename """
+        """Get the extracted filename"""
         logger.debug("path: '%s'", path)
         filename = ""
         for file in os.listdir(path):
@@ -541,11 +554,12 @@ class Effmpeg():
 
     @staticmethod
     def __get_zero_pad(filename):
-        """ Return the starting position of zero padding from a filename """
-        chkstring = filename[::-1]
-        logger.trace("filename: %s, chkstring: %s", filename, chkstring)
+        """Return the starting position of zero padding from a filename"""
+        chk_string = filename[::-1]
+        logger.trace("filename: %s, chk_string: %s",  # type:ignore[attr-defined]
+                     filename, chk_string)
         pos = 0
-        for char in chkstring:
+        for char in chk_string:
             if not char.isdigit():
                 break
         logger.debug("filename: '%s', pos: %s", filename, pos)
@@ -553,7 +567,7 @@ class Effmpeg():
 
     @staticmethod
     def __check_equals_time(value, time):
-        """ Check equals time """
+        """Check equals time"""
         val = value.replace(":", "")
         tme = time.replace(":", "")
         retval = val.zfill(6) == tme.zfill(6)
@@ -562,7 +576,7 @@ class Effmpeg():
 
     @staticmethod
     def parse_time(txt):
-        """ Parse Time """
+        """Parse Time"""
         clean_txt = txt.replace(":", "")
         hours = clean_txt[0:2]
         minutes = clean_txt[2:4]

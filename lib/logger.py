@@ -194,7 +194,7 @@ class FaceswapFormatter(logging.Formatter):
         """Some external libs log at a higher level than we would really like, so lower their
         log level.
 
-        Specifically: Matplotlib font properties, pytorch compilation gemm warnings
+        Specifically: Matplotlib font properties and libav output
 
         Parameters
         ----------
@@ -205,9 +205,7 @@ class FaceswapFormatter(logging.Formatter):
         ----------
         The log rewritten or untouched record
         """
-        if (record.levelno == logging.INFO and record.funcName == "__init__"
-                and record.module == "font_manager"):
-            # Matplotlib font manager
+        if record.levelno == logging.INFO and record.name.startswith(("libav.",  "matplotlib.")):
             record.levelno = 10
             record.levelname = "DEBUG"
         return record
@@ -610,7 +608,7 @@ def _process_value(value: T.Any) -> T.Any:
     The original or amended value
     """
     if isinstance(value, (list, tuple, set)) and len(value) > 10:
-        return f'[type: "{type(value).__name__}" len: {len(value)}'
+        return f'[type: "{type(value).__name__}" len: {len(value)}]'
 
     try:
         import numpy as np  # pylint:disable=import-outside-toplevel

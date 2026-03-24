@@ -8,8 +8,8 @@ import typing as T
 from argparse import Namespace
 from multiprocessing import Process
 
-from lib.utils import (get_module_objects, FaceswapError,
-                       handle_deprecated_cli_opts, VIDEO_EXTENSIONS)
+from lib.utils import get_module_objects, FaceswapError, handle_deprecated_cli_opts
+from lib.video import VIDEO_EXTENSIONS
 from .media import AlignmentData
 from .jobs import Check, Export, Sort, Spatial  # noqa pylint:disable=unused-import
 from .jobs_faces import FromFaces, RemoveFaces, Rename  # noqa pylint:disable=unused-import

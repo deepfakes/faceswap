@@ -1,27 +1,28 @@
 #!/usr/bin/env python3
 """ Video output writer for faceswap.py converter """
 from __future__ import annotations
-import os
+
+import logging
 import typing as T
+import os
+from collections import deque
 
-from math import ceil
-from subprocess import CalledProcessError, check_output, STDOUT
-
-import imageio
-import imageio_ffmpeg as im_ffm
-import numpy as np
-
+from lib.logger import parse_class_init
 from lib.utils import get_module_objects
+from lib.video import VideoMux
 
-from ._base import Output, logger
+from ._base import Output
 from . import ffmpeg_defaults as cfg
 
 if T.TYPE_CHECKING:
-    from collections.abc import Generator
+    import numpy as np
+    import numpy.typing as npt
+
+logger = logging.getLogger(__name__)
 
 
 class Writer(Output):
-    """ Video output writer using imageio-ffmpeg.
+    """ Video output writer using pyAV.
 
     Parameters
     ----------
@@ -44,15 +45,10 @@ class Writer(Output):
                  source_video: str,
                  **kwargs) -> None:
         super().__init__(output_folder, **kwargs)
-        logger.debug("total_count: %s, frame_ranges: %s, source_video: '%s'",
-                     total_count, frame_ranges, source_video)
-        self._source_video: str = source_video
-        self._output_filename: str = self._get_output_filename()
+        logger.debug(parse_class_init(locals()))
         self._frame_ranges: list[tuple[int, int]] | None = frame_ranges
-        self._frame_order: list[int] = self._set_frame_order(total_count, frame_ranges)
-        self._output_dimensions: str | None = None  # Fix dims on 1st received frame
-        # Need to know dimensions of first frame, so set writer then
-        self._writer: Generator[None, np.ndarray, None] | None = None
+        self._frame_order: deque[int] = self._set_frame_order(total_count, frame_ranges)
+        self._muxer = self._get_muxer(source_video)
 
     @property
     def _valid_tunes(self) -> dict:
@@ -61,97 +57,7 @@ class Writer(Output):
                             "zerolatency"],
                 "libx265": ["grain", "fastdecode", "zerolatency"]}
 
-    @property
-    def _video_fps(self) -> float:
-        """ float: The fps of the source video. """
-        reader = imageio.get_reader(self._source_video, "ffmpeg")  # type:ignore[arg-type]
-        retval = reader.get_meta_data()["fps"]
-        reader.close()
-        logger.debug(retval)
-        return retval
-
-    @property
-    def _output_params(self) -> list[str]:
-        """ list: The FFMPEG Output parameters """
-        codec = cfg.codec()
-        tune = cfg.tune()
-        # Force all frames to the same size
-        output_args = ["-vf", f"scale={self._output_dimensions}"]
-
-        output_args.extend(["-crf", str(cfg.crf())])
-        output_args.extend(["-preset", cfg.preset()])
-
-        if tune is not None and tune in self._valid_tunes[codec]:
-            output_args.extend(["-tune", tune])
-
-        if codec == "libx264" and cfg.profile() != "auto":
-            output_args.extend(["-profile:v", cfg.profile()])
-
-        if codec == "libx264" and cfg.level() != "auto":
-            output_args.extend(["-level", cfg.level()])
-
-        logger.debug(output_args)
-        return output_args
-
-    @property
-    def _audio_codec(self) -> str | None:
-        """ str or ``None``: The audio codec to use. This will either be ``"copy"`` (the default)
-        or ``None`` if skip muxing has been selected in configuration options, or if frame ranges
-        have been passed in the command line arguments. """
-        retval: str | None = "copy"
-        if cfg.skip_mux():
-            logger.info("Skipping audio muxing due to configuration settings.")
-            retval = None
-        elif self._frame_ranges is not None:
-            logger.warning("Muxing audio is not supported for limited frame ranges."
-                           "The output video will be created but you will need to mux audio "
-                           "manually.")
-            retval = None
-        elif not self._test_for_audio_stream():
-            logger.warning("No audio stream could be found in the source video '%s'. Muxing audio "
-                           "will be disabled.", self._source_video)
-            retval = None
-        logger.debug("Audio codec: %s", retval)
-        return retval
-
-    def _test_for_audio_stream(self) -> bool:
-        """ Check whether the source video file contains an audio stream.
-
-        If we attempt to mux audio from a source video that does not contain an audio stream
-        ffmpeg will crash faceswap in a fairly ugly manner.
-
-        Returns
-        -------
-        bool
-            ``True`` if an audio stream is found in the source video file, otherwise ``False``
-
-        Raises
-        ------
-        ValueError
-            If a subprocess error is raised scanning the input video file
-        """
-        exe = im_ffm.get_ffmpeg_exe()
-        cmd = [exe, "-hide_banner", "-i", self._source_video, "-f", "ffmetadata", "-"]
-
-        try:
-            out = check_output(cmd, stderr=STDOUT)
-        except CalledProcessError as err:
-            err_out = err.output.decode(errors="ignore")
-            msg = f"Error checking audio stream. Status: {err.returncode}\n{err_out}"
-            raise ValueError(msg) from err
-
-        retval = False
-        for line in out.splitlines():
-            if not line.strip().startswith(b"Stream #"):
-                continue
-            logger.debug("scanning Stream line: %s", line.decode(errors="ignore").strip())
-            if b"Audio" in line:
-                retval = True
-                break
-        logger.debug("Audio found: %s", retval)
-        return retval
-
-    def _get_output_filename(self) -> str:
+    def _get_output_filename(self, source_filename: str) -> str:
         """ Return full path to video output file.
 
         The filename is the same as the input video with `"_converted"` appended to the end. The
@@ -159,12 +65,16 @@ class Writer(Output):
         given filename, then `"_1"` is appended to the end of the filename. This number iterates
         until a valid filename that does not exist is found.
 
+        Parameters
+        ----------
+        The filename of the source/reference video
+
         Returns
         -------
         str
             The full path to the output video filename
         """
-        filename = os.path.basename(self._source_video)
+        filename = os.path.basename(source_filename)
         filename = os.path.splitext(filename)[0]
         ext = cfg.container()
         idx = 0
@@ -174,43 +84,83 @@ class Writer(Output):
             if not os.path.exists(retval):
                 break
             idx += 1
-        logger.info("Outputting to: '%s'", retval)
+        logger.info("[FFMPEG] Outputting to: '%s'", retval)
         return retval
 
-    def _get_writer(self, frame_dims: tuple[int, int]) -> Generator[None, np.ndarray, None]:
-        """ Add the requested encoding options and return the writer.
-
-        Parameters
-        ----------
-        frame_dims: tuple
-            The (rows, colums) shape of the input image
+    def _get_codec_parameters(self) -> dict[str, str]:
+        """Obtain the selected video codec parameters
 
         Returns
         -------
-        generator
-            The imageio ffmpeg writer
+        Parameter option name to parameter value for the codec options
         """
-        audio_codec = self._audio_codec
-        audio_path = None if audio_codec is None else self._source_video
-        logger.debug("writer audio_path: '%s'", audio_path)
+        codec = cfg.codec()
+        tune = cfg.tune()
 
-        retval = im_ffm.write_frames(self._output_filename,
-                                     size=(frame_dims[1], frame_dims[0]),
-                                     fps=self._video_fps,
-                                     quality=None,
-                                     codec=cfg.codec(),
-                                     macro_block_size=8,
-                                     ffmpeg_log_level="error",
-                                     ffmpeg_timeout=10,
-                                     output_params=self._output_params,
-                                     audio_path=audio_path,
-                                     audio_codec=audio_codec)
-        logger.debug("FFMPEG Writer created: %s", retval)
-        retval.send(None)
+        output_args = {"crf": str(cfg.crf()),
+                       "preset": cfg.preset()}
 
-        return retval
+        if tune is not None and tune in self._valid_tunes[codec]:
+            output_args["tune"] = tune
 
-    def write(self, filename: str, image: np.ndarray) -> None:
+        if codec == "libx264" and cfg.profile() != "auto":
+            output_args["profile"] = cfg.profile()
+
+        if codec == "libx264" and cfg.level() != "auto":
+            output_args["level"] = cfg.level()
+
+        logger.debug("[FFMPEG] codec_params: %s", output_args)
+        return output_args
+
+    def _should_mux_audio(self) -> bool:
+        """Test if audio should be muxed based on selected parameters
+
+        Returns
+        -------
+        ``True`` if audio should be muxed
+        """
+        if cfg.skip_mux():
+            logger.info("Skipping audio muxing due to configuration settings.")
+            return False
+
+        if self._frame_ranges is not None:
+            logger.warning("Muxing audio is not supported for limited frame ranges."
+                           "The output video will be created but you will need to mux audio "
+                           "manually.")
+            return False
+
+        logger.debug("[FFMPEG] Audio will be muxed")
+        return True
+
+    def _get_muxer(self, source_filename: str) -> VideoMux:
+        """Obtain the VideoMux object for encoding the video
+
+        Parameters
+        ----------
+        source_filename
+            The filename of the reference source video
+        """
+        out_file = self._get_output_filename(source_filename)
+        params = self._get_codec_parameters()
+        mux_audio = self._should_mux_audio()
+        codec = T.cast(T.Literal["libx264", "libx265"], cfg.codec())
+        return VideoMux(source_filename, out_file, codec, params, mux_audio)
+
+    def _save_from_cache(self) -> None:
+        """Sends any any consecutive frames to the muxer that are ready to be output from cache."""
+        while self._frame_order:
+            if self._frame_order[0] not in self.cache:
+                logger.trace("Next frame not ready. Continuing")  # type:ignore[attr-defined]
+                break
+            save_no = self._frame_order.popleft()
+            save_image = self.cache.pop(save_no)
+            logger.trace(  # type:ignore[attr-defined]
+                "[FFMPEG] Rendering from cache. Frame no: %s", save_no)
+            self._muxer.encode(save_image)
+        logger.trace("[FFMPEG] Current cache size: %s",  # type:ignore[attr-defined]
+                     len(self.cache))
+
+    def write(self, filename: str, image: npt.NDArray[np.uint8]) -> None:
         """ Frames come from the pool in arbitrary order, so frames are cached for writing out
         in the correct order.
 
@@ -223,47 +173,12 @@ class Writer(Output):
         """
         logger.trace("Received frame: (filename: '%s', shape: %s",  # type:ignore[attr-defined]
                      filename, image.shape)
-        if not self._output_dimensions:
-            input_dims = T.cast(tuple[int, int], image.shape[:2])
-            self._set_dimensions(input_dims)
-            self._writer = self._get_writer(input_dims)
         self.cache_frame(filename, image)
         self._save_from_cache()
 
-    def _set_dimensions(self, frame_dims: tuple[int, int]) -> None:
-        """ Set the attribute :attr:`_output_dimensions` based on the first frame received.
-        This protects against different sized images coming in and ensures all images are written
-        to ffmpeg at the same size. Dimensions are mapped to a macro block size 8.
-
-        Parameters
-        ----------
-        frame_dims: tuple
-            The (rows, colums) shape of the input image
-        """
-        logger.debug("input dimensions: %s", frame_dims)
-        self._output_dimensions = (f"{int(ceil(frame_dims[1] / 8) * 8)}:"
-                                   f"{int(ceil(frame_dims[0] / 8) * 8)}")
-        logger.debug("Set dimensions: %s", self._output_dimensions)
-
-    def _save_from_cache(self) -> None:
-        """ Writes any consecutive frames to the video container that are ready to be output
-        from the cache. """
-        assert self._writer is not None
-        while self._frame_order:
-            if self._frame_order[0] not in self.cache:
-                logger.trace("Next frame not ready. Continuing")  # type:ignore[attr-defined]
-                break
-            save_no = self._frame_order.pop(0)
-            save_image = self.cache.pop(save_no)
-            logger.trace("Rendering from cache. Frame no: %s",  # type:ignore[attr-defined]
-                         save_no)
-            self._writer.send(np.ascontiguousarray(save_image[:, :, ::-1]))
-        logger.trace("Current cache size: %s", len(self.cache))  # type:ignore[attr-defined]
-
     def close(self) -> None:
-        """ Close the ffmpeg writer and mux the audio """
-        if self._writer is not None:
-            self._writer.close()
+        """ Close the ffmpeg writer"""
+        self._muxer.encode(None)
 
 
 __all__ = get_module_objects(__name__)

@@ -11,7 +11,8 @@ from multiprocessing import Process
 
 from lib.align import Alignments
 
-from lib.utils import get_module_objects, handle_deprecated_cli_opts, VIDEO_EXTENSIONS
+from lib.utils import get_module_objects, handle_deprecated_cli_opts
+from lib.video import VIDEO_EXTENSIONS
 
 from .loader import Loader
 from .mask_import import Import

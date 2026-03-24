@@ -18,12 +18,13 @@ import numpy as np
 from lib.align import DetectedFace
 from lib.cli.args_extract_convert import ConvertArgs
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
+from lib.image import SingleFrameLoader
 from lib.infer.objects import FrameFaces
 from lib.convert import Converter
 from lib.utils import get_module_objects, FaceswapError, handle_deprecated_cli_opts
 from lib.queue_manager import queue_manager
-# TODO this is the last reference to Images. Remove if possible:
-from scripts.fs_media import Alignments, Images
+from lib.video import check_for_video
+from scripts.fs_media import Alignments
 from scripts.convert import Predict, ConvertItem
 
 from .control_panels import ActionFrame, ConfigTools, OptionsBook
@@ -277,19 +278,26 @@ class Samples():
         self._input_images: list[ConvertItem] = []
         self._predicted_images: list[tuple[ConvertItem, np.ndarray]] = []
 
-        self._images = Images(arguments)
+        is_video = check_for_video(arguments.input_dir)
         self._alignments = Alignments(arguments.alignments_path,
                                       arguments.input_dir,
                                       is_extract=False,
-                                      input_is_video=self._images.is_video)
+                                      input_is_video=is_video)
 
         if not self._alignments.have_alignments_file:
             logger.error("Alignments file not found at: '%s'", self._alignments.file)
             sys.exit(1)
 
+        video_meta = self._alignments.video_meta_data
+        self._images = SingleFrameLoader(arguments.input_dir, video_meta_data=video_meta)
+
+        if is_video and video_meta is None:
+            video_meta = self._images.video_meta_data
+            assert video_meta is not None
+            self._alignments.save_video_meta_data(video_meta["pts_time"], video_meta["keyframes"])
+
         if self._images.is_video:
-            assert isinstance(self._images.input_images, str)
-            self._alignments.update_legacy_has_source(os.path.basename(self._images.input_images))
+            self._alignments.update_legacy_has_source(os.path.basename(arguments.input_dir))
 
         self._filelist = self._get_filelist()
         self._indices = self._get_indices()
@@ -346,16 +354,9 @@ class Samples():
             A list of filenames of frames that contain faces.
         """
         logger.debug("Filtering file list to frames with faces")
-        if isinstance(self._images.input_images, str):
-            vid_name, ext = os.path.splitext(self._images.input_images)
-            filelist = [f"{vid_name}_{frame_no:06d}{ext}"
-                        for frame_no in range(1, self._images.images_found + 1)]
-        else:
-            filelist = self._images.input_images
-
-        retval = [filename for filename in filelist
+        retval = [filename for filename in self._images.file_list
                   if self._alignments.frame_has_faces(os.path.basename(filename))]
-        logger.debug("Filtered out frames: %s", self._images.images_found - len(retval))
+        logger.debug("Filtered out frames: %s", self._images.count - len(retval))
         try:
             assert retval
         except AssertionError as err:
@@ -408,21 +409,32 @@ class Samples():
 
         * Picks a random face from each indices group.
 
-        * Takes the first face from the image (if there are multiple faces). Adds the images to \
+        * Takes the first face from the image (if there are multiple faces). Adds the images to
         :attr:`self._input_images`.
 
-        * Sets :attr:`_display.source` to the input images and flags that the display should be \
+        * Sets :attr:`_display.source` to the input images and flags that the display should be
         updated
         """
         self._input_images = []
         for selection in self._random_choice:
-            filename = os.path.basename(self._filelist[selection])
-            image = self._images.load_one_image(self._filelist[selection])
+            filename = self._filelist[selection]
+            basename = os.path.basename(filename)
+
+            if self._images.is_video and basename.isdigit():
+                frame_no = int(basename)
+            elif self._images.is_video:
+                frame_no = int(os.path.splitext(basename)[0][filename.rfind("_") + 1:])
+                logger.trace(  # type:ignore[attr-defined]
+                    "Extracted frame_no %s from filename '%s'", frame_no, basename)
+            else:
+                frame_no = self._images.file_list.index(filename)
+
+            _, image = self._images.image_from_index(frame_no)
             # Get first face only
-            face = self._alignments.get_faces_in_frame(filename)[0]
+            face = self._alignments.get_faces_in_frame(basename)[0]
             detected_face = DetectedFace()
             detected_face.from_alignment(face, image=image)
-            inbound = FrameFaces(filename=filename, image=image)
+            inbound = FrameFaces(filename=basename, image=image)
             inbound.detected_faces = [detected_face]
             self._input_images.append(ConvertItem(inbound=inbound))
         self._app.display.source = self._input_images

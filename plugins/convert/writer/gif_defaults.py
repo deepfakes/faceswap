@@ -28,7 +28,9 @@ from lib.config import ConfigItem
 from lib.config import ConfigItem
 
 
-HELPTEXT = "Options for outputting converted frames to an animated gif."
+HELPTEXT = ("Options for outputting converted frames to an animated GIF.\n"
+            "Note: GIF creation needs to load all images into RAM so you should only use short "
+            "sequences")
 
 
 fps = ConfigItem(
@@ -47,7 +49,7 @@ loop = ConfigItem(
     rounding=1,
     min_max=(0, 100))
 
-palettesize = ConfigItem(
+palette_size = ConfigItem(
     datatype=str,
     default="256",
     group="settings",
@@ -55,9 +57,9 @@ palettesize = ConfigItem(
          "two.",
     choices=["2", "4", "8", "16", "32", "64", "128", "256"])
 
-subrectangles = ConfigItem(
+dithering = ConfigItem(
     datatype=bool,
     default=False,
     group="settings",
-    info="If True, will try and optimize the GIF by storing only the rectangular parts of "
-         "each frame that change with respect to the previous.")
+    info="Apply dithering. Improves gradients but adds noise. Good for natural images, bad for "
+         "sharp images.")

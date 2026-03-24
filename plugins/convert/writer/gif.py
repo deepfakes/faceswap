@@ -1,35 +1,44 @@
 #!/usr/bin/env python3
-""" Animated GIF writer for faceswap.py converter """
+"""Animated GIF writer for faceswap.py converter"""
 from __future__ import annotations
+
+import logging
 import os
 import typing as T
+from collections import deque
 
 import cv2
-import imageio
+import numpy as np
+from PIL import Image
+from scipy.spatial import cKDTree  # type:ignore[attr-defined]
+from sklearn.cluster import MiniBatchKMeans
 
+from lib.logger import parse_class_init
 from lib.utils import get_module_objects
 
-from ._base import Output, logger
+from ._base import Output
 from . import gif_defaults as cfg
 
 if T.TYPE_CHECKING:
-    from imageio.core import format as im_format  # noqa:F401
+    import numpy.typing as npt
+
+logger = logging.getLogger(__name__)
 
 
 class Writer(Output):
-    """ GIF output writer using imageio.
+    """GIF output writer using PIL.
 
 
     Parameters
     ----------
-    output_folder: str
+    output_folder
         The folder to save the output gif to
-    total_count: int
+    total_count
         The total number of frames to be converted
-    frame_ranges: list or ``None``
+    frame_ranges
         List of tuples for starting and end values of each frame range to be converted or ``None``
         if all frames are to be converted
-    kwargs: dict
+    kwargs
         Any additional standard :class:`plugins.convert.writer._base.Output` key word arguments.
     """
     def __init__(self,
@@ -37,62 +46,17 @@ class Writer(Output):
                  total_count: int,
                  frame_ranges: list[tuple[int, int]] | None,
                  **kwargs) -> None:
-        logger.debug("total_count: %s, frame_ranges: %s", total_count, frame_ranges)
+        logger.debug(parse_class_init(locals()))
         super().__init__(output_folder, **kwargs)
-        self._frame_order: list[int] = self._set_frame_order(total_count, frame_ranges)
+        self._frame_order: deque[int] = self._set_frame_order(total_count, frame_ranges)
         # Fix dims on 1st received frame
-        self._output_dimensions: tuple[int, int] | None = None
-        # Need to know dimensions of first frame, so set writer then
-        self._writer: imageio.plugins.pillowmulti.GIFFormat.Writer | None = None
+        self._dimensions = (0, 0)
+        self._images: list[np.ndarray] = []
+        self._palette: dict[int, int] = {}
         self._gif_file: str | None = None  # Set filename based on first file seen
 
-    @property
-    def _gif_params(self) -> dict:
-        """ dict: The selected gif plugin configuration options. """
-        kwargs = {"fps": cfg.fps(),
-                  "loop": cfg.loop(),
-                  "palettesize": cfg.palettesize(),
-                  "subrectangles": cfg.subrectangles()}
-        logger.debug(kwargs)
-        return kwargs
-
-    def _get_writer(self) -> im_format.Format.Writer:
-        """ Obtain the GIF writer with the requested GIF encoding options.
-
-        Returns
-        -------
-        :class:`imageio.plugins.pillowmulti.GIFFormat.Writer`
-            The imageio GIF writer
-        """
-        assert self._gif_file is not None
-        return imageio.get_writer(self._gif_file,
-                                  mode="i",
-                                  **self._gif_params)
-
-    def write(self, filename: str, image) -> None:
-        """ Frames come from the pool in arbitrary order, so frames are cached for writing out
-        in the correct order.
-
-        Parameters
-        ----------
-        filename: str
-            The incoming frame filename.
-        image: :class:`numpy.ndarray`
-            The converted image to be written
-        """
-        logger.trace("Received frame: (filename: '%s', shape: %s",  # type: ignore
-                     filename, image.shape)
-        if not self._gif_file:
-            self._set_gif_filename(filename)
-            self._set_dimensions(image.shape[:2])
-            self._writer = self._get_writer()
-        if (image.shape[1], image.shape[0]) != self._output_dimensions:
-            image = cv2.resize(image, self._output_dimensions)  # pylint:disable=no-member
-        self.cache_frame(filename, image)
-        self._save_from_cache()
-
     def _set_gif_filename(self, filename: str) -> None:
-        """ Set the full path to GIF output file to :attr:`_gif_file`
+        """Set the full path to GIF output file to :attr:`_gif_file`
 
         The filename is the created from the source filename of the first input image received with
         `"_converted"` appended to the end and a .gif extension. If a file already exists with the
@@ -101,11 +65,11 @@ class Writer(Output):
 
         Parameters
         ----------
-        filename: str
+        filename
             The incoming frame filename.
         """
 
-        logger.debug("sample filename: '%s'", filename)
+        logger.debug("[GIF] sample filename: '%s'", filename)
         filename = os.path.splitext(os.path.basename(filename))[0]
         snip = len(filename)
         for char in list(filename[::-1]):
@@ -123,36 +87,129 @@ class Writer(Output):
             idx += 1
 
         self._gif_file = retval
-        logger.info("Outputting to: '%s'", self._gif_file)
-
-    def _set_dimensions(self, frame_dims: tuple[int, int]) -> None:
-        """ Set the attribute :attr:`_output_dimensions` based on the first frame received. This
-        protects against different sized images coming in and ensure all images get written to the
-        Gif at the sema dimensions. """
-        # pylint:disable=duplicate-code
-        logger.debug("input dimensions: %s", frame_dims)
-        self._output_dimensions = (frame_dims[1], frame_dims[0])
-        logger.debug("Set dimensions: %s", self._output_dimensions)
+        logger.info("[GIF] Outputting to: '%s'", self._gif_file)
 
     def _save_from_cache(self) -> None:
-        """ Writes any consecutive frames to the GIF container that are ready to be output
-        from the cache. """
-        # pylint:disable=duplicate-code
-        assert self._writer is not None
+        """Writes any consecutive frames to the GIF container that are ready to be output
+        from the cache."""
         while self._frame_order:
             if self._frame_order[0] not in self.cache:
-                logger.trace("Next frame not ready. Continuing")  # type: ignore
+                logger.trace(  # type: ignore[attr-defined]
+                    "[GIF] Next frame not ready. Continuing")
                 break
-            save_no = self._frame_order.pop(0)
-            save_image = self.cache.pop(save_no)
-            logger.trace("Rendering from cache. Frame no: %s", save_no)  # type: ignore
-            self._writer.append_data(save_image[:, :, ::-1])
-        logger.trace("Current cache size: %s", len(self.cache))  # type: ignore
+            save_no = self._frame_order.popleft()
+            logger.trace("[GIF] Rendering from cache. Frame no: %s",  # type: ignore[attr-defined]
+                         save_no)
+            img = self.cache.pop(save_no)
+            if img.size != self._dimensions:
+                img = cv2.resize(img, self._dimensions)
+            self._images.append(img)
+        logger.trace("[GIF] Current cache size: %s", len(self.cache))  # type: ignore[attr-defined]
+
+    def write(self, filename: str, image: npt.NDArray[np.uint8]) -> None:
+        """Frames come from the pool in arbitrary order, so frames are cached for writing out
+        in the correct order.
+
+        Parameters
+        ----------
+        filename
+            The incoming frame filename.
+        image
+            The converted image to be written
+        """
+        logger.trace(  # type: ignore[attr-defined]
+            "[GIF] Received frame: (filename: '%s', shape: %s", filename, image.shape)
+        dimensions = (image.shape[1], image.shape[0])
+        if not self._gif_file:
+            self._set_gif_filename(filename)
+            self._dimensions = dimensions
+        img = image[:, :, ::-1]
+        self.cache_frame(filename, img)
+        self._save_from_cache()
+
+    def _build_palette(self, images: npt.NDArray[np.uint8]):
+        """Obtain a color palette from the images to be saved
+
+        Parameters
+        ----------
+        images
+            The converted images batched into a single array
+        """
+        palette_size = int(cfg.palette_size())
+        logger.info("[GIF] Generating palette of size %s...", palette_size)
+        pixels = images.reshape(-1, 3)
+        num_samples = 100000
+
+        if pixels.shape[0] > num_samples:
+            idx = np.random.choice(pixels.shape[0], num_samples, replace=False)
+            pixels = pixels[idx]
+
+        k_means = MiniBatchKMeans(n_clusters=palette_size, batch_size=4096)
+        k_means.fit(pixels)
+
+        palette = k_means.cluster_centers_.astype(np.uint8)
+        return palette
+
+    def _quantize_frame(self, mapped: np.ndarray, palette: bytes) -> Image.Image:
+        """Quantize a frame and convert to PIL Image
+
+        Parameters
+        ----------
+        mapped
+            The mapped frame to quantize
+        tree
+            The K-Means tree to use for quantization
+        palette
+            The palette to apply to the frame
+
+        Returns
+        -------
+        The quantized PIL image
+        """
+        img = Image.fromarray(mapped, mode='P')
+        del mapped
+        img.putpalette(palette)
+        if cfg.dithering():
+            meth = Image.FLOYDSTEINBERG  # type:ignore[attr-defined]  # pylint:disable=no-member
+            img = img.convert("P", dither=meth)
+        return img
+
+    def _quantize_images(self) -> list[Image.Image]:
+        """Quantize the images for writing to GIF
+
+        Returns
+        -------
+        The list of quantized images
+        """
+        images = np.stack(self._images)
+        im_shape = images.shape
+        del self._images
+        palette = self._build_palette(images)
+        tree = cKDTree(palette)
+        logger.info("[GIF] Mapping colors...")
+        _, mapped_flat = tree.query(images.reshape(-1, 3))
+        del images
+        mapped = T.cast("npt.NDArray[np.uint8]",
+                        mapped_flat.reshape(im_shape[:3]).astype(np.uint8))
+        flat_palette = palette.flatten().tobytes()
+        imgs = [self._quantize_frame(im, flat_palette) for im in mapped]
+        return imgs
 
     def close(self) -> None:
-        """ Close the GIF writer on completion. """
-        if self._writer is not None:
-            self._writer.close()
+        """Close the GIF writer on completion."""
+        if not self._images:
+            return
+        assert self._gif_file is not None
+        logger.info("[GIF] Creating GIF. Depending on the number of frames this may take a "
+                    "while...")
+        imgs = self._quantize_images()
+        assert self._gif_file is not None
+        logger.info("[GIF] Saving...")
+        imgs[0].save(self._gif_file,
+                     save_all=True,
+                     append_images=imgs[1:],
+                     duration=1000 / cfg.fps(),
+                     loop=cfg.loop())
 
 
 __all__ = get_module_objects(__name__)

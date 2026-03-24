@@ -527,8 +527,9 @@ class DiskIO():  # pylint:disable=too-many-instance-attributes
         """
         logger.debug("Load Images: Start")
         idx = 0
-        for filename, image in self._images.load():
+        for filename_image in self._images.load():
             idx += 1
+            filename, image = filename_image[:2]
             if self._queues["load"].shutdown_event.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break

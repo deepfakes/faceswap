@@ -36,8 +36,6 @@ if T.TYPE_CHECKING:
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 """str : Full path to the root faceswap folder """
 IMAGE_EXTENSIONS = [".bmp", ".exr", ".jpeg", ".jpg", ".png", ".tif", ".tiff"]
-VIDEO_EXTENSIONS = [".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
-                    ".ts", ".vob"]
 ValidBackends = T.Literal["nvidia", "cpu", "apple_silicon", "rocm"]
 _FS_BACKEND: ValidBackends | None = None
 
@@ -338,7 +336,7 @@ def get_module_objects(module: str) -> list[str]:
             and not name_.startswith("_")]
 
 
-def convert_to_secs(*args: int) -> int:
+def convert_to_secs(*args: int | str) -> int:
     """ Convert time in hours, minutes, and seconds to seconds.
 
     Parameters
