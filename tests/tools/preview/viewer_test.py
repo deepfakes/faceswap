@@ -103,12 +103,13 @@ class TestFacesDisplay():
         assert f_display._total_columns == columns
 
     def test_set_centering(self) -> None:
-        """ Test :class:`~tools.preview.viewer.FacesDisplay` set_centering method """
+        """ Test :class:`~tools.preview.viewer.FacesDisplay` set_centering_offset method """
         f_display = self.get_faces_display_instance()
         assert f_display._centering is None
         centering: CenteringType = "legacy"
-        f_display.set_centering(centering)
+        f_display.set_centering_offset(centering, 0.80)
         assert f_display._centering == centering
+        assert f_display._y_offset == 0.80
 
     def test_set_display_dimensions(self) -> None:
         """ Test :class:`~tools.preview.viewer.FacesDisplay` set_display_dimensions method """
