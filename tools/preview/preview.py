@@ -304,7 +304,8 @@ class Samples():
 
         self._predictor = Predict(self._sample_size, arguments)
         self._predictor.launch(queue_manager.get_queue("preview_predict_in"))
-        self._app._display.set_centering(self._predictor.centering)
+        self._app._display.set_centering_offset(self._predictor.centering,
+                                                self._predictor.y_offset)
         self.generate()
 
         logger.debug("Initialized %s", self.__class__.__name__)

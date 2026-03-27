@@ -787,6 +787,11 @@ class Predict():  # pylint:disable=too-many-instance-attributes
         """The size in pixels of the Faceswap model output."""
         return self._sizes["output"]
 
+    @property
+    def y_offset(self) -> float:
+        """The selected model y-offset value"""
+        return self._y_offset
+
     def _get_io_sizes(self) -> dict[str, int]:
         """Obtain the input size and output size of the model.
 

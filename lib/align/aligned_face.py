@@ -410,7 +410,11 @@ class AlignedFace():  # pylint:disable=too-many-instance-attributes
         elif self._is_aligned:
             retval = image
         else:
-            retval = transform_image(image, self.matrix, self._size, self.padding)
+            mat = self.matrix
+            if self._y_offset:
+                mat = self.matrix.copy()
+                mat[1, 2] += self.y_offset
+            retval = transform_image(image, mat, self._size, self.padding)
         retval = retval if self._dtype is None else retval.astype(self._dtype)
         return retval
 
