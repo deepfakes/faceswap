@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Base class for Models. ALL Models should at least inherit from this class.
+"""Base class for Models. ALL Models should at least inherit from this class.
 
 See :mod:`~plugins.train.model.original` for an annotated example for how to create model plugins.
 """
@@ -30,27 +29,18 @@ logger = logging.getLogger(__name__)
 
 
 class ModelBase():  # pylint:disable=too-many-instance-attributes
-    """ Base class that all model plugins should inherit from.
+    """Base class that all model plugins should inherit from.
 
     Parameters
     ----------
-    model_dir: str
+    model_dir
         The full path to the model save location
-    arguments: :class:`argparse.Namespace`
+    arguments
         The arguments that were passed to the train or convert process as generated from
         Faceswap's command line arguments
-    predict: bool, optional
+    predict
         ``True`` if the model is being loaded for inference, ``False`` if the model is being loaded
         for training. Default: ``False``
-
-    Attributes
-    ----------
-    input_shape: tuple or list
-        A `tuple` of `ints` defining the shape of the faces that the model takes as input. This
-        should be overridden by model plugins in their :func:`__init__` function. If the input size
-        is the same for both sides of the model, then this can be a single 3 dimensional `tuple`.
-        If the inputs have different sizes for `"A"` and `"B"` this should be a `list` of 2 3
-        dimensional shape `tuples`, 1 for each side respectively.
     """
     def __init__(self,
                  model_dir: str,
@@ -59,6 +49,12 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         logger.debug(parse_class_init(locals()))
         # Input shape must be set within the plugin after initializing
         self.input_shape: tuple[int, ...] = ()
+        """A `tuple` of `ints` defining the shape of the faces that the model takes as input. This
+        should be overridden by model plugins in their :func:`__init__` function. If the input size
+        is the same for both sides of the model, then this can be a single 3 dimensional `tuple`.
+        If the inputs have different sizes for `"A"` and `"B"` this should be a `list` of 2 3
+        dimensional shape `tuples`, 1 for each side respectively."""
+
         self.color_order: T.Literal["bgr", "rgb"] = "bgr"  # Override for image color channel order
 
         self._args = arguments
@@ -94,95 +90,92 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
 
     @property
     def model(self) -> keras.Model:
-        """:class:`keras.Model`: The compiled model for this plugin. """
+        """The compiled model for this plugin."""
         return self._model
 
     @property
     def command_line_arguments(self) -> argparse.Namespace:
-        """ :class:`argparse.Namespace`: The command line arguments passed to the model plugin from
-        either the train or convert script """
+        """The command line arguments passed to the model plugin from either the train or convert
+        script"""
         return self._args
 
     @property
     def coverage_ratio(self) -> float:
-        """ float: The ratio of the training image to crop out and train on as defined in user
+        """The ratio of the training image to crop out and train on as defined in user
         configuration options.
 
         NB: The coverage ratio is a raw float, but will be applied to integer pixel images.
 
         To ensure consistent rounding and guaranteed even image size, the calculation for coverage
-        should always be: :math:`(original_size * coverage_ratio // 2) * 2`
-        """
+        should always be: :math:`(original_size * coverage_ratio // 2) * 2`"""
         return cfg.coverage() / 100.
 
     @property
     def io(self) -> IO:  # pylint:disable=invalid-name
-        """ :class:`~plugins.train.model.io.IO`: Input/Output operations for the model """
+        """Input/Output operations for the model"""
         return self._io
 
     @property
     def name(self) -> str:
-        """ str: The name of this model based on the plugin name. """
+        """The name of this model based on the plugin name."""
         _name = sys.modules[self.__module__].__file__
         assert isinstance(_name, str)
         return os.path.splitext(os.path.basename(_name))[0].lower()
 
     @property
     def model_name(self) -> str:
-        """ str: The name of the keras model. Generally this will be the same as :attr:`name`
-        but some plugins will override this when they contain multiple architectures """
+        """The name of the keras model. Generally this will be the same as :attr:`name`
+        but some plugins will override this when they contain multiple architectures"""
         return self.name
 
     @property
     def input_shapes(self) -> list[tuple[None, int, int, int]]:
-        """ list: A flattened list corresponding to all of the inputs to the model. """
+        """A flattened list corresponding to all of the inputs to the model."""
         shapes = [T.cast(tuple[None, int, int, int], inputs.shape)
                   for inputs in self.model.inputs]
         return shapes
 
     @property
     def output_shapes(self) -> list[tuple[None, int, int, int]]:
-        """ list: A flattened list corresponding to all of the outputs of the model. """
+        """A flattened list corresponding to all of the outputs of the model."""
         shapes = [T.cast(tuple[None, int, int, int], output.shape)
                   for output in self.model.outputs]
         return shapes
 
     @property
     def iterations(self) -> int:
-        """ int: The total number of iterations that the model has trained. """
+        """The total number of iterations that the model has trained."""
         return self._state.iterations
 
     @property
     def warmup_steps(self) -> int:
-        """ int : The number of steps to perform learning rate warmup """
+        """The number of steps to perform learning rate warmup"""
         return self._args.warmup
 
     @property
     def freeze_layers(self) -> list[str]:
-        """ list[str] : Override to set plugin specific layers that can be frozen. Defaults to
-        ["encoder"] """
+        """Override to set plugin specific layers that can be frozen. Defaults to ["encoder"]"""
         return ["encoder"]
 
     @property
     def load_layers(self) -> list[str]:
-        """ list[str] : Override to set plugin specific layers that can be loaded. Defaults to
-        ["encoder"] """
+        """Override to set plugin specific layers that can be loaded. Defaults to ["encoder"]"""
         return ["encoder"]
 
     # Private properties
     @property
     def _config_section(self) -> str:
-        """ str: The section name for the current plugin for loading configuration options from the
-        config file. """
+        """The section name for the current plugin for loading configuration options from the
+        config file"""
         return ".".join(self.__module__.split(".")[-2:])
 
     @property
     def state(self) -> "State":
-        """:class:`State`: The state settings for the current plugin. """
+        """The state settings for the current plugin."""
         return self._state
 
     def _check_multiple_models(self) -> None:
-        """ Check whether multiple models exist in the model folder, and that no models exist that
+        """Check whether multiple models exist in the model folder, and that no models exist that
         were trained with a different plugin than the requested plugin.
 
         Raises
@@ -208,7 +201,7 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         raise FaceswapError(msg)
 
     def build(self) -> None:
-        """ Build the model and assign to :attr:`model`.
+        """Build the model and assign to :attr:`model`.
 
         Within the defined strategy scope, either builds the model from scratch or loads an
         existing model if one exists.
@@ -224,7 +217,7 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
             model = self.io.load()
             if self._is_predict:
                 inference = Inference(model, self._args.swap_model)
-                self._model = inference.model
+                self._model = inference()
             else:
                 self._model = model
         else:
@@ -243,21 +236,20 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         self._output_summary()
 
     def _validate_input_shape(self) -> None:
-        """ Validate that the input shape is either a single shape tuple of 3 dimensions or
-        a list of 2 shape tuples of 3 dimensions. """
+        """Validate that the input shape is either a single shape tuple of 3 dimensions or
+        a list of 2 shape tuples of 3 dimensions."""
         assert len(self.input_shape) == 3, "Input shape should be a 3 dimensional shape tuple"
 
     def _get_inputs(self) -> list[keras.layers.Input]:
-        """ Obtain the standardized inputs for the model.
+        """Obtain the standardized inputs for the model.
 
         The inputs will be returned for the "A" and "B" sides in the shape as defined by
         :attr:`input_shape`.
 
         Returns
         -------
-        list
-            A list of :class:`keras.layers.Input` tensors. This will be a list of 2 tensors (one
-            for each side) each of shapes :attr:`input_shape`.
+        A list of :class:`keras.layers.Input` tensors. This will be a list of 2 tensors (one for
+        each side) each of shapes :attr:`input_shape`.
         """
         logger.debug("Getting inputs")
         input_shapes = [self.input_shape, self.input_shape]
@@ -267,36 +259,35 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         return inputs
 
     def build_model(self, inputs: list[keras.layers.Input]) -> keras.Model:
-        """ Override for Model Specific autoencoder builds.
+        """Override for Model Specific autoencoder builds.
 
         Parameters
         ----------
-        inputs: list
+        inputs
             A list of :class:`keras.layers.Input` tensors. This will be a list of 2 tensors (one
             for each side) each of shapes :attr:`input_shape`.
 
         Returns
         -------
-        :class:`keras.Model`
-            See Keras documentation for the correct structure, but note that parameter :attr:`name`
-            is a required rather than an optional argument in Faceswap. You should assign this to
-            the attribute ``self.name`` that is automatically generated from the plugin's filename.
+        See Keras documentation for the correct structure, but note that parameter :attr:`name`
+        is a required rather than an optional argument in Faceswap. You should assign this to
+        the attribute ``self.name`` that is automatically generated from the plugin's filename.
         """
         raise NotImplementedError
 
     def _summary_to_log(self, summary: str) -> None:
-        """ Function to output Keras model summary to log file at verbose log level
+        """Function to output Keras model summary to log file at verbose log level
 
         Parameters
         ----------
-        summary, str
+        summary
             The model summary output from keras
         """
         for line in summary.splitlines():
             logger.verbose(line)  # type:ignore[attr-defined]
 
     def _output_summary(self) -> None:
-        """ Output the summary of the model and all sub-models to the verbose logger. """
+        """Output the summary of the model and all sub-models to the verbose logger."""
         if hasattr(self._args, "summary") and self._args.summary:
             print_fn = None  # Print straight to stdout
         else:
@@ -311,7 +302,7 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         parent.summary(print_fn=print_fn)
 
     def _compile_model(self) -> None:
-        """ Compile the model to include the Optimizer and Loss Function(s). """
+        """Compile the model to include the Optimizer and Loss Function(s)."""
         logger.debug("Compiling Model")
 
         if self.state.model_needs_rebuild:
@@ -332,14 +323,14 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         logger.debug("Compiled Model: %s", self.model)
 
     def add_history(self, loss: np.ndarray) -> None:
-        """ Add the current iteration's loss history to :attr:`_io.history`.
+        """Add the current iteration's loss history to :attr:`_io.history`.
 
         Called from the trainer after each iteration, for tracking loss drop over time between
         save iterations.
 
         Parameters
         ----------
-        loss : :class:`numpy.ndarray`
+        loss
             The loss values for the A and B side for the current iteration. This should be the
             collated loss values for each side.
         """
