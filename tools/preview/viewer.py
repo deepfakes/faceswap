@@ -7,7 +7,7 @@ import tkinter as tk
 import typing as T
 
 from tkinter import ttk
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, InitVar
 
 import cv2
 import numpy as np
@@ -15,11 +15,13 @@ from PIL import Image, ImageTk
 
 from lib.align import transform_image
 from lib.align.aligned_face import CenteringType
+from lib.logger import parse_class_init
 from lib.utils import get_module_objects
 from scripts.convert import ConvertItem
 
 
 if T.TYPE_CHECKING:
+    import numpy.typing as npt
     from .preview import Preview
 
 logger = logging.getLogger(__name__)
@@ -27,11 +29,28 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class _Faces:
-    """Dataclass for holding faces"""
+    """Dataclass for holding faces
+
+    Parameters
+    ----------
+    size
+        The size of each individual face sample in pixels
+    num_faces
+        The number of faces to be displayed in the preview window
+    """
+    num_faces: InitVar[int]
+    size: InitVar[int]
+
     filenames: list[str] = field(default_factory=list)
-    matrix: list[np.ndarray] = field(default_factory=list)
-    src: list[np.ndarray] = field(default_factory=list)
-    dst: list[np.ndarray] = field(default_factory=list)
+    matrix: npt.NDArray[np.float32] = field(init=False)
+    src: npt.NDArray[np.uint8] = field(init=False)
+    dst: npt.NDArray[np.uint8] = field(init=False)
+
+    def __post_init__(self, num_faces: int, size: int) -> None:
+        """Initialize the matrices based on input sizes"""
+        self.matrix = np.empty((num_faces, 2, 3), dtype=np.float32)
+        self.src = np.empty((num_faces, size, size, 3), dtype=np.uint8)
+        self.dst = np.empty((num_faces, size, size, 3), dtype=np.uint8)
 
 
 class FacesDisplay():  # pylint:disable=too-many-instance-attributes
@@ -45,16 +64,18 @@ class FacesDisplay():  # pylint:disable=too-many-instance-attributes
         The size of each individual face sample in pixels
     padding
         The amount of extra padding to apply to the outside of the face
+    num_faces
+        The number of faces to be displayed in the preview window
     """
-    def __init__(self, app: Preview, size: int, padding: int) -> None:
-        logger.trace("Initializing %s: (app: %s, size: %s, padding: %s)",  # type: ignore
-                     self.__class__.__name__, app, size, padding)
+    def __init__(self, app: Preview, size: int, padding: int, num_faces: int) -> None:
+        logger.debug(parse_class_init(locals()))
         self._size = size
         self._display_dims = (1, 1)
         self._app = app
         self._padding = padding
+        self._num_faces = num_faces
 
-        self._faces = _Faces()
+        self._faces = _Faces(num_faces=num_faces, size=size)
         self._centering: CenteringType | None = None
         self._y_offset = 0.0
         self._faces_source: np.ndarray = np.array([])
@@ -169,21 +190,20 @@ class FacesDisplay():  # pylint:disable=too-many-instance-attributes
         """Extract the source faces from the source frames, along with their filenames and the
         transformation matrix used to extract the faces."""
         logger.debug("Updating source faces")
-        self._faces = _Faces()  # Init new class
-        for item in self.source:
+        self._faces = _Faces(num_faces=self._num_faces, size=self._size)  # Init new class
+        for i, item in enumerate(self.source):
             detected_face = item.inbound.detected_faces[0]
             src_img = item.inbound.image
             detected_face.load_aligned(src_img,
                                        size=self._size,
-                                       centering=T.cast(CenteringType, self._centering),
-                                       y_offset=self._y_offset)
+                                       centering=T.cast(CenteringType, self._centering))
             matrix = detected_face.aligned.matrix
-            self._faces.filenames.append(os.path.splitext(item.inbound.filename)[0])
-            self._faces.matrix.append(matrix)
             if self._y_offset:
-                matrix = detected_face.aligned.matrix.copy()
+                matrix = matrix.copy()
                 matrix[1, 2] += self._y_offset
-            self._faces.src.append(transform_image(src_img, matrix, self._size, self._padding))
+            self._faces.filenames.append(os.path.splitext(item.inbound.filename)[0])
+            self._faces.matrix[i] = matrix
+            self._faces.src[i] = transform_image(src_img, matrix, self._size, self._padding)
         self.update_source = False
         logger.debug("Updated source faces")
 
@@ -191,14 +211,13 @@ class FacesDisplay():  # pylint:disable=too-many-instance-attributes
         """Extract the swapped faces from the swapped frames using the source face destination
         matrices."""
         logger.debug("Updating destination faces")
-        self._faces.dst = []
         destination = self.destination if self.destination else [np.ones_like(src.inbound.image)
                                                                  for src in self.source]
-        for idx, image in enumerate(destination):
-            self._faces.dst.append(transform_image(image,
-                                                   self._faces.matrix[idx],
-                                                   self._size,
-                                                   self._padding))
+        for i, image in enumerate(destination):
+            self._faces.dst[i] = transform_image(image,
+                                                 self._faces.matrix[i],
+                                                 self._size,
+                                                 self._padding)
         logger.debug("Updated destination faces")
 
     def _header_text(self) -> np.ndarray:

@@ -64,8 +64,9 @@ class Preview(tk.Tk):
         self._config_tools = ConfigTools(arguments.config_file)
         self._lock = Lock()
         self._dispatcher = Dispatcher(self)
-        self._display = FacesDisplay(self, 256, 64)
-        self._samples = Samples(self, arguments, 5)
+        num_faces = 5
+        self._display = FacesDisplay(self, 256, 64, num_faces)
+        self._samples = Samples(self, arguments, num_faces)
         self._patch = Patch(self, arguments)
 
         self._initialize_tkinter()

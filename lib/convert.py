@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Converter for Faceswap """
+"""Converter for Faceswap"""
 from __future__ import annotations
 import logging
 import typing as T
@@ -28,17 +28,17 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Adjustments:
-    """ Dataclass to hold the optional processing plugins
+    """Dataclass to hold the optional processing plugins
 
     Parameters
     ----------
-    color: :class:`~plugins.color._base.Adjustment`, Optional
+    color
         The selected color processing plugin. Default: `None`
-    mask: :class:`~plugins.mask_blend.Mask`, Optional
+    mask
         The selected mask processing plugin. Default: `None`
-    seamless: :class:`~plugins.color.seamless_clone.Color`, Optional
+    seamless
         The selected mask processing plugin. Default: `None`
-    sharpening: :class:`~plugins.scaling._base.Adjustment`, Optional
+    sharpening
         The selected mask processing plugin. Default: `None`
     """
     color: ColorAdjust | None = None
@@ -48,28 +48,28 @@ class Adjustments:
 
 
 class Converter():  # pylint:disable=too-many-instance-attributes
-    """ The converter is responsible for swapping the original face(s) in a frame with the output
+    """The converter is responsible for swapping the original face(s) in a frame with the output
     of a trained Faceswap model.
 
     Parameters
     ----------
-    output_size: int
+    output_size
         The size of the face, in pixels, that is output from the Faceswap model
-    coverage_ratio: float
+    coverage_ratio
         The ratio of the training image that was used for training the Faceswap model
-    centering: str
+    centering
         The extracted face centering that the model was trained on (`"face"` or "`legacy`")
-    draw_transparent: bool
+    draw_transparent
         Whether the final output should be drawn onto a transparent layer rather than the original
         frame. Only available with certain writer plugins.
-    pre_encode: python function
+    pre_encode
         Some writer plugins support the pre-encoding of images prior to saving out. As patching is
         done in multiple threads, but writing is done in a single thread, it can speed up the
         process to do any pre-encoding as part of the converter process.
-    arguments: :class:`argparse.Namespace`
+    arguments
         The arguments that were passed to the convert process as generated from Faceswap's command
         line arguments
-    config_file: str, optional
+    config_file
         Optional location of custom configuration ``ini`` file. If ``None`` then use the default
         config location. Default: ``None``
     """
@@ -103,12 +103,11 @@ class Converter():  # pylint:disable=too-many-instance-attributes
 
     @property
     def cli_arguments(self) -> Namespace:
-        """:class:`argparse.Namespace`: The command line arguments passed to the convert
-        process """
+        """The command line arguments passed to the convert process"""
         return self._args
 
     def reinitialize(self) -> None:
-        """ Reinitialize this :class:`Converter`.
+        """Reinitialize this :class:`Converter`.
 
         Called as part of the :mod:`~tools.preview` tool. Resets all adjustments then loads the
         plugins as specified in the current config.
@@ -120,14 +119,14 @@ class Converter():  # pylint:disable=too-many-instance-attributes
         logger.debug("Reinitialized converter")
 
     def _load_plugins(self, disable_logging: bool = False) -> None:
-        """ Load the requested adjustment plugins.
+        """Load the requested adjustment plugins.
 
         Loads the :mod:`plugins.converter` plugins that have been requested for this conversion
         session.
 
         Parameters
         ----------
-        config: :class:`lib.config.FaceswapConfig`, optional
+        config
             Optional pre-loaded :class:`lib.config.FaceswapConfig`. If passed, then this will be
             used over any configuration on disk. If ``None`` then it is ignored. Default: ``None``
         """
@@ -140,7 +139,7 @@ class Converter():  # pylint:disable=too-many-instance-attributes
                                                                 self._coverage_ratio,
                                                                 config_file=self._config_file)
 
-        if self._args.color_adjustment is not None:
+        if self._args.color_adjustment is not None and self._args.color_adjustment != "none":
             self._adjustments.color = PluginLoader.get_converter("color",
                                                                  self._args.color_adjustment,
                                                                  disable_logging=disable_logging)(
@@ -154,17 +153,17 @@ class Converter():  # pylint:disable=too-many-instance-attributes
         logger.debug("Loaded plugins: %s", self._adjustments)
 
     def process(self, in_queue: EventQueue, out_queue: EventQueue):
-        """ Main convert process.
+        """Main convert process.
 
         Takes items from the in queue, runs the relevant adjustments, patches faces to final frame
         and outputs patched frame to the out queue.
 
         Parameters
         ----------
-        in_queue: :class:`~lib.queue_manager.EventQueue`
+        in_queue
             The output from :class:`scripts.convert.Predictor`. Contains detected faces from the
             Faceswap model as well as the frame to be patched.
-        out_queue: :class:`~lib.queue_manager.EventQueue`
+        out_queue
             The queue to place patched frames into for writing by one of Faceswap's
             :mod:`plugins.convert.writer` plugins.
         """
@@ -204,48 +203,47 @@ class Converter():  # pylint:disable=too-many-instance-attributes
                 out_queue.put((item.inbound.filename, image))
         logger.debug("Completed convert process")
 
-    def _get_warp_matrix(self, matrix: np.ndarray, size: int) -> np.ndarray:
-        """ Obtain the final scaled warp transformation matrix based on face scaling from the
+    def _get_warp_matrix(self, matrix: np.ndarray, size: int, y_offset: float = 0.0) -> np.ndarray:
+        """Obtain the final scaled warp transformation matrix based on face scaling from the
         original transformation matrix
 
         Parameters
         ----------
-        matrix: :class:`numpy.ndarray`
+        matrix
             The transformation for patching the swapped face back onto the output frame
-        size: int
+        size
             The size of the face patch, in pixels
+        y_offset
+            The amount of offset to apply on the y-axis. Default: 0.0 (no offset)
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The final transformation matrix with any scaling applied
+        The final transformation matrix with any scaling and y-offset applied
         """
-        if self._face_scale == 1.0:
-            mat = matrix
-        else:
+        mat = matrix.copy() if self._scale != 1.0 or y_offset else matrix
+        if self._face_scale != 1.0:
             mat = matrix * self._face_scale
             patch_center = (size / 2, size / 2)
             mat[..., 2] += (1 - self._face_scale) * np.array(patch_center)
-
+        if y_offset:
+            mat[1, 2] += (y_offset * size)
         return mat
 
     def _patch_image(self, predicted: ConvertItem) -> np.ndarray | list[bytes]:
-        """ Patch a swapped face onto a frame.
+        """Patch a swapped face onto a frame.
 
         Run selected adjustments and swap the faces in a frame.
 
         Parameters
         ----------
-        predicted: :class:`~scripts.convert.ConvertItem`
+        predicted
             The output from :class:`scripts.convert.Predictor`.
 
         Returns
         -------
-        :class: `numpy.ndarray` or pre-encoded image output
-            The final frame ready for writing by a :mod:`plugins.convert.writer` plugin.
-            Frame is either an array, or the pre-encoded output from the writer's pre-encode
-            function (if it has one)
-
+        The final frame ready for writing by a :mod:`plugins.convert.writer` plugin. Frame is
+        either an array, or the pre-encoded output from the writer's pre-encode function (if it
+        has one)
         """
         logger.trace("Patching image: '%s'",  # type: ignore[attr-defined]
                      predicted.inbound.filename)
@@ -269,7 +267,8 @@ class Converter():  # pylint:disable=too-many-instance-attributes
             if self.cli_arguments.writer == "patch":
                 kwargs["canvas_size"] = (background.shape[1], background.shape[0])
                 kwargs["matrices"] = np.array([self._get_warp_matrix(face.adjusted_matrix,
-                                                                     patched_face.shape[1])
+                                                                     patched_face.shape[1],
+                                                                     face.y_offset)
                                                for face in predicted.reference_faces],
                                               dtype="float32")
             retval = self._writer_pre_encode(patched_face, **kwargs)
@@ -281,21 +280,21 @@ class Converter():  # pylint:disable=too-many-instance-attributes
                        reference: AlignedFace,
                        face: np.ndarray,
                        frame: np.ndarray) -> None:
-        """ Perform affine transformation to place a face patch onto the given frame.
+        """Perform affine transformation to place a face patch onto the given frame.
 
         Affine is done in place on the `frame` array, so this function does not return a value
 
         Parameters
         ----------
-        reference: :class:`lib.align.AlignedFace`
+        reference
             The object holding the original aligned face
-        face: :class:`numpy.ndarray`
+        face
             The swapped face patch
-        frame: :class:`numpy.ndarray`
+        frame
             The frame to affine the face onto
         """
         # Warp face with the mask
-        mat = self._get_warp_matrix(reference.adjusted_matrix, face.shape[0])
+        mat = self._get_warp_matrix(reference.adjusted_matrix, face.shape[0], reference.y_offset)
         frame_face = np.zeros_like(frame)
         cv2.warpAffine(face,
                        mat,
@@ -315,23 +314,23 @@ class Converter():  # pylint:disable=too-many-instance-attributes
     def _get_new_image(self,
                        predicted: ConvertItem,
                        frame_size: tuple[int, int]) -> tuple[np.ndarray, np.ndarray]:
-        """ Get the new face from the predictor and apply pre-warp manipulations.
+        """Get the new face from the predictor and apply pre-warp manipulations.
 
         Applies any requested adjustments to the raw output of the Faceswap model
         before transforming the image into the target frame.
 
         Parameters
         ----------
-        predicted: :class:`~scripts.convert.ConvertItem`
+        predicted
             The output from :class:`scripts.convert.Predictor`.
-        frame_size: tuple
+        frame_size
             The (`width`, `height`) of the final frame in pixels
 
         Returns
         -------
-        placeholder:  :class: `numpy.ndarray`
+        placeholder
             The original frame with the swapped faces patched onto it
-        background:  :class: `numpy.ndarray`
+        background
             The original frame
         """
         logger.trace("Getting: (filename: '%s', faces: %s)",  # type: ignore[attr-defined]
@@ -375,7 +374,7 @@ class Converter():  # pylint:disable=too-many-instance-attributes
                               detected_face: DetectedFace,
                               reference_face: AlignedFace,
                               predicted_mask: np.ndarray | None) -> np.ndarray:
-        """ Run any requested adjustments that can be performed on the raw output from the Faceswap
+        """Run any requested adjustments that can be performed on the raw output from the Faceswap
         model.
 
         Any adjustments that can be performed before warping the face into the final frame are
@@ -383,21 +382,19 @@ class Converter():  # pylint:disable=too-many-instance-attributes
 
         Parameters
         ----------
-        new_face: :class:`numpy.ndarray`
+        new_face
             The swapped face received from the faceswap model.
-        detected_face: :class:`~lib.align.DetectedFace`
+        detected_face
             The detected_face object as defined in :class:`scripts.convert.Predictor`
-        reference_face: :class:`~lib.align.AlignedFace`
+        reference_face
             The aligned face object sized to the model output of the original face for reference
-        predicted_mask: :class:`numpy.ndarray` or ``None``
+        predicted_mask
             The predicted mask output from the Faceswap model. ``None`` if the model
             did not learn a mask
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The face output from the Faceswap Model with any requested pre-warp adjustments
-            performed.
+        The face output from the Faceswap Model with any requested pre-warp adjustments performed.
         """
         logger.trace("new_face shape: %s, predicted_mask shape: %s",  # type: ignore[attr-defined]
                      new_face.shape, predicted_mask.shape if predicted_mask is not None else None)
@@ -418,27 +415,27 @@ class Converter():  # pylint:disable=too-many-instance-attributes
                         detected_face: DetectedFace,
                         predicted_mask: np.ndarray | None,
                         reference_face: AlignedFace) -> tuple[np.ndarray, np.ndarray]:
-        """ Return any selected image mask
+        """Return any selected image mask
 
         Places the requested mask into the new face's Alpha channel.
 
         Parameters
         ----------
-        new_face: :class:`numpy.ndarray`
+        new_face
             The swapped face received from the faceswap model.
-        detected_face: :class:`~lib.DetectedFace`
+        detected_face
             The detected_face object as defined in :class:`scripts.convert.Predictor`
-        predicted_mask: :class:`numpy.ndarray` or ``None``
+        predicted_mask
             The predicted mask output from the Faceswap model. ``None`` if the model
             did not learn a mask
-        reference_face: :class:`~lib.align.AlignedFace`
+        reference_face
             The aligned face object sized to the model output of the original face for reference
 
         Returns
         -------
-        :class:`numpy.ndarray`
+        swapped_face
             The swapped face with the requested mask added to the Alpha channel
-        :class:`numpy.ndarray`
+        raw_mask
             The raw mask with no erosion or blurring applied
         """
         logger.trace("Getting mask. Image shape: %s", new_face.shape)  # type: ignore[attr-defined]
@@ -467,20 +464,19 @@ class Converter():  # pylint:disable=too-many-instance-attributes
         return new_face, raw_mask
 
     def _post_warp_adjustments(self, background: np.ndarray, new_image: np.ndarray) -> np.ndarray:
-        """ Perform any requested adjustments to the swapped faces after they have been transformed
+        """Perform any requested adjustments to the swapped faces after they have been transformed
         into the final frame.
 
         Parameters
         ----------
-        background: :class:`numpy.ndarray`
+        background
             The original frame
-        new_image: :class:`numpy.ndarray`
+        new_image
             A blank frame of original frame size with the faces warped onto it
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The final merged and swapped frame with any requested post-warp adjustments applied
+        The final merged and swapped frame with any requested post-warp adjustments applied
         """
         if self._adjustments.sharpening is not None:
             new_image = self._adjustments.sharpening.run(new_image)
@@ -499,20 +495,19 @@ class Converter():  # pylint:disable=too-many-instance-attributes
         return frame
 
     def _scale_image(self, frame: np.ndarray) -> np.ndarray:
-        """ Scale the final image if requested.
+        """Scale the final image if requested.
 
         If output scale has been requested in command line arguments, scale the output
         otherwise return the final frame.
 
         Parameters
         ----------
-        frame: :class:`numpy.ndarray`
+        frame
             The final frame with faces swapped
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The final frame scaled by the requested scaling factor
+        The final frame scaled by the requested scaling factor
         """
         if self._scale == 1:
             return frame

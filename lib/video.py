@@ -765,7 +765,8 @@ class VideoMux:  # pylint:disable=too-many-instance-attributes
         timestamp
             The timestamp of the next video packet to be output
         """
-        assert self._next_audio_packet is not None
+        if self._next_audio_packet is None:
+            return None
         next_ts = self._timestamp(self._next_audio_packet)
         if next_ts >= timestamp:
             logger.trace(  # type:ignore[attr-defined]
@@ -775,7 +776,7 @@ class VideoMux:  # pylint:disable=too-many-instance-attributes
 
         assert self._audio_packets is not None
         retval = self._next_audio_packet
-        self._next_audio_packet = next(self._audio_packets)
+        self._next_audio_packet = next((self._audio_packets), None)
         logger.trace(  # type:ignore[attr-defined]
             "[%s] Returning audio packet %s for timestamp %s < video timestamp: %s. Next  queued "
             "packet: %s",
