@@ -870,7 +870,7 @@ class FrameFaces:  # pylint:disable=too-many-instance-attributes
             If the FrameFaces object does not contain a filename and image or if any of the data
             fields are populated
         """
-        if not self.filename or not np.any(self.image):
+        if not self.filename or not self.image.size:
             raise ValueError("Filename and image must be populated before adding DetectedFace "
                              "objects")
         if np.any(self.bboxes) or self.landmarks is not None or self.masks or self.identities:
