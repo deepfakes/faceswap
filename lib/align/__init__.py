@@ -7,4 +7,4 @@ from .aligned_utils import (get_adjusted_center, get_centered_size,
 from .aligned_mask import BlurMask, LandmarksMask, Mask
 from .alignments import Alignments
 from .constants import CenteringType, EXTRACT_RATIOS, LANDMARK_PARTS, LandmarkType
-from .detected_face import DetectedFace,  update_legacy_png_header
+from .detected_face import DetectedFace

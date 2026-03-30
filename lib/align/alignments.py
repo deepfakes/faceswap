@@ -15,7 +15,7 @@ from lib.serializer import get_serializer
 from lib.utils import FaceswapError, get_module_objects
 
 from .thumbnails import Thumbnails
-from .updater import (FileStructure, IdentityAndVideoMeta, LandmarkRename, Legacy, NumpyToList,
+from .updater import (FileStructure, IdentityAndVideoMeta, LandmarkRename, NumpyToList,
                       MaskCentering, VideoExtension)
 
 if T.TYPE_CHECKING:
@@ -195,7 +195,6 @@ class Alignments():  # pylint:disable=too-many-public-methods
         self._data = self._load()
         self._io.update_legacy()
 
-        self._legacy = Legacy(self)
         self._thumbnails = Thumbnails(self)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -229,30 +228,6 @@ class Alignments():  # pylint:disable=too-many-public-methods
     def have_alignments_file(self) -> bool:
         """``True`` if an alignments file exists at location :attr:`file` otherwise ``False``."""
         return self._io.have_alignments_file
-
-    @property
-    def hashes_to_frame(self) -> dict[str, dict[str, int]]:
-        """The SHA1 hash of the face mapped to the frame(s) and face index within the frame that
-        the hash corresponds to.
-
-        Notes
-        -----
-        This method is deprecated and exists purely for updating legacy hash based alignments
-        to new png header storage in :class:`lib.align.update_legacy_png_header`.
-        """
-        return self._legacy.hashes_to_frame
-
-    @property
-    def hashes_to_alignment(self) -> dict[str, AlignmentFileDict]:
-        """The SHA1 hash of the face mapped to the alignment for the face that the hash
-        corresponds to.
-
-        Notes
-        -----
-        This method is deprecated and exists purely for updating legacy hash based alignments
-        to new png header storage in :class:`lib.align.update_legacy_png_header`.
-        """
-        return self._legacy.hashes_to_alignment
 
     @property
     def mask_summary(self) -> dict[str, int]:

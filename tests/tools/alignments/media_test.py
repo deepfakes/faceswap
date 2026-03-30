@@ -17,7 +17,6 @@ from lib.logger import log_setup
 log_setup("DEBUG", f"{__name__}.log", "PyTest, False")
 
 # pylint:disable=wrong-import-position,protected-access
-from lib.utils import FaceswapError  # noqa:E402
 from tools.alignments.media import (AlignmentData, Faces, ExtractedFaces,  # noqa:E402
                                     Frames, MediaLoader)
 
@@ -387,54 +386,6 @@ class TestFaces:
         Faces(folder, alignments_mock)
         parent_mock.assert_called_once()
 
-    def test__handle_legacy(self,
-                            faces_instance: Faces,
-                            mocker: pytest_mock.MockerFixture,
-                            caplog: pytest.LogCaptureFixture) -> None:
-        """ Test for :class:`~tools.alignments.media.Faces` _handle_legacy method
-
-        Parameters
-        ----------
-        faces_instance: :class:`~tools.alignments.media.Faces`
-            Test class instance
-        mocker: :class:`pytest_mock.MockerFixture`
-            Fixture for mocking various objects
-        caplog: :class:`pytest.LogCaptureFixture
-            For capturing logging messages
-        """
-        faces = faces_instance
-        folder = faces.folder
-        legacy_file = os.path.join(folder, "a.png")
-
-        # No alignments file
-        with pytest.raises(FaceswapError):
-            faces._handle_legacy(legacy_file)
-
-        # No returned metadata
-        alignments_mock = mocker.patch("tools.alignments.media.AlignmentData")
-        alignments_mock.version = 2.1
-        update_mock = mocker.patch("tools.alignments.media.update_legacy_png_header",
-                                   return_value={})
-        faces = Faces(folder, alignments_mock)
-        faces.folder = folder
-        with pytest.raises(FaceswapError):
-            faces._handle_legacy(legacy_file)
-        update_mock.assert_called_once_with(legacy_file, alignments_mock)
-
-        # Correct data with logging
-        caplog.clear()
-        update_mock.reset_mock()
-        update_mock.return_value = {"test": "data"}
-        faces._handle_legacy(legacy_file, log=True)
-        assert "Legacy faces discovered" in caplog.text
-
-        # Correct data without logging
-        caplog.clear()
-        update_mock.reset_mock()
-        update_mock.return_value = {"test": "data"}
-        faces._handle_legacy(legacy_file, log=False)
-        assert "Legacy faces discovered" not in caplog.text
-
     def test__handle_duplicate(self, faces_instance: Faces) -> None:
         """ Test for :class:`~tools.alignments.media.Faces` _handle_duplicate method
 
@@ -489,8 +440,6 @@ class TestFaces:
         expected = [(fname, meta_data["itxt"]) for fname in os.listdir(faces.folder)]
         read_image_meta_mock.side_effect = [[(src, meta_data) for src in img_sources]]
 
-        legacy_mock = mocker.patch("tools.alignments.media.Faces._handle_legacy",
-                                   return_value=meta_data["itxt"])
         dupe_mock = mocker.patch("tools.alignments.media.Faces._handle_duplicate",
                                  return_value=False)
 
@@ -498,7 +447,6 @@ class TestFaces:
         output = list(faces.process_folder())
         assert read_image_meta_mock.call_count == 1
         assert dupe_mock.call_count == 2
-        assert not legacy_mock.called
         assert output == expected
 
         dupe_mock.reset_mock()
@@ -521,9 +469,8 @@ class TestFaces:
         read_image_meta_mock.side_effect = [[(src, {}) for src in img_sources]]
         output = list(faces.process_folder())
         assert read_image_meta_mock.call_count == 1
-        assert legacy_mock.call_count == 2
-        assert dupe_mock.call_count == 2
-        assert output == expected
+        assert dupe_mock.call_count == 0
+        assert not output
 
     def test_load_items(self,
                         faces_instance: Faces) -> None:

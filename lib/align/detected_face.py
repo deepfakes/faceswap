@@ -2,19 +2,15 @@
 """Face and landmarks detection for faceswap.py"""
 from __future__ import annotations
 import logging
-import os
 import typing as T
 
-from hashlib import sha1
 from zlib import compress, decompress
 
 import numpy as np
 
-from lib.image import encode_image, read_image
 from lib.logger import format_array, parse_class_init
-from lib.utils import FaceswapError, get_module_objects
-from .alignments import (Alignments, AlignmentFileDict, PNGHeaderAlignmentsDict,
-                         PNGHeaderDict, PNGHeaderSourceDict)
+from lib.utils import get_module_objects
+from .alignments import AlignmentFileDict, PNGHeaderAlignmentsDict
 from .aligned_face import AlignedFace
 from . import aligned_mask
 
@@ -490,75 +486,6 @@ class DetectedFace():  # pylint:disable=too-many-instance-attributes
                                         dtype=dtype,
                                         is_aligned=is_aligned,
                                         is_legacy=is_aligned and is_legacy)
-
-
-_HASHES_SEEN: dict[str, dict[str, int]] = {}
-
-
-def update_legacy_png_header(filename: str, alignments: Alignments
-                             ) -> PNGHeaderDict | None:
-    """Update a legacy extracted face from pre v2.1 alignments by placing the alignment data for
-    the face in the png exif header for the given filename with the given alignment data.
-
-    If the given file is not a .png then a png is created and the original file is removed
-
-    Parameters
-    ----------
-    filename
-        The image file to update
-    alignments
-        The alignments data the contains the information to store in the image header. This must be
-        a v2.0 or less alignments file as later versions no longer store the face hash (not
-        required)
-
-    Returns
-    -------
-    The metadata that has been applied to the given image
-    """
-    if alignments.version > 2.0:
-        raise FaceswapError("The faces being passed in do not correspond to the given Alignments "
-                            "file. Please double check your sources and try again.")
-    # Track hashes for multiple files with the same hash. Not the most robust but should be
-    # effective enough
-    folder = os.path.dirname(filename)
-    if folder not in _HASHES_SEEN:
-        _HASHES_SEEN[folder] = {}
-    hashes_seen = _HASHES_SEEN[folder]
-
-    in_image = read_image(filename, raise_error=True)
-    in_hash = sha1(T.cast(bytes, in_image)).hexdigest()
-    hashes_seen[in_hash] = hashes_seen.get(in_hash, -1) + 1
-
-    alignment = alignments.hashes_to_alignment.get(in_hash)
-    if not alignment:
-        logger.debug("Alignments not found for image: '%s'", filename)
-        return None
-
-    detected_face = DetectedFace()
-    detected_face.from_alignment(alignment)
-    # For dupe hash handling, make sure we get a different filename for repeat hashes
-    src_fname, face_idx = list(alignments.hashes_to_frame[in_hash].items())[hashes_seen[in_hash]]
-    orig_filename = f"{os.path.splitext(src_fname)[0]}_{face_idx}.png"
-    meta = PNGHeaderDict(alignments=detected_face.to_png_meta(),
-                         source=PNGHeaderSourceDict(
-                            alignments_version=alignments.version,
-                            original_filename=orig_filename,
-                            face_index=face_idx,
-                            source_filename=src_fname,
-                            source_is_video=False,  # Can't check so set false
-                            source_frame_dims=None))
-
-    out_filename = f"{os.path.splitext(filename)[0]}.png"  # Make sure saved file is png
-    out_image = encode_image(in_image, ".png", metadata=meta)
-
-    with open(out_filename, "wb") as out_file:
-        out_file.write(out_image)
-
-    if filename != out_filename:  # Remove the old non-png:
-        logger.debug("Removing replaced face with deprecated extension: '%s'", filename)
-        os.remove(filename)
-
-    return meta
 
 
 __all__ = get_module_objects(__name__)

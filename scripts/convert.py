@@ -18,7 +18,7 @@ from scripts import fs_media
 from scripts.fs_media import finalize
 from lib.serializer import get_serializer
 from lib.convert import Converter
-from lib.align import AlignedFace, DetectedFace, update_legacy_png_header
+from lib.align import AlignedFace, DetectedFace
 from lib.infer.objects import FrameFaces
 from lib.gpu_stats import GPUStats
 from lib.image import read_image_meta_batch, ImagesLoader
@@ -1154,27 +1154,16 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
                            "alignments file will be converted")
             return retval
 
-        log_once = False
         filelist = get_image_paths(input_aligned_dir)
         for fullpath, metadata in tqdm(read_image_meta_batch(filelist),
                                        total=len(filelist),
                                        desc="Reading Face Data",
                                        leave=False):
             if "itxt" not in metadata or "source" not in metadata["itxt"]:
-                # UPDATE LEGACY FACES FROM ALIGNMENTS FILE
-                if not log_once:
-                    logger.warning("Legacy faces discovered in '%s'. These faces will be updated",
-                                   input_aligned_dir)
-                    log_once = True
-                data = update_legacy_png_header(fullpath, self._alignments)
-                if not data:
-                    raise FaceswapError(
-                        f"Some of the faces being passed in from '{input_aligned_dir}' could not "
-                        f"be matched to the alignments file '{self._alignments.file}'\n"
-                        "Please double check your sources and try again.")
-                meta = data["source"]
-            else:
-                meta = metadata["itxt"]["source"]
+                logger.warning("Non-Faceswap extracted face found. Image skipped: '%s'",
+                               fullpath)
+                continue
+            meta = metadata["itxt"]["source"]
             retval.setdefault(meta["source_filename"], []).append(meta["face_index"])
 
         if not retval:

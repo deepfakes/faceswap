@@ -10,7 +10,7 @@ import typing as T
 import numpy as np
 from tqdm import tqdm
 
-from lib.align import alignments, DetectedFace, update_legacy_png_header
+from lib.align import alignments, DetectedFace
 from lib.image import FacesLoader, ImagesLoader
 from lib.utils import get_module_objects
 from lib.infer.objects import FrameFaces
@@ -119,24 +119,12 @@ class Loader:
         ------
         The extract media object for the processed face
         """
-        log_once = False
         for filename, image, metadata in tqdm(self._loader.load(), total=self._loader.count):
-            if not metadata:  # Legacy faces. Update the headers
-                if self._alignments is None:
-                    logger.error("Legacy faces have been discovered, but no alignments file "
-                                 "provided. You must provide an alignments file for this face set")
-                    break
-
-                if not log_once:
-                    logger.warning("Legacy faces discovered. These faces will be updated")
-                    log_once = True
-
-                metadata = update_legacy_png_header(filename, self._alignments)
-                if not metadata:  # Face not found
-                    self._skip_count += 1
-                    logger.warning("Legacy face not found in alignments file. This face has not "
-                                   "been updated: '%s'", filename)
-                    continue
+            if not metadata:
+                self._skip_count += 1
+                logger.warning("Non-Faceswap extracted face found. Image skipped: '%s'",
+                               filename)
+                continue
 
             if "source_frame_dims" not in metadata.get("source", {}):
                 logger.error("The faces need to be re-extracted as at least some of them do not "

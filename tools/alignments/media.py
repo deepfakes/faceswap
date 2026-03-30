@@ -10,10 +10,10 @@ import typing as T
 import cv2
 from tqdm import tqdm
 
-from lib.align import Alignments, DetectedFace, update_legacy_png_header
+from lib.align import Alignments, DetectedFace
 from lib.image import (generate_thumbnail, ImagesLoader, png_write_meta, read_image,
                        read_image_meta_batch)
-from lib.utils import get_module_objects, IMAGE_EXTENSIONS, FaceswapError
+from lib.utils import get_module_objects, IMAGE_EXTENSIONS
 from lib.video import count_frames, VIDEO_EXTENSIONS
 
 if T.TYPE_CHECKING:
@@ -271,43 +271,6 @@ class Faces(MediaLoader):
         self._alignments = alignments
         super().__init__(folder)
 
-    def _handle_legacy(self, fullpath: str, log: bool = False) -> PNGHeaderDict:
-        """Handle face sets that are legacy (i.e. do not contain alignment information in the
-        header data)
-
-        Parameters
-        ----------
-        fullpath
-            The full path to the extracted face image
-        log
-            Whether to log a message that legacy updating is occurring
-
-        Returns
-        -------
-        The Alignments information from the face in PNG Header dict format
-
-        Raises
-        ------
-        FaceswapError
-            If legacy faces can't be updated because the alignments file does not exist or some of
-            the faces do not appear in the provided alignments file
-        """
-        if self._alignments is None:  # Can't update legacy
-            raise FaceswapError(f"The folder '{self.folder}' contains images that do not include "
-                                "Faceswap metadata.\nAll images in the provided folder should "
-                                "contain faces generated from Faceswap's extraction process.\n"
-                                "Please double check the source and try again.")
-        if log:
-            logger.warning("Legacy faces discovered. These faces will be updated")
-
-        data = update_legacy_png_header(fullpath, self._alignments)
-        if not data:
-            raise FaceswapError(
-                f"Some of the faces being passed in from '{self.folder}' could not be "
-                f"matched to the alignments file '{self._alignments.file}'\nPlease double "
-                "check your sources and try again.")
-        return data
-
     def _handle_duplicate(self,
                           fullpath: str,
                           header_dict: PNGHeaderDict,
@@ -366,16 +329,15 @@ class Faces(MediaLoader):
                         for face in os.listdir(self.folder)
                         if os.path.splitext(face)[-1] == ".png"]
 
-        log_once = False
         for fullpath, metadata in tqdm(read_image_meta_batch(filelist),
                                        total=len(filelist),
                                        desc="Reading Face Data"):
 
             if "itxt" not in metadata or "source" not in metadata["itxt"]:
-                sub_dict = self._handle_legacy(fullpath, not log_once)
-                log_once = True
-            else:
-                sub_dict = T.cast("PNGHeaderDict", metadata["itxt"])
+                logger.warning("Non-Faceswap extracted face found. Image skipped: '%s'",
+                               fullpath)
+                continue
+            sub_dict = T.cast("PNGHeaderDict", metadata["itxt"])
 
             if self._handle_duplicate(fullpath, sub_dict, seen):
                 dupe_count += 1
