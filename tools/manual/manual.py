@@ -164,10 +164,12 @@ class Manual(tk.Tk):
             sleep(1)
 
         extractor.link_faces(self._detected_faces)
-        if not valid_meta:
+        if not valid_meta and loader.video_meta_data:
             logger.debug("Saving video meta data to alignments file")
             self._detected_faces.save_video_meta_data(
-                **loader.video_meta_data)  # type:ignore[arg-type]
+                pts_time=loader.video_meta_data["pts_time"],
+                keyframes=loader.video_meta_data["keyframes"]
+                )
 
     def _generate_thumbs(self, input_location: str, force: bool, single_process: bool) -> None:
         """Check whether thumbnails are stored in the alignments file and if not generate them.
