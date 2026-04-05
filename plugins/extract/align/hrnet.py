@@ -102,7 +102,7 @@ class HRNet(ExtractPlugin):
         widths = batch[:, 2] - batch[:, 0]
         ctr_x = np.rint((batch[:, 0] + batch[:, 2]) * 0.5).astype("int32")
         ctr_y = np.rint((batch[:, 1] + batch[:, 3]) * 0.5).astype("int32")
-        size = np.maximum(widths, heights)
+        size = np.maximum(widths, heights) * 1.25
         half = np.rint(size * 0.5).astype("int32")
         retval = np.empty((batch.shape[0], 4), dtype=np.int32)
         retval[:, 0] = ctr_x - half

@@ -96,8 +96,7 @@ class Align(ExtractHandler):
         retval[:, 3] = np.clip(roi[:, 3], 0, imgs_h_w[:, 0] - 1)
         return retval
 
-    @classmethod
-    def _get_destinations(cls,
+    def _get_destinations(self,
                           original_roi: npt.NDArray[np.int32],
                           clamped_roi: npt.NDArray[np.int32],
                           scales: npt.NDArray[np.float64]) -> npt.NDArray[np.int32]:
@@ -117,8 +116,14 @@ class Align(ExtractHandler):
         The destination co-ordinates for re-sizing the face box to model input size
         """
         retval = np.empty_like(clamped_roi, dtype=np.int32)
-        retval[:, [0, 2]] = (clamped_roi[:, [0, 2]] - original_roi[:, 0, None]) * scales[:, None]
-        retval[:, [1, 3]] = (clamped_roi[:, [1, 3]] - original_roi[:, 1, None]) * scales[:, None]
+        retval[:, [0, 2]] = np.clip(np.round((clamped_roi[:, [0, 2]] -
+                                              original_roi[:, 0, None]) * scales[:, None]),
+                                    0,
+                                    self.plugin.input_size)
+        retval[:, [1, 3]] = np.clip(np.round((clamped_roi[:, [1, 3]] -
+                                              original_roi[:, 1, None]) * scales[:, None]),
+                                    0,
+                                    self.plugin.input_size)
         return retval
 
     def _crop_and_resize(self,  # pylint:disable=too-many-locals
