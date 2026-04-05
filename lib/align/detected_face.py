@@ -10,7 +10,7 @@ import numpy as np
 
 from lib.logger import format_array, parse_class_init
 from lib.utils import get_module_objects
-from .alignments import AlignmentFileDict, PNGHeaderAlignmentsDict
+from .objects import FileAlignments, PNGAlignments
 from .aligned_face import AlignedFace
 from . import aligned_mask
 
@@ -266,7 +266,7 @@ class DetectedFace():  # pylint:disable=too-many-instance-attributes
         return np.frombuffer(decompress(self._training_masks[0]),
                              dtype="uint8").reshape(self._training_masks[1])
 
-    def to_alignment(self) -> AlignmentFileDict:
+    def to_alignment(self) -> FileAlignments:
         """ Return the detected face formatted for an alignments file
 
         Returns
@@ -278,19 +278,19 @@ class DetectedFace():  # pylint:disable=too-many-instance-attributes
         if (self.left is None or self.width is None or self.top is None or self.height is None):
             raise AssertionError("Some detected face variables have not been initialized")
         thumb = None if self.thumbnail is None else self.thumbnail.tolist()
-        alignment = AlignmentFileDict(x=self.left,
-                                      w=self.width,
-                                      y=self.top,
-                                      h=self.height,
-                                      landmarks_xy=self.landmarks_xy.tolist(),
-                                      mask={name: mask.to_dict()
-                                            for name, mask in self.mask.items()},
-                                      identity={k: v.tolist() for k, v in self._identity.items()},
-                                      thumb=thumb)
+        alignment = FileAlignments(x=self.left,
+                                   w=self.width,
+                                   y=self.top,
+                                   h=self.height,
+                                   landmarks_xy=self.landmarks_xy.tolist(),
+                                   mask={name: mask.to_dict()
+                                         for name, mask in self.mask.items()},
+                                   identity=self._identity,
+                                   thumb=thumb)
         logger.trace("Returning: %s", alignment)  # type:ignore[attr-defined]
         return alignment
 
-    def from_alignment(self, alignment: AlignmentFileDict,
+    def from_alignment(self, alignment: FileAlignments | PNGAlignments,
                        image: np.ndarray | None = None, with_thumb: bool = False) -> T.Self:
         """Set the attributes of this class from an alignments file and optionally load the face
         into the ``image`` attribute.
@@ -298,12 +298,7 @@ class DetectedFace():  # pylint:disable=too-many-instance-attributes
         Parameters
         ----------
         alignment
-            A dictionary entry for a face from an alignments file containing the keys
-            ``x``, ``w``, ``y``, ``h``, ``landmarks_xy``.
-            Optionally the key ``thumb`` will be provided. This is for use in the manual tool and
-            contains the compressed jpg thumbnail of the face to be allocated to :attr:`thumbnail.
-            Optionally the key ``mask`` will be provided, but legacy alignments will not have
-            this key.
+            The alignment object to obtain the alignments from
         image
             If an image is passed in, then the ``image`` attribute will
             be set to the cropped face based on the passed in bounding box co-ordinates
@@ -318,33 +313,25 @@ class DetectedFace():  # pylint:disable=too-many-instance-attributes
 
         logger.trace("Creating from alignment: (alignment: %s,"  # type:ignore[attr-defined]
                      " has_image: %s)", alignment, bool(image is not None))
-        self.left = alignment["x"]
-        self.width = alignment["w"]
-        self.top = alignment["y"]
-        self.height = alignment["h"]
-        landmarks = alignment["landmarks_xy"]
-        if not isinstance(landmarks, np.ndarray):
-            landmarks = np.array(landmarks, dtype="float32")
-        self._identity = {k: np.array(v, dtype="float32")
-                          for k, v in alignment.get("identity", {}).items()}
-        self._landmarks_xy = landmarks.copy()
-
-        if with_thumb:
-            # Thumbnails currently only used for manual tool. Default to None
-            thumb = alignment.get("thumb")
-            if isinstance(thumb, list):
-                self.thumbnail = np.array(thumb, dtype=np.uint8)
+        self.left = alignment.x
+        self.width = alignment.w
+        self.top = alignment.y
+        self.height = alignment.h
+        self._identity = alignment.identity
+        self._landmarks_xy = alignment.landmarks_xy
+        if with_thumb and isinstance(alignment, FileAlignments):
+            self.thumbnail = alignment.thumb
 
         # Manual tool and legacy alignments will not have a mask
         self._aligned = None
 
-        if alignment.get("mask", None) is not None:
+        if alignment.mask:
             self.mask = {}
-            for name, mask_dict in alignment["mask"].items():
+            for name, mask in alignment.mask.items():
                 if name in ("components", "extended"):
                     continue  # Skip legacy stored LM based masks
                 self.mask[name] = aligned_mask.Mask()
-                self.mask[name].from_dict(mask_dict)
+                self.mask[name].from_dict(mask)
         if image is not None and image.any():
             self._image_to_face(image)
         logger.trace("Created from alignment: (left: %s, width: %s, "  # type:ignore[attr-defined]
@@ -352,7 +339,7 @@ class DetectedFace():  # pylint:disable=too-many-instance-attributes
                      self.left, self.width, self.top, self.height, self.landmarks_xy, self.mask)
         return self
 
-    def to_png_meta(self) -> PNGHeaderAlignmentsDict:
+    def to_png_meta(self) -> PNGAlignments:
         """Return the detected face formatted for insertion into a png itxt header.
 
         Returns
@@ -362,17 +349,17 @@ class DetectedFace():  # pylint:disable=too-many-instance-attributes
         """
         if (self.left is None or self.width is None or self.top is None or self.height is None):
             raise AssertionError("Some detected face variables have not been initialized")
-        alignment = PNGHeaderAlignmentsDict(
+        alignment = PNGAlignments(
             x=self.left,
             w=self.width,
             y=self.top,
             h=self.height,
             landmarks_xy=self.landmarks_xy.tolist(),
             mask={name: mask.to_png_meta() for name, mask in self.mask.items()},
-            identity={k: v.tolist() for k, v in self._identity.items()})
+            identity=self._identity)
         return alignment
 
-    def from_png_meta(self, alignment: PNGHeaderAlignmentsDict) -> T.Self:
+    def from_png_meta(self, alignment: PNGAlignments) -> T.Self:
         """Set the attributes of this class from alignments stored in a png exif header.
 
         Parameters
@@ -381,19 +368,19 @@ class DetectedFace():  # pylint:disable=too-many-instance-attributes
             A dictionary entry for a face from alignments stored in a png exif header containing
             the keys ``x``, ``w``, ``y``, ``h``, ``landmarks_xy`` and ``mask``
         """
-        self.left = alignment["x"]
-        self.width = alignment["w"]
-        self.top = alignment["y"]
-        self.height = alignment["h"]
-        self._landmarks_xy = np.array(alignment["landmarks_xy"], dtype="float32")
+        self.left = alignment.x
+        self.width = alignment.w
+        self.top = alignment.y
+        self.height = alignment.h
+        self._landmarks_xy = alignment.landmarks_xy
         self.mask = {}
-        for name, mask_dict in alignment["mask"].items():
+        for name, mask_dict in alignment.mask.items():
             if name in ("components", "extended"):
                 continue  # Skip legacy stored LM based masks
             self.mask[name] = aligned_mask.Mask()
             self.mask[name].from_dict(mask_dict)
         self._identity = {}
-        for key, val in alignment.get("identity", {}).items():
+        for key, val in alignment.identity.items():
             self._identity[key] = np.array(val, dtype="float32")
         logger.trace("Created from png exif header: (left: %s, "  # type:ignore[attr-defined]
                      "width: %s, top: %s  height: %s, landmarks: %s, mask: %s, identity: %s)",

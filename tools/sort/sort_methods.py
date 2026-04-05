@@ -25,7 +25,7 @@ from .info_loader import InfoLoader
 if T.TYPE_CHECKING:
     from argparse import Namespace
     import numpy.typing as npt
-    from lib.align.alignments import PNGHeaderAlignmentsDict
+    from lib.align.objects import PNGAlignments
     from lib.infer.runner import ExtractRunner
     from lib.infer.handler import ExtractHandlerFace
 
@@ -229,7 +229,7 @@ class SortMethod():
     def score_image(self,
                     filename: str,
                     image: np.ndarray | None,
-                    alignments: PNGHeaderAlignmentsDict | None) -> None:
+                    alignments: PNGAlignments | None) -> None:
         """Override for sort method's specific logic. This method should be executed to get a
         single score from a single image  and add the result to :attr:`_result`
 
@@ -258,7 +258,7 @@ class SortMethod():
         raise NotImplementedError()
 
     @classmethod
-    def _mask_face(cls, image: np.ndarray, alignments: PNGHeaderAlignmentsDict) -> np.ndarray:
+    def _mask_face(cls, image: np.ndarray, alignments: PNGAlignments) -> np.ndarray:
         """Function for applying the mask to an aligned face if both the face image and alignment
         data are available.
 
@@ -345,7 +345,7 @@ class SortMultiMethod(SortMethod):
     def score_image(self,
                     filename: str,
                     image: np.ndarray | None,
-                    alignments: PNGHeaderAlignmentsDict | None) -> None:
+                    alignments: PNGAlignments | None) -> None:
         """Score a single image for sort method and add the result to :attr:`_result`
 
         Parameters
@@ -386,7 +386,7 @@ class SortMultiMethod(SortMethod):
         for bin_ in tqdm(self._binned, desc="Binning and sorting", file=sys.stdout, leave=False):
             indices: dict[int, str] = {}
             for filename in bin_:
-                indices[sorted_.index(filename)] = filename
+                indices[sorted_.index(filename)] = filename  # pyright:ignore[reportArgumentType]
             output.append([indices[idx] for idx in sorted(indices)])
         return output
 
@@ -434,7 +434,7 @@ class SortBlur(SortMethod):
 
     def estimate_blur_fft(self,
                           image: np.ndarray,
-                          alignments: PNGHeaderAlignmentsDict | None = None) -> float:
+                          alignments: PNGAlignments | None = None) -> float:
         """Estimate the amount of blur a fft filtered image has.
 
         Parameters
@@ -475,7 +475,7 @@ class SortBlur(SortMethod):
     def score_image(self,
                     filename: str,
                     image: np.ndarray | None,
-                    alignments: PNGHeaderAlignmentsDict | None) -> None:
+                    alignments: PNGAlignments | None) -> None:
         """Score a single image for blur or blur-fft and add the result to :attr:`_result`
 
         Parameters
@@ -595,7 +595,7 @@ class SortColor(SortMethod):
     def score_image(self,
                     filename: str,
                     image: np.ndarray | None,
-                    alignments: PNGHeaderAlignmentsDict | None) -> None:
+                    alignments: PNGAlignments | None) -> None:
         """Score a single image for color
 
         Parameters
@@ -668,12 +668,12 @@ class SortFace(SortMethod):
         self._count_seen = 0
         self._plugin_thread = FSThread(self._score_from_plugin)
         self._from_plugin: list[tuple[str, npt.NDArray[np.float32]]] = []
-        self._alignment_queue: Queue[tuple[str, PNGHeaderAlignmentsDict]] = Queue(
+        self._alignment_queue: Queue[tuple[str, PNGAlignments]] = Queue(
             maxsize=self._plugin.batch_size * 3)
 
     def _score_from_header(self,
                            filename: str,
-                           alignments: PNGHeaderAlignmentsDict) -> bool:
+                           alignments: PNGAlignments) -> bool:
         """Reads header information from the PNG file to look for the identity embedding
 
         Parameters
@@ -687,9 +687,9 @@ class SortFace(SortMethod):
         -------
         ``True`` if embedding information was read from the PNG header, otherwise ``False``
         """
-        if not alignments.get("identity", {}).get(self._storage_name):
+        embedding = alignments.identity.get(self._storage_name)
+        if embedding is None:
             return False
-        embedding = np.array(alignments["identity"][self._storage_name], dtype="float32")
         self._result.append((filename, embedding))
         return True
 
@@ -707,7 +707,7 @@ class SortFace(SortMethod):
             self._from_plugin.append((media.filename, embedding))
             filename, alignments = self._alignment_queue.get()
             assert filename == media.filename
-            alignments.setdefault("identity", {})[self._storage_name] = embedding.tolist()
+            alignments.identity[self._storage_name] = embedding
             self._iterator.update_png_header(filename, alignments)
 
     def _handle_plugin(self) -> None:
@@ -726,7 +726,7 @@ class SortFace(SortMethod):
     def score_image(self,
                     filename: str,
                     image: np.ndarray | None,
-                    alignments: PNGHeaderAlignmentsDict | None) -> None:
+                    alignments: PNGAlignments | None) -> None:
         """Score a single image for sort method and add the result to :attr:`_result`. Attempts
         to pull identity information from the PNG metadata. If not available, pulls the information
         from the Identity plugin and stores in the PNG header for future use
@@ -740,6 +740,7 @@ class SortFace(SortMethod):
         alignments
             The alignments dictionary for the aligned face or ``None``
         """
+        # pylint:disable=duplicate-code
         if not alignments:
             msg = ("The images to be sorted do not contain alignment data. Images must have "
                    "been generated by Faceswap's Extract process.\nIf you are sorting an "
@@ -762,11 +763,11 @@ class SortFace(SortMethod):
 
         self._alignment_queue.put((filename, alignments))
 
-        face = DetectedFace(left=alignments["x"],  # Only include required items
-                            width=alignments["w"],
-                            top=alignments["y"],
-                            height=alignments["h"],
-                            landmarks_xy=np.array(alignments["landmarks_xy"], dtype="float32"))
+        face = DetectedFace(left=alignments.x,  # Only include required items
+                            width=alignments.w,
+                            top=alignments.y,
+                            height=alignments.h,
+                            landmarks_xy=alignments.landmarks_xy)
         assert self._runner is not None
         try:
             self._runner.put(filename,
@@ -834,7 +835,7 @@ class SortHistogram(SortMethod):
 
     def _calc_histogram(self,
                         image: np.ndarray,
-                        alignments: PNGHeaderAlignmentsDict | None) -> np.ndarray:
+                        alignments: PNGAlignments | None) -> np.ndarray:
         if alignments:
             image = self._mask_face(image, alignments)
         return cv2.calcHist([image], [0], None, [256], [0, 256])
@@ -854,7 +855,7 @@ class SortHistogram(SortMethod):
                 score_total += cv2.compareHist(result[i][1],
                                                result[j][1],
                                                cv2.HISTCMP_BHATTACHARYYA)
-            result[i][2] = score_total
+            result[i][2] = score_total  # pyright:ignore
 
         self._result = sorted(result, key=operator.itemgetter(2), reverse=True)
 
@@ -941,7 +942,7 @@ class SortHistogram(SortMethod):
     def score_image(self,
                     filename: str,
                     image: np.ndarray | None,
-                    alignments: PNGHeaderAlignmentsDict | None) -> None:
+                    alignments: PNGAlignments | None) -> None:
         """Collect the histogram for the given face
 
         Parameters

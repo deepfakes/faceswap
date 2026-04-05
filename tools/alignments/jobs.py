@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Tools for manipulating the alignments serialized file """
+"""Tools for manipulating the alignments serialized file """
 from __future__ import annotations
 import logging
 import os
@@ -23,20 +23,20 @@ from .jobs_faces import FaceToFile
 if T.TYPE_CHECKING:
     from collections.abc import Generator
     from argparse import Namespace
-    from lib.align.alignments import AlignmentFileDict, PNGHeaderDict
+    from lib.align.objects import FileAlignments, PNGHeader
     from .media import AlignmentData
 
 logger = logging.getLogger(__name__)
 
 
 class Check:
-    """ Frames and faces checking tasks.
+    """Frames and faces checking tasks.
 
     Parameters
     ---------
-    alignments : :class:`tools.alignments.media.AlignmentsData`
+    alignments
         The loaded alignments corresponding to the frames to be annotated
-    arguments : :class:`argparse.Namespace`
+    arguments
         The command line arguments that have called this job
     """
     def __init__(self, alignments: AlignmentData, arguments: Namespace) -> None:
@@ -54,17 +54,16 @@ class Check:
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _get_source_dir(self, arguments: Namespace) -> str:
-        """ Set the correct source folder
+        """Set the correct source folder
 
         Parameters
         ----------
-        arguments : :class:`argparse.Namespace`
+        arguments
             The command line arguments for the Alignments tool
 
         Returns
         -------
-        str
-            Full path to the source folder
+        Full path to the source folder
         """
         if (hasattr(arguments, "faces_dir") and arguments.faces_dir and
                 hasattr(arguments, "frames_dir") and arguments.frames_dir):
@@ -82,30 +81,29 @@ class Check:
         logger.debug("type: '%s', source_dir: '%s'", self._type, source_dir)
         return source_dir
 
-    def _get_items(self) -> list[dict[str, str]] | list[tuple[str, PNGHeaderDict]]:
-        """ Set the correct items to process
+    def _get_items(self) -> list[dict[str, str]] | list[tuple[str, PNGHeader]]:
+        """Set the correct items to process
 
         Returns
         -------
-        list[dict[str, str]] | list[tuple[str, :class:`~lib.align.alignments.PNGHeaderDict`]]
-            Sorted list of dictionaries for either faces or frames. If faces the dictionaries
-            have the current filename as key, with the header source data as value. If frames
-            the dictionaries will contain the keys 'frame_fullname', 'frame_name', 'extension'.
+        Sorted list of dictionaries for either faces or frames. If faces the dictionaries
+        have the current filename as key, with the header source data as value. If frames
+        the dictionaries will contain the keys 'frame_fullname', 'frame_name', 'extension'.
         """
         assert self._type is not None
         items: Frames | Faces = globals()[self._type.title()](self._source_dir)
         self._is_video = items.is_video
-        return T.cast(list[dict[str, str]] | list[tuple[str, "PNGHeaderDict"]],
+        return T.cast(list[dict[str, str]] | list[tuple[str, "PNGHeader"]],
                       items.file_list_sorted)
 
     def process(self) -> None:
-        """ Process the frames check against the alignments file """
+        """Process the frames check against the alignments file """
         assert self._type is not None
         logger.info("[CHECK %s]", self._type.upper())
         items_output = self._compile_output()
 
         if self._type == "faces":
-            filelist = T.cast(list[tuple[str, "PNGHeaderDict"]], self._items)
+            filelist = T.cast(list[tuple[str, "PNGHeader"]], self._items)
             check_update = FaceToFile(self._alignments, [val[1] for val in filelist])
             if check_update():
                 self._alignments.save()
@@ -113,7 +111,7 @@ class Check:
         self._output_results(items_output)
 
     def _validate(self) -> None:
-        """ Check that the selected type is valid for selected task and job """
+        """Check that the selected type is valid for selected task and job"""
         if self._job == "missing-frames" and self._output == "move":
             logger.warning("Missing_frames was selected with move output, but there will "
                            "be nothing to move. Defaulting to output: console")
@@ -124,12 +122,11 @@ class Check:
             sys.exit(1)
 
     def _compile_output(self) -> list[str] | list[tuple[str, int]]:
-        """ Compile list of frames that meet criteria
+        """Compile list of frames that meet criteria
 
         Returns
         -------
-        list[str] | list[tuple[str, int]]
-            List of filenames or filenames and face indices for the selected criteria
+        List of filenames or filenames and face indices for the selected criteria
         """
         action = self._job.replace("-", "_")
         processor = getattr(self, f"_get_{action}")
@@ -137,12 +134,11 @@ class Check:
         return [item for item in processor()]  # pylint:disable=unnecessary-comprehension
 
     def _get_no_faces(self) -> Generator[str, None, None]:
-        """ yield each frame that has no face match in alignments file
+        """yield each frame that has no face match in alignments file
 
         Yields
         ------
-        str
-            The frame name of any frames which have no faces
+        The frame name of any frames which have no faces
         """
         self.output_message = "Frames with no faces"
         for frame in tqdm(T.cast(list[dict[str, str]], self._items),
@@ -156,23 +152,21 @@ class Check:
 
     def _get_multi_faces(self) -> (Generator[str, None, None] |
                                    Generator[tuple[str, int], None, None]):
-        """ yield each frame or face that has multiple faces matched in alignments file
+        """yield each frame or face that has multiple faces matched in alignments file
 
         Yields
         ------
-        str | tuple
-            The frame name of any frames which have multiple faces and potentially the face id
+        The frame name of any frames which have multiple faces and potentially the face id
         """
         process_type = getattr(self, f"_get_multi_faces_{self._type}")
         yield from process_type()
 
     def _get_multi_faces_frames(self) -> Generator[str, None, None]:
-        """ Return Frames that contain multiple faces
+        """Return Frames that contain multiple faces
 
         Yields
         ------
-        str
-            The frame name of any frames which have multiple faces
+        The frame name of any frames which have multiple faces
         """
         self.output_message = "Frames with multiple faces"
         for item in tqdm(T.cast(list[dict[str, str]], self._items),
@@ -185,35 +179,33 @@ class Check:
             yield filename
 
     def _get_multi_faces_faces(self) -> Generator[tuple[str, int], None, None]:
-        """ Return Faces when there are multiple faces in a frame
+        """Return Faces when there are multiple faces in a frame
 
         Yields
         ------
-        tuple[str, int]
-            The frame name and the face id of any frames which have multiple faces
+        The frame name and the face id of any frames which have multiple faces
         """
         self.output_message = "Multiple faces in frame"
-        for item in tqdm(T.cast(list[tuple[str, "PNGHeaderDict"]], self._items),
+        for item in tqdm(T.cast(list[tuple[str, "PNGHeader"]], self._items),
                          desc=self.output_message,
                          leave=False):
-            src = item[1]["source"]
-            if not self._alignments.frame_has_multiple_faces(src["source_filename"]):
+            src = item[1].source
+            if not self._alignments.frame_has_multiple_faces(src.source_filename):
                 continue
-            retval = (item[0], src["face_index"])
+            retval = (item[0], src.face_index)
             logger.trace("Returning: '%s'", retval)  # type:ignore
             yield retval
 
     def _get_missing_alignments(self) -> Generator[str, None, None]:
-        """ yield each frame that does not exist in alignments file
+        """yield each frame that does not exist in alignments file
 
         Yields
         ------
-        str
-            The frame name of any frames missing alignments
+        The frame name of any frames missing alignments
         """
         self.output_message = "Frames missing from alignments file"
         exclude_filetypes = set(["yaml", "yml", "p", "json", "txt"])
-        for frame in tqdm(T.cast(dict[str, str], self._items),
+        for frame in tqdm(T.cast(list[dict[str, str]], self._items),
                           desc=self.output_message,
                           leave=False):
             frame_name = frame["frame_fullname"]
@@ -223,12 +215,11 @@ class Check:
                 yield frame_name
 
     def _get_missing_frames(self) -> Generator[str, None, None]:
-        """ yield each frame in alignments that does not have a matching file
+        """yield each frame in alignments that does not have a matching file
 
         Yields
         ------
-        str
-            The frame name of any frames in alignments with no matching file
+        The frame name of any frames in alignments with no matching file
         """
         self.output_message = "Missing frames that are in alignments file"
         frames = set(item["frame_fullname"] for item in T.cast(list[dict[str, str]], self._items))
@@ -238,11 +229,11 @@ class Check:
                 yield frame
 
     def _output_results(self, items_output: list[str] | list[tuple[str, int]]) -> None:
-        """ Output the results in the requested format
+        """Output the results in the requested format
 
         Parameters
         ----------
-        items_output : list[str]
+        items_output
             The list of frame names, and potentially face ids, of any items which met the
             selection criteria
         """
@@ -273,38 +264,36 @@ class Check:
             self.output_file(output_message, len(final_output))
 
     def _get_output_folder(self) -> str:
-        """ Return output folder. Needs to be in the root if input is a video and processing
+        """Return output folder. Needs to be in the root if input is a video and processing
         frames
 
         Returns
         -------
-        str
-            Full path to the output folder
+        Full path to the output folder
         """
         if self._is_video and self._type == "frames":
             return os.path.dirname(self._source_dir)
         return self._source_dir
 
     def _get_filename_prefix(self) -> str:
-        """ Video name needs to be prefixed to filename if input is a video and processing frames
+        """Video name needs to be prefixed to filename if input is a video and processing frames
 
         Returns
         -------
-        str
-            The common filename prefix to use
+        The common filename prefix to use
         """
         if self._is_video and self._type == "frames":
             return f"{os.path.basename(self._source_dir)}_"
         return ""
 
     def output_file(self, output_message: str, items_discovered: int) -> None:
-        """ Save the output to a text file in the frames directory
+        """Save the output to a text file in the frames directory
 
         Parameters
         ----------
-        output_message : str
+        output_message
             The message to write out to file
-        items_discovered : int
+        items_discovered
             The number of items which matched the criteria
         """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -317,11 +306,11 @@ class Check:
             f_output.write(output_message)
 
     def _move_file(self, items_output: list[str] | list[tuple[str, int]]) -> None:
-        """ Move the identified frames to a new sub folder
+        """Move the identified frames to a new sub folder
 
         Parameters
         ----------
-        items_output : list[str] | list[tuple[str, int]]
+        items_output
             List of items to move
         """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -336,13 +325,13 @@ class Check:
         move(output_folder, items_output)
 
     def _move_frames(self, output_folder: str, items_output: list[str]) -> None:
-        """ Move frames into single sub folder
+        """Move frames into single sub folder
 
         Parameters
         ----------
-        output_folder : str
+        output_folder
             The folder to move the output to
-        items_output : list
+        items_output
             List of items to move
         """
         logger.info("Moving %s frame(s) to '%s'", len(items_output), output_folder)
@@ -353,13 +342,13 @@ class Check:
             os.rename(src, dst)
 
     def _move_faces(self, output_folder: str, items_output: list[tuple[str, int]]) -> None:
-        """ Make additional sub folders for each face that appears Enables easier manual sorting
+        """Make additional sub folders for each face that appears Enables easier manual sorting
 
         Parameters
         ----------
-        output_folder : str
+        output_folder
             The folder to move the output to
-        items_output : list
+        items_output
             List of items and face indices to move
         """
         logger.info("Moving %s faces(s) to '%s'", len(items_output), output_folder)
@@ -375,13 +364,13 @@ class Check:
 
 
 class Export:
-    """ Export alignments from a Faceswap .fsa file to a json formatted file.
+    """Export alignments from a Faceswap .fsa file to a json formatted file.
 
     Parameters
     ----------
-    alignments : :class:`tools.lib_alignments.media.AlignmentData`
+    alignments
         The alignments data loaded from an alignments file for this rename job
-    arguments : :class:`argparse.Namespace`
+    arguments
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`. Unused
     """
     def __init__(self,
@@ -394,13 +383,12 @@ class Export:
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _get_output_file(self) -> str:
-        """ Obtain the name of an output file. If a file of the request name exists, then append a
+        """Obtain the name of an output file. If a file of the request name exists, then append a
         digit to the end until a unique filename is found
 
         Returns
         -------
-        str
-            Full path to an output json file
+        Full path to an output json file
         """
         in_file = self._alignments.file
         base_filename = f"{os.path.splitext(in_file)[0]}"
@@ -416,47 +404,46 @@ class Export:
         return out_file
 
     @classmethod
-    def _format_face(cls, face: AlignmentFileDict) -> dict[str, list[int] | list[list[float]]]:
-        """ Format the relevant keys from an alignment file's face into the correct format for
+    def _format_face(cls, face: FileAlignments) -> dict[str, list[int] | list[list[float]]]:
+        """Format the relevant keys from an alignment file's face into the correct format for
         export/import
 
         Parameters
         ----------
-        face : :class:`~lib.align.alignments.AlignmentFileDict`
+        face
             The alignment dictionary for a face to process
 
         Returns
         -------
-        dict[str, list[int] | list[list[float]]]
-            The face formatted for exporting to a json file
+        The face formatted for exporting to a json file
         """
-        lms = face["landmarks_xy"]
+        lms = face.landmarks_xy
         assert isinstance(lms, list)
-        box = [int(round(face["x"], 0)),
-               int(round(face["y"], 0)),
-               int(round(face["x"] + face["w"], 0)),
-               int(round(face["y"] + face["h"], 0))]
+        box = [int(round(face.x, 0)),
+               int(round(face.y, 0)),
+               int(round(face.x + face.w, 0)),
+               int(round(face.y + face.h, 0))]
         retval = T.cast(dict[str, list[int] | list[list[float]]],
                         {"detected": box, "landmarks_2d": lms})
         return retval
 
     def process(self) -> None:
-        """ Parse the imported alignments file and output relevant information to a json file """
+        """Parse the imported alignments file and output relevant information to a json file"""
         logger.info("[EXPORTING ALIGNMENTS]")  # Tidy up cli output
-        formatted = {key: [self._format_face(face) for face in val["faces"]]
+        formatted = {key: [self._format_face(face) for face in val.faces]
                      for key, val in self._alignments.data.items()}
         logger.info("Saving export alignments to '%s'...", self._output_file)
         self._serializer.save(self._output_file, formatted)
 
 
 class Sort:
-    """ Sort alignments' index by the order they appear in an image in left to right order.
+    """Sort alignments' index by the order they appear in an image in left to right order.
 
     Parameters
     ----------
-    alignments : :class:`tools.lib_alignments.media.AlignmentData`
+    alignments
         The alignments data loaded from an alignments file for this rename job
-    arguments : :class:`argparse.Namespace`
+    arguments
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`. Unused
     """
     def __init__(self,
@@ -467,7 +454,7 @@ class Sort:
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self) -> None:
-        """ Execute the sort process """
+        """Execute the sort process"""
         logger.info("[SORT INDEXES]")  # Tidy up cli output
         reindexed = self.reindex_faces()
         if reindexed:
@@ -476,12 +463,11 @@ class Sort:
                            "processed then you should run the 'Extract' job to regenerate it.")
 
     def reindex_faces(self) -> int:
-        """ Re-Index the faces
+        """Re-Index the faces
 
         Returns
         -------
-        int
-            The count of re-indexed faces
+        The count of re-indexed faces
         """
         reindexed = 0
         for alignment in tqdm(self._alignments.yield_faces(),
@@ -492,26 +478,26 @@ class Sort:
             if count <= 1:
                 logger.trace("0 or 1 face in frame. Not sorting: '%s'", frame)  # type:ignore
                 continue
-            sorted_alignments = sorted(alignments, key=lambda x: (x["x"]))
+            sorted_alignments = sorted(alignments, key=lambda a: (a.x))
             if sorted_alignments == alignments:
                 logger.trace("Alignments already in correct order. Not "  # type:ignore
                              "sorting: '%s'", frame)
                 continue
             logger.trace("Sorting alignments for frame: '%s'", frame)  # type:ignore
-            self._alignments.data[key]["faces"] = sorted_alignments
+            self._alignments.data[key].faces = sorted_alignments
             reindexed += 1
         logger.info("%s Frames had their faces reindexed", reindexed)
         return reindexed
 
 
 class Spatial:
-    """ Apply spatial temporal filtering to landmarks
+    """Apply spatial temporal filtering to landmarks
 
     Parameters
     ----------
-    alignments : :class:`tools.lib_alignments.media.AlignmentData`
+    alignments
         The alignments data loaded from an alignments file for this rename job
-    arguments : :class:`argparse.Namespace`
+    arguments
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`
 
     Reference
@@ -528,7 +514,7 @@ class Spatial:
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self) -> None:
-        """ Perform spatial filtering """
+        """Perform spatial filtering """
         logger.info("[SPATIAL-TEMPORAL FILTERING]")  # Tidy up cli output
         logger.info("NB: The process only processes the alignments for the first "
                     "face it finds for any given frame. For best results only run this when "
@@ -548,20 +534,20 @@ class Spatial:
     @staticmethod
     def _normalize_shapes(shapes_im_coords: np.ndarray
                           ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """ Normalize a 2D or 3D shape
+        """Normalize a 2D or 3D shape
 
         Parameters
         ----------
-        shaped_im_coords : :class:`numpy.ndarray`
+        shaped_im_coords
             The facial landmarks
 
         Returns
         -------
-        shapes_normalized : :class:`numpy.ndarray`
+        shapes_normalized
             The normalized shapes
-        scale_factors : :class:`numpy.ndarray`
+        scale_factors
             The scale factors
-        mean_coords : :class:`numpy.ndarray`
+        mean_coords
             The mean coordinates
         """
         logger.debug("Normalize shapes")
@@ -585,21 +571,20 @@ class Spatial:
     def _normalized_to_original(shapes_normalized: np.ndarray,
                                 scale_factors: np.ndarray,
                                 mean_coords: np.ndarray) -> np.ndarray:
-        """ Transform a normalized shape back to original image coordinates
+        """Transform a normalized shape back to original image coordinates
 
         Parameters
         ----------
-        shapes_normalized : :class:`numpy.ndarray`
+        shapes_normalized
             The normalized shapes
-        scale_factors : :class:`numpy.ndarray`
+        scale_factors
             The scale factors
-        mean_coords : :class:`numpy.ndarray`
+        mean_coords
             The mean coordinates
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The normalized shape transformed back to original coordinates
+        The normalized shape transformed back to original coordinates
         """
         logger.debug("Normalize to original")
         (num_pts, num_dims, _) = shapes_normalized.shape
@@ -613,12 +598,12 @@ class Spatial:
         return shapes_im_coords
 
     def _normalize(self) -> None:
-        """ Compile all original and normalized alignments """
+        """Compile all original and normalized alignments"""
         logger.debug("Normalize")
-        count = sum(1 for val in self._alignments.data.values() if val["faces"])
+        count = sum(1 for val in self._alignments.data.values() if val.faces)
 
-        sample_lm = next((val["faces"][0]["landmarks_xy"]
-                          for val in self._alignments.data.values() if val["faces"]), 68)
+        sample_lm = next((val.faces[0].landmarks_xy
+                          for val in self._alignments.data.values() if val.faces), 68)
         assert isinstance(sample_lm, np.ndarray)
         lm_count = sample_lm.shape[0]
         if lm_count != 68:
@@ -628,12 +613,12 @@ class Spatial:
 
         end = 0
         for key in tqdm(sorted(self._alignments.data.keys()), desc="Compiling", leave=False):
-            val = self._alignments.data[key]["faces"]
+            val = self._alignments.data[key].faces
             if not val:
                 continue
             # We should only be normalizing a single face, so just take
             # the first landmarks found
-            landmarks = np.array(val[0]["landmarks_xy"]).reshape((lm_count, 2, 1))
+            landmarks = np.array(val[0].landmarks_xy).reshape((lm_count, 2, 1))
             start = end
             end = start + landmarks.shape[2]
             # Store in one big array
@@ -649,7 +634,7 @@ class Spatial:
         logger.debug("Normalized: %s", self._normalized)
 
     def _shape_model(self) -> None:
-        """ build 2D shape model """
+        """build 2D shape model"""
         logger.debug("Shape model")
         landmarks_norm = self._normalized["landmarks"]
         num_components = 20
@@ -663,12 +648,11 @@ class Spatial:
         logger.debug("Shaped model")
 
     def _spatially_filter(self) -> np.ndarray:
-        """ interpret the shapes using our shape model (project and reconstruct)
+        """interpret the shapes using our shape model (project and reconstruct)
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The filtered landmarks in original coordinate space
+        The filtered landmarks in original coordinate space
         """
         logger.debug("Spatially Filter")
         assert self._shapes_model is not None
@@ -691,17 +675,16 @@ class Spatial:
 
     @staticmethod
     def _temporally_smooth(landmarks: np.ndarray) -> np.ndarray:
-        """ apply temporal filtering on the 2D points
+        """apply temporal filtering on the 2D points
 
         Parameters
         ----------
-        landmarks : :class:`numpy.ndarray`
+        landmarks
             68 point landmarks to be temporally smoothed
 
         Returns
         -------
-        :class: `numpy.ndarray`
-            The temporally smoothed landmarks
+        The temporally smoothed landmarks
         """
         logger.debug("Temporally Smooth")
         filter_half_length = 2
@@ -718,19 +701,19 @@ class Spatial:
         return retval
 
     def _update_alignments(self, landmarks: np.ndarray) -> None:
-        """ Update smoothed landmarks back to alignments
+        """Update smoothed landmarks back to alignments
 
         Parameters
         ----------
-        landmarks : :class:`numpy.ndarray`
+        landmarks
             The smoothed landmarks
         """
         logger.debug("Update alignments")
         for idx, frame in tqdm(self._mappings.items(), desc="Updating", leave=False):
             logger.trace("Updating: (frame: %s)", frame)  # type:ignore
             landmarks_update = landmarks[:, :, idx]
-            landmarks_xy = landmarks_update.reshape(68, 2).tolist()
-            self._alignments.data[frame]["faces"][0]["landmarks_xy"] = landmarks_xy
+            landmarks_xy = landmarks_update.reshape(68, 2)
+            self._alignments.data[frame].faces[0].landmarks_xy = landmarks_xy
             logger.trace("Updated: (frame: '%s', landmarks: %s)",  # type:ignore
                          frame, landmarks_xy)
         logger.debug("Updated alignments")

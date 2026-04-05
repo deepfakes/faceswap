@@ -116,7 +116,7 @@ class TestFacesDisplay():
         f_display.set_display_dimensions(dimensions)
         assert f_display._display_dims == dimensions
 
-    # TODO remove the next line that supresses a weird pytest bug when it tears down the tempdir
+    # TODO remove the next line that suppresses a weird pytest bug when it tears down the tempdir
     @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     @pytest.mark.parametrize("columns, face_size", _PARAMS, ids=_IDS)
     def test_update_tk_image(self,
@@ -286,7 +286,6 @@ class TestFacesDisplay():
                                                                       dtype=np.uint8))
         monkeypatch.setattr("tools.preview.viewer.transform_image", transform_image_mock)
 
-
         mats = np.random.random((columns, 2, 3)).astype(np.float32)
         f_display.source = [mocker.MagicMock() for _ in range(columns)]
         for idx, mock in enumerate(f_display.source):
@@ -330,7 +329,6 @@ class TestFacesDisplay():
         transform_image_mock = mocker.MagicMock(return_value=np.zeros((face_size, face_size, 3),
                                                                       dtype=np.uint8))
         monkeypatch.setattr("tools.preview.viewer.transform_image", transform_image_mock)
-
 
         f_display.source = [mocker.MagicMock() for _ in range(columns)]
         for item in f_display.source:  # type ignore

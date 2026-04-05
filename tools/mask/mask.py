@@ -20,7 +20,7 @@ from .mask_generate import MaskGenerator
 from .mask_output import Output
 
 if T.TYPE_CHECKING:
-    from lib.align.alignments import PNGHeaderSourceDict
+    from lib.align.objects import PNGSource
     from lib.infer.objects import FrameFaces
 
 logger = logging.getLogger(__name__)
@@ -250,14 +250,14 @@ class _Mask:
         """
         if self._input_is_faces:
             assert media.frame_metadata is not None
-            filename = os.path.basename(media.frame_metadata["source_filename"])
-            dims = media.frame_metadata["source_frame_dims"]
+            filename = os.path.basename(media.frame_metadata.source_filename)
+            dims = media.frame_metadata.source_frame_dims
         else:
             filename = os.path.basename(media.filename)
             dims = None
         for idx, face in enumerate(media.detected_faces):
-            face_idx = T.cast("PNGHeaderSourceDict",
-                              media.frame_metadata)["face_index"] if self._input_is_faces else idx
+            face_idx = T.cast("PNGSource",
+                              media.frame_metadata).face_index if self._input_is_faces else idx
             face.image = media.image
             self._output.save(filename, face_idx, face, frame_dims=dims)
 

@@ -13,13 +13,14 @@ import numpy as np
 from tqdm import tqdm
 
 from lib.align import CenteringType, DetectedFace, LandmarkType
+from lib.align.objects import PNGHeader
 from lib.image import read_image_batch, read_image_meta_batch
 from lib.logger import parse_class_init
 from lib.utils import FaceswapError, get_module_objects
 from plugins.train import train_config as cfg
 
 if T.TYPE_CHECKING:
-    from lib.align.alignments import PNGHeaderAlignmentsDict, PNGHeaderDict
+    from lib.align.objects import PNGAlignments
     from lib import align
 
 logger = logging.getLogger(__name__)
@@ -408,14 +409,14 @@ class Cache():
         if set_flag:
             self._cache_info["has_reset"] = True
 
-    def _validate_version(self, png_meta: PNGHeaderDict, filename: str) -> None:
-        """ Validate that there are not a mix of v1.0 extracted faces and v2.x faces.
+    def _validate_version(self, png_meta: PNGHeader, filename: str) -> None:
+        """Validate that there are not a mix of v1.0 extracted faces and v2.x faces.
 
         Parameters
         ----------
-        png_meta : :class:`~lib.align.alignments.PNGHeaderDict`
+        png_meta
             The information held within the Faceswap PNG Header
-        filename: str
+        filename
             The full path to the file being validated
 
         Raises
@@ -423,7 +424,7 @@ class Cache():
         :class:`~lib.utils.FaceswapError`
             If a version 1.0 face appears in a 2.x set or vice versa
         """
-        alignment_version = png_meta["source"]["alignments_version"]
+        alignment_version = png_meta.source.alignments_version
 
         if not self._extract_version:
             logger.debug("Setting initial extract version: %s", alignment_version)
@@ -442,21 +443,20 @@ class Cache():
 
     def _load_detected_face(self,
                             filename: str,
-                            alignments: PNGHeaderAlignmentsDict) -> DetectedFace:
-        """ Load a :class:`~lib.align.detected_face.DetectedFace` object and load its associated
+                            alignments: PNGAlignments) -> DetectedFace:
+        """Load a :class:`~lib.align.detected_face.DetectedFace` object and load its associated
         `aligned` property.
 
         Parameters
         ----------
-        filename : str
+        filename
             The file path for the current image
-        alignments : :class:`~lib.align.alignments.PNGHeaderAlignmentsDict`
+        alignments
             The alignments for a single face, extracted from a PNG header
 
         Returns
         -------
-        :class:`~lib.align.detected_face.DetectedFace`
-            The loaded Detected Face object
+        The loaded Detected Face object
         """
         y_offset = cfg.vertical_offset()
         detected_face = DetectedFace()
@@ -473,17 +473,17 @@ class Cache():
 
     def _populate_cache(self,
                         needs_cache: list[str],
-                        metadata: list[PNGHeaderDict],
+                        metadata: list[PNGHeader],
                         filenames: list[str]) -> None:
-        """ Populate the given items into the cache
+        """Populate the given items into the cache
 
         Parameters
         ----------
-        needs_cache : list[str]
+        needs_cache
             The full path to files within this batch that require caching
-        metadata : list[:class:`~lib.align.alignments.PNGHeaderDict`]
+        metadata
             The faceswap metadata loaded from the image png header
-        filenames : list[str]
+        filenames
             Full path to the filenames that are being loaded in this batch
         """
         for filename in needs_cache:
@@ -496,25 +496,25 @@ class Cache():
                 self._partially_loaded.remove(key)
                 detected_face = self._cache[key]
             else:
-                detected_face = self._load_detected_face(filename, meta["alignments"])
+                detected_face = self._load_detected_face(filename, meta.alignments)
 
             self._mask_prepare(filename, detected_face)
             self._cache[key] = detected_face
 
     def _get_batch_with_metadata(self,
-                                 filenames: list[str]) -> tuple[np.ndarray, list[PNGHeaderDict]]:
+                                 filenames: list[str]) -> tuple[np.ndarray, list[PNGHeader]]:
         """ Load a batch of images along with their faceswap metadata for loading into the cache
 
         Parameters
         ----------
-        filenames : list[str]
+        filenames
             Full path to the images to be loaded
 
         Returns
         -------
-        batch : :class:`numpy.ndarray`
+        batch
             The batch of images in a single array
-        metadata : :class:`~lib.align.alignments.PNGHeaderDict`
+        metadata
             The faceswap metadata corresponding to each image in the batch
         """
         try:
@@ -611,10 +611,10 @@ class Cache():
                 if "itxt" not in meta or "alignments" not in meta["itxt"]:
                     raise FaceswapError(f"Invalid face image found. Aborting: '{filename}'")
 
-                meta = meta["itxt"]
+                meta = PNGHeader.from_dict(meta["itxt"])
                 key = os.path.basename(filename)
                 self._validate_version(meta, filename)
-                detected_face = self._load_detected_face(filename, meta["alignments"])
+                detected_face = self._load_detected_face(filename, meta.alignments)
 
                 aligned = detected_face.aligned
                 assert aligned is not None

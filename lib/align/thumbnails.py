@@ -37,9 +37,9 @@ class Thumbnails():
     def has_thumbnails(self) -> bool:
         """``True`` if all faces in the alignments file contain thumbnail images otherwise
         ``False``."""
-        retval = all(np.any(T.cast(np.ndarray, face.get("thumb")))
+        retval = all(np.any(T.cast(np.ndarray, face.thumb is not None))
                      for frame in self._alignments_dict.values()
-                     for face in frame["faces"])
+                     for face in frame.faces)
         logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
@@ -57,7 +57,7 @@ class Thumbnails():
         -------
         The encoded JPG thumbnail
         """
-        retval = self._alignments_dict[self._frame_list[frame_index]]["faces"][face_index]["thumb"]
+        retval = self._alignments_dict[self._frame_list[frame_index]].faces[face_index].thumb
         assert retval is not None
         logger.trace(  # type:ignore[attr-defined]
             "frame index: %s, face_index: %s, thumb shape: %s",
@@ -78,7 +78,7 @@ class Thumbnails():
         """
         logger.debug("frame: %s, face_index: %s, thumb shape: %s thumb dtype: %s",
                      frame, face_index, thumb.shape, thumb.dtype)
-        self._alignments_dict[frame]["faces"][face_index]["thumb"] = thumb.tolist()
+        self._alignments_dict[frame].faces[face_index].thumb = thumb
 
 
 __all__ = get_module_objects(__name__)

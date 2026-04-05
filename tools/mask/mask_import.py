@@ -12,6 +12,7 @@ import cv2
 from tqdm import tqdm
 
 from lib.align import AlignedFace
+from lib.align.objects import PNGHeader
 from lib.image import encode_image, ImagesSaver
 from lib.utils import get_image_paths, get_module_objects
 
@@ -316,16 +317,15 @@ class Import:
         self._store_mask(face, mask)
 
         if self._alignments is not None:
-            idx = media.frame_metadata["source_filename"]
-            fname = media.frame_metadata["face_index"]
+            idx = media.frame_metadata.source_filename
+            fname = media.frame_metadata.face_index
             logger.trace("Updating face %s in frame '%s'", idx, fname)  # type:ignore[attr-defined]
             self._alignments.update_face(idx,
                                          fname,
                                          face.to_alignment())
 
         logger.trace("Updating extracted face: '%s'", media.filename)  # type:ignore[attr-defined]
-        meta: align.alignments.PNGHeaderDict = {"alignments": face.to_png_meta(),
-                                                "source": media.frame_metadata}
+        meta = PNGHeader(alignments=face.to_png_meta(), source=media.frame_metadata)
         self._saver.save(os.path.basename(media.filename),
                          encode_image(media.image, ".png", metadata=meta))
 

@@ -11,6 +11,7 @@ import cv2
 from tqdm import tqdm
 
 from lib.align import Alignments, DetectedFace
+from lib.align.objects import PNGHeader
 from lib.image import (generate_thumbnail, ImagesLoader, png_write_meta, read_image,
                        read_image_meta_batch)
 from lib.utils import get_module_objects, IMAGE_EXTENSIONS
@@ -19,7 +20,7 @@ from lib.video import count_frames, VIDEO_EXTENSIONS
 if T.TYPE_CHECKING:
     from collections.abc import Generator
     import numpy as np
-    from lib.align.alignments import AlignmentFileDict, PNGHeaderDict
+    from lib.align.objects import FileAlignments
 
 logger = logging.getLogger(__name__)
 
@@ -148,12 +149,12 @@ class MediaLoader():
                      filename, retval)
         return retval
 
-    def sorted_items(self) -> list[dict[str, str]] | list[tuple[str, PNGHeaderDict]]:
+    def sorted_items(self) -> list[dict[str, str]] | list[tuple[str, PNGHeader]]:
         """Override for specific folder processing"""
         raise NotImplementedError()
 
     def process_folder(self) -> (Generator[dict[str, str], None, None] |
-                                 Generator[tuple[str, PNGHeaderDict], None, None]):
+                                 Generator[tuple[str, PNGHeader], None, None]):
         """Override for specific folder processing"""
         raise NotImplementedError()
 
@@ -230,7 +231,7 @@ class MediaLoader():
     def save_image(output_folder: str,
                    filename: str,
                    image: np.ndarray,
-                   metadata: PNGHeaderDict | None = None) -> None:
+                   metadata: PNGHeader | None = None) -> None:
         """Save an image
 
         Parameters
@@ -273,7 +274,7 @@ class Faces(MediaLoader):
 
     def _handle_duplicate(self,
                           fullpath: str,
-                          header_dict: PNGHeaderDict,
+                          header_dict: PNGHeader,
                           seen: dict[str, list[int]]) -> bool:
         """Check whether the given face has already been seen for the source frame and face index
         from an existing face. Can happen when filenames have changed due to sorting etc. and users
@@ -293,8 +294,8 @@ class Faces(MediaLoader):
         -------
         ``True`` if the face was a duplicate and has been removed, otherwise ``False``
         """
-        src_filename = header_dict["source"]["source_filename"]
-        face_index = header_dict["source"]["face_index"]
+        src_filename = header_dict.source.source_filename
+        face_index = header_dict.source.face_index
 
         if src_filename in seen and face_index in seen[src_filename]:
             dupe_dir = os.path.join(self.folder, "_duplicates")
@@ -307,7 +308,7 @@ class Faces(MediaLoader):
         seen.setdefault(src_filename, []).append(face_index)
         return False
 
-    def process_folder(self) -> Generator[tuple[str, PNGHeaderDict], None, None]:
+    def process_folder(self) -> Generator[tuple[str, PNGHeader], None, None]:
         """Iterate through the faces folder pulling out various information for each face.
 
         Yields
@@ -337,14 +338,14 @@ class Faces(MediaLoader):
                 logger.warning("Non-Faceswap extracted face found. Image skipped: '%s'",
                                fullpath)
                 continue
-            sub_dict = T.cast("PNGHeaderDict", metadata["itxt"])
+            sub_dict = T.cast(PNGHeader, PNGHeader.from_dict(metadata["itxt"]))
 
             if self._handle_duplicate(fullpath, sub_dict, seen):
                 dupe_count += 1
                 continue
 
             if (self._alignments is not None and  # filter existing
-                    not self._alignments.frame_exists(sub_dict["source"]["source_filename"])):
+                    not self._alignments.frame_exists(sub_dict.source.source_filename)):
                 filter_count += 1
                 continue
 
@@ -368,13 +369,13 @@ class Faces(MediaLoader):
         The source filename as key with list of face indices for the frame as value
         """
         faces: dict[str, list[int]] = {}
-        for face in T.cast(list[tuple[str, "PNGHeaderDict"]], self.file_list_sorted):
-            src = face[1]["source"]
-            faces.setdefault(src["source_filename"], []).append(src["face_index"])
+        for face in T.cast(list[tuple[str, PNGHeader]], self.file_list_sorted):
+            src = face[1].source
+            faces.setdefault(src.source_filename, []).append(src.face_index)
         logger.trace(faces)  # type:ignore[attr-defined]
         return faces
 
-    def sorted_items(self) -> list[tuple[str, PNGHeaderDict]]:
+    def sorted_items(self) -> list[tuple[str, PNGHeader]]:
         """Return the items sorted by the saved file name.
 
         Returns
@@ -512,7 +513,7 @@ class ExtractedFaces():
         self.current_frame = frame
 
     def extract_one_face(self,
-                         alignment: AlignmentFileDict,
+                         alignment: FileAlignments,
                          image: np.ndarray) -> DetectedFace:
         """Extract one face from image
 

@@ -42,8 +42,8 @@ class TestAlignmentData:
             Path to a dummy alignments file
         """
         alignments_file = os.path.join(tmp_path, "alignments.fsa")
-        with open(alignments_file, "w", encoding="utf8") as afile:
-            afile.write("test")
+        with open(alignments_file, "w", encoding="utf8") as a_file:
+            a_file.write("test")
         yield alignments_file
         os.remove(alignments_file)
 
@@ -272,7 +272,7 @@ class TestMediaLoader:
         vid_cap.set.assert_called_once()
         np.testing.assert_equal(output, expected)
 
-    # TODO remove the next line that supresses a weird pytest bug when it tears down the tempdir
+    # TODO remove the next line that suppresses a weird pytest bug when it tears down the tempdir
     @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_stream(self,
                     media_loader_instance: MediaLoader,
@@ -303,7 +303,7 @@ class TestMediaLoader:
         assert output == expected
         skip_call.assert_called_once_with(skip_list)
 
-    # TODO remove the next line that supresses a weird pytest bug when it tears down the tempdir
+    # TODO remove the next line that suppresses a weird pytest bug when it tears down the tempdir
     @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_save_image(self,
                         media_loader_instance: MediaLoader,
@@ -386,7 +386,8 @@ class TestFaces:
         Faces(folder, alignments_mock)
         parent_mock.assert_called_once()
 
-    def test__handle_duplicate(self, faces_instance: Faces) -> None:
+    def test__handle_duplicate(self, faces_instance: Faces, mocker: pytest_mock.MockerFixture
+                               ) -> None:
         """ Test for :class:`~tools.alignments.media.Faces` _handle_duplicate method
 
         Parameters
@@ -399,8 +400,9 @@ class TestFaces:
         src_filename = "test_0001.png"
         src_face_idx = 0
         paths = [os.path.join(faces.folder, fname) for fname in os.listdir(faces.folder)]
-        data = {"source": {"source_filename": src_filename,
-                           "face_index": src_face_idx}}
+        data = mocker.MagicMock()
+        data.source.source_filename = src_filename
+        data.source.face_index = src_face_idx
         seen: dict[str, list[int]] = {}
 
         # New item
@@ -423,7 +425,8 @@ class TestFaces:
 
     def test_process_folder(self,
                             faces_instance: Faces,
-                            mocker: pytest_mock.MockerFixture) -> None:
+                            mocker: pytest_mock.MockerFixture,
+                            monkeypatch: pytest.MonkeyPatch) -> None:
         """ Test for :class:`~tools.alignments.media.Faces` process_folder method
 
         Parameters
@@ -436,8 +439,13 @@ class TestFaces:
         faces = faces_instance
         read_image_meta_mock = mocker.patch("tools.alignments.media.read_image_meta_batch")
         img_sources = [os.path.join(faces.folder, fname) for fname in os.listdir(faces.folder)]
+
         meta_data = {"itxt": {"source": ({"source_filename": "data.png"})}}
-        expected = [(fname, meta_data["itxt"]) for fname in os.listdir(faces.folder)]
+        png_mock = mocker.MagicMock()
+        png_mock.source.source_filename = "data.png"
+        monkeypatch.setattr("lib.training.cache.PNGHeader.from_dict", lambda x: png_mock)
+
+        expected = [(fname, png_mock) for fname in os.listdir(faces.folder)]
         read_image_meta_mock.side_effect = [[(src, meta_data) for src in img_sources]]
 
         dupe_mock = mocker.patch("tools.alignments.media.Faces._handle_duplicate",
@@ -452,7 +460,7 @@ class TestFaces:
         dupe_mock.reset_mock()
         read_image_meta_mock.reset_mock()
 
-        # valid itxt with alignemnts data
+        # valid itxt with alignments data
         read_image_meta_mock.side_effect = [[(src, meta_data) for src in img_sources]]
         faces._alignments = mocker.MagicMock(AlignmentData)
         faces._alignments.version = 2.1  # type:ignore
@@ -473,7 +481,8 @@ class TestFaces:
         assert not output
 
     def test_load_items(self,
-                        faces_instance: Faces) -> None:
+                        faces_instance: Faces,
+                        mocker: pytest_mock.MockerFixture) -> None:
         """ Test for :class:`~tools.alignments.media.Faces` load_items method
 
         Parameters
@@ -482,17 +491,25 @@ class TestFaces:
             The class instance for testing
         """
         faces = faces_instance
-        data = [(f"file{idx}.png", {"source": {"source_filename": f"src{idx}.png",
-                                               "face_index": 0}})
-                for idx in range(4)]
+        data = []
+        for idx in range(4):
+            mock = mocker.MagicMock()
+            mock.source.source_filename = f"src{idx}.png"
+            mock.source.face_index = 0
+            data.append((f"file{idx}.png", mock))
+
         faces.file_list_sorted = data  # type: ignore
         expected = {"src0.png": [0], "src1.png": [0], "src2.png": [0], "src3.png": [0]}
         result = faces.load_items()
         assert result == expected
 
-        data = [(f"file{idx}.png", {"source": {"source_filename": f"src{idx // 2}.png",
-                                               "face_index": 0 if idx % 2 == 0 else 1}})
-                for idx in range(4)]
+        data = []
+        for idx in range(4):
+            mock = mocker.MagicMock()
+            mock.source.source_filename = f"src{idx // 2}.png"
+            mock.source.face_index = 0 if idx % 2 == 0 else 1
+            data.append((f"file{idx}.png", mock))
+
         faces.file_list_sorted = data  # type: ignore
         expected = {"src0.png": [0, 1], "src1.png": [0, 1]}
         result = faces.load_items()
@@ -712,7 +729,7 @@ class TestExtractedFaces:
         assert extract_face_mock.call_count == 1
         assert faces.current_frame == frame
 
-    # TODO remove the next line that supresses a weird pytest bug when it tears down the tempdir
+    # TODO remove the next line that suppresses a weird pytest bug when it tears down the tempdir
     @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_extract_one_face(self,
                               extracted_faces_instance: ExtractedFaces,

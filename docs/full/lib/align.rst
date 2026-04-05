@@ -35,6 +35,11 @@ The align Package handles detected faces, their alignments and masks.
    :no-inheritance-diagram:
 
 |
+.. automodapi:: lib.align.objects
+   :include-all-objects:
+   :no-inheritance-diagram:
+
+|
 .. automodapi:: lib.align.pose
    :include-all-objects:
    :no-inheritance-diagram:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Helper functions for :mod:`~scripts.extract` and :mod:`~scripts.convert`.
+"""Helper functions for :mod:`~scripts.extract` and :mod:`~scripts.convert`.
 
 Holds the classes for the 2 main Faceswap 'media' objects: Images and Alignments.
 
@@ -14,26 +14,24 @@ import typing as T
 import numpy as np
 
 from lib.align import Alignments as AlignmentsBase
+from lib.align.objects import AlignmentsEntry, FileAlignments
 from lib.logger import parse_class_init
 from lib.serializer import get_serializer
 from lib.utils import get_module_objects
-
-if T.TYPE_CHECKING:
-    from lib.align.alignments import AlignmentFileDict
 
 logger = logging.getLogger(__name__)
 
 
 def finalize(images_found: int, num_faces_detected: int, verify_output: bool) -> None:
-    """ Output summary statistics at the end of the extract or convert processes.
+    """Output summary statistics at the end of the extract or convert processes.
 
     Parameters
     ----------
-    images_found: int
+    images_found
         The number of images/frames that were processed
-    num_faces_detected: int
+    num_faces_detected
         The number of faces that have been detected
-    verify_output: bool
+    verify_output
         ``True`` if multiple faces were detected in frames otherwise ``False``.
      """
     logger.info("-------------------------")
@@ -172,9 +170,8 @@ class Alignments(AlignmentsBase):
 
         Returns
         -------
-        dict
-            Any alignments that have already been extracted if skip existing has been selected
-            otherwise an empty dictionary
+        Any alignments that have already been extracted if skip existing has been selected
+        otherwise an empty dictionary
         """
         data: dict[str, T.Any] = {}
         if not self._is_extract and not self.have_alignments_file:
@@ -218,7 +215,7 @@ class Alignments(AlignmentsBase):
                            json_file, self._io.file)
         data = get_serializer("json").load(json_file)
         for k, v in data.items():
-            faces: list[AlignmentFileDict] = []
+            faces: list[FileAlignments] = []
             for face in v:
                 if "detected" not in face:
                     lms = np.array(face["landmarks_2d"], dtype="float32")
@@ -228,15 +225,15 @@ class Alignments(AlignmentsBase):
                     mins = np.rint(lms.min(axis=0)).astype(np.int32).tolist()
                     maxes = np.rint(lms.max(axis=0)).astype(np.int32).tolist()
                     face["detected"] = mins + maxes
-                faces.append(T.cast("AlignmentFileDict", {
-                    "x": face["detected"][0],
-                    "y": face["detected"][1],
-                    "w": face["detected"][2] - face["detected"][0],
-                    "h": face["detected"][3] - face["detected"][1],
-                    "landmarks_xy": np.array(face["landmarks_2d"], dtype="float32"),
-                    "mask": {},
-                    "identity": {}}))
-            self._data[k] = {"faces": faces, "video_meta": {}}
+                faces.append(FileAlignments(
+                    x=face["detected"][0],
+                    y=face["detected"][1],
+                    w=face["detected"][2] - face["detected"][0],
+                    h=face["detected"][3] - face["detected"][1],
+                    landmarks_xy=np.array(face["landmarks_2d"], dtype="float32"),
+                    mask={},
+                    identity={}))
+            self._data[k] = AlignmentsEntry(faces=faces)
         logger.info("Imported %s frames from '%s'", len(data), json_file)
 
 

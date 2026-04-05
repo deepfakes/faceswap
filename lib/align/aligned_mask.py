@@ -14,7 +14,7 @@ from lib.logger import parse_class_init
 from lib.utils import FaceswapError, get_module_objects
 
 from .aligned_utils import get_adjusted_center, get_centered_size
-from .alignments import MaskAlignmentsFileDict
+from .objects import MaskAlignmentsFile
 from .constants import LandmarkType, LANDMARK_PARTS, LANDMARK_MASK_PARTS
 
 if T.TYPE_CHECKING:
@@ -367,7 +367,7 @@ class Mask():  # pylint:disable=too-many-instance-attributes
                      affine_matrix.shape, adjust_mat.shape)
         return adjust_mat
 
-    def to_dict(self, is_png=False) -> MaskAlignmentsFileDict:
+    def to_dict(self, is_png=False) -> MaskAlignmentsFile:
         """Convert the mask to a dictionary for saving to an alignments file
 
         Parameters
@@ -383,16 +383,15 @@ class Mask():  # pylint:disable=too-many-instance-attributes
         """
         assert self._mask is not None
         affine_matrix = self.affine_matrix.tolist() if is_png else self.affine_matrix
-        retval = MaskAlignmentsFileDict(mask=self._mask,
-                                        affine_matrix=affine_matrix,
-                                        interpolator=self.interpolator,
-                                        stored_size=self.stored_size,
-                                        stored_centering=self.stored_centering)
-        logger.trace({k: v if k != "mask" else type(v)  # type:ignore[attr-defined]
-                      for k, v in retval.items()})
+        retval = MaskAlignmentsFile(mask=self._mask,
+                                    affine_matrix=affine_matrix,
+                                    interpolator=self.interpolator,
+                                    stored_size=self.stored_size,
+                                    stored_centering=self.stored_centering)
+        logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
-    def to_png_meta(self) -> MaskAlignmentsFileDict:
+    def to_png_meta(self) -> MaskAlignmentsFile:
         """Convert the mask to a dictionary supported by png itxt headers.
 
         Returns
@@ -402,26 +401,20 @@ class Mask():  # pylint:disable=too-many-instance-attributes
         """
         return self.to_dict(is_png=True)
 
-    def from_dict(self, mask_dict: MaskAlignmentsFileDict) -> None:
+    def from_dict(self, mask: MaskAlignmentsFile) -> None:
         """Populates the :class:`Mask` from a dictionary loaded from an alignments file.
 
         Parameters
         ----------
-        mask_dict
             A dictionary stored in an alignments file containing the keys ``mask``,
             ``affine_matrix``, ``interpolator``, ``stored_size``, ``stored_centering``
         """
-        self._mask = mask_dict["mask"]
-        affine_matrix = mask_dict["affine_matrix"]
-        self._affine_matrix = self._matrix_2to3(
-            affine_matrix if isinstance(affine_matrix, np.ndarray)
-            else np.array(affine_matrix, dtype=np.float32))
-        self._interpolator = mask_dict["interpolator"]
-        self.stored_size = mask_dict["stored_size"]
-        centering = mask_dict.get("stored_centering")
-        self.stored_centering = "face" if centering is None else centering
-        logger.trace({k: v if k != "mask" else type(v)  # type:ignore[attr-defined]
-                      for k, v in mask_dict.items()})
+        self._mask = mask.mask
+        self._affine_matrix = self._matrix_2to3(mask.affine_matrix)
+        self._interpolator = mask.interpolator
+        self.stored_size = mask.stored_size
+        self.stored_centering = mask.stored_centering
+        logger.trace(mask)  # type:ignore[attr-defined]
 
 
 class LandmarksMask(Mask):

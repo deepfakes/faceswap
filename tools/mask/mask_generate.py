@@ -6,6 +6,7 @@ import logging
 import os
 import typing as T
 
+from lib.align.objects import PNGHeader
 from lib.image import encode_image, ImagesSaver
 from lib.logger import parse_class_init
 from lib.multithreading import FSThread
@@ -105,8 +106,8 @@ class MaskGenerator:
             if self._is_faces:
                 assert media.frame_metadata is not None
                 assert len(media) == 1
-                needs_update = self._needs_update(media.frame_metadata["source_filename"],
-                                                  media.frame_metadata["face_index"],
+                needs_update = self._needs_update(media.frame_metadata.source_filename,
+                                                  media.frame_metadata.face_index,
                                                   media.detected_faces[0])
             else:
                 # To keep face indexes correct/cover off where only one face in an image is missing
@@ -155,8 +156,8 @@ class MaskGenerator:
         assert self._saver is not None
         assert media.frame_metadata is not None
 
-        fname = media.frame_metadata["source_filename"]
-        idx = media.frame_metadata["face_index"]
+        fname = media.frame_metadata.source_filename
+        idx = media.frame_metadata.face_index
         face = media.detected_faces[0]
 
         if self._alignments is not None:
@@ -164,8 +165,7 @@ class MaskGenerator:
             self._alignments.update_face(fname, idx, face.to_alignment())
 
         logger.trace("Updating extracted face: '%s'", media.filename)  # type:ignore[attr-defined]
-        meta: align.alignments.PNGHeaderDict = {"alignments": face.to_png_meta(),
-                                                "source": media.frame_metadata}
+        meta = PNGHeader(alignments=face.to_png_meta(), source=media.frame_metadata)
         self._saver.save(os.path.basename(media.filename),
                          encode_image(media.image, ".png", metadata=meta))
 
@@ -185,7 +185,7 @@ class MaskGenerator:
             self._alignments.update_face(fname, idx, face.to_alignment())
 
     def _finalize(self) -> None:
-        """Close thread and save alignments on completion """
+        """Close thread and save alignments on completion"""
         logger.debug("Finalizing MaskGenerator")
         self._input_thread.join()
 

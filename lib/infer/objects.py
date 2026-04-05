@@ -14,7 +14,7 @@ import numpy.typing as npt
 from lib.align.aligned_face import batch_umeyama
 from lib.align.aligned_utils import batch_resize, batch_transform, points_to_68
 from lib.align.aligned_mask import Mask
-from lib.align.alignments import PNGAlignments, MaskAlignmentsFile
+from lib.align.objects import PNGAlignments, MaskAlignmentsFile
 from lib.align.constants import LandmarkType, MEAN_FACE
 from lib.align.detected_face import DetectedFace
 from lib.align.pose import Batch3D
@@ -22,7 +22,7 @@ from lib.logger import parse_class_init, format_array
 from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
-    from lib.align.alignments import PNGHeaderSourceDict
+    from lib.align.objects import PNGSource
     from lib.align.constants import CenteringType
 
 logger = logging.getLogger(__name__)
@@ -406,7 +406,7 @@ class ExtractBatch:  # pylint:disable=too-many-instance-attributes
     """``True`` if :attr:`images` contains aligned faces. ``False`` for full frames"""
     frame_sizes: list[tuple[int, int]] | None = None
     """The original frame (heights, widths) when the images are aligned faces"""
-    frame_metadata: list[PNGHeaderSourceDict] | None = None
+    frame_metadata: list[PNGSource] | None = None
     """The original frame metadata when aligned faces is ``True`` otherwise ``None``"""
     passthrough: bool = False
     """Whether this item should pass straight through the pipeline for immediate return"""
@@ -759,7 +759,7 @@ class FrameFaces:  # pylint:disable=too-many-instance-attributes
                  masks: dict[str, ExtractBatchMask] | None = None,
                  source: str | None = None,
                  is_aligned: bool = False,
-                 frame_metadata: PNGHeaderSourceDict | None = None,
+                 frame_metadata: PNGSource | None = None,
                  passthrough: bool = False) -> None:
         logger.trace(parse_class_init(locals()))  # type:ignore[attr-defined]
         if is_aligned:
@@ -777,7 +777,7 @@ class FrameFaces:  # pylint:disable=too-many-instance-attributes
         """The mask objects for each face in the frame"""
         self.source = source
         """The full path to the source folder or video file or ``None`` if not provided"""
-        self.frame_metadata: PNGHeaderSourceDict | None = frame_metadata
+        self.frame_metadata: PNGSource | None = frame_metadata
         """The frame metadata that has been added from an aligned image. ``None`` if metadata has
         not been added"""
         self.is_aligned = is_aligned
@@ -913,8 +913,9 @@ class FrameFaces:  # pylint:disable=too-many-instance-attributes
         The shape of the original image
         """
         if self.is_aligned:
-            assert self.frame_metadata is not None
-            dims = T.cast(tuple[int, int], self.frame_metadata["source_frame_dims"])
+            assert (self.frame_metadata is not None and
+                    self.frame_metadata.source_frame_dims is not None)
+            dims = self.frame_metadata.source_frame_dims
             return (*dims, 3)
         return T.cast(tuple[int, int, int], self.image.shape)
 

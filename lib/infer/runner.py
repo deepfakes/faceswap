@@ -22,7 +22,7 @@ from .objects import ExtractBatch, FrameFaces, ExtractSignal
 
 if T.TYPE_CHECKING:
     from .handler import ExtractHandler, ExtractHandlerFace
-    from lib.align.alignments import PNGHeaderSourceDict
+    from lib.align.objects import PNGSource
     from lib.align.detected_face import DetectedFace
 
 logger = logging.getLogger(__name__)
@@ -567,7 +567,7 @@ class ExtractRunner(T.Generic[HandlerT]):
             detected_faces: list[DetectedFace] | None = None,
             source: str | None = None,
             is_aligned: bool = False,
-            frame_metadata: PNGHeaderSourceDict | None = None,
+            frame_metadata: PNGSource | None = None,
             passthrough: T.Literal[False] = False) -> None: ...
 
     @T.overload
@@ -577,7 +577,7 @@ class ExtractRunner(T.Generic[HandlerT]):
             detected_faces: list[DetectedFace] | None = None,
             source: str | None = None,
             is_aligned: bool = False,
-            frame_metadata: PNGHeaderSourceDict | None = None,
+            frame_metadata: PNGSource | None = None,
             *,
             passthrough: T.Literal[True]) -> FrameFaces: ...
 
@@ -587,7 +587,7 @@ class ExtractRunner(T.Generic[HandlerT]):
             detected_faces: list[DetectedFace] | None = None,
             source: str | None = None,
             is_aligned: bool = False,
-            frame_metadata: PNGHeaderSourceDict | None = None,
+            frame_metadata: PNGSource | None = None,
             passthrough: bool = False) -> None | FrameFaces:
         """Put a frame into the pipeline.
 

@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 
 from lib.align import Alignments, AlignedFace, DetectedFace
+from lib.align.objects import PNGHeader, PNGSource
 from lib.gui.custom_widgets import PopupProgress
 from lib.gui.utils import FileHandler
 from lib.image import ImagesLoader, ImagesSaver, encode_image, generate_thumbnail
@@ -22,7 +23,7 @@ from lib.utils import get_folder, get_module_objects
 
 if T.TYPE_CHECKING:
     from . import manual
-    from lib.align.alignments import AlignmentFileDict, PNGHeaderDict
+    from lib.align.objects import FileAlignments
 
 logger = logging.getLogger(__name__)
 
@@ -274,7 +275,7 @@ class _DiskIO():
         :class:`~lib.align.DetectedFace`. objects and add to :attr:`_frame_faces`."""
         for key in sorted(self._alignments.data):
             this_frame_faces: list[DetectedFace] = []
-            for item in self._alignments.data[key]["faces"]:
+            for item in self._alignments.data[key].faces:
                 face = DetectedFace()
                 face.from_alignment(item, with_thumb=True)
                 face.load_aligned(None)
@@ -296,7 +297,7 @@ class _DiskIO():
         for idx, faces in zip(frames,
                               np.array(self._frame_faces, dtype="object")[np.array(frames)]):
             frame = self._sorted_frame_names[idx]
-            self._alignments.data[frame]["faces"] = [face.to_alignment() for face in faces]
+            self._alignments.data[frame].faces = [face.to_alignment() for face in faces]
 
         self._alignments.backup()
         self._alignments.save()
@@ -316,7 +317,7 @@ class _DiskIO():
             return
         logger.verbose("Reverting alignments for frame_index %s",  # type:ignore[attr-defined]
                        frame_index)
-        alignments = self._alignments.data[self._sorted_frame_names[frame_index]]["faces"]
+        alignments = self._alignments.data[self._sorted_frame_names[frame_index]].faces
         faces = self._frame_faces[frame_index]
 
         reset_grid = self._add_remove_faces(alignments, faces)
@@ -338,7 +339,7 @@ class _DiskIO():
 
     @classmethod
     def _add_remove_faces(cls,
-                          alignments: list[AlignmentFileDict],
+                          alignments: list[FileAlignments],
                           faces: list[DetectedFace]) -> bool:
         """On a revert, ensure that the alignments and detected face object counts for each frame
         are in sync.
@@ -382,10 +383,10 @@ class _DiskIO():
         logger.debug(dirname)
 
         queue: Queue = Queue()
-        pbar = PopupProgress("Extracting Faces...", self._alignments.frames_count + 1)
+        p_bar = PopupProgress("Extracting Faces...", self._alignments.frames_count + 1)
         thread = MultiThread(self._background_extract, dirname, queue)
         thread.start()
-        self._monitor_extract(thread, queue, pbar)
+        self._monitor_extract(thread, queue, p_bar)
 
     def _monitor_extract(self,
                          thread: MultiThread,
@@ -417,7 +418,9 @@ class _DiskIO():
                 break
         progress_bar.after(100, self._monitor_extract, thread, queue, progress_bar)
 
-    def _background_extract(self, output_folder: str, progress_queue: Queue) -> None:
+    def _background_extract(self,  # pylint:disable=too-many-locals
+                            output_folder: str,
+                            progress_queue: Queue) -> None:
         """Perform the background extraction in a thread so GUI doesn't become unresponsive.
 
         Parameters
@@ -442,14 +445,14 @@ class _DiskIO():
                                       image=image,
                                       centering="head",
                                       size=512)  # TODO user selectable size
-                meta: PNGHeaderDict = {"alignments": face.to_png_meta(),
-                                       "source": {"alignments_version": self._alignments.version,
-                                                  "original_filename": output,
-                                                  "face_index": face_idx,
-                                                  "source_filename": src_filename,
-                                                  "source_is_video": self._globals.is_video,
-                                                  "source_frame_dims": image.shape[:2]}}
-
+                meta = PNGHeader(
+                    alignments=face.to_png_meta(),
+                    source=PNGSource(alignments_version=self._alignments.version,
+                                     original_filename=output,
+                                     face_index=face_idx,
+                                     source_filename=src_filename,
+                                     source_is_video=self._globals.is_video,
+                                     source_frame_dims=tuple(image.shape[:2])))
                 assert aligned.face is not None
                 b_image = encode_image(aligned.face, ".png", metadata=meta)
                 saver.save(output, b_image)
@@ -507,11 +510,11 @@ class Filter():
         :attr:`~tools.manual.manual.TkGlobals.var_filter_mode.get()`."""
         face_count_per_index = self._detected_faces.face_count_per_index
         if self._globals.var_filter_mode.get() == "No Faces":
-            retval = sum(1 for fcount in face_count_per_index if fcount == 0)
+            retval = sum(1 for f_count in face_count_per_index if f_count == 0)
         elif self._globals.var_filter_mode.get() == "Has Face(s)":
-            retval = sum(1 for fcount in face_count_per_index if fcount != 0)
+            retval = sum(1 for f_count in face_count_per_index if f_count != 0)
         elif self._globals.var_filter_mode.get() == "Multiple Faces":
-            retval = sum(1 for fcount in face_count_per_index if fcount > 1)
+            retval = sum(1 for f_count in face_count_per_index if f_count > 1)
         elif self._globals.var_filter_mode.get() == "Misaligned Faces":
             distance = self._filter_distance
             retval = sum(1 for frame in self._detected_faces.current_faces

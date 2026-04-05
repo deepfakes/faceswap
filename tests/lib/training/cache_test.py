@@ -110,8 +110,8 @@ def test_MaskProcessing_init(size,
                              status: str,
                              mocker: pytest_mock.MockerFixture) -> None:
     """ Test cache._MaskProcessing correctly initializes """
-    mock_maskconfig = mocker.MagicMock()
-    mocker.patch(f"{MODULE_PREFIX}._MaskConfig", new=mock_maskconfig)
+    mock_mask_config = mocker.MagicMock()
+    mocker.patch(f"{MODULE_PREFIX}._MaskConfig", new=mock_mask_config)
 
     if not status == "pass":
         with pytest.raises(AssertionError):
@@ -132,7 +132,7 @@ def test_MaskProcessing_init(size,
     assert instance._size == size
     assert instance._coverage == coverage
     assert instance._centering == centering
-    mock_maskconfig.assert_called_once()
+    mock_mask_config.assert_called_once()
 
 
 def test_MaskProcessing_check_mask_exists(mocker: pytest_mock.MockerFixture) -> None:
@@ -226,10 +226,10 @@ def test_MaskProcessing_crop_and_resize(mask_centering: str,  # pylint:disable=t
         return
 
     assert retval is mock_cv2_resize_item
-    interp_used = mock_cv2_cubic if mask_size < size else mock_cv2_area
+    interpolation_used = mock_cv2_cubic if mask_size < size else mock_cv2_area
     mock_cv2_resize.assert_called_once_with(mock_face_mask,
                                             (size, size),
-                                            interpolation=interp_used)
+                                            interpolation=interpolation_used)
 
 
 @pytest.mark.parametrize("mask_type", (None, "extended", "components"))
@@ -438,7 +438,7 @@ def test_Cache_cache_full(mocker: pytest_mock.MockerFixture):
 
 
 def test_Cache_aligned_landmarks(mocker: pytest_mock.MockerFixture):
-    """ Test that cache.Cache.aligned_landmarks property behaves correcly """
+    """ Test that cache.Cache.aligned_landmarks property behaves correctly """
     instance = cache_mod.Cache(*STANDARD_CACHE_ARGS)
     instance._lock = mocker.MagicMock()
     for fname in _DUMMY_IMAGE_LIST:
@@ -518,52 +518,48 @@ def test_Cache_reset_cache(set_flag: bool,
         mock_warn.assert_called_once()
 
 
-@pytest.mark.parametrize("png_meta",
-                         ({"source": {"alignments_version": 1.0}},
-                          {"source": {"alignments_version": 2.0}},
-                          {"source": {"alignments_version": 2.2}}),
-                         ids=("v1.0", "v2.0", "v2.2"))
-def test_Cache_validate_version(png_meta, mocker):
+@pytest.mark.parametrize("version", (1.0, 2.0,  2.2), ids=("v1.0", "v2.0", "v2.2"))
+def test_Cache_validate_version(version, mocker):
     """ Test that cache.Cache._validate_version executes correctly """
     instance = cache_mod.Cache(*STANDARD_CACHE_ARGS)
     instance._reset_cache = mocker.MagicMock()
     fname = "test_filename.png"
-    version = png_meta["source"]["alignments_version"]
-
+    mock_meta = mocker.MagicMock()
+    mock_meta.source.alignments_version = version
     if version == 1.0:
         for centering in ("legacy", "face"):
             instance._extract_version = 0.0
             instance._config.centering = centering
-            instance._validate_version(png_meta, fname)
+            instance._validate_version(mock_meta, fname)
             if centering == "legacy":
                 instance._reset_cache.assert_not_called()
             else:
                 instance._reset_cache.assert_called_once_with(True)
             assert instance._extract_version == version
     else:
-        instance._validate_version(png_meta, fname)
+        instance._validate_version(mock_meta, fname)
         instance._reset_cache.assert_not_called()
         assert instance._extract_version == version
 
     instance._extract_version = 1.0  # Legacy alignments have been seen
     if version > 1.0:  # Newer alignments inbound
         with pytest.raises(FaceswapError):
-            instance._validate_version(png_meta, fname)
+            instance._validate_version(mock_meta, fname)
     else:
-        instance._validate_version(png_meta, fname)
+        instance._validate_version(mock_meta, fname)
 
     instance._extract_version = 2.0  # Newer alignments have been seen
     if version < 2.0:  # Legacy alignments inbound
         with pytest.raises(FaceswapError):
-            instance._validate_version(png_meta, fname)
+            instance._validate_version(mock_meta, fname)
         return  # Exit early on 1.0 because cannot pass any more tests
 
-    instance._validate_version(png_meta, fname)
+    instance._validate_version(mock_meta, fname)
     if version > 2.0:
         assert instance._extract_version == 2.0  # Defaulted to lowest version
 
     instance._extract_version = 2.5
-    instance._validate_version(png_meta, fname)
+    instance._validate_version(mock_meta, fname)
     assert instance._extract_version == version  # Defaulted to lowest version
 
 
@@ -614,7 +610,10 @@ def test_Cache_populate_cache(partially_loaded: bool,
     already_cached = ["/path/to/img4.png", "/path/img5.png"]
     needs_cache = _DUMMY_IMAGE_LIST
     filenames = _DUMMY_IMAGE_LIST + already_cached
-    metadata = [{"alignments": f"{f}_alignments"} for f in filenames]
+
+    mock_meta = [mocker.MagicMock() for _ in range(len(filenames))]
+    for meta, fname in zip(mock_meta, filenames):
+        meta.alignments = f"{fname}_alignments"
 
     instance = cache_mod.Cache(*STANDARD_CACHE_ARGS)
     instance._validate_version = mocker.MagicMock()  # type:ignore[method-assign]
@@ -632,9 +631,9 @@ def test_Cache_populate_cache(partially_loaded: bool,
             side_effect=[mock_detected_faces[f] for f in needs_cache])
 
     # Call the function
-    instance._populate_cache(needs_cache, metadata, filenames)  # type:ignore[arg-type]
+    instance._populate_cache(needs_cache, mock_meta, filenames)  # type:ignore[arg-type]
 
-    expected_validate = [mocker.call(metadata[idx], f) for idx, f in enumerate(needs_cache)]
+    expected_validate = [mocker.call(mock_meta[idx], f) for idx, f in enumerate(needs_cache)]
     instance._validate_version.assert_has_calls(expected_validate,  # type:ignore[attr-defined]
                                                 any_order=False)
     assert instance._validate_version.call_count == len(needs_cache)  # type:ignore[attr-defined]
@@ -702,7 +701,7 @@ def test_Cache_update_cache_full(scenario: bool, mocker: pytest_mock.MockerFixtu
 
     if scenario == "full":
         instance._cache = {i: i for i in range(10)}  # type:ignore[misc]
-    if scenario == "patial":
+    if scenario == "partial":
         instance._cache = {i: i for i in range(10)}  # type:ignore[misc]
         instance._partially_loaded = filenames.copy()
 
@@ -771,11 +770,17 @@ def test_Cache_cache_metadata(scenario: str, mocker: pytest_mock.MockerFixture) 
 
 
 @pytest.mark.parametrize("scenario", ("fail-meta", "fail-landmarks", "success"))
-def test_Cache_pre_fill(scenario: str, mocker: pytest_mock.MockerFixture) -> None:
+def test_Cache_pre_fill(scenario: str,
+                        mocker: pytest_mock.MockerFixture,
+                        monkeypatch: pytest.MonkeyPatch) -> None:
     """ Test that cache.Cache.prefill executes correctly """
     filenames = _DUMMY_IMAGE_LIST.copy()
     mock_read_image_batch = mocker.patch(f"{MODULE_PREFIX}.read_image_meta_batch")
     side_effect_read_image_batch = [(f, {}) for f in filenames]  # type:ignore[var-annotated]
+
+    png_mock = mocker.MagicMock()
+    monkeypatch.setattr("lib.training.cache.PNGHeader.from_dict", lambda x: png_mock)
+
     if scenario != "fail-meta":  # Set successful return data
         for effect in side_effect_read_image_batch:
             effect[1]["itxt"] = {"alignments": [1, 2, 3]}
@@ -801,11 +806,10 @@ def test_Cache_pre_fill(scenario: str, mocker: pytest_mock.MockerFixture) -> Non
             instance._validate_version.assert_not_called()  # type:ignore[attr-defined]
             instance._load_detected_face.assert_not_called()  # type:ignore[attr-defined]
         else:
-            meta = side_effect_read_image_batch[0][1]["itxt"]
             instance._validate_version.assert_called_once_with(  # type:ignore[attr-defined]
-                meta, filenames[0])
+                png_mock, filenames[0])
             instance._load_detected_face.assert_called_once_with(  # type:ignore[attr-defined]
-                filenames[0], meta["alignments"])
+                filenames[0], png_mock.alignments)
         return
 
     # success
@@ -814,16 +818,11 @@ def test_Cache_pre_fill(scenario: str, mocker: pytest_mock.MockerFixture) -> Non
     instance._lock.__exit__.assert_called_once()  # type:ignore[attr-defined]
     mock_read_image_batch.assert_called_once_with(filenames)
 
-    fname_calls = [x[0] for x in side_effect_read_image_batch]
-    meta_calls = [x[1]["itxt"] for x in side_effect_read_image_batch]
-    call_validate = [mocker.call(l, f) for f, l in zip(fname_calls, meta_calls)]
-    call_det_face = [mocker.call(f, l["alignments"]) for f, l in zip(fname_calls, meta_calls)]
-
     instance._validate_version.assert_has_calls(  # type:ignore[attr-defined]
-        call_validate, any_order=False)  # type:ignore[attr-defined]
+        png_mock, any_order=False)  # type:ignore[attr-defined]
     assert instance._validate_version.call_count == len(filenames)  # type:ignore[attr-defined]
     instance._load_detected_face.assert_has_calls(  # type:ignore[attr-defined]
-        call_det_face, any_order=False)  # type:ignore[attr-defined]
+        png_mock.alignments, any_order=False)  # type:ignore[attr-defined]
     assert instance._load_detected_face.call_count == len(filenames)  # type:ignore[attr-defined]
 
     assert instance._cache == {os.path.basename(f): d for f, d in zip(filenames,

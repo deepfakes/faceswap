@@ -129,8 +129,7 @@ class ThumbsCreator():
         if self._meta["keyframes"][0] != 0:
             logger.warning("Your video does not start on a Key Frame. This can lead to issues.")
 
-        frame_face_indices = [i for i, v in enumerate(self._alignments.data.values())
-                              if v["faces"]]
+        frame_face_indices = [i for i, v in enumerate(self._alignments.data.values()) if v.faces]
         num_frames = len(frame_face_indices)
         num_threads = min(num_frames, self._num_threads)
         window = num_frames // num_threads

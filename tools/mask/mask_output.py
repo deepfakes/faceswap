@@ -13,7 +13,7 @@ import numpy as np
 from tqdm import tqdm
 
 from lib.align import AlignedFace
-from lib.align.alignments import AlignmentDict
+from lib.align.objects import AlignmentsEntry
 
 from lib.image import ImagesSaver, read_image_meta_batch
 from lib.utils import get_folder, get_module_objects
@@ -130,15 +130,14 @@ class Output:
             return alignments
         logger.debug("Generating alignments from faces")
 
-        data = T.cast(dict[str, AlignmentDict], {})
+        data = T.cast(dict[str, AlignmentsEntry], {})
         for _, meta in tqdm(read_image_meta_batch(file_list),
                             desc="Reading alignments from faces",
                             total=len(file_list),
                             leave=False):
             fname = meta["itxt"]["source"]["source_filename"]
             aln = meta["itxt"]["alignments"]
-            data.setdefault(fname, {}).setdefault("faces",  # type:ignore[typeddict-item]
-                                                  []).append(aln)
+            data.setdefault(fname, AlignmentsEntry()).faces.append(aln)
 
         retval = ExtractAlignments("/dummy/alignments.fsa", "", is_extract=True)
         retval.update_from_dict(data)

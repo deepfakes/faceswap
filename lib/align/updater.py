@@ -12,10 +12,9 @@ from lib.logger import parse_class_init
 from lib.utils import get_module_objects
 from lib.video import VIDEO_EXTENSIONS
 
-logger = logging.getLogger(__name__)
+from .objects import AlignmentsEntry
 
-if T.TYPE_CHECKING:
-    from lib import align
+logger = logging.getLogger(__name__)
 
 
 class _Updater():
@@ -24,11 +23,14 @@ class _Updater():
     Parameters
     ----------
     alignments
-        The alignments object that is being tested and updated
+        The serialized alignments that have been loaded from disk
+    version
+        The alignments file version that has been loaded
     """
-    def __init__(self, alignments: align.alignments.Alignments) -> None:
+    def __init__(self, alignments: dict[str, T.Any], version: float) -> None:
         logger.debug(parse_class_init(locals()))
         self._alignments = alignments
+        self._version = version
         self._needs_update = self._test()
         if self._needs_update:
             self._update()
@@ -91,13 +93,16 @@ class VideoExtension(_Updater):
     Parameters
     ----------
     alignments
-        The alignments object that is being tested and updated
+        The serialized alignments that have been loaded from disk
+    version
+        The alignments file version that has been loaded
     video_filename
         The video filename that holds these alignments
     """
-    def __init__(self, alignments: align.alignments.Alignments, video_filename: str) -> None:
+    def __init__(self, alignments: dict[str, T.Any], version: float, video_filename: str) -> None:
         self._video_name, self._extension = os.path.splitext(video_filename)
-        super().__init__(alignments)
+        super().__init__(alignments, version)
+        self._alignments: dict[str, AlignmentsEntry]
 
     def test(self) -> bool:
         """Requires update if the extension of the key in the alignment file is not the same
@@ -112,7 +117,7 @@ class VideoExtension(_Updater):
         if self._extension.lower() not in VIDEO_EXTENSIONS:
             return False
 
-        exts = set(os.path.splitext(k)[-1] for k in self._alignments.data)
+        exts = set(os.path.splitext(k)[-1] for k in self._alignments)
         if len(exts) != 1:
             logger.debug("Alignments file has multiple key extensions. Skipping")
             return False
@@ -122,7 +127,7 @@ class VideoExtension(_Updater):
             return False
 
         logger.debug("Needs update for video extension (version: %s, extension: %s)",
-                     self._alignments.version, self._extension)
+                     self._version, self._extension)
         return True
 
     def update(self) -> int:
@@ -135,16 +140,16 @@ class VideoExtension(_Updater):
             The filename of the video file that created these alignments
         """
         updated = 0
-        for key in list(self._alignments.data):
+        for key in list(self._alignments):
             fname = os.path.splitext(key)[0]
             if fname.rsplit("_", maxsplit=1)[0] != self._video_name:
                 continue  # Key is from a different source
 
-            val = self._alignments.data[key]
+            val = self._alignments[key]
             new_key = f"{fname}{self._extension}"
 
-            del self._alignments.data[key]
-            self._alignments.data[new_key] = val
+            del self._alignments[key]
+            self._alignments[new_key] = val
 
             updated += 1
 
@@ -164,7 +169,7 @@ class FileStructure(_Updater):
         -------
         ``True`` if the file has legacy structure otherwise ``False``
         """
-        return any(isinstance(val, list) for val in self._alignments.data.values())
+        return any(isinstance(val, list) for val in self._alignments.values())
 
     def update(self) -> int:
         """Update legacy alignments files from the format `{frame_name: [faces}` to the
@@ -175,10 +180,10 @@ class FileStructure(_Updater):
         The number of items that were updated
         """
         updated = 0
-        for key, val in self._alignments.data.items():
+        for key, val in self._alignments.items():
             if not isinstance(val, list):
                 continue
-            self._alignments.data[key] = T.cast("align.alignments.AlignmentDict", {"faces": val})
+            self._alignments[key] = {"faces": val}
             updated += 1
         return updated
 
@@ -193,7 +198,7 @@ class LandmarkRename(_Updater):
         ``True`` if the alignments file contains legacy `landmarksXY` keys otherwise ``False``
         """
         return (any(key == "landmarksXY"
-                    for val in self._alignments.data.values()
+                    for val in self._alignments.values()
                     for alignment in val["faces"]
                     for key in alignment))
 
@@ -205,7 +210,7 @@ class LandmarkRename(_Updater):
         The number of landmarks keys that were changed
         """
         update_count = 0
-        for val in self._alignments.data.values():
+        for val in self._alignments.values():
             for alignment in val["faces"]:
                 if "landmarksXY" in alignment:
                     alignment["landmarks_xy"] = alignment.pop("landmarksXY")  # type:ignore
@@ -225,7 +230,7 @@ class NumpyToList(_Updater):
         """
         return any(isinstance(face["landmarks_xy"], np.ndarray)
                    or isinstance(face.get("thumb"), np.ndarray)
-                   for val in self._alignments.data.values()
+                   for val in self._alignments.values()
                    for face in val["faces"])
 
     def update(self) -> int:
@@ -236,7 +241,7 @@ class NumpyToList(_Updater):
         The number of faces that were changed
         """
         update_count = 0
-        for val in self._alignments.data.values():
+        for val in self._alignments.values():
             for alignment in val["faces"]:
                 test1 = alignment["landmarks_xy"]
                 test2 = alignment["thumb"]
@@ -260,7 +265,7 @@ class MaskCentering(_Updater):
         -------
         ``True`` mask centering requires updating otherwise ``False``
         """
-        return self._alignments.version < 2.2
+        return self._version < 2.2
 
     def update(self) -> int:
         """Add the mask key to the alignment file and update the centering of existing masks
@@ -270,7 +275,7 @@ class MaskCentering(_Updater):
         The number of masks that were updated
         """
         update_count = 0
-        for val in self._alignments.data.values():
+        for val in self._alignments.values():
             for alignment in val["faces"]:
                 if "mask" not in alignment:
                     alignment["mask"] = {}
@@ -290,7 +295,7 @@ class IdentityAndVideoMeta(_Updater):
         -------
         ``True`` identity key needs inserting otherwise ``False``
         """
-        return self._alignments.version < 2.3
+        return self._version < 2.3
 
     # Identity information was not previously stored in the alignments file.
     def update(self) -> int:
@@ -301,7 +306,7 @@ class IdentityAndVideoMeta(_Updater):
         The number of keys inserted
         """
         update_count = 0
-        for val in self._alignments.data.values():
+        for val in self._alignments.values():
             this_update = 0
             if "video_meta" not in val:
                 val["video_meta"] = {}

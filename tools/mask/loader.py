@@ -16,7 +16,7 @@ from lib.utils import get_module_objects
 from lib.infer.objects import FrameFaces
 
 if T.TYPE_CHECKING:
-    from lib.align.alignments import PNGHeaderDict
+    from lib.align.objects import FileAlignments, PNGAlignments, PNGHeader
 logger = logging.getLogger(__name__)
 
 
@@ -76,7 +76,7 @@ class Loader:
     def _process_face(self,
                       filename: str,
                       image: np.ndarray,
-                      metadata: PNGHeaderDict) -> FrameFaces | None:
+                      metadata: PNGHeader) -> FrameFaces | None:
         """Process a single face when masking from face images
 
         Parameters
@@ -93,12 +93,12 @@ class Loader:
         the extract media object for the processed face or ``None`` if alignment information
         could not be found
         """
-        frame_name = metadata["source"]["source_filename"]
-        face_index = metadata["source"]["face_index"]
+        frame_name = metadata.source.source_filename
+        face_index = metadata.source.face_index
 
         if self._alignments is None:  # mask from PNG header
             lookup_index = 0
-            aligns = [T.cast(alignments.AlignmentFileDict, metadata["alignments"])]
+            aligns: list[FileAlignments] | list[PNGAlignments] = [metadata.alignments]
         else:  # mask from Alignments file
             lookup_index = face_index
             aligns = self._alignments.get_faces_in_frame(frame_name)
@@ -108,7 +108,7 @@ class Loader:
                 return None
 
         alignment = aligns[lookup_index]
-        retval = FrameFaces(filename, image, is_aligned=True, frame_metadata=metadata["source"])
+        retval = FrameFaces(filename, image, is_aligned=True, frame_metadata=metadata.source)
         retval.detected_faces = [DetectedFace().from_alignment(alignment)]
         return retval
 
@@ -125,13 +125,6 @@ class Loader:
                 logger.warning("Non-Faceswap extracted face found. Image skipped: '%s'",
                                filename)
                 continue
-
-            if "source_frame_dims" not in metadata.get("source", {}):
-                logger.error("The faces need to be re-extracted as at least some of them do not "
-                             "contain information required to correctly generate masks.")
-                logger.error("You can re-extract the face-set by using the Alignments Tool's "
-                             "Extract job.")
-                break
 
             retval = self._process_face(filename, image, metadata)
             if retval is None:

@@ -13,6 +13,7 @@ import psutil
 from fastcluster import linkage, linkage_vector
 
 from lib.align.detected_face import DetectedFace
+from lib.align.objects import PNGHeader
 from lib.image import png_read_meta
 from lib.logger import parse_class_init
 from lib.utils import FaceswapError, get_module_objects, IMAGE_EXTENSIONS
@@ -23,7 +24,6 @@ from .handler import ExtractHandlerFace
 if T.TYPE_CHECKING:
     import numpy.typing as npt
     from collections.abc import Generator
-    from lib.align.alignments import PNGHeaderDict
     from .runner import ExtractRunner
 
 logger = logging.getLogger(__name__)
@@ -319,7 +319,7 @@ class FilterLoader:
         self._runner = runner
 
     @classmethod
-    def _get_meta(cls, filename: str, image: bytes) -> PNGHeaderDict | None:
+    def _get_meta(cls, filename: str, image: bytes) -> PNGHeader | None:
         """Obtain the embedded meta data from a faceswap aligned image
 
         Parameters
@@ -343,11 +343,11 @@ class FilterLoader:
             logger.debug("[IdentityFilter] '%s' is not a faceswap extracted image", filename)
             return None
 
-        if "alignments" not in meta:
+        if not isinstance(meta, PNGHeader):
             logger.debug("[IdentityFilter] '%s' is not a faceswap extracted image", filename)
             return None
 
-        return T.cast("PNGHeaderDict", meta)
+        return meta
 
     def _from_pipeline(self, pipeline: ExtractRunner, images: dict[str, npt.NDArray[np.uint8]]
                        ) -> dict[str, npt.NDArray[np.float32]]:
@@ -377,7 +377,7 @@ class FilterLoader:
                      {k: v.shape for k, v in retval.items()})
         return retval
 
-    def _from_plugin(self, images: dict[str, tuple[PNGHeaderDict, npt.NDArray[np.uint8]]]
+    def _from_plugin(self, images: dict[str, tuple[PNGHeader, npt.NDArray[np.uint8]]]
                      ) -> dict[str, npt.NDArray[np.float32]]:
         """Obtain embeddings from the identity when faceswap aligned images without identity
         information have been provided
@@ -397,9 +397,9 @@ class FilterLoader:
             logger.debug("[IdentityFilter] Putting to plugin: '%s'", fname)
             out = self._runner.put_direct(fname,
                                           image,
-                                          [DetectedFace().from_png_meta(meta["alignments"])],
+                                          [DetectedFace().from_png_meta(meta.alignments)],
                                           is_aligned=True,
-                                          frame_size=meta["source"]["source_frame_dims"])
+                                          frame_size=meta.source.source_frame_dims)
             retval[fname] = out.identities[self._runner.handler.plugin.storage_name].squeeze(0)
 
         logger.debug("[IdentityFilter] Identity from plugin: %s",
@@ -455,7 +455,7 @@ class FilterLoader:
         """
         embeds: dict[str, npt.NDArray[np.float32]] = {}
         non_aligned: dict[str, npt.NDArray[np.uint8]] = {}
-        aligned: dict[str, tuple[PNGHeaderDict, npt.NDArray[np.uint8]]] = {}
+        aligned: dict[str, tuple[PNGHeader, npt.NDArray[np.uint8]]] = {}
 
         for filepath in self._filter_files.union(self._nfilter_files):
             with open(filepath, "rb") as in_file:
@@ -463,7 +463,7 @@ class FilterLoader:
 
             meta = self._get_meta(filepath, raw_image)
             if meta is not None:
-                idn = T.cast(dict[str, list], meta.get("identity", {}))
+                idn = meta.alignments.identity
                 embed = np.array(idn.get(self._runner.handler.storage_name, []),
                                  dtype="float32")
                 if np.any(embed):

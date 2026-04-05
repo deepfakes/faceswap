@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 from lib.align.aligned_utils import (batch_adjust_matrices, batch_align, batch_resize,
                                      batch_transform, get_adjusted_center, get_centered_size)
-from lib.align.alignments import AlignmentsFace, PNGHeader, PNGSource
+from lib.align.objects import AlignmentsEntry, FileAlignments, PNGHeader, PNGSource
 from lib.align.constants import EXTRACT_RATIOS, LandmarkType, MEAN_FACE
 from lib.align.detected_face import DetectedFace
 from lib.align.pose import get_camera_matrix, get_xyz_2d, Batch3D
@@ -35,7 +35,7 @@ from .fs_media import Alignments, finalize
 if T.TYPE_CHECKING:
     import numpy.typing as npt
     from argparse import Namespace
-    from lib.align.alignments import AlignmentDict, AlignmentFileDict, PNGAlignments
+    from lib.align.objects import PNGAlignments
     from lib.infer.runner import ExtractRunner
     from lib.multithreading import ErrorState
 
@@ -387,7 +387,7 @@ class Loader:  # pylint:disable=too-many-instance-attributes
 
         self._images = ImagesLoader(input_path)
         self._thread = FSThread(self._load, name="ExtractLoader")
-        self._alignments: dict[str, AlignmentDict] = {}
+        self._alignments: dict[str, AlignmentsEntry] = {}
         self._missing_count = 0
         self._seen: set[str] = set()
         self._ready = False
@@ -434,7 +434,7 @@ class Loader:  # pylint:disable=too-many-instance-attributes
                           if f in existing) if self._skip_frames else set()
         skip_faces = (
             set(i for i, f in enumerate(file_names)
-                if self._alignments.get(f, {}).get("faces"))  # type:ignore[call-overload]
+                if f in self._alignments and self._alignments[f].faces)
             if self._skip_faces else set()
         )
         skip_exist = skip_frames.union(skip_faces)
@@ -475,8 +475,7 @@ class Loader:  # pylint:disable=too-many-instance-attributes
             logger.verbose(  # type:ignore[attr-defined]
                 "Adding frame with no detections as does not exist in import file: '%s'", fname)
             return []
-        retval = [DetectedFace().from_alignment(a)
-                  for a in self._alignments[fname].get("faces", [])]
+        retval = [DetectedFace().from_alignment(a) for a in self._alignments[fname].faces]
         logger.trace(  # type:ignore[attr-defined]
             "[Extract.Loader] importing %s faces for file '%s'", len(retval), fname)
         return retval
@@ -511,7 +510,7 @@ class Loader:  # pylint:disable=too-many-instance-attributes
         self._finalize()
         logger.debug("[Extract.Loader] end")
 
-    def start(self, alignments: dict[str, AlignmentDict]) -> None:
+    def start(self, alignments: dict[str, AlignmentsEntry]) -> None:
         """ Set the skip list and start loading images from disk
 
         Parameters
@@ -944,10 +943,9 @@ class Output:  # pylint:disable=too-many-instance-attributes
                          media.image_size,
                          alignments.version,
                          is_video)
-        alignments_faces = T.cast(list["AlignmentFileDict"],
-                                  [asdict(AlignmentsFace(**aln.__dict__, thumb=thumb.tolist()))
-                                   for aln, thumb in zip(meta, thumbnails)])
-        alignments.data[basename] = {"faces": alignments_faces, "video_meta": {}}
+        alignments_faces = [FileAlignments(**aln.__dict__, thumb=thumb)
+                            for aln, thumb in zip(meta, thumbnails)]
+        alignments.data[basename] = AlignmentsEntry(faces=alignments_faces)
         faces_count = len(media)
         if faces_count == 0:
             logger.verbose("No faces were detected in image: %s", basename)  # type: ignore

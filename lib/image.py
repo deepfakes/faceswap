@@ -16,6 +16,7 @@ from zlib import crc32
 import cv2
 import numpy as np
 
+from lib.align.objects import PNGHeader
 from lib.logger import parse_class_init
 from lib.multithreading import FSThread
 from lib.utils import FaceswapError, get_image_paths, get_module_objects
@@ -25,7 +26,6 @@ from lib.video import check_for_video, VideoReader
 if T.TYPE_CHECKING:
     import numpy.typing as npt
     from lib.multithreading import ErrorState
-    from lib.align.alignments import PNGHeaderDict
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ def read_image(filename: str,
 def read_image(filename: str,
                raise_error: T.Literal[False] = False,
                *,
-               with_metadata: T.Literal[True]) -> tuple[npt.NDArray[np.uint8], PNGHeaderDict]: ...
+               with_metadata: T.Literal[True]) -> tuple[npt.NDArray[np.uint8], PNGHeader]: ...
 
 
 @T.overload
@@ -59,8 +59,8 @@ def read_image(filename: str,
 def read_image(filename: str,  # noqa[C901]  # pylint:disable=too-many-statements,too-many-branches
                raise_error: bool = False,
                with_metadata: bool = False
-               ) -> np.ndarray | None | tuple[npt.NDArray[np.uint8], PNGHeaderDict]:
-    """ Read an image file from a file location.
+               ) -> np.ndarray | None | tuple[npt.NDArray[np.uint8], PNGHeader]:
+    """Read an image file from a file location.
 
     Extends the functionality of :func:`cv2.imread()` by ensuring that an image was actually
     loaded. Errors can be logged and ignored so that the process can continue on an image load
@@ -68,22 +68,22 @@ def read_image(filename: str,  # noqa[C901]  # pylint:disable=too-many-statement
 
     Parameters
     ----------
-    filename : str
+    filename
         Full path to the image to be loaded.
-    raise_error: bool, optional
+    raise_error
         If ``True`` then any failures (including the returned image being ``None``) will be
         raised. If ``False`` then an error message will be logged, but the error will not be
         raised. Default: ``False``
-    with_metadata : bool, optional
+    with_metadata
         Only returns a value if the images loaded are extracted Faceswap faces. If ``True`` then
         returns the Faceswap metadata stored with in a Face images .png EXIF header.
         Default: ``False``
 
     Returns
     -------
-    image : :class:`numpy.ndarray`
+    image
         The image in `BGR` channel order as UINT8 for the corresponding :attr:`filename`
-    metadata : :class:`~lib.align.alignments.PNGHeaderDict`, optional
+    metadata
         The faceswap metadata corresponding to the image. Only returned if
         `with_metadata` is ``True``
 
@@ -98,7 +98,7 @@ def read_image(filename: str,  # noqa[C901]  # pylint:disable=too-many-statement
     logger.trace("Requested image: '%s'", filename)  # type:ignore[attr-defined]
     success = True
     image = None
-    retval: np.ndarray | tuple[np.ndarray, PNGHeaderDict] | None = None
+    retval: np.ndarray | tuple[np.ndarray, PNGHeader] | None = None
     try:
         with open(filename, "rb") as in_file:
             raw_file = in_file.read()
@@ -122,7 +122,8 @@ def read_image(filename: str,  # noqa[C901]  # pylint:disable=too-many-statement
             image = np.clip(image, 0, 255).astype(np.uint8)
 
         if with_metadata:
-            metadata = T.cast("PNGHeaderDict", png_read_meta(raw_file))
+            metadata = png_read_meta(raw_file)
+            assert isinstance(metadata, PNGHeader)
             retval = (image, metadata)
         else:
             retval = image
@@ -158,30 +159,30 @@ def read_image_batch(filenames: list[str], with_metadata: T.Literal[False] = Fal
 
 @T.overload
 def read_image_batch(filenames: list[str], with_metadata: T.Literal[True]
-                     ) -> tuple[np.ndarray, list[PNGHeaderDict]]: ...
+                     ) -> tuple[np.ndarray, list[PNGHeader]]: ...
 
 
 def read_image_batch(filenames: list[str], with_metadata: bool = False
-                     ) -> np.ndarray | tuple[np.ndarray, list[PNGHeaderDict]]:
-    """ Load a batch of images from the given file locations.
+                     ) -> np.ndarray | tuple[np.ndarray, list[PNGHeader]]:
+    """Load a batch of images from the given file locations.
 
     Leverages multi-threading to load multiple images from disk at the same time leading to vastly
     reduced image read times.
 
     Parameters
     ----------
-    filenames : list[str]
+    filenames
         A of full paths to the images to be loaded.
-    with_metadata : bool, optional
+    with_metadata
         Only returns a value if the images loaded are extracted Faceswap faces. If ``True`` then
         returns the Faceswap metadata stored within each Face's .png exif header.
         Default: ``False``
 
     Returns
     -------
-    batch : :class:`numpy.ndarray`
+    batch
         The batch of images in `BGR` channel order returned in the order of :attr:`filenames`
-    metadata : list[:class:`~lib.align.alignments.PNGHeaderDict`], optional
+    metadata
         The faceswap metadata corresponding to each image in the batch. Only returned if
         `with_metadata` is ``True``
 
@@ -204,7 +205,7 @@ def read_image_batch(filenames: list[str], with_metadata: bool = False
     """
     logger.trace("Requested batch: '%s'", filenames)  # type:ignore[attr-defined]
     batch: list[np.ndarray | None] = [None for _ in range(len(filenames))]
-    meta: list[PNGHeaderDict | None] = [None for _ in range(len(filenames))]
+    meta: list[PNGHeader | None] = [None for _ in range(len(filenames))]
 
     with futures.ThreadPoolExecutor() as executor:
         images = {executor.submit(  # NOTE submit strips positionals, breaking type-checking
@@ -215,7 +216,7 @@ def read_image_batch(filenames: list[str], with_metadata: bool = False
                   for idx, filename in enumerate(filenames)}
 
         for future in futures.as_completed(images):
-            result = T.cast(np.ndarray | tuple[np.ndarray, "PNGHeaderDict"], future.result())
+            result = T.cast(np.ndarray | tuple[np.ndarray, "PNGHeader"], future.result())
             ret_idx = images[future]
             if with_metadata:
                 assert isinstance(result, tuple)
@@ -225,9 +226,9 @@ def read_image_batch(filenames: list[str], with_metadata: bool = False
                 batch[ret_idx] = result
 
     arr_batch = np.array(batch)
-    retval: np.ndarray | tuple[np.ndarray, list[PNGHeaderDict]]
+    retval: np.ndarray | tuple[np.ndarray, list[PNGHeader]]
     if with_metadata:
-        retval = (arr_batch, T.cast(list["PNGHeaderDict"], meta))
+        retval = (arr_batch, T.cast(list["PNGHeader"], meta))
     else:
         retval = arr_batch
 
@@ -344,19 +345,20 @@ def read_image_meta_batch(filenames):
             yield retval
 
 
-def pack_to_itxt(metadata):
+def pack_to_itxt(metadata: PNGHeader | dict[str, T.Any] | bytes) -> bytes:
     """ Pack the given metadata dictionary to a PNG iTXt header field.
 
     Parameters
     ----------
-    metadata: dict or bytes
+    metadata
         The dictionary to write to the header. Can be pre-encoded as utf-8.
 
     Returns
     -------
-    bytes
-        A byte encoded PNG iTXt field, including chunk header and CRC
+    A byte encoded PNG iTXt field, including chunk header and CRC
     """
+    if isinstance(metadata, PNGHeader):
+        metadata = metadata.to_dict()
     if not isinstance(metadata, bytes):
         metadata = str(metadata).encode("utf-8", "strict")
     key = "faceswap".encode("latin-1", "strict")
@@ -368,16 +370,18 @@ def pack_to_itxt(metadata):
     return retval
 
 
-def update_existing_metadata(filename, metadata):
+def update_existing_metadata(filename: str, metadata: PNGHeader | bytes) -> None:
     """ Update the png header metadata for an existing .png extracted face file on the filesystem.
 
     Parameters
     ----------
-    filename: str
+    filename
         The full path to the face to be updated
-    metadata: dict or bytes
+    metadata
         The dictionary to write to the header. Can be pre-encoded as utf-8.
     """
+    if not isinstance(metadata, bytes):
+        metadata = str(metadata.to_dict()).encode("utf-8", errors="strict")
 
     tmp_filename = filename + "~"
     with open(filename, "rb") as png, open(tmp_filename, "wb") as tmp:
@@ -421,18 +425,18 @@ def update_existing_metadata(filename, metadata):
 def encode_image(image: np.ndarray,
                  extension: str,
                  encoding_args: tuple[int, ...] | None = None,
-                 metadata: PNGHeaderDict | dict[str, T.Any] | bytes | None = None) -> bytes:
-    """ Encode an image.
+                 metadata: PNGHeader | dict[str, T.Any] | bytes | None = None) -> bytes:
+    """Encode an image.
 
     Parameters
     ----------
-    image: numpy.ndarray
+    image
         The image to be encoded in `BGR` channel order.
-    extension: str
+    extension
         A compatible `cv2` image file extension that the final image is to be saved to.
-    encoding_args: tuple[int, ...], optional
+    encoding_args
         Any encoding arguments to pass to cv2's imencode function
-    metadata: dict or bytes, optional
+    metadata
         Metadata for the image. If provided, and the extension is png or tiff, this information
         will be written to the PNG itxt header. Default:``None`` Can be provided as a python dict
         or pre-encoded
@@ -459,14 +463,14 @@ def encode_image(image: np.ndarray,
     return retval
 
 
-def png_write_meta(image: bytes, data: PNGHeaderDict | dict[str, T.Any] | bytes) -> bytes:
-    """ Write Faceswap information to a png's iTXt field.
+def png_write_meta(image: bytes, data: PNGHeader | dict[str, T.Any] | bytes) -> bytes:
+    """Write Faceswap information to a png's iTXt field.
 
     Parameters
     ----------
-    image: bytes
+    image
         The bytes encoded png file to write header data to
-    data: dict or bytes
+    data
         The dictionary to write to the header. Can be pre-encoded as utf-8.
 
     Notes
@@ -478,7 +482,6 @@ def png_write_meta(image: bytes, data: PNGHeaderDict | dict[str, T.Any] | bytes)
     References
     ----------
     PNG Specification: https://www.w3.org/TR/2003/REC-PNG-20031110/
-
     """
     split = image.find(b"IDAT") - 4
     retval = image[:split] + pack_to_itxt(data) + image[split:]
@@ -486,14 +489,14 @@ def png_write_meta(image: bytes, data: PNGHeaderDict | dict[str, T.Any] | bytes)
 
 
 def tiff_write_meta(image: bytes,  # pylint:disable=too-many-locals
-                    data: PNGHeaderDict | dict[str, T.Any] | bytes) -> bytes:
-    """ Write Faceswap information to a tiff's image_description field.
+                    data: PNGHeader | dict[str, T.Any] | bytes) -> bytes:
+    """Write Faceswap information to a tiff's image_description field.
 
     Parameters
     ----------
-    png: bytes
+    png
         The bytes encoded tiff file to write header data to
-    data: dict or bytes
+    data
         The data to write to the image-description field. If provided as a dict, then it should be
         a json serializable object, otherwise it should be data encoded as ascii bytes
 
@@ -502,6 +505,8 @@ def tiff_write_meta(image: bytes,  # pylint:disable=too-many-locals
     This handles a very specific task of adding, and populating, an ImageDescription field in a
     Tiff file generated by OpenCV. For any other use cases it will likely fail
     """
+    if isinstance(data, PNGHeader):
+        data = data.to_dict()
     if not isinstance(data, bytes):
         data = json.dumps(data, ensure_ascii=True).encode("ascii")
 
@@ -591,19 +596,18 @@ def tiff_read_meta(image: bytes) -> dict[str, T.Any]:  # pylint:disable=too-many
     return retval
 
 
-def png_read_meta(image: bytes) -> PNGHeaderDict | dict[str, T.Any]:
+def png_read_meta(image: bytes) -> PNGHeader | dict[str, T.Any]:
     """ Read the Faceswap information stored in a png's iTXt field.
 
     Parameters
     ----------
-    image: bytes
+    image
         The bytes encoded png file to read header data from
 
     Returns
     -------
-    :class:`~lib.align.alignments.PNGHeaderDict` | dict[str, Any]
-        The Faceswap information stored in the PNG header. This will either be a PNGHeaderDict
-        if an extracted face, or other arbitrary information (for example for the Patch Writer)
+    The Faceswap information stored in the PNG header. This will either be a PNGHeader object if an
+    extracted face, or other arbitrary information (for example for the Patch Writer)
 
     Notes
     -----
@@ -611,7 +615,7 @@ def png_read_meta(image: bytes) -> PNGHeaderDict | dict[str, T.Any]:
     task. OpenCV will not write any iTXt headers to the PNG file, so we make the assumption that
     the only iTXt header that exists is the one that Faceswap created for storing alignments.
     """
-    retval: PNGHeaderDict | None = None
+    retval: PNGHeader | dict[str, T.Any] | None = None
     pointer = 0
     while True:
         pointer = image.find(b"iTXt", pointer) - 4
@@ -622,7 +626,7 @@ def png_read_meta(image: bytes) -> PNGHeaderDict | dict[str, T.Any]:
         pointer += 8
         keyword, value = image[pointer:pointer + length].split(b"\0", 1)
         if keyword == b"faceswap":
-            retval = literal_eval(value[4:].decode("utf-8", errors="ignore"))
+            retval = PNGHeader.from_dict(literal_eval(value[4:].decode("utf-8", errors="ignore")))
             break
         logger.trace("Skipping iTXt chunk: '%s'",  # type:ignore[attr-defined]
                      keyword.decode("latin-1", errors="ignore"))
@@ -1038,7 +1042,7 @@ class ImagesLoader(ImageIO):
             yield filename, image
 
     def _from_folder(self) -> T.Generator[tuple[str, npt.NDArray[np.uint8]] |
-                                          tuple[str, npt.NDArray[np.uint8], PNGHeaderDict],
+                                          tuple[str, npt.NDArray[np.uint8], PNGHeader],
                                           None, None]:
         """Generator for loading images from a folder
 
@@ -1064,7 +1068,7 @@ class ImagesLoader(ImageIO):
             yield filename, image_read
 
     def load(self) -> T.Generator[tuple[str, npt.NDArray[np.uint8]] |
-                                  tuple[str, npt.NDArray[np.uint8], PNGHeaderDict], None, None]:
+                                  tuple[str, npt.NDArray[np.uint8], PNGHeader], None, None]:
         """Generator for loading images from the given :attr:`location`
 
         If :class:`FacesLoader` is in use then the Faceswap metadata of the image stored in the
@@ -1180,7 +1184,7 @@ class SingleFrameLoader(ImagesLoader):
     path
         Full path to the input media
     video_meta_data
-        Existing video meta information containing the pts_time and iskey flags for the given
+        Existing video meta information containing the pts_time and is_key flags for the given
         video. Used in conjunction with single_frame_reader for faster seeks. Providing this means
         that the video does not need to be scanned again. Set to ``None`` if the video is to be
         scanned. Default: ``None``

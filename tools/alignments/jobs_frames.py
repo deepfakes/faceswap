@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Tools for manipulating the alignments using Frames as a source """
+"""Tools for manipulating the alignments using Frames as a source """
 from __future__ import annotations
 import logging
 import os
@@ -13,7 +13,7 @@ import numpy as np
 from tqdm import tqdm
 
 from lib.align import DetectedFace, LANDMARK_PARTS, LandmarkType
-from lib.align.alignments import PNGHeaderDict
+from lib.align.objects import PNGHeader, PNGSource
 from lib.image import encode_image, ImagesSaver
 from lib.utils import get_module_objects, deprecation_warning
 from .media import ExtractedFaces, Frames
@@ -26,14 +26,14 @@ logger = logging.getLogger(__name__)
 
 
 class Draw():
-    """ Draws annotations onto original frames and saves into a sub-folder next to the original
+    """Draws annotations onto original frames and saves into a sub-folder next to the original
     frames.
 
     Parameters
     ---------
-    alignments: :class:`tools.alignments.media.AlignmentsData`
+    alignments
         The loaded alignments corresponding to the frames to be annotated
-    arguments: :class:`argparse.Namespace`
+    arguments
         The command line arguments that have called this job
     """
     def __init__(self, alignments: AlignmentData, arguments: Namespace) -> None:
@@ -44,16 +44,14 @@ class Draw():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _set_output(self) -> str:
-        """ Set the output folder path.
+        """Set the output folder path.
 
         If annotating a folder of frames, output will be placed in a sub folder within the frames
         folder. If annotating a video, output will be a folder next to the original video.
 
         Returns
         -------
-        str
-            Full path to the output folder
-
+        Full path to the output folder
         """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         folder_name = f"drawn_landmarks_{now}"
@@ -67,10 +65,12 @@ class Draw():
         return output_folder
 
     def process(self) -> None:
-        """ Runs the process to draw face annotations onto original source frames. """
+        """Runs the process to draw face annotations onto original source frames."""
         logger.info("[DRAW LANDMARKS]")  # Tidy up cli output
         frames_drawn = 0
-        for frame in tqdm(self._frames.file_list_sorted, desc="Drawing landmarks", leave=False):
+        for frame in tqdm(T.cast(list[dict[str, str]], self._frames.file_list_sorted),
+                          desc="Drawing landmarks",
+                          leave=False):
             frame_name = frame["frame_fullname"]
 
             if not self._alignments.frame_exists(frame_name):
@@ -82,11 +82,11 @@ class Draw():
         logger.info("%s Frame(s) output", frames_drawn)
 
     def _annotate_image(self, frame_name: str) -> None:
-        """ Annotate the frame with each face that appears in the alignments file.
+        """Annotate the frame with each face that appears in the alignments file.
 
         Parameters
         ----------
-        frame_name: str
+        frame_name
             The full path to the original frame
         """
         logger.trace("Annotating frame: '%s'", frame_name)  # type:ignore
@@ -106,13 +106,13 @@ class Draw():
         self._frames.save_image(self._output_folder, frame_name, image)
 
     def _annotate_landmarks(self, image: np.ndarray, landmarks: np.ndarray) -> None:
-        """ Annotate the extract boxes onto the frame.
+        """Annotate the extract boxes onto the frame.
 
         Parameters
         ----------
-        image: :class:`numpy.ndarray`
+        image
             The frame that extract boxes are to be annotated on to
-        landmarks: :class:`numpy.ndarray`
+        landmarks
             The facial landmarks that are to be annotated onto the frame
         """
         # Mesh
@@ -124,15 +124,15 @@ class Draw():
 
     @classmethod
     def _annotate_extract_boxes(cls, image: np.ndarray, face: DetectedFace, index: int) -> None:
-        """ Annotate the mesh and landmarks boxes onto the frame.
+        """Annotate the mesh and landmarks boxes onto the frame.
 
         Parameters
         ----------
-        image: :class:`numpy.ndarray`
+        image
             The frame that mesh and landmarks are to be annotated on to
-        face: :class:`lib.align.DetectedFace`
+        face
             The aligned face
-        index: int
+        index
             The face index for the given face
         """
         for area in T.get_args(T.Literal["face", "head"]):
@@ -145,13 +145,13 @@ class Draw():
 
     @classmethod
     def _annotate_pose(cls, image: np.ndarray, face: DetectedFace) -> None:
-        """ Annotate the pose onto the frame.
+        """Annotate the pose onto the frame.
 
         Parameters
         ----------
-        image: :class:`numpy.ndarray`
+        image
             The frame that pose is to be annotated on to
-        face: :class:`lib.align.DetectedFace`
+        face
             The aligned face loaded for head centering
         """
         center = np.array((face.aligned.size / 2,
@@ -165,13 +165,13 @@ class Draw():
 
 
 class Extract():
-    """ Re-extract faces from source frames based on Alignment data
+    """Re-extract faces from source frames based on Alignment data
 
     Parameters
     ----------
-    alignments: :class:`tools.lib_alignments.media.AlignmentData`
+    alignments
         The alignments data loaded from an alignments file for this rename job
-    arguments: :class:`argparse.Namespace`
+    arguments
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`
     """
     def __init__(self, alignments: AlignmentData, arguments: Namespace) -> None:
@@ -192,21 +192,20 @@ class Extract():
 
     @classmethod
     def _get_min_size(cls, extract_size: int, min_size: int) -> int:
-        """ Obtain the minimum size that a face has been resized from to be included as a valid
+        """Obtain the minimum size that a face has been resized from to be included as a valid
         extract.
 
         Parameters
         ----------
-        extract_size: int
+        extract_size
             The requested size of the extracted images
-        min_size: int
+        min_size
             The percentage amount that has been supplied for valid faces (as a percentage of
             extract size)
 
         Returns
         -------
-        int
-            The minimum size, in pixels, that a face is resized from to be considered valid
+        The minimum size, in pixels, that a face is resized from to be considered valid
         """
         retval = 0 if min_size == 0 else max(4, int(extract_size * (min_size / 100.)))
         logger.debug("Extract size: %s, min percentage size: %s, min_size: %s",
@@ -214,13 +213,12 @@ class Extract():
         return retval
 
     def _get_count(self) -> int | None:
-        """ If the alignments file has been run through the manual tool, then it will hold video
+        """If the alignments file has been run through the manual tool, then it will hold video
         meta information, meaning that the count of frames in the alignment file can be relied
         on to be accurate.
 
         Returns
         -------
-        int or ``None``
         For video input which contain video meta-data in the alignments file then the count of
         frames is returned. In all other cases ``None`` is returned
         """
@@ -235,7 +233,7 @@ class Extract():
         return retval
 
     def process(self) -> None:
-        """ Run the re-extraction from Alignments file process"""
+        """Run the re-extraction from Alignments file process"""
         logger.info("[EXTRACT FACES]")  # Tidy up cli output
         self._check_folder()
         self._saver = ImagesSaver(self._faces_dir, as_bytes=True)
@@ -247,7 +245,7 @@ class Extract():
         self._export_faces()
 
     def _check_folder(self) -> None:
-        """ Check that the faces folder doesn't pre-exist and create. """
+        """Check that the faces folder doesn't pre-exist and create."""
         err = None
         if not self._faces_dir:
             err = "ERROR: Output faces folder not provided."
@@ -262,7 +260,7 @@ class Extract():
         logger.verbose("Creating output folder at '%s'", self._faces_dir)  # type:ignore
 
     def _export_faces(self) -> None:
-        """ Export the faces to the output folder. """
+        """Export the faces to the output folder."""
         extracted_faces = 0
         skip_list = self._set_skip_list()
         count = self._frames.count if skip_list is None else self._frames.count - len(skip_list)
@@ -278,14 +276,12 @@ class Extract():
         logger.info("%s face(s) extracted", extracted_faces)
 
     def _set_skip_list(self) -> list[int] | None:
-        """ Set the indices for frames that should be skipped based on the `extract_every_n`
+        """Set the indices for frames that should be skipped based on the `extract_every_n`
         command line option.
 
         Returns
         -------
-        list or ``None``
-            A list of indices to be skipped if extract_every_n is not `1` otherwise
-            returns ``None``
+        A list of indices to be skipped if extract_every_n is not `1` otherwise returns ``None``
         """
         skip_num = self._arguments.extract_every_n
         if skip_num == 1:
@@ -301,19 +297,18 @@ class Extract():
         return skip_list
 
     def _output_faces(self, filename: str, image: np.ndarray) -> int:
-        """ For each frame save out the faces
+        """For each frame save out the faces
 
         Parameters
         ----------
-        filename: str
+        filename
             The filename (without the full path) of the current frame
-        image: :class:`numpy.ndarray`
+        image
             The full frame that faces are to be extracted from
 
         Returns
         -------
-        int
-            The total number of faces that have been extracted
+        The total number of faces that have been extracted
         """
         logger.trace("Outputting frame: %s", filename)  # type:ignore
         face_count = 0
@@ -325,14 +320,14 @@ class Extract():
 
         for idx, face in enumerate(faces):
             output = f"{frame_name}_{idx}.png"
-            meta: PNGHeaderDict = {
-                "alignments": face.to_png_meta(),
-                "source": {"alignments_version": self._alignments.version,
-                           "original_filename": output,
-                           "face_index": idx,
-                           "source_filename": filename,
-                           "source_is_video": self._frames.is_video,
-                           "source_frame_dims": T.cast(tuple[int, int], image.shape[:2])}}
+            meta = PNGHeader(
+                alignments=face.to_png_meta(),
+                source=PNGSource(alignments_version=self._alignments.version,
+                                 original_filename=output,
+                                 face_index=idx,
+                                 source_filename=filename,
+                                 source_is_video=self._frames.is_video,
+                                 source_frame_dims=tuple(image.shape[:2])))
             assert face.aligned.face is not None
             self._saver.save(output, encode_image(face.aligned.face, ".png", metadata=meta))
             face_count += 1
@@ -340,19 +335,18 @@ class Extract():
         return face_count
 
     def _select_valid_faces(self, frame: str, image: np.ndarray) -> list[DetectedFace]:
-        """ Return the aligned faces from a frame that meet the selection criteria,
+        """Return the aligned faces from a frame that meet the selection criteria,
 
         Parameters
         ----------
-        frame: str
+        frame
             The filename (without the full path) of the current frame
-        image: :class:`numpy.ndarray`
+        image
             The full frame that faces are to be extracted from
 
         Returns
         -------
-        list:
-            List of valid :class:`lib,align.DetectedFace` objects
+        List of valid :class:`lib,align.DetectedFace` objects
         """
         faces = self._extracted_faces.get_faces_in_frame(frame, image=image)
         if self._min_size == 0:
