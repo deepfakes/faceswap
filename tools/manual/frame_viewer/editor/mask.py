@@ -104,7 +104,7 @@ class Mask(Editor):
           - the size of brush to use
           - the cursor display color
         """
-        masks = sorted(msk.title() for msk in list(self._det_faces.available_masks) + ["None"])
+        masks = sorted(msk.title() for msk in list(self._det_faces.available_masks))
         default = masks[0] if len(masks) == 1 else [mask for mask in masks if mask != "None"][0]
         self._add_control(ControlPanelOption("Mask type",
                                              str,
