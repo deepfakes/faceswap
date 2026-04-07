@@ -13,7 +13,7 @@ import numpy as np
 from lib.logger import parse_class_init
 from lib.utils import FaceswapError, get_module_objects
 
-from .aligned_utils import get_adjusted_center, get_centered_size
+from .aligned_utils import get_adjusted_center, get_sub_crop_size
 from .objects import MaskAlignmentsFile
 from .constants import LandmarkType, LANDMARK_PARTS, LANDMARK_MASK_PARTS
 
@@ -308,7 +308,7 @@ class Mask():  # pylint:disable=too-many-instance-attributes
                                      target_offset,
                                      self.stored_centering,
                                      y_offset)
-        crop_size = get_centered_size(self.stored_centering,
+        crop_size = get_sub_crop_size(self.stored_centering,
                                       centering,
                                       self.stored_size,
                                       coverage_ratio=coverage_ratio)
@@ -401,13 +401,18 @@ class Mask():  # pylint:disable=too-many-instance-attributes
         """
         return self.to_dict(is_png=True)
 
-    def from_dict(self, mask: MaskAlignmentsFile) -> None:
+    def from_dict(self, mask: MaskAlignmentsFile) -> T.Self:
         """Populates the :class:`Mask` from a dictionary loaded from an alignments file.
 
         Parameters
         ----------
+        mask
             A dictionary stored in an alignments file containing the keys ``mask``,
             ``affine_matrix``, ``interpolator``, ``stored_size``, ``stored_centering``
+
+        Returns
+        -------
+        This loaded Mask object
         """
         self._mask = mask.mask
         self._affine_matrix = self._matrix_2to3(mask.affine_matrix)
@@ -415,6 +420,7 @@ class Mask():  # pylint:disable=too-many-instance-attributes
         self.stored_size = mask.stored_size
         self.stored_centering = mask.stored_centering
         logger.trace(mask)  # type:ignore[attr-defined]
+        return self
 
 
 class LandmarksMask(Mask):

@@ -10,7 +10,7 @@ import numpy as np
 from torch.cuda import OutOfMemoryError
 
 from lib.align.aligned_utils import (batch_adjust_matrices, batch_align, batch_resize,
-                                     batch_sub_crop)
+                                     batch_sub_crop, get_base_scale, get_sub_crop_scale)
 from lib.align.constants import EXTRACT_RATIOS, LandmarkType
 from lib.logger import parse_class_init
 from lib.utils import FaceswapError, get_module_objects
@@ -304,9 +304,8 @@ class ExtractHandlerFace(ExtractHandler, abc.ABC):
                                   else f"matrices_{self._centering}")
 
         # Aligned handling
-        self._head_to_base_ratio = (1 - EXTRACT_RATIOS["head"]) / 2
-        self._head_to_centering_ratio = ((1 - EXTRACT_RATIOS["head"]) /
-                                         (1 - EXTRACT_RATIOS[self._centering]) / 2)
+        self._head_to_base_ratio = get_base_scale("head", 1.0) / 2
+        self._head_to_centering_ratio = get_sub_crop_scale("head", self._centering, 1.0, 1.0) / 2
         self._aligned_offsets_name = f"offsets_{self._centering}"
 
     def _maybe_log_warning(self, landmark_type: LandmarkType | None) -> None:

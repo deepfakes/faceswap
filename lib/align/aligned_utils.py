@@ -58,7 +58,76 @@ def get_adjusted_center(image_size: int,
     return center
 
 
-def get_centered_size(source_centering: CenteringType,
+def get_base_scale(source_centering: CenteringType,
+                   source_coverage: float = 1.0) -> float:
+    """For an aligned patch of the given centering and the given coverage, obtain the ratio of the
+    patch that contains the core central area with no padding applied
+
+    Parameters
+    ----------
+    source_centering
+        The centering type of the image patch to obtain the core ratio for
+    source_coverage
+        The coverage of the source patch to obtain the core ratio for. Default: 1.0
+
+    Returns
+    -------
+    The ratio of the patch of the given centering and coverage that contains the core patch
+    """
+    return 1 - EXTRACT_RATIOS[source_centering] * source_coverage
+
+
+def get_base_size(size: int,
+                  source_centering: CenteringType,
+                  source_coverage: float = 1.0) -> int:
+    """For an aligned patch of the given size, centering and coverage, obtain the size of the patch
+    that contains the core central area with no padding applied
+
+    Parameters
+    ----------
+    size
+        The size of the larger patch to obtain the core size for
+    source_centering
+        The centering type of the image patch to obtain the core size for
+    source_coverage
+        The coverage of the source patch to obtain the core size for. Default: 1.0
+
+    Returns
+    -------
+    The size of the core patch of larger patch of the given size, centering and coverage
+    """
+    scale = get_base_scale(source_centering, source_coverage=source_coverage)
+    return 2 * int(round(size * scale / 2))
+
+
+def get_sub_crop_scale(source_centering: CenteringType,
+                       target_centering: CenteringType,
+                       source_coverage: float = 1.0,
+                       target_coverage: float = 1.0) -> float:
+    """For a source aligned patch of the given centering and the given coverage, obtain the ratio
+    to obtain a destination patch of the given coverage
+
+    Parameters
+    ----------
+    source_centering
+        The centering type of the source image patch to obtain the destination ratio for
+    target_centering
+        The centering type of the destination image patch to obtain the ratio for
+    source_coverage
+        The coverage of the source patch to obtain the destination ratio for. Default: 1.0
+    target_coverage
+        The coverage of the destination patch to obtain the ratio for. Default: 1.0
+
+    Returns
+    -------
+    The ratio to take the source patch to the destination patch for the given coverage ratios
+    """
+    coverage = target_coverage / source_coverage
+    return ((1 - EXTRACT_RATIOS[source_centering]) /
+            (1 - EXTRACT_RATIOS[target_centering]) * coverage)
+
+
+def get_sub_crop_size(source_centering: CenteringType,
                       target_centering: CenteringType,
                       size: int,
                       coverage_ratio: float = 1.0) -> int:
@@ -94,16 +163,16 @@ def get_centered_size(source_centering: CenteringType,
     The pixel size of a sub-crop image from a full head aligned image with the given coverage ratio
     """
     if source_centering == target_centering and coverage_ratio == 1.0:
-        src_size: float | int = size
         retval = size
     else:
-        src_size = size - (size * EXTRACT_RATIOS[source_centering])
-        retval = 2 * int(np.rint((src_size / (1 - EXTRACT_RATIOS[target_centering])
-                                 * coverage_ratio) / 2))
+        scale = get_sub_crop_scale(source_centering,
+                                   target_centering,
+                                   source_coverage=1.0,
+                                   target_coverage=coverage_ratio)
+        retval = 2 * int(round(size * scale / 2))
     logger.trace(  # type:ignore[attr-defined]
         "source_centering: %s, target_centering: %s, size: %s, coverage_ratio: %s, "
-        "source_size: %s, crop_size: %s",
-        source_centering, target_centering, size, coverage_ratio, src_size, retval)
+        "crop_size: %s", source_centering, target_centering, size, coverage_ratio, retval)
     return retval
 
 
@@ -171,6 +240,60 @@ def transform_image(image: np.ndarray,
     return retval
 
 
+@T.overload
+def sub_crop(image: npt.NDArray[np.uint8], offset: npt.NDArray[np.int32], out_size: int
+             ) -> npt.NDArray[np.uint8]:
+    ...
+
+
+@T.overload
+def sub_crop(image: npt.NDArray[np.float32], offset: npt.NDArray[np.int32], out_size: int
+             ) -> npt.NDArray[np.float32]:
+    ...
+
+
+def sub_crop(image: npt.NDArray[np.uint8 | np.float32],  # pylint:disable=too-many-locals
+             offset: npt.NDArray[np.int32],
+             out_size: int
+             ) -> npt.NDArray[np.uint8 | np.float32]:
+    """Obtain an aligned sub-crop from a larger aligned image. Handles OOB. Output is zero padded
+
+    Parameters
+    ----------
+    image
+        The (H, W, C) full size extracted image.
+    offset
+        The (x, y) offset to shift the sub-crop.
+    out_size
+        The output size of the sub-crop.
+    """
+    height, width, channels = image.shape[:3]
+
+    src_x0 = int(offset[0])
+    src_y0 = int(offset[1])
+    src_x1 = src_x0 + out_size
+    src_y1 = src_y0 + out_size
+
+    valid_src_x0 = max(src_x0, 0)
+    valid_src_y0 = max(src_y0, 0)
+    valid_src_x1 = min(src_x1, width)
+    valid_src_y1 = min(src_y1, height)
+
+    out = np.zeros((out_size, out_size, channels), dtype=image.dtype)
+
+    if valid_src_x0 >= valid_src_x1 or valid_src_y0 >= valid_src_y1:
+        return out  # Fully OOB
+
+    dst_x0 = valid_src_x0 - src_x0
+    dst_y0 = valid_src_y0 - src_y0
+    dst_x1 = dst_x0 + (valid_src_x1 - valid_src_x0)
+    dst_y1 = dst_y0 + (valid_src_y1 - valid_src_y0)
+
+    out[dst_y0:dst_y1, dst_x0:dst_x1] = image[valid_src_y0:valid_src_y1, valid_src_x0:valid_src_x1]
+    return out
+
+
+# Batch functions
 def batch_transform(matrices: npt.NDArray[np.float32],
                     points: npt.NDArray[np.float32],
                     in_place: bool = False) -> npt.NDArray[np.float32]:
@@ -253,7 +376,8 @@ def batch_sub_crop(images: npt.NDArray[np.uint8 | np.float32],
                    out_size: int,
                    base_grid: tuple[npt.NDArray[np.int32], npt.NDArray[np.int32]] | None = None
                    ) -> npt.NDArray[np.uint8 | np.float32]:
-    """Obtain aligned sub-crops from larger aligned images
+    """Obtain aligned sub-crops from larger aligned images. Handles OOB. Outputs are replicate
+    padded
 
     Parameters
     ----------

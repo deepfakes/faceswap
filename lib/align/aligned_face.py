@@ -15,8 +15,8 @@ from lib.logger import parse_class_init
 from lib.utils import get_module_objects
 
 from .constants import CenteringType, EXTRACT_RATIOS, LandmarkType, MEAN_FACE
-from .aligned_utils import (get_adjusted_center, get_centered_size, get_matrix_scaling,
-                            points_to_68, transform_image)
+from .aligned_utils import (get_base_size, get_sub_crop_size, get_matrix_scaling, points_to_68,
+                            sub_crop, transform_image)
 from .aligned_mask import LandmarksMask
 from .pose import PoseEstimate
 
@@ -216,8 +216,7 @@ class AlignedFace():  # pylint:disable=too-many-instance-attributes
         original frame with padding and sizing applied."""
         with self._cache.lock("adjusted_matrix"):
             if self._cache.adjusted_matrix is None:
-                matrix = self.matrix.copy()
-                mat = matrix * (self._size - 2 * self.padding)
+                mat = self.matrix * (self._size - 2 * self.padding)
                 mat[:, 2] += self.padding
                 logger.trace("adjusted_matrix: %s", mat)  # type:ignore[attr-defined]
                 self._cache.adjusted_matrix = mat
@@ -336,7 +335,7 @@ class AlignedFace():  # pylint:disable=too-many-instance-attributes
         -------
         The padding required, in pixels for 'head', 'face' and 'legacy' face types
         """
-        retval = {_type: round((size * (coverage_ratio - (1 - EXTRACT_RATIOS[_type]))) / 2)
+        retval = {_type: round((size * (1 - EXTRACT_RATIOS[_type] / coverage_ratio)) / 2)
                   for _type in T.get_args(T.Literal["legacy", "face", "head"])}
         logger.trace(retval)  # type:ignore[attr-defined]
         return retval
@@ -374,7 +373,11 @@ class AlignedFace():  # pylint:disable=too-many-instance-attributes
         The transformed points
         """
         retval = np.expand_dims(points, axis=1)
-        mat = cv2.invertAffineTransform(self.adjusted_matrix) if invert else self.adjusted_matrix
+        mat = self.adjusted_matrix
+        if self.y_offset:
+            mat = mat.copy()
+            mat[1, 2] += (self.y_offset * (self._size - self.padding * 2))
+        mat = cv2.invertAffineTransform(mat) if invert else mat
         retval = cv2.transform(retval, mat).squeeze()
         logger.trace(  # type:ignore[attr-defined]
             "invert: %s, Original points: %s, transformed points: %s", invert, points, retval)
@@ -411,7 +414,7 @@ class AlignedFace():  # pylint:disable=too-many-instance-attributes
             retval = image
         else:
             mat = self.matrix
-            if self._y_offset:
+            if self.y_offset:
                 mat = self.matrix.copy()
                 mat[1, 2] += self.y_offset
             retval = transform_image(image, mat, self._size, self.padding)
@@ -421,10 +424,6 @@ class AlignedFace():  # pylint:disable=too-many-instance-attributes
     def _convert_centering(self, image: np.ndarray) -> np.ndarray:
         """When the face being loaded is pre-aligned, the loaded image will have 'head' centering
         so it needs to be cropped out to the appropriate centering.
-
-        This function temporarily converts this object to a full head aligned face, extracts the
-        sub-cropped face to the correct centering, reverse the sub crop and returns the cropped
-        face at the selected coverage ratio.
 
         Parameters
         ----------
@@ -440,90 +439,21 @@ class AlignedFace():  # pylint:disable=too-many-instance-attributes
             image.shape[0], self.size, self._coverage_ratio)
 
         img_size = image.shape[0]
-        target_size = get_centered_size(self._source_centering,
+        target_size = get_sub_crop_size(self._source_centering,
                                         self._centering,
                                         img_size,
                                         self._coverage_ratio)
-        out = np.zeros((target_size, target_size, image.shape[-1]), dtype=image.dtype)
-
-        slices = self._get_cropped_slices(img_size, target_size)
-        out[slices["out"][0], slices["out"][1], :] = image[slices["in"][0], slices["in"][1], :]
+        base_size = get_base_size(img_size, self._source_centering, 1.0)
+        padding_diff = (img_size - target_size) / 2
+        delta = self.pose.offset[self._centering] - self.pose.offset[self._source_centering]
+        if self.y_offset:
+            delta[1] -= self.y_offset
+        offset = np.rint(delta * base_size + padding_diff).astype("int32")
+        retval = sub_crop(image, offset, target_size)
         logger.trace(  # type:ignore[attr-defined]
             "Cropped from aligned extract: (centering: %s, in shape: %s, out shape: %s)",
-            self._centering, image.shape, out.shape)
-        return out
-
-    def _get_cropped_slices(self,
-                            image_size: int,
-                            target_size: int,
-                            ) -> dict[T.Literal["in", "out"], tuple[slice, slice]]:
-        """Obtain the slices to turn a full head extract into an alternatively centered extract.
-
-        Parameters
-        ----------
-        image_size
-            The size of the full head extracted image loaded from disk
-        target_size
-            The size of the target centered face with coverage ratio applied in relation to the
-            original image size
-
-        Returns
-        -------
-        The slices for an input full head image and output cropped image
-        """
-        with self._cache.lock("cropped_slices"):
-            if not self._cache.cropped_slices.get(self._centering):
-                roi = self.get_cropped_roi(image_size, target_size, self._centering)
-                slice_in = (slice(max(roi[1], 0), max(roi[3], 0)),
-                            slice(max(roi[0], 0), max(roi[2], 0)))
-                slice_out = (slice(max(roi[1] * -1, 0),
-                                   target_size - min(target_size, max(0, roi[3] - image_size))),
-                             slice(max(roi[0] * -1, 0),
-                                   target_size - min(target_size, max(0, roi[2] - image_size))))
-                self._cache.cropped_slices[self._centering] = {"in": slice_in, "out": slice_out}
-                logger.trace("centering: %s, cropped_slices: %s",  # type:ignore[attr-defined]
-                             self._centering, self._cache.cropped_slices[self._centering])
-        return self._cache.cropped_slices[self._centering]
-
-    def get_cropped_roi(self,
-                        image_size: int,
-                        target_size: int,
-                        centering: CenteringType) -> np.ndarray:
-        """Obtain the region of interest within an aligned face set to centered coverage for
-        an alternative centering
-
-        Parameters
-        ----------
-        image_size
-            The size of the full head extracted image loaded from disk
-        target_sizes
-            The size of the target centered face with coverage ratio applied in relation to the
-            original image size
-        centering
-            The type of centering to obtain the region of interest for. "legacy" places the nose
-            in the center of the image (the original method for aligning). "face" aligns for the
-            nose to be in the center of the face (top to bottom) but the center of the skull for
-            left to right.
-
-        Returns
-        -------
-            The (`left`, `top`, `right`, `bottom` location of the region of interest within an
-            aligned face centered on the head for the given centering
-        """
-        with self._cache.lock("cropped_roi"):
-            if centering not in self._cache.cropped_roi:
-                center = get_adjusted_center(image_size,
-                                             self.pose.offset[self._source_centering],
-                                             self.pose.offset[centering],
-                                             self._source_centering,
-                                             self.y_offset)
-                padding = target_size // 2
-                roi = np.array([center - padding, center + padding]).ravel()
-                logger.trace(  # type:ignore[attr-defined]
-                    "centering: '%s', center: %s, padding: %s, sub roi: %s",
-                    centering, center, padding, roi)
-                self._cache.cropped_roi[centering] = roi
-        return self._cache.cropped_roi[centering]
+            self._centering, image.shape, retval.shape)
+        return retval
 
     def split_mask(self) -> np.ndarray:
         """Remove the mask from the alpha channel of :attr:`face` and return the mask

@@ -16,7 +16,7 @@ import torch
 from tqdm import tqdm
 
 from lib.align.aligned_utils import (batch_adjust_matrices, batch_align, batch_resize,
-                                     batch_transform, get_adjusted_center, get_centered_size)
+                                     batch_transform, get_adjusted_center, get_sub_crop_size)
 from lib.align.objects import AlignmentsEntry, FileAlignments, PNGHeader, PNGSource
 from lib.align.constants import EXTRACT_RATIOS, LandmarkType, MEAN_FACE
 from lib.align.detected_face import DetectedFace
@@ -548,8 +548,8 @@ class DebugLandmarks():
     def __init__(self, size: int) -> None:
         logger.debug(parse_class_init(locals()))
         self._size = size
-        self._face_size = get_centered_size("head", "face", size)
-        self._legacy_size = get_centered_size("head", "legacy", size)
+        self._face_size = get_sub_crop_size("head", "face", size)
+        self._legacy_size = get_sub_crop_size("head", "legacy", size)
         self._camera_matrix = get_camera_matrix()
         self._mean_face = MEAN_FACE[LandmarkType.LM_2D_51][None]
         self._face_expansion = 1.0 - EXTRACT_RATIOS["face"]
