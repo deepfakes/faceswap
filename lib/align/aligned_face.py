@@ -335,7 +335,8 @@ class AlignedFace():  # pylint:disable=too-many-instance-attributes
         -------
         The padding required, in pixels for 'head', 'face' and 'legacy' face types
         """
-        retval = {_type: round((size * (1 - EXTRACT_RATIOS[_type] / coverage_ratio)) / 2)
+        retval = {_type: round(size * (EXTRACT_RATIOS[_type] + coverage_ratio - 1) /
+                               (2 * coverage_ratio))
                   for _type in T.get_args(T.Literal["legacy", "face", "head"])}
         logger.trace(retval)  # type:ignore[attr-defined]
         return retval

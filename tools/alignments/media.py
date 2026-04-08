@@ -481,7 +481,6 @@ class ExtractedFaces():
         logger.trace("Initializing %s: size: %s",  # type:ignore[attr-defined]
                      self.__class__.__name__, size)
         self.size = size
-        self.padding = int(size * 0.1875)
         self.alignments = alignments
         self.frames = frames
         self.current_frame: str | None = None
