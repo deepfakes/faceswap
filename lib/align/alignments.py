@@ -605,7 +605,7 @@ class _IO():
         if self._update_legacy(alignments):
             logger.info("Writing alignments to: '%s'", self._file)
             self._serializer.save(self._file, {"__meta__": {"version": self._version},
-                                               "__data__": {alignments}})
+                                               "__data__": alignments})
         retval: dict[str, AlignmentsEntry]
         retval = {k: AlignmentsEntry.from_dict(v) for k, v in alignments.items()}
         logger.debug("Loaded alignments")
