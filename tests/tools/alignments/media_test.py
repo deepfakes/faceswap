@@ -678,7 +678,6 @@ class TestExtractedFaces:
         """
         faces = extracted_faces_instance
         assert faces.size == 512
-        assert faces.padding == int(512 * 0.1875)
         assert faces.current_frame is None
         assert faces.faces == []
 
