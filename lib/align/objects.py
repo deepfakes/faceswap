@@ -220,9 +220,9 @@ class PNGAlignments(DataclassDict):
     """The height of the bounding box"""
     landmarks_xy: npt.NDArray[np.float32]
     """The (x, y) landmark points of the face"""
-    mask: dict[str, MaskAlignmentsFile]
+    mask: dict[str, MaskAlignmentsFile] = field(default_factory=dict)
     """The masks stored for the face"""
-    identity: dict[str, npt.NDArray[np.float32]]
+    identity: dict[str, npt.NDArray[np.float32]] = field(default_factory=dict)
     """The identity vectors stored for the face"""
 
     def __repr__(self) -> str:
