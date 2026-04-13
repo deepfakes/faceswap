@@ -119,7 +119,10 @@ def count_frames(filename, fast=False):
     """
     logger.debug("filename: %s, fast: %s", filename, fast)
     assert isinstance(filename, str), "Video path must be a string"
-    cmd = [str(ffmpeg.FFMPEG_PATH), "-i", filename, "-map", "0:v:0"]
+    # Validate filename as a safe filesystem path to prevent command injection
+    import os
+    safe_filename = os.path.realpath(filename)
+    cmd = [str(ffmpeg.FFMPEG_PATH), "-i", safe_filename, "-map", "0:v:0"]
     if fast:
         cmd.extend(["-c", "copy"])
     cmd.extend(["-f", "null", "-"])
@@ -128,7 +131,9 @@ def count_frames(filename, fast=False):
     process = subprocess.Popen(cmd,
                                stderr=subprocess.STDOUT,
                                stdout=subprocess.PIPE,
-                               universal_newlines=True, encoding="utf8")
+                               universal_newlines=True,
+                               encoding="utf8",
+                               shell=False)
     p_bar = None
     duration = None
     update = 0
