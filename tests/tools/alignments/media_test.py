@@ -440,10 +440,17 @@ class TestFaces:
         read_image_meta_mock = mocker.patch("tools.alignments.media.read_image_meta_batch")
         img_sources = [os.path.join(faces.folder, fname) for fname in os.listdir(faces.folder)]
 
-        meta_data = {"itxt": {"source": ({"source_filename": "data.png"})}}
+        meta_data = {"itxt": {"source": ({"source_filename": "data.png",
+                                          "alignments_version": 2.5,
+                                          "face_index": 0,
+                                          "original_filename": "data.png",
+                                          "source_is_video": False,
+                                          "source_frame_dims": (1280, 720)}),
+                              "alignments": {"x": 1, "y": 2, "w": 3, "h": 4,
+                                             "landmarks_xy": [[0.0, 1.1], [1.1, 2.2]]}}}
         png_mock = mocker.MagicMock()
         png_mock.source.source_filename = "data.png"
-        monkeypatch.setattr("lib.training.cache.PNGHeader.from_dict", lambda x: png_mock)
+        monkeypatch.setattr("tools.alignments.media.PNGHeader.from_dict", lambda x: png_mock)
 
         expected = [(fname, png_mock) for fname in os.listdir(faces.folder)]
         read_image_meta_mock.side_effect = [[(src, meta_data) for src in img_sources]]

@@ -1,5 +1,5 @@
 #!/usr/bin python3
-""" Pytest unit tests for :mod:`lib.training.augmentation` """
+""" Pytest unit tests for :mod:`lib.training.data_augmentation` """
 import typing as T
 
 import cv2
@@ -8,8 +8,8 @@ import pytest
 import pytest_mock
 
 from lib.config import ConfigValueType
-from lib.training.augmentation import (ConstantsAugmentation, ConstantsColor, ConstantsTransform,
-                                       ConstantsWarp, ImageAugmentation)
+from lib.training.data_augmentation import (
+    ConstantsAugmentation, ConstantsColor, ConstantsTransform, ConstantsWarp, ImageAugmentation)
 from plugins.train.trainer import trainer_config as cfg
 
 # pylint:disable=unused-import
@@ -18,7 +18,7 @@ from tests.lib.config.helpers import patch_config  # noqa[F401]
 # pylint:disable=protected-access,redefined-outer-name
 
 
-MODULE_PREFIX = "lib.training.augmentation"
+MODULE_PREFIX = "lib.training.data_augmentation"
 
 
 # CONSTANTS #
@@ -33,7 +33,7 @@ def test_constants_get_clahe(config: dict[str, T.Any],
                              size: int,
                              patch_config) -> None:  # noqa[F811]
     """ Test ConstantsAugmentation._get_clahe works as expected """
-    patch_config(cfg, config)
+    patch_config(cfg.Augmentation, config)
     contrast, chance, max_size = ConstantsAugmentation._get_clahe(size)
     assert isinstance(contrast, int)
     assert isinstance(chance, float)
@@ -51,7 +51,7 @@ _LAB_CONF = ({"color_lightness": 30, "color_ab": 8},
 @pytest.mark.parametrize(("config"), _LAB_CONF)
 def test_constants_get_lab(config: dict[str, T.Any], patch_config) -> None:  # noqa[F811]
     """ Test ConstantsAugmentation._get_lab works as expected """
-    patch_config(cfg, config)
+    patch_config(cfg.Augmentation, config)
     lab_adjust = ConstantsAugmentation._get_lab()
     assert isinstance(lab_adjust, np.ndarray)
     assert lab_adjust.dtype == np.float32
@@ -72,7 +72,7 @@ def test_constants_get_color(config: dict[str, T.Any],
                              patch_config,  # noqa[F811]
                              mocker: pytest_mock.MockerFixture) -> None:
     """ Test ConstantsAugmentation._get_color works as expected """
-    patch_config(cfg, config)
+    patch_config(cfg.Augmentation, config)
     clahe_mock = mocker.patch(f"{MODULE_PREFIX}.ConstantsAugmentation._get_clahe",
                               return_value=(1, 2.0, 3))
     lab_mock = mocker.patch(f"{MODULE_PREFIX}.ConstantsAugmentation._get_lab",
@@ -106,7 +106,7 @@ def test_constants_get_transform(config: dict[str, T.Any],
                                  size: int,
                                  patch_config) -> None:  # noqa[F811]
     """ Test ConstantsAugmentation._get_transform works as expected """
-    patch_config(cfg, config)
+    patch_config(cfg.Augmentation, config)
     transform = ConstantsAugmentation._get_transform(size)
     assert isinstance(transform, ConstantsTransform)
     assert isinstance(transform.rotation, int)
@@ -199,7 +199,7 @@ def test_constants_from_config(size: int,
                                mocker: pytest_mock.MockerFixture
                                ) -> None:
     """ Test that ConstantsAugmentation.from_config executes correctly """
-    patch_config(cfg, _CONFIG)
+    patch_config(cfg.Augmentation, _CONFIG)
     constants = ConstantsAugmentation.from_config(size, batch_size)
     assert isinstance(constants, ConstantsAugmentation)
     assert isinstance(constants.color, ConstantsColor)
@@ -231,7 +231,7 @@ def test_image_augmentation_init(size: int,
                                  batch_size: int,
                                  patch_config) -> None:  # noqa[F811]
     """ Test ImageAugmentation initializes """
-    patch_config(cfg, _CONFIG)
+    patch_config(cfg.Augmentation, _CONFIG)
     attrs = {"_processing_size": int,
              "_batch_size": int,
              "_constants": ConstantsAugmentation}
@@ -252,7 +252,7 @@ def test_image_augmentation_random_lab(size: int,
                                        patch_config,  # noqa[F811]
                                        mocker: pytest_mock.MockerFixture) -> None:
     """ Test that ImageAugmentation._random_lab executes as expected """
-    patch_config(cfg, _CONFIG)
+    patch_config(cfg.Augmentation, _CONFIG)
     batch = get_batch(batch_size, size)
     original = batch.copy()
     instance = get_instance(batch_size, size)
@@ -274,7 +274,7 @@ def test_image_augmentation_random_clahe(size: int,  # pylint:disable=too-many-l
                                          mocker: pytest_mock.MockerFixture) -> None:
     """ Test that ImageAugmentation._random_clahe executes as expected """
     # Expected output
-    patch_config(cfg, _CONFIG)
+    patch_config(cfg.Augmentation, _CONFIG)
     batch = get_batch(batch_size, size)
     original = batch.copy()
     instance = get_instance(batch_size, size)
@@ -324,7 +324,7 @@ def test_image_augmentation_color_adjust(size: int,
                                          patch_config,  # noqa[F811]
                                          mocker: pytest_mock.MockerFixture) -> None:
     """ Test that ImageAugmentation._color_adjust executes as expected """
-    patch_config(cfg, _CONFIG)
+    patch_config(cfg.Augmentation, _CONFIG)
     batch = get_batch(batch_size, size)
     output = get_instance(batch_size, size).color_adjust(batch)
     assert output.shape == batch.shape
@@ -349,11 +349,11 @@ def test_image_augmentation_transform(size: int,
                                       patch_config,  # noqa[F811]
                                       mocker: pytest_mock.MockerFixture) -> None:
     """ Test that ImageAugmentation.transform executes as expected """
-    patch_config(cfg, _CONFIG)
+    patch_config(cfg.Augmentation, _CONFIG)
     batch = get_batch(batch_size, size)
     instance = get_instance(batch_size, size)
     original = batch.copy()
-    instance.transform(batch)
+    instance.transform(batch, None)
 
     assert original.shape == batch.shape
     assert original.dtype == batch.dtype
@@ -374,17 +374,17 @@ def test_image_augmentation_transform(size: int,
     rand_mock = mocker.patch(f"{MODULE_PREFIX}.np.random.uniform",
                              side_effect=rand_ret)
 
-    rotmat_mock = mocker.patch(
-        f"{MODULE_PREFIX}.cv2.getRotationMatrix2D",
-        return_value=np.array([[1.0, 0.0, -2.0], [-1.0, 1.0, 5.0]]).astype("float32"))
+    rotmap_ret = np.random.random((batch_size, 3, 3)).astype(np.float32)
+    rotmat_mock = mocker.patch(f"{MODULE_PREFIX}.batch_create_matrices",
+                               return_value=rotmap_ret)
 
     affine_mock = mocker.patch(f"{MODULE_PREFIX}.cv2.warpAffine")
 
     batch = get_batch(batch_size, size)
-    get_instance(batch_size, size).transform(batch)
+    get_instance(batch_size, size).transform(batch, None)
 
     rand_mock.assert_has_calls(rand_calls)  # type:ignore
-    assert rotmat_mock.call_count == batch_size
+    rotmat_mock.assert_called_once()
     assert affine_mock.call_count == batch_size
 
 
@@ -394,10 +394,10 @@ def test_image_augmentation_random_flip(size: int,
                                         patch_config,  # noqa[F811]
                                         mocker: pytest_mock.MockerFixture) -> None:
     """ Test that ImageAugmentation.flip_chance executes as expected """
-    patch_config(cfg, _CONFIG)
+    patch_config(cfg.Augmentation, _CONFIG)
     batch = get_batch(batch_size, size)
     original = batch.copy()
-    get_instance(batch_size, size).random_flip(batch)
+    get_instance(batch_size, size).random_flip(batch, None)
 
     assert original.shape == batch.shape
     assert original.dtype == batch.dtype
@@ -408,7 +408,7 @@ def test_image_augmentation_random_flip(size: int,
     where_mock = mocker.patch(f"{MODULE_PREFIX}.np.where")
 
     batch = get_batch(batch_size, size)
-    get_instance(batch_size, size).random_flip(batch)
+    get_instance(batch_size, size).random_flip(batch, None)
 
     rand_mock.assert_called_once_with(batch_size)
     where_mock.assert_called_once()

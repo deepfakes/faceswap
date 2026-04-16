@@ -1,5 +1,5 @@
 #!/usr/bin python3
-""" Main entry point to the training process of FaceSwap """
+"""Main entry point to the training process of FaceSwap """
 from __future__ import annotations
 import logging
 import os
@@ -12,15 +12,19 @@ from threading import Event
 import cv2
 import numpy as np
 
-from lib.gui.utils.image import TRAININGPREVIEW
+from lib.gui.utils.image import TRAINING_PREVIEW
 from lib.image import read_image_meta
 from lib.keypress import KBHit
+from lib.logger import parse_class_init
 from lib.multithreading import MultiThread, FSThread
 from lib.training import Preview, PreviewBuffer, TriggerType
+from lib.training.data_set import get_label
+from lib.training.train import Trainer
 from lib.utils import (get_folder, get_image_paths, get_module_objects, handle_deprecated_cli_opts,
-                       FaceswapError, IMAGE_EXTENSIONS)
+                       FaceswapError)
 from plugins.plugin_loader import PluginLoader
-from plugins.train.training import Trainer
+from plugins.train.trainer.base import TrainConfig
+
 
 if T.TYPE_CHECKING:
     import argparse
@@ -32,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 class Train():
-    """ The Faceswap Training Process.
+    """The Faceswap Training Process.
 
     The training process is responsible for training a model on a set of source faces and a set of
     destination faces.
@@ -42,12 +46,12 @@ class Train():
 
     Parameters
     ----------
-    arguments: argparse.Namespace
+    arguments
         The arguments to be passed to the training process as generated from Faceswap's command
         line arguments
     """
     def __init__(self, arguments: argparse.Namespace) -> None:
-        logger.debug("Initializing %s: (args: %s", self.__class__.__name__, arguments)
+        logger.debug(parse_class_init(locals()))
         self._args = handle_deprecated_cli_opts(arguments)
 
         if self._args.summary:
@@ -65,51 +69,9 @@ class Train():
         self._save_now: bool = False
         self._preview = PreviewInterface(self._args.preview)
 
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def _get_images(self) -> dict[T.Literal["a", "b"], list[str]]:
-        """ Check the image folders exist and contains valid extracted faces. Obtain image paths.
-
-        Returns
-        -------
-        dict
-            The image paths for each side. The key is the side, the value is the list of paths
-            for that side.
-        """
-        logger.debug("Getting image paths")
-        images = {}
-        for side in ("a", "b"):
-            side = T.cast(T.Literal["a", "b"], side)
-            image_dir = getattr(self._args, f"input_{side}")
-            if not os.path.isdir(image_dir):
-                logger.error("Error: '%s' does not exist", image_dir)
-                sys.exit(1)
-
-            images[side] = get_image_paths(image_dir, ".png")
-            if not images[side]:
-                logger.error("Error: '%s' contains no images", image_dir)
-                sys.exit(1)
-            # Validate the first image is a detected face
-            test_image = next(img for img in images[side])
-            meta = read_image_meta(test_image)
-            logger.debug("Test file: (filename: %s, metadata: %s)", test_image, meta)
-            if "itxt" not in meta or "alignments" not in meta["itxt"]:
-                logger.error("The input folder '%s' contains images that are not extracted faces.",
-                             image_dir)
-                logger.error("You can only train a model on faces generated from Faceswap's "
-                             "extract process. Please check your sources and try again.")
-                sys.exit(1)
-
-            logger.info("Model %s Directory: '%s' (%s images)",
-                        side.upper(), image_dir, len(images[side]))
-        logger.debug("Got image paths: %s", [(key, str(len(val)) + " images")
-                                             for key, val in images.items()])
-        self._validate_image_counts(images)
-        return images
-
     @classmethod
-    def _validate_image_counts(cls, images: dict[T.Literal["a", "b"], list[str]]) -> None:
-        """ Validate that there are sufficient images to commence training without raising an
+    def _validate_image_counts(cls, side: str, num_images: int) -> None:
+        """Validate that there are sufficient images to commence training without raising an
         error.
 
         Confirms that there are at least 24 images in each folder. Whilst this is not enough images
@@ -120,35 +82,80 @@ class Train():
 
         Parameters
         ----------
-        images: dict
-            The image paths for each side. The key is the side, the value is the list of paths
-            for that side.
+        side
+            The side of the model that we are validating counts for
+        num_images
+            The number of images for the side
         """
-        counts = {side: len(paths) for side, paths in images.items()}
         msg = ("You need to provide a significant number of images to successfully train a Neural "
                "Network. Aim for between 500 - 5000 images per side.")
-        if any(count < 25 for count in counts.values()):
-            logger.error("At least one of your input folders contains fewer than 25 images.")
+        if num_images < 25:
+            logger.error("Side %s contains fewer than 25 images.", side)
             logger.error(msg)
             sys.exit(1)
-        if any(count < 250 for count in counts.values()):
-            logger.warning("At least one of your input folders contains fewer than 250 images. "
-                           "Results are likely to be poor.")
+        if num_images < 250:
+            logger.warning("Side %s contains fewer than 250 images. "
+                           "Results are likely to be poor.", side)
             logger.warning(msg)
 
-    def _set_timelapse(self) -> dict[T.Literal["input_a", "input_b", "output"], str]:
-        """ Set time-lapse paths if requested.
+    @classmethod
+    def _validate_faceswap_image(cls, image_path: str) -> None:
+        """Validate that the given image path is to a faceswap training image. Exits with error
+        if a non-faceswap image is found
+
+        Parameters
+        ----------
+        image_path
+            Full path to a faceswap .png to validate
+        """
+        meta = read_image_meta(image_path)
+        logger.debug("[Train] Test file: (filename: %s, metadata: %s)", image_path, meta)
+        if "itxt" not in meta or "alignments" not in meta["itxt"]:
+            logger.error("The input folder '%s' contains images that are not extracted faces.",
+                         os.path.dirname(image_path))
+            logger.error("You can only train a model on faces generated from Faceswap's "
+                         "extract process. Please check your sources and try again.")
+            sys.exit(1)
+
+    def _get_images(self) -> list[str]:
+        """Check the image folders exist and contains valid extracted faces.
 
         Returns
         -------
-        dict
-            The time-lapse keyword arguments for passing to the trainer
+        The folder path for each side of the model to be trained
+        """
+        logger.debug("[Train] Getting image paths")
+        retval: list[str] = []
+        input_folders = [self._args.input_a, self._args.input_b]
+        for idx, image_dir in enumerate(input_folders):
+            key = get_label(idx, len(input_folders))
+            if not os.path.isdir(image_dir):
+                logger.error("Error: '%s' does not exist", image_dir)
+                sys.exit(1)
 
+            test = get_image_paths(image_dir, ".png")
+            if not test:
+                logger.error("Error: '%s' contains no images", image_dir)
+                sys.exit(1)
+            # Validate the first image is a detected face
+            self._validate_faceswap_image(next(img for img in test))
+            self._validate_image_counts(key, len(test))
+            retval.append(image_dir)
+            logger.info("Model %s Directory: '%s' (%s images)", key, image_dir, len(test))
+
+        return retval
+
+    def _set_timelapse(self) -> bool:
+        """Validate timelapse settings
+
+        Returns
+        -------
+        ``True`` if timelapse is enabled and valid otherwise ``False``
         """
         if (not self._args.timelapse_input_a and
                 not self._args.timelapse_input_b and
                 not self._args.timelapse_output):
-            return {}
+            return False
         if (not self._args.timelapse_input_a or
                 not self._args.timelapse_input_b or
                 not self._args.timelapse_output):
@@ -156,11 +163,11 @@ class Train():
                                 "(--timelapse-input-A, --timelapse-input-B and "
                                 "--timelapse-output).")
 
-        timelapse_output = get_folder(self._args.timelapse_output)
+        timelapse_folders = [self._args.timelapse_input_a, self._args.timelapse_input_b]
+        get_folder(self._args.timelapse_output)
 
-        for side in ("a", "b"):
-            side = T.cast(T.Literal["a", "b"], side)
-            folder = getattr(self._args, f"timelapse_input_{side}")
+        for idx, folder in enumerate(timelapse_folders):
+            side = "a" if idx == 0 else "b"
             if folder is not None and not os.path.isdir(folder):
                 raise FaceswapError(f"The Timelapse path '{folder}' does not exist")
 
@@ -168,67 +175,56 @@ class Train():
             if folder == training_folder:
                 continue  # Time-lapse folder is training folder
 
-            filenames = [fname for fname in os.listdir(folder)
-                         if os.path.splitext(fname)[-1].lower() in IMAGE_EXTENSIONS]
+            filenames = [os.path.join(folder, fname) for fname in os.listdir(folder)
+                         if os.path.splitext(fname)[-1].lower() == ".png"]
             if not filenames:
                 raise FaceswapError(f"The Timelapse path '{folder}' does not contain any valid "
                                     "images")
 
-            # Time-lapse images must appear in the training set, as we need access to alignment and
-            # mask info. Check filenames are there to save failing much later in the process.
-            training_images = [os.path.basename(img) for img in self._images[side]]
-            if not all(img in training_images for img in filenames):
-                raise FaceswapError(f"All images in the Timelapse folder '{folder}' must exist in "
-                                    f"the training folder '{training_folder}'")
-
-        TKey = T.Literal["input_a", "input_b", "output"]
-        kwargs = {T.cast(TKey, "input_a"): self._args.timelapse_input_a,
-                  T.cast(TKey, "input_b"): self._args.timelapse_input_b,
-                  T.cast(TKey, "output"): timelapse_output}
-        logger.debug("Timelapse enabled: %s", kwargs)
-        return kwargs
+            self._validate_faceswap_image(filenames[0])
+        logger.debug("[Train] Timelapse enabled")
+        return True
 
     def process(self) -> None:
-        """ The entry point for triggering the Training Process.
+        """The entry point for triggering the Training Process.
 
         Should only be called from  :class:`lib.cli.launcher.ScriptExecutor`
         """
         if self._args.summary:
             self._load_model()
             return
-        logger.debug("Starting Training Process")
+        logger.debug("[Train] Starting Training Process")
         logger.info("Training data directory: %s", self._args.model_dir)
         thread = self._start_thread()
         # from lib.queue_manager import queue_manager; queue_manager.debug_monitor(1)
         err = self._monitor(thread)
         self._end_thread(thread, err)
-        logger.debug("Completed Training Process")
+        logger.debug("[Train] Completed Training Process")
 
     def _start_thread(self) -> MultiThread:
-        """ Put the :func:`_training` into a background thread so we can keep control.
+        """Put the :func:`_training` into a background thread so we can keep control.
 
         Returns
         -------
-        :class:`lib.multithreading.MultiThread`
-            The background thread for running training
+        The background thread for running training
         """
-        logger.debug("Launching Trainer thread")
+        logger.debug("[Train] Launching Trainer thread")
         thread = MultiThread(target=self._training)
         thread.start()
-        logger.debug("Launched Trainer thread")
+        logger.debug("[Train] Launched Trainer thread")
         return thread
 
     def _end_thread(self, thread: MultiThread, err: bool) -> None:
-        """ Output message and join thread back to main on termination.
+        """Output message and join thread back to main on termination.
 
         Parameters
         ----------
-        thread: :class:`lib.multithreading.MultiThread`
+        thread
             The background training thread
-        err: bool
+        err
             Whether an error has been detected in :func:`_monitor`
         """
-        logger.debug("Ending Training thread")
+        logger.debug("[Train] Ending Training thread")
         if err:
             msg = "Error caught! Exiting..."
             log = logger.critical
@@ -243,25 +239,25 @@ class Train():
         self._stop = True
         thread.join()
         sys.stdout.flush()
-        logger.debug("Ended training thread")
+        logger.debug("[Train] Ended training thread")
 
     def _training(self) -> None:
-        """ The training process to be run inside a thread. """
+        """The training process to be run inside a thread."""
         trainer = None
         try:
             sleep(0.5)  # Let preview instructions flush out to logger
-            logger.debug("Commencing Training")
+            logger.debug("[Train] Commencing Training")
             logger.info("Loading data, this may take a while...")
             model = self._load_model()
             trainer = self._load_trainer(model)
             if trainer.exit_early:
-                logger.debug("Trainer exits early")
+                logger.debug("[Train] Trainer exits early")
                 self._stop = True
                 return
             self._run_training_cycle(trainer)
         except KeyboardInterrupt:
             try:
-                logger.debug("Keyboard Interrupt Caught. Saving Weights and exiting")
+                logger.debug("[Train] Keyboard Interrupt Caught. Saving Weights and exiting")
                 if trainer is not None:
                     trainer.save(is_exit=True)
             except KeyboardInterrupt:
@@ -271,37 +267,35 @@ class Train():
             raise err
 
     def _load_model(self) -> ModelBase:
-        """ Load the model requested for training.
+        """Load the model requested for training.
 
         Returns
         -------
-        :file:`plugins.train.model` plugin
-            The requested model plugin
+        The requested model plugin
         """
-        logger.debug("Loading Model")
+        logger.debug("[Train] Loading Model")
         model_dir = get_folder(self._args.model_dir)
         model: ModelBase = PluginLoader.get_model(self._args.trainer)(
             model_dir,
             self._args,
             predict=False)
         model.build()
-        logger.debug("Loaded Model")
+        logger.debug("[Train] Loaded Model")
         return model
 
     def _load_trainer(self, model: ModelBase) -> Trainer:
-        """ Load the trainer requested for training.
+        """Load the trainer requested for training.
 
         Parameters
         ----------
-        model: :file:`plugins.train.model` plugin
+        model
             The requested model plugin
 
         Returns
         -------
-        :class:`plugins.train.trainer.run_train.Trainer`
-            The model training loop with the requested trainer plugin loaded
+        The model training loop with the requested trainer plugin loaded
         """
-        logger.debug("Loading Trainer")
+        logger.debug("[Train] Loading Trainer")
         trainer = "distributed" if self._args.distributed else "original"
         if trainer == "distributed":
             import torch  # pylint:disable=import-outside-toplevel
@@ -311,23 +305,34 @@ class Train():
                                "to Original")
                 trainer = "original"
 
-        retval = Trainer(PluginLoader.get_trainer(trainer)(model, self._args.batch_size),
-                         self._images)
-        logger.debug("Loaded Trainer")
+        config = TrainConfig(folders=self._images,
+                             batch_size=self._args.batch_size,
+                             augment_color=not self._args.no_augment_color,
+                             flip=not self._args.no_flip,
+                             warp=not self._args.no_warp,
+                             cache_landmarks=self._args.warp_to_landmarks,
+                             lr_finder=self._args.use_lr_finder,
+                             snapshot_interval=self._args.snapshot_interval)
+        retval = Trainer(PluginLoader.get_trainer(trainer)(model, config),
+                         self._args.preview or self._args.write_image or self._args.redirect_gui,
+                         timelapse_folders=[self._args.timelapse_input_a,
+                                            self._args.timelapse_input_b],
+                         timelapse_output=self._args.timelapse_output)
+        logger.debug("[Train] Loaded Trainer")
         return retval
 
     def _run_training_cycle(self, trainer: Trainer) -> None:
-        """ Perform the training cycle.
+        """Perform the training cycle.
 
         Handles the background training, updating previews/time-lapse on each save interval,
         and saving the model.
 
         Parameters
         ----------
-        trainer: :file:`plugins.train.trainer` plugin
+        trainer
             The requested model trainer plugin
         """
-        logger.debug("Running Training Cycle")
+        logger.debug("[Train] Running Training Cycle")
         update_preview_images = False
         if self._args.write_image or self._args.redirect_gui or self._args.preview:
             display_func: Callable | None = self._show
@@ -335,7 +340,7 @@ class Train():
             display_func = None
 
         for iteration in range(1, self._args.iterations + 1):
-            logger.trace("Training iteration: %s", iteration)  # type:ignore
+            logger.trace("[Train] Training iteration: %s", iteration)  # type:ignore
             save_iteration = iteration % self._args.save_interval == 0 or iteration == 1
             gui_triggers = self._process_gui_triggers()
 
@@ -349,32 +354,31 @@ class Train():
             else:
                 viewer = None
 
-            timelapse = self._timelapse if save_iteration else {}
-            trainer.train_one_step(viewer, timelapse)
+            trainer.train_one_step(viewer, self._timelapse and save_iteration)
 
             if viewer is not None and not save_iteration:
-                # Spammy but required by GUI to know to update window
+                # Ugly spam but required by GUI to know to update window
                 print("\x1b[2K", end="\r")  # Clear last line
                 logger.info("[Preview Updated]")
 
             if self._stop:
-                logger.debug("Stop received. Terminating")
+                logger.debug("[Train] Stop received. Terminating")
                 break
 
             if save_iteration or self._save_now:
-                logger.debug("Saving (save_iterations: %s, save_now: %s) Iteration: "
+                logger.debug("[Train] Saving (save_iterations: %s, save_now: %s) Iteration: "
                              "(iteration: %s)", save_iteration, self._save_now, iteration)
                 trainer.save(is_exit=False)
                 self._save_now = False
                 update_preview_images = True
 
-        logger.debug("Training cycle complete")
+        logger.debug("[Train] Training cycle complete")
         trainer.save(is_exit=True)
         self._stop = True
 
     def _output_startup_info(self) -> None:
-        """ Print the startup information to the console. """
-        logger.debug("Launching Monitor")
+        """Print the startup information to the console."""
+        logger.debug("[Train] Launching Monitor")
         logger.info("===================================================")
         logger.info("  Starting")
         if self._args.preview:
@@ -387,23 +391,22 @@ class Train():
         logger.info("===================================================")
 
     def _check_keypress(self, keypress: KBHit) -> bool:
-        """ Check if a keypress has been detected.
+        """Check if a keypress has been detected.
 
         Parameters
         ----------
-        keypress: :class:`lib.keypress.KBHit`
+        keypress
             The keypress monitor
 
         Returns
         -------
-        bool
-            ``True`` if an exit keypress has been detected otherwise ``False``
+        ``True`` if an exit keypress has been detected otherwise ``False``
         """
         retval = False
         if keypress.kbhit():
             console_key = keypress.getch()
             if console_key in ("\n", "\r"):
-                logger.debug("Exit requested")
+                logger.debug("[Train] Exit requested")
                 retval = True
             if console_key in ("s", "S"):
                 logger.info("Save requested")
@@ -411,12 +414,11 @@ class Train():
         return retval
 
     def _process_gui_triggers(self) -> dict[T.Literal["mask", "refresh"], bool]:
-        """ Check whether a file drop has occurred from the GUI to manually update the preview.
+        """Check whether a file drop has occurred from the GUI to manually update the preview.
 
         Returns
         -------
-        dict
-            The trigger name as key and boolean as value
+        The trigger name as key and boolean as value
         """
         retval: dict[T.Literal["mask", "refresh"], bool] = {key: False
                                                             for key in self._gui_triggers}
@@ -425,9 +427,9 @@ class Train():
 
         for trigger, filename in self._gui_triggers.items():
             if os.path.isfile(filename):
-                logger.debug("GUI Trigger received for: '%s'", trigger)
+                logger.debug("[Train] GUI Trigger received for: '%s'", trigger)
                 retval[trigger] = True
-                logger.debug("Removing gui trigger file: %s", filename)
+                logger.debug("[Train] Removing gui trigger file: %s", filename)
                 os.remove(filename)
                 if trigger == "refresh":
                     print("\x1b[2K", end="\r")  # Clear last line
@@ -435,17 +437,16 @@ class Train():
         return retval
 
     def _monitor(self, thread: MultiThread) -> bool:
-        """ Monitor the background :func:`_training` thread for key presses and errors.
+        """Monitor the background :func:`_training` thread for key presses and errors.
 
         Parameters
         ----------
-        thread: :class:`~lib.multithreading.MultiThread`
+        thread
             The thread containing the training loop
 
         Returns
         -------
-        bool
-            ``True`` if there has been an error in the background thread otherwise ``False``
+        ``True`` if there has been an error in the background thread otherwise ``False``
         """
         self._output_startup_info()
         keypress = KBHit(is_gui=self._args.redirect_gui)
@@ -453,11 +454,11 @@ class Train():
         while True:
             try:
                 if thread.has_error:
-                    logger.debug("Thread error detected")
+                    logger.debug("[Train] Thread error detected")
                     err = True
                     break
                 if self._stop:
-                    logger.debug("Stop received")
+                    logger.debug("[Train] Stop received")
                     break
 
                 # Preview Monitor
@@ -472,61 +473,62 @@ class Train():
 
                 sleep(1)
             except KeyboardInterrupt:
-                logger.debug("Keyboard Interrupt received")
+                logger.debug("[Train] Keyboard Interrupt received")
                 break
-        logger.debug("Closing Monitor")
+        logger.debug("[Train] Closing Monitor")
         self._preview.shutdown()
         keypress.set_normal_term()
-        logger.debug("Closed Monitor")
+        logger.debug("[Train] Closed Monitor")
         return err
 
     def _show(self, image: np.ndarray, name: str = "") -> None:
-        """ Generate the preview and write preview file output.
+        """Generate the preview and write preview file output.
 
         Handles the output and display of preview images.
 
         Parameters
         ----------
-        image: :class:`numpy.ndarray`
+        image
             The preview image to be displayed and/or written out
-        name: str, optional
+        name
             The name of the image for saving or display purposes. If an empty string is passed
             then it will automatically be named. Default: ""
         """
-        logger.debug("Updating preview: (name: %s)", name)
+        logger.debug("[Train] Updating preview: (name: %s)", name)
         try:
-            scriptpath = os.path.realpath(os.path.dirname(sys.argv[0]))
+            script_path = os.path.realpath(os.path.dirname(sys.argv[0]))
             if self._args.write_image:
-                logger.debug("Saving preview to disk")
+                logger.debug("[Train] Saving preview to disk")
                 img = "training_preview.png"
-                imgfile = os.path.join(scriptpath, img)
-                cv2.imwrite(imgfile, image)  # pylint:disable=no-member
-                logger.debug("Saved preview to: '%s'", img)
+                img_file = os.path.join(script_path, img)
+                cv2.imwrite(img_file, image)  # pylint:disable=no-member
+                logger.debug("[Train] Saved preview to: '%s'", img)
             if self._args.redirect_gui:
-                logger.debug("Generating preview for GUI")
-                img = TRAININGPREVIEW
-                imgfile = os.path.join(scriptpath, "lib", "gui", ".cache", "preview", img)
-                cv2.imwrite(imgfile, image)  # pylint:disable=no-member
-                logger.debug("Generated preview for GUI: '%s'", imgfile)
+                logger.debug("[Train] Generating preview for GUI")
+                img = TRAINING_PREVIEW
+                img_file = os.path.join(script_path, "lib", "gui", ".cache", "preview", img)
+                cv2.imwrite(img_file, image)  # pylint:disable=no-member
+                logger.debug("[Train] Generated preview for GUI: '%s'", img_file)
             if self._args.preview:
-                logger.debug("Generating preview for display: '%s'", name)
+                logger.debug("[Train] Generating preview for display: '%s'", name)
                 self._preview.buffer.add_image(name, image)
-                logger.debug("Generated preview for display: '%s'", name)
+                logger.debug("[Train] Generated preview for display: '%s'", name)
         except Exception as err:
             logging.error("could not preview sample")
             raise err
-        logger.debug("Updated preview: (name: %s)", name)
+        logger.debug("[Train] Updated preview: (name: %s)", name)
 
 
 class PreviewInterface():
-    """ Run the preview window in a thread and interface with it
+    """Run the preview window in a thread and interface with it
 
     Parameters
     ----------
-    use_preview: bool
+    use_preview
         ``True`` if pop-up preview window has been requested otherwise ``False``
     """
     def __init__(self, use_preview: bool) -> None:
+        logger.debug(parse_class_init(locals()))
         self._active = use_preview
         self._triggers: TriggerType = {"toggle_mask": Event(),
                                        "refresh": Event(),
@@ -538,48 +540,48 @@ class PreviewInterface():
 
     @property
     def buffer(self) -> PreviewBuffer:
-        """ :class:`PreviewBuffer`: The thread save preview image object """
+        """The thread save preview image object"""
         return self._buffer
 
     @property
     def should_toggle_mask(self) -> bool:
-        """ bool: Check whether the mask should be toggled and return the value. If ``True`` is
-        returned then resets mask toggle back to ``False`` """
+        """Check whether the mask should be toggled and return the value. If ``True`` is returned
+        then resets mask toggle back to ``False``"""
         if not self._active:
             return False
         retval = self._triggers["toggle_mask"].is_set()
         if retval:
-            logger.debug("Sending toggle mask")
+            logger.debug("[PreviewInterface] Sending toggle mask")
             self._triggers["toggle_mask"].clear()
         return retval
 
     @property
     def should_refresh(self) -> bool:
-        """ bool: Check whether the preview should be updated and return the value. If ``True`` is
-        returned then resets the refresh trigger back to ``False`` """
+        """Check whether the preview should be updated and return the value. If ``True`` is
+        returned then resets the refresh trigger back to ``False``"""
         if not self._active:
             return False
         retval = self._triggers["refresh"].is_set()
         if retval:
-            logger.debug("Sending should refresh")
+            logger.debug("[PreviewInterface] Sending should refresh")
             self._triggers["refresh"].clear()
         return retval
 
     @property
     def should_save(self) -> bool:
-        """ bool: Check whether a save request has been made. If ``True`` is returned then save
-        trigger is set back to ``False`` """
+        """Check whether a save request has been made. If ``True`` is returned then save
+        trigger is set back to ``False``"""
         if not self._active:
             return False
         retval = self._triggers["save"].is_set()
         if retval:
-            logger.debug("Sending should save")
+            logger.debug("[PreviewInterface] Sending should save")
             self._triggers["save"].clear()
         return retval
 
     @property
     def should_quit(self) -> bool:
-        """ bool: Check whether an exit request has been made. ``True`` if an exit request has
+        """Check whether an exit request has been made. ``True`` if an exit request has
         been made otherwise ``False``.
 
         Raises
@@ -594,16 +596,15 @@ class PreviewInterface():
 
         retval = self._triggers["quit"].is_set()
         if retval:
-            logger.debug("Sending should stop")
+            logger.debug("[PreviewInterface] Sending should stop")
         return retval
 
     def _launch_thread(self) -> FSThread | None:
-        """ Launch the preview viewer in it's own thread if preview has been selected
+        """Launch the preview viewer in it's own thread if preview has been selected
 
         Returns
         -------
-        :class:`lib.multithreading.FSThread` or ``None``
-            The thread that holds the preview viewer if preview is selected otherwise ``None``
+        The thread that holds the preview viewer if preview is selected otherwise ``None``
         """
         if not self._active:
             return None
@@ -615,10 +616,10 @@ class PreviewInterface():
         return thread
 
     def shutdown(self) -> None:
-        """ Send a signal to shutdown the preview window. """
+        """Send a signal to shutdown the preview window."""
         if not self._active:
             return
-        logger.debug("Sending shutdown to preview viewer")
+        logger.debug("[PreviewInterface] Sending shutdown to preview viewer")
         self._triggers["shutdown"].set()
 
 

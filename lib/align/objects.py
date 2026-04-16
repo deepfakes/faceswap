@@ -11,7 +11,7 @@ import numpy.typing as npt
 
 from lib.logger import format_array
 
-from .aligned_face import CenteringType
+from .constants import CenteringType
 
 
 @dataclass
@@ -19,8 +19,15 @@ class DataclassDict:
     """Parent DataClass that has methods for loading to and from a dict for data serialization"""
     def __repr__(self) -> str:
         """Pretty print for logging"""
-        params = {k: format_array(v) if isinstance(v, np.ndarray) else v
-                  for k, v in self.__dict__.items()}
+        params = {}
+        for k, v in self.__dict__.items():
+            if isinstance(v, np.ndarray):
+                params[k] = format_array(v)
+                continue
+            if isinstance(v, bytes):
+                params[k] = f"{len(v)}b"
+                continue
+            params[k] = v
         s_params = ", ".join(f"{k}={repr(v)}" for k, v in params.items())
         return f"{self.__class__.__name__}({s_params})"
 

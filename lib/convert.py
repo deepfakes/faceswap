@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+from lib.align.aligned_mask import LandmarksMask
 from lib.utils import get_module_objects
 from plugins.plugin_loader import PluginLoader
 
@@ -446,7 +447,10 @@ class Converter():  # pylint:disable=too-many-instance-attributes
             m_type: T.Literal["face", "face_extended"] = (
                 "face" if self._args.mask_type == "components" else "face_extended"
             )
-            lm_mask = reference_face.get_landmark_mask(m_type, dilation=0.0)
+            lm_mask = LandmarksMask(m_type,
+                                    reference_face.landmark_type,
+                                    reference_face.landmarks,
+                                    reference_face.size)
         elif self._args.mask_type not in ("none", "predicted"):
             mask_centering = detected_face.mask[self._args.mask_type].stored_centering
         else:

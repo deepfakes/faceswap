@@ -8,7 +8,7 @@ import pytest_mock
 import torch
 
 from plugins.train.trainer import original as mod_original
-from plugins.train.trainer import _base as mod_base
+from plugins.train.trainer import base as mod_base
 
 
 @pytest.fixture
@@ -17,7 +17,13 @@ def _trainer_mocked(mocker: pytest_mock.MockFixture):  # noqa:[F811]
 
     def _apply_patch(batch_size=8):
         model = mocker.MagicMock()
-        instance = mod_original.Trainer(model, batch_size)
+        conf = mod_base.TrainConfig(folders=["x", "y"],
+                                    batch_size=batch_size,
+                                    augment_color=False,
+                                    flip=False,
+                                    warp=False,
+                                    cache_landmarks=False)
+        instance = mod_original.Trainer(model, conf)
         return instance
 
     return _apply_patch
@@ -56,9 +62,9 @@ def test_Trainer_forward(batch_size,  # pylint:disable=too-many-locals
     instance = _trainer_mocked(batch_size=batch_size)
 
     loss_returns = [torch.from_numpy(np.random.random((1, ))) for _ in range(outputs * 2)]
-    mock_preds = [torch.from_numpy(np.random.random((batch_size, 16, 16, 3)))
-                  for _ in range(outputs * 2)]
-    instance.model.model.return_value = mock_preds
+    mock_predictions = [torch.from_numpy(np.random.random((batch_size, 16, 16, 3)))
+                        for _ in range(outputs * 2)]
+    instance.model.model.return_value = mock_predictions
     instance.model.model.zero_grad = mocker.MagicMock()
     instance.model.model.loss = [mocker.MagicMock(return_value=ret) for ret in loss_returns]
 
@@ -87,8 +93,8 @@ def test_Trainer_forward(batch_size,  # pylint:disable=too-many-locals
     # losses called with targets split
     loss_calls = instance.model.model.loss
     expected_targets = [t[i].numpy() for i in range(2) for t in targets]
-    expected_preds = [p.numpy() for p in mock_preds]
-    for loss_call, pred, target in zip(loss_calls, expected_preds, expected_targets):
+    expected_predictions = [p.numpy() for p in mock_predictions]
+    for loss_call, pred, target in zip(loss_calls, expected_predictions, expected_targets):
         loss_call.assert_called_once()
         call_args, call_kwargs = loss_call.call_args
         assert not call_kwargs

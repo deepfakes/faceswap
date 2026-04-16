@@ -29,11 +29,12 @@ class _Config(FaceswapConfig):
         """ Set the default values for config """
         super().set_defaults(helptext=_("Options that apply to all models") + _ADDITIONAL_INFO)
         self._defaults_from_plugin(os.path.dirname(__file__))
-
-        train_helptext, section, train_opts = trainer_config.get_defaults()
-        self.add_section(section, train_helptext)
-        for k, v in train_opts.items():
-            self.add_item(section, k, v)
+        for section, opts in trainer_config.get_defaults().items():
+            sect = f"trainer.{section.lower()}"
+            self.add_section(sect, opts.helptext)
+            for k, v in opts.__dict__.items():
+                if isinstance(v, ConfigItem):
+                    self.add_item(sect, k, v)
 
 
 centering = ConfigItem(

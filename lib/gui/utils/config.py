@@ -1,5 +1,5 @@
 #!/usr/bin python3
-""" Global configuration optiopns for the Faceswap GUI """
+""" Global configuration options for the Faceswap GUI """
 from __future__ import annotations
 import logging
 import os
@@ -24,7 +24,7 @@ if T.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-PATHCACHE = os.path.join(PROJECT_ROOT, "lib", "gui", ".cache")
+PATH_CACHE = os.path.join(PROJECT_ROOT, "lib", "gui", ".cache")
 _CONFIG: Config | None = None
 
 
@@ -191,7 +191,7 @@ class Config():  # pylint:disable=too-many-public-methods
             tasks=Tasks(self, FileHandler),
             status_bar=statusbar)
 
-        self._style = Style(self.default_font, root, PATHCACHE)
+        self._style = Style(self.default_font, root, PATH_CACHE)
         self._user_theme = self._style.user_theme
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -209,7 +209,7 @@ class Config():  # pylint:disable=too-many-public-methods
     @property
     def pathcache(self) -> str:
         """ str: The path to the GUI cache folder """
-        return PATHCACHE
+        return PATH_CACHE
 
     # GUI Objects
     @property
@@ -328,7 +328,7 @@ class Config():  # pylint:disable=too-many-public-methods
         notebook: :class:`lib.gui.command.CommandNotebook`
             The main command notebook for the Faceswap GUI
         """
-        logger.debug("Setting commane notebook: %s", notebook)
+        logger.debug("Setting command notebook: %s", notebook)
         self._gui_objects.command_notebook = notebook
         self.project.set_modified_callback()
 
@@ -365,11 +365,11 @@ class Config():  # pylint:disable=too-many-public-methods
             The command to set the modified state to ``True``
 
         """
-        tkvar = self.modified_vars.get(command, None)
-        if tkvar is None:
-            logger.debug("No tkvar for command: '%s'", command)
+        tk_var = self.modified_vars.get(command, None)
+        if tk_var is None:
+            logger.debug("No tk_var for command: '%s'", command)
             return
-        tkvar.set(True)
+        tk_var.set(True)
         logger.debug("Set modified var to True for: '%s'", command)
 
     def set_cursor_busy(self, widget: tk.Widget | None = None) -> None:

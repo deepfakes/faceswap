@@ -103,9 +103,27 @@ class Mask():
                             passes=cfg.passes()).blurred
         return mask
 
+    def _get_landmarks_mask(self, mask: LandmarksMask) -> npt.NDArray[np.float32]:
+        """Obtain a mask that is generated from landmark points
+
+        Parameters
+        ----------
+        landmarks_mask
+            The LandmarksMask object of the requested mask type (components or extended) at model
+            output size with the raw mask generated
+
+        Returns
+        -------
+        The landmarks mask with any blur/erosion applied
+        """
+        blur_type = T.cast(T.Literal["gaussian", "normalized"] | None, cfg.type().lower())
+        mask.blur_type = None if blur_type == "none" else blur_type
+        mask.blur_kernel = cfg.kernel_size()
+        mask.blur_passes = cfg.passes()
+        return mask.generate_mask().astype(np.float32) / 255.
+
     def _get_stored_mask(self,
                          detected_face: DetectedFace,
-                         landmarks_mask: LandmarksMask | None,
                          centering: T.Literal["legacy", "face", "head"],
                          source_offset: np.ndarray,
                          target_offset: np.ndarray) -> np.ndarray:
@@ -115,8 +133,6 @@ class Mask():
         ----------
         detected_face : :class:`lib.align.DetectedFace`
             The DetectedFace object as returned from :class:`scripts.convert.Predictor`.
-        landmarks_mask : :class:`lib.align.aligned_mask.LandmarksMask` | None, optional
-            The landmarks mask object, if requested otherwise ``None``
         centering: [`"legacy"`, `"face"`, `"head"`]
             The centering to obtain the mask for
         source_offset : :class:`numpy.ndarray`
@@ -129,7 +145,7 @@ class Mask():
         :class:`numpy.ndarray`
             The mask sized to Faceswap model output with any requested blurring applied.
         """
-        mask = detected_face.mask[self._mask_type] if landmarks_mask is None else landmarks_mask
+        mask = detected_face.mask[self._mask_type]
         blur_type = T.cast(T.Literal["gaussian", "normalized"] | None, cfg.type().lower())
         blur_type = None if blur_type == "none" else blur_type
         mask.set_blur_and_threshold(blur_kernel=cfg.kernel_size(),
@@ -137,8 +153,6 @@ class Mask():
                                     blur_passes=cfg.passes(),
                                     threshold=cfg.threshold())
         mask.set_sub_crop(source_offset, target_offset, centering, self._coverage_ratio)
-        if isinstance(mask, LandmarksMask):
-            mask.generate_mask()
         face_mask = mask.mask
         mask_size = face_mask.shape[0]
         face_size = self._box.shape[0]
@@ -185,9 +199,10 @@ class Mask():
             mask = np.ones_like(self._box)  # Return a dummy mask if not using a mask
         elif self._mask_type == "predicted" and predicted_mask is not None:
             mask = self._process_predicted_mask(predicted_mask)
+        elif landmarks_mask is not None:
+            mask = self._get_landmarks_mask(landmarks_mask)
         else:
             mask = self._get_stored_mask(detected_face,
-                                         landmarks_mask,
                                          centering,
                                          source_offset,
                                          target_offset)

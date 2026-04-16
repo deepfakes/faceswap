@@ -20,6 +20,8 @@ from .aligned_utils import (get_base_size, get_sub_crop_size, get_matrix_scaling
 from .aligned_mask import LandmarksMask
 from .pose import PoseEstimate
 
+if T.TYPE_CHECKING:
+    import numpy.typing as npt
 
 logger = logging.getLogger(__name__)
 
@@ -476,7 +478,10 @@ class AlignedFace():  # pylint:disable=too-many-instance-attributes
 
     def get_landmark_mask(self,
                           area: T.Literal["eye", "mouth", "face", "face_extended"],
-                          dilation: float) -> LandmarksMask:
+                          dilation: float = 0,
+                          blur_kernel: int = 0,
+                          blur_type: T.Literal["gaussian", "normalized"] | None = "gaussian",
+                          blur_passes: int = 1) -> npt.NDArray[np.uint8]:
         """Obtain a :class:`~lib.align.aligned_mask.LandmarksMask` based mask for this face
 
         Landmark based masks are generated from Aligned Face landmark points.
@@ -487,21 +492,31 @@ class AlignedFace():  # pylint:disable=too-many-instance-attributes
             The type of mask to obtain. `face` is a full face mask, `face_extended` is a face mask
             that extends above the eyebrows. The others are masks for those specific areas
         dilation
-            The amount of dilation to apply to the mask. as a percentage of the mask size
+            The amount of dilation to apply to the mask. as a percentage of the mask size.
+            Default: 0
+        blur_kernel
+            The kernel size, in pixels to apply gaussian blurring to the mask. Set to 0 for no
+            blurring. Should be odd, if an even number is passed in (outside of 0) then it is
+            rounded up to the next odd number. Default: 0
+        blur_type
+            The blur type to use. ``gaussian`` or ``normalized`` box filter. Default: ``gaussian``
+        blur_passes
+            The number of passed to perform when blurring. Default: 1
 
         Returns
         -------
-        The requested Landmarks Mask object
+        The requested Landmarks Mask
         """
         logger.trace("area: %s, dilation: %s", area, dilation)  # type:ignore[attr-defined]
         mask = LandmarksMask(area,
                              self.landmark_type,
                              self.landmarks,
-                             self.adjusted_matrix,
-                             storage_size=self.size,
-                             storage_centering=self.centering,
-                             dilation=dilation)
-        return mask
+                             self.size,
+                             dilation=dilation,
+                             blur_kernel=blur_kernel,
+                             blur_type=blur_type,
+                             blur_passes=blur_passes)
+        return mask.mask
 
 
 def _umeyama(source: np.ndarray, destination: np.ndarray, estimate_scale: bool) -> np.ndarray:

@@ -282,7 +282,7 @@ class SortMethod():
         if aln_face.landmark_type != LandmarkType.LM_2D_68:
             mask = None
         else:
-            mask = det_face.get_landmark_mask("face", 0, 0)
+            mask = det_face.get_landmark_mask("face")
 
         if mask is None and not cls._log_mask_once:
             logger.warning("Masks cannot be generated for the available landmark types. Results "
