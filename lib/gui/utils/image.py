@@ -13,7 +13,7 @@ from lib.gui import gui_config as cfg
 from lib.training.preview_cv import PreviewBuffer
 from lib.utils import get_module_objects
 
-from .config import get_config, PATHCACHE
+from .config import get_config, PATH_CACHE
 
 if T.TYPE_CHECKING:
     from collections.abc import Sequence
@@ -21,7 +21,7 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 _IMAGES: Images | None = None
 _PREVIEW_TRIGGER: PreviewTrigger | None = None
-TRAININGPREVIEW = ".gui_training_preview.png"
+TRAINING_PREVIEW = ".gui_training_preview.png"
 
 
 def initialize_images() -> None:
@@ -100,7 +100,7 @@ class PreviewTrain():
         logger.trace("Loading Training preview images")  # type:ignore
         image_files = _get_previews(self._cache_path)
         filename = next((fname for fname in image_files
-                         if os.path.basename(fname) == TRAININGPREVIEW), "")
+                         if os.path.basename(fname) == TRAINING_PREVIEW), "")
         img: np.ndarray | None = None
         if not filename:
             logger.trace("No preview to display")  # type:ignore
@@ -297,10 +297,10 @@ class PreviewExtract():
         Returns
         -------
         bool
-            ``True`` if samples succesfully compiled otherwise ``False``
+            ``True`` if samples successfully compiled otherwise ``False``
         """
-        asamples = np.array(samples)
-        if not np.any(asamples):
+        a_samples = np.array(samples)
+        if not np.any(a_samples):
             logger.debug("No preview images collected.")
             return False
 
@@ -309,10 +309,10 @@ class PreviewExtract():
 
         if cache is None:
             logger.debug("Creating new cache")
-            cache = asamples[-num_images:]
+            cache = a_samples[-num_images:]
         else:
             logger.debug("Appending to existing cache")
-            cache = np.concatenate((cache, asamples))[-num_images:]
+            cache = np.concatenate((cache, a_samples))[-num_images:]
 
         self._images = cache
         assert self._images is not None
@@ -400,9 +400,9 @@ class PreviewExtract():
         placeholder = Image.new("RGB", (thumbnail_size, thumbnail_size))
         draw = ImageDraw.Draw(placeholder)
         draw.rectangle(((0, 0), (thumbnail_size, thumbnail_size)), outline="#E5E5E5", width=1)
-        nplaceholder = np.array(placeholder)
-        self._placeholder = nplaceholder
-        logger.debug("Created placeholder. shape: %s", nplaceholder.shape)
+        n_placeholder = np.array(placeholder)
+        self._placeholder = n_placeholder
+        logger.debug("Created placeholder. shape: %s", n_placeholder.shape)
 
     def _place_previews(self, frame_dims: tuple[int, int]) -> Image.Image | None:
         """ Format the preview thumbnails stored in the cache into a grid fitting the display
@@ -462,7 +462,7 @@ class PreviewExtract():
         Returns
         -------
         bool
-            ``True`` if a preview was succesfully loaded otherwise ``False``
+            ``True`` if a preview was successfully loaded otherwise ``False``
         """
         logger.debug("Loading preview image: (thumbnail_size: %s, frame_dims: %s)",
                      thumbnail_size, frame_dims)
@@ -522,11 +522,10 @@ class Images():
     """
     def __init__(self) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
-        self._pathpreview = os.path.join(PATHCACHE, "preview")
-        self._pathoutput: str | None = None
+        self._path_preview = os.path.join(PATH_CACHE, "preview")
         self._batch_mode = False
-        self._preview_train = PreviewTrain(self._pathpreview)
-        self._preview_extract = PreviewExtract(self._pathpreview)
+        self._preview_train = PreviewTrain(self._path_preview)
+        self._preview_extract = PreviewExtract(self._path_preview)
         self._icons = self._load_icons()
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -569,14 +568,14 @@ class Images():
         size = cfg.icon_size()
         size = int(round(size * get_config().scaling_factor))
         icons: dict[str, ImageTk.PhotoImage] = {}
-        pathicons = os.path.join(PATHCACHE, "icons")
-        for fname in os.listdir(pathicons):
+        path_icons = os.path.join(PATH_CACHE, "icons")
+        for fname in os.listdir(path_icons):
             name, ext = os.path.splitext(fname)
             if ext != ".png":
                 continue
-            img = Image.open(os.path.join(pathicons, fname))
-            pimg = ImageTk.PhotoImage(img.resize((size, size), resample=Image.Resampling.HAMMING))
-            icons[name] = pimg
+            img = Image.open(os.path.join(path_icons, fname))
+            p_img = ImageTk.PhotoImage(img.resize((size, size), resample=Image.Resampling.HAMMING))
+            icons[name] = p_img
         logger.debug(icons)
         return icons
 
@@ -586,18 +585,18 @@ class Images():
         Should be called when terminating tasks, or when Faceswap starts up or shuts down.
         """
         logger.debug("Deleting previews")
-        for item in os.listdir(self._pathpreview):
-            if item.startswith(os.path.splitext(TRAININGPREVIEW)[0]) and item.endswith((".jpg",
+        for item in os.listdir(self._path_preview):
+            if item.startswith(os.path.splitext(TRAINING_PREVIEW)[0]) and item.endswith((".jpg",
                                                                                         ".png")):
-                fullitem = os.path.join(self._pathpreview, item)
-                logger.debug("Deleting: '%s'", fullitem)
-                os.remove(fullitem)
+                full_item = os.path.join(self._path_preview, item)
+                logger.debug("Deleting: '%s'", full_item)
+                os.remove(full_item)
 
         self._preview_extract.delete_previews()
         del self._preview_train
         del self._preview_extract
-        self._preview_train = PreviewTrain(self._pathpreview)
-        self._preview_extract = PreviewExtract(self._pathpreview)
+        self._preview_train = PreviewTrain(self._path_preview)
+        self._preview_extract = PreviewExtract(self._path_preview)
 
 
 class PreviewTrigger():
@@ -608,8 +607,8 @@ class PreviewTrigger():
     """
     def __init__(self) -> None:
         logger.debug("Initializing: %s", self.__class__.__name__)
-        self._trigger_files = {"update": os.path.join(PATHCACHE, ".preview_trigger"),
-                               "mask_toggle": os.path.join(PATHCACHE, ".preview_mask_toggle")}
+        self._trigger_files = {"update": os.path.join(PATH_CACHE, ".preview_trigger"),
+                               "mask_toggle": os.path.join(PATH_CACHE, ".preview_mask_toggle")}
         logger.debug("Initialized: %s (trigger_files: %s)",
                      self.__class__.__name__, self._trigger_files)
 

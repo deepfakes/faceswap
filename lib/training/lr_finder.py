@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Learning Rate Finder for faceswap.py. """
+"""Learning Rate Finder for faceswap.py."""
 from __future__ import annotations
 import logging
 import os
@@ -19,32 +19,32 @@ from plugins.train import train_config as cfg
 
 if T.TYPE_CHECKING:
     from keras import optimizers
-    from plugins.train import training
+    from . import train
 
 logger = logging.getLogger(__name__)
 
 
 class LRStrength(Enum):
-    """ Enum for how aggressively to set the optimal learning rate """
+    """Enum for how aggressively to set the optimal learning rate"""
     DEFAULT = 10
     AGGRESSIVE = 5
     EXTREME = 2.5
 
 
 class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
-    """ Learning Rate Finder
+    """Learning Rate Finder
 
     Parameters
     ----------
-    trainer : :class:`plugins.train.run_trainer.Trainer`
+    trainer
         The training loop with the loaded training plugin
-    stop_factor : int
+    stop_factor
         When to stop finding the optimal learning rate
-    beta : float
+    beta
         Amount to smooth loss by, for graphing purposes
     """
     def __init__(self,  # pylint:disable=too-many-positional-arguments
-                 trainer: training.Trainer,
+                 trainer: train.Trainer,
                  stop_factor: int = 4,
                  beta: float = 0.98) -> None:
         logger.debug(parse_class_init(locals()))
@@ -72,13 +72,13 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _on_batch_end(self, iteration: int, loss: float) -> None:
-        """ Learning rate actions to perform at the end of a batch
+        """Learning rate actions to perform at the end of a batch
 
         Parameters
         ----------
-        iteration: int
+        iteration
             The current iteration
-        loss: float
+        loss
             The loss value for the current batch
         """
         learning_rate = float(self._optimizer.learning_rate.numpy())
@@ -102,11 +102,11 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
         self._optimizer.learning_rate.assign(learning_rate)
 
     def _update_description(self, progress_bar: tqdm) -> None:
-        """ Update the description of the progress bar for the current iteration
+        """Update the description of the progress bar for the current iteration
 
         Parameters
         ----------
-        progress_bar: :class:`tqdm.tqdm`
+        progress_bar
             The learning rate finder progress bar to update
         """
         current = self._metrics['learning_rates'][-1]
@@ -115,29 +115,28 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
         progress_bar.set_description(f"Current: {current:.1e}  Best: {best:.1e}")
 
     def _train(self) -> None:
-        """ Train the model for the given number of iterations to find the optimal
+        """Train the model for the given number of iterations to find the optimal
         learning rate and show progress"""
         logger.info("Finding optimal learning rate...")
-        pbar = tqdm(range(1, self._iterations + 1),
-                    desc="Current: N/A      Best: N/A    ",
-                    leave=False)
-        for idx in pbar:
+        p_bar = tqdm(range(1, self._iterations + 1),
+                     desc="Current: N/A      Best: N/A    ",
+                     leave=False)
+        for idx in p_bar:
             loss = self._trainer.train_one_batch()
 
             if any(np.isnan(x) for x in loss):
                 logger.warning("NaN detected! Exiting early")
                 break
             self._on_batch_end(idx, loss[0])
-            self._update_description(pbar)
+            self._update_description(p_bar)
 
     def _rebuild_optimizer(self, optimizer: optimizers.Optimizer) -> optimizers.Optimizer:
-        """ Pass through nested Optimizers (eg LossScaleOptimizer) and create new nested
+        """Pass through nested Optimizers (eg LossScaleOptimizer) and create new nested
         optimizers based on their original config
 
         Returns
         -------
-        :class:`keras.optimizers.Optimizer`
-            A new optimizer of the same type as the given one, with the same config
+        A new optimizer of the same type as the given one, with the same config
         """
         logger.debug("Processing optimizer: '%s'", optimizer.name)
         config = optimizer.get_config()
@@ -149,14 +148,14 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
         return retval
 
     def _reset_model(self, original_lr: float, new_lr: float) -> None:
-        """ Reset the model's weights to initial values, reset the model's optimizer and set the
+        """Reset the model's weights to initial values, reset the model's optimizer and set the
         learning rate
 
         Parameters
         ----------
-        original_lr: float
+        original_lr
             The model's original learning rate
-        new_lr: float
+        new_lr
             The discovered optimal learning rate
         """
         self._model.state.add_lr_finder(new_lr)
@@ -182,12 +181,11 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
         self._optimizer = self._model.model.optimizer
 
     def find(self) -> bool:
-        """ Find the optimal learning rate
+        """Find the optimal learning rate
 
         Returns
         -------
-        bool
-            ``True`` if the learning rate was succesfully discovered otherwise ``False``
+        ``True`` if the learning rate was successfully discovered otherwise ``False``
         """
         if not self._model.io.model_exists:
             self._model.io.save()
@@ -211,13 +209,13 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
         return True
 
     def _plot_loss(self, skip_begin: int = 10, skip_end: int = 1) -> None:
-        """ Plot a graph of loss vs learning rate and save to the training folder
+        """Plot a graph of loss vs learning rate and save to the training folder
 
         Parameters
         ----------
-        skip_begin: int, optional
+        skip_begin
             Number of iterations to skip at the start. Default: `10`
-        skip_end: int, optional
+        skip_end
             Number of iterations to skip at the end. Default: `1`
         """
         if not self._save_graph:

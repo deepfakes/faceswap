@@ -7,6 +7,7 @@ import inspect
 import logging
 import os
 import sys
+import typing as T
 
 from importlib import import_module
 
@@ -186,9 +187,10 @@ class FaceswapConfig():
         # Add global sub-sections
         for key, val in vars(sys.modules[self.__module__]).items():
             if inspect.isclass(val) and issubclass(val, GlobalSection) and val != GlobalSection:
+                g_val = T.cast(GlobalSection, val)
                 section_name = f"{section}.{key.lower()}"
-                self.add_section(section_name, val.helptext)
-                for opt_name, opt in val.__dict__.items():
+                self.add_section(section_name, g_val.helptext)
+                for opt_name, opt in g_val.__dict__.items():
                     if isinstance(opt, ConfigItem):
                         self.add_item(section=section_name, title=opt_name, config_item=opt)
 

@@ -10,7 +10,7 @@ from zlib import compress, decompress
 import cv2
 import numpy as np
 
-from lib.logger import parse_class_init
+from lib.logger import format_array, parse_class_init
 from lib.utils import FaceswapError, get_module_objects
 
 from .aligned_utils import get_adjusted_center, get_sub_crop_size
@@ -423,7 +423,7 @@ class Mask():  # pylint:disable=too-many-instance-attributes
         return self
 
 
-class LandmarksMask(Mask):
+class LandmarksMask():
     """Create a single channel mask from aligned landmark points.
 
     Landmarks masks are created on the fly, so the stored centering and size should be the same as
@@ -444,36 +444,59 @@ class LandmarksMask(Mask):
         The type of landmarks that this mask is being created from
     landmarks
         The landmarks to generate the mask from
-    affine_matrix
-        The transformation matrix required to transform the mask to the original frame.
-    storage_size
-        The size (in pixels) that the compressed mask should be stored at. Default: 128.
-    storage_centering
-        The centering to store the mask at. One of `"legacy"`, `"face"`, `"head"`.
-        Default: `"face"`
+    size
+        The size (in pixels) that the compressed mask should be
     dilation
         The amount of dilation to apply to the mask. as a percentage of the mask size. Default: 0.0
+    blur_kernel
+        The kernel size, in pixels to apply gaussian blurring to the mask. Set to 0 for no
+        blurring. Should be odd, if an even number is passed in (outside of 0) then it is rounded
+        up to the next odd number. Default: 0
+    blur_type
+        The blur type to use. ``gaussian`` or ``normalized`` box filter. Default: ``gaussian``
+    blur_passes
+        The number of passed to perform when blurring. Default: 1
     """
     def __init__(self,
                  area: T.Literal["eye", "mouth", "face", "face_extended"],
                  landmark_type: LandmarkType,
                  landmarks: npt.NDArray[np.float32],
-                 affine_matrix: npt.NDArray[np.float32],
-                 storage_size: int = 128,
-                 storage_centering: CenteringType = "face",
-                 dilation: float = 0.0) -> None:
-        super().__init__(storage_size=storage_size, storage_centering=storage_centering)
+                 size: int,
+                 dilation: float = 0.0,
+                 blur_kernel: int = 0,
+                 blur_type: T.Literal["gaussian", "normalized"] | None = "gaussian",
+                 blur_passes: int = 1) -> None:
+        logger.debug(parse_class_init(locals()))
         self._area = area
         self._landmark_type = landmark_type
-        self._lm_matrix = affine_matrix
-        self._points = self._get_points(landmarks)
-        self.set_dilation(dilation)
+        self._landmarks = landmarks
+        self._size = size
+        self._original_mask: npt.NDArray[np.uint8] | None = None
 
-    @property
-    def mask(self) -> npt.NDArray[np.uint8]:
-        """Overrides the default mask property, creating the processed mask at first call and
-        compressing it. The decompressed mask is returned from this property."""
-        return self.stored_mask
+        self.dilation = dilation
+        """The amount of dilation to apply to the mask. as a percentage of the mask size.
+        Default: 0.0"""
+        self.blur_kernel = blur_kernel
+        """The kernel size, in pixels to apply gaussian blurring to the mask. Set to 0 for no
+        blurring. Should be odd, if an even number is passed in (outside of 0) then it is rounded
+        up to the next odd number. Default: 0"""
+        self.blur_type: T.Literal["gaussian", "normalized"] | None = blur_type
+        """The blur type to use. ``gaussian``, ``normalized`` box filter or ``None`` for no blur.
+        Default: ``gaussian``"""
+        self.blur_passes = blur_passes
+        """The number of passed to perform when blurring. Default: 1"""
+        self.mask = self.generate_mask()
+        """The mask at the size of :attr:`size` with any requested blurring, threshold amount and
+        centering applied."""
+
+    def __repr__(self) -> str:
+        """Pretty print for logging"""
+        params = {f"{k[1:]}": format_array(v) if isinstance(v, np.ndarray) else v
+                  for k, v in self.__dict__.items()
+                  if k in ("_area", "_landmark_type", "_landmarks", "_size",
+                           "_dilation", "_blur_kernel", "_blur_type", "blur_passes")}
+        s_params = ", ".join(f"{k}={repr(v)}" for k, v in params.items())
+        return f"{self.__class__.__name__}({s_params})"
 
     def _get_slices(self) -> list[slice] | list[list[slice]]:
         """Obtain the slices that will extract the points for the given area and landmark type
@@ -543,19 +566,15 @@ class LandmarksMask(Mask):
         retval[22:27] = top_r + ((top_r - bot_r) // 2)
         return retval
 
-    def _get_points(self, landmarks: npt.NDArray[np.float32]) -> list[npt.NDArray[np.int32]]:
+    def _get_points(self) -> list[npt.NDArray[np.int32]]:
         """Obtain the points required to create the mask
-
-        Parameters
-        ----------
-        landmarks
-            The landmarks to obtain the points from
 
         Returns
         -------
         The list of points for creating each section of the mask
         """
         slices = self._get_slices()
+        landmarks = self._landmarks
         if self._area == "face_extended":
             landmarks = self._extend_face_landmarks(landmarks)
 
@@ -567,26 +586,49 @@ class LandmarksMask(Mask):
                       for zone in T.cast(list[list[slice]], slices)]
         return retval
 
-    def generate_mask(self) -> None:
+    def _dilate(self, mask: npt.NDArray[np.uint8]):
+        """Perform dilation on the mask
+
+        Parameters
+        ----------
+        mask
+            The mask to dilate
+        """
+        if self.dilation == 0.0:
+            return
+        kernel_size = int(round(self._size * abs(self.dilation / 100.), 0))
+        element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+        func = cv2.erode if self.dilation < 0 else cv2.dilate
+        func(mask, element, dst=mask, iterations=1)
+
+    def generate_mask(self) -> npt.NDArray[np.uint8]:
         """Generate the mask.
 
-        Creates the mask applying any requested dilation and blurring and assigns compressed mask
-        to :attr:`_mask`
+        Creates the mask applying any requested dilation and blurring
+
+        Returns
+        -------
+        The landmarks based mask
         """
-        mask = np.zeros((self.stored_size, self.stored_size, 1), dtype=np.uint8)
-        for pts in self._points:
-            lms = np.rint(pts).astype("int")
-            cv2.fillConvexPoly(mask, cv2.convexHull(lms), [255], lineType=cv2.LINE_AA)
-        if self._dilation[-1] is not None:
-            self._dilate_mask(mask)
-        if self._blur_kernel != 0 and self._blur_type is not None:
-            mask = BlurMask(self._blur_type,
+        if self._original_mask is None:
+            points = self._get_points()
+            mask = np.zeros((self._size, self._size, 1), dtype=np.uint8)
+            for pts in points:
+                lms = np.rint(pts).astype("int")
+                cv2.fillConvexPoly(mask, cv2.convexHull(lms), [255], lineType=cv2.LINE_AA)
+            self._original_mask = mask
+
+        mask = self._original_mask.copy()
+        self._dilate(mask)
+
+        if self.blur_kernel != 0 and self.blur_type is not None:
+            mask = BlurMask(self.blur_type,
                             mask,
-                            self._blur_kernel,
-                            passes=self._blur_passes).blurred
+                            self.blur_kernel,
+                            passes=self.blur_passes).blurred
         logger.trace("[LM_MASK] mask: (shape: %s, dtype: %s)",  # type:ignore[attr-defined]
                      mask.shape, mask.dtype)
-        self.add(mask, self._lm_matrix)
+        return mask
 
 
 class BlurMask():

@@ -10,7 +10,7 @@ from keras.src.tree import flatten
 import torch
 
 from lib.utils import get_module_objects
-from ._base import TrainerBase
+from .base import TrainerBase
 
 
 logger = logging.getLogger(__name__)
@@ -18,6 +18,15 @@ logger = logging.getLogger(__name__)
 
 class Trainer(TrainerBase):
     """Original trainer"""
+
+    def get_sampler(self) -> type[torch.utils.data.RandomSampler]:
+        """Obtain a standard random sampler
+
+        Returns
+        -------
+        The Random sampler
+        """
+        return torch.utils.data.RandomSampler
 
     def _forward(self,
                  inputs: torch.Tensor,
@@ -39,13 +48,13 @@ class Trainer(TrainerBase):
         The loss for each side of this batch in layout (A1, ..., An, B1, ..., Bn)
         """
         feed_targets = [[t[i] for t in targets] for i in range(2)]
-        preds = self.model.model((inputs[0], inputs[1]), training=True)
+        predictions = self.model.model((inputs[0], inputs[1]), training=True)
         self.model.model.zero_grad()
 
         losses = torch.stack([loss_fn(y_true, y_pred)
                               for loss_fn, y_true, y_pred in zip(self.model.model.loss,
                                                                  flatten(feed_targets),
-                                                                 preds)])
+                                                                 predictions)])
         logger.trace("Losses: %s", losses)  # type:ignore[attr-defined]
         return losses
 

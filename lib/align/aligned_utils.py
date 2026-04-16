@@ -294,6 +294,51 @@ def sub_crop(image: npt.NDArray[np.uint8 | np.float32],  # pylint:disable=too-ma
 
 
 # Batch functions
+def batch_create_matrices(size: int,
+                          rotation: npt.NDArray[np.float32],
+                          scale: npt.NDArray[np.float32] | None = None,
+                          translation: npt.NDArray[np.float32] | None = None
+                          ) -> npt.NDArray[np.float32]:
+    """Generate affine transformation matrices for the given rotations, scales and translations
+
+    Parameters
+    ----------
+    size
+        The size of the image that the matrix is transforming to
+    rotation
+        A 1D batch of rotation amounts or ``None`` for no rotation. Default: ``None``
+    scale
+        A 1D batch of scale amounts or ``None`` for no scaling. Default: ``None``
+    translation
+        A 2D batch of (x, y) translation amounts or ``None`` for no translation. Default: ``None``
+
+    Returns
+    -------
+    The (3, 3) transformation matrices for the requested transform
+    """
+    theta = np.deg2rad(rotation)
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+    if scale is not None:
+        cos_t *= scale
+        sin_t *= scale
+
+    cx = cy = (size - 1) / 2.0
+
+    matrices = np.zeros((len(rotation), 3, 3), dtype=np.float32)
+    matrices[:, 0, 0] = cos_t
+    matrices[:, 0, 1] = sin_t
+    matrices[:, 1, 0] = -sin_t
+    matrices[:, 1, 1] = cos_t
+    matrices[:, 0, 2] = cx * (1 - cos_t) - cy * sin_t
+    matrices[:, 1, 2] = cx * sin_t + cy * (1 - cos_t)
+    if translation is not None:
+        matrices[:, :2, 2] += translation
+    matrices[:, 2, :] = [0., 0., 1.]
+    logger.trace("Created affine matrices: %s", matrices.tolist())  # type:ignore[attr-defined]
+    return matrices
+
+
 def batch_transform(matrices: npt.NDArray[np.float32],
                     points: npt.NDArray[np.float32],
                     in_place: bool = False) -> npt.NDArray[np.float32]:

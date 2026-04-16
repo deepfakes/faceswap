@@ -1,6 +1,6 @@
 #!/usr/bin python3
 """ Pytest unit tests for :mod:`plugins.train.trainer.distributed` Trainer plug in """
-# pylint:disable=protected-access, invalid-name
+# pylint:disable=protected-access, invalid-name, duplicate-code, too-many-locals
 
 import numpy as np
 import pytest
@@ -9,7 +9,7 @@ import torch
 
 from plugins.train.trainer import distributed as mod_distributed
 from plugins.train.trainer import original as mod_original
-from plugins.train.trainer import _base as mod_base
+from plugins.train.trainer import base as mod_base
 
 
 _MODULE_PREFIX = "plugins.train.trainer.distributed"
@@ -18,7 +18,7 @@ _MODULE_PREFIX = "plugins.train.trainer.distributed"
 @pytest.mark.parametrize("batch_size", (4, 8, 16, 32, 64))
 @pytest.mark.parametrize("outputs", (1, 2, 4))
 def test_WrappedModel(batch_size, outputs, mocker):
-    """ Test that the wrapped model calls preds and loss """
+    """ Test that the wrapped model calls predictions and loss """
     model = mocker.MagicMock()
     instance = mod_distributed.WrappedModel(model)
     assert instance._keras_model is model
@@ -32,9 +32,9 @@ def test_WrappedModel(batch_size, outputs, mocker):
     inp_b = torch.from_numpy(np.random.random(test_dims))
     targets = [torch.from_numpy(np.random.random(test_dims))
                for _ in range(outputs * 2)]
-    preds = [*torch.from_numpy(np.random.random((outputs * 2, *test_dims)))]
+    predictions = [*torch.from_numpy(np.random.random((outputs * 2, *test_dims)))]
 
-    model.return_value = preds
+    model.return_value = predictions
 
     # Call forwards
     result = instance.forward(inp_a, inp_b, *targets)
@@ -54,7 +54,7 @@ def test_WrappedModel(batch_size, outputs, mocker):
     # Confirm loss functions correctly called
     expected_targets = targets[0::2] + targets[1::2]
 
-    for target, pred, loss in zip(expected_targets, preds, model.loss):
+    for target, pred, loss in zip(expected_targets, predictions, model.loss):
         loss.assert_called_once()
         loss_args, loss_kwargs = loss.call_args
         assert not loss_kwargs
@@ -77,7 +77,13 @@ def _trainer_mocked(mocker: pytest_mock.MockFixture):  # noqa:[F811]
         patched_parallel = mocker.patch(f"{_MODULE_PREFIX}.torch.nn.DataParallel")
         patched_parallel.return_value = mocker.MagicMock()
         model = mocker.MagicMock()
-        instance = mod_distributed.Trainer(model, batch_size)
+        conf = mod_base.TrainConfig(folders=["x", "y"],
+                                    batch_size=batch_size,
+                                    augment_color=False,
+                                    flip=False,
+                                    warp=False,
+                                    cache_landmarks=False)
+        instance = mod_distributed.Trainer(model, conf)
         return instance, patched_parallel
 
     return _apply_patch
@@ -106,10 +112,11 @@ def test_Trainer_forward(gpu_count, batch_size, outputs, _trainer_mocked, mocker
 
     test_dims = (2, batch_size, 16, 16, 3)
 
-    inputs = torch.from_numpy(np.random.random(test_dims))
-    targets = [torch.from_numpy(np.random.random(test_dims)) for _ in range(outputs)]
+    inputs = torch.from_numpy(np.random.random(test_dims)).to("cpu")
+    targets = [torch.from_numpy(np.random.random(test_dims)).to("cpu")
+               for _ in range(outputs)]
 
-    loss_return = torch.rand((gpu_count * 2 * outputs))
+    loss_return = torch.rand((gpu_count * 2 * outputs), device="cpu")
     instance._distributed_model = mocker.MagicMock(return_value=loss_return)
 
     # Call the forward pass
@@ -127,9 +134,9 @@ def test_Trainer_forward(gpu_count, batch_size, outputs, _trainer_mocked, mocker
     assert not call_kwargs
     assert len(call_args) == len(inputs) + (len(targets) * 2)
 
-    expected_tgts = [t[i].cpu().numpy() for t in targets for i in range(2)]
+    expected_tgt = [t[i].cpu().numpy() for t in targets for i in range(2)]
 
-    for expected, actual in zip([*inputs, *expected_tgts], call_args):
+    for expected, actual in zip([*inputs, *expected_tgt], call_args):
         assert np.allclose(expected, actual)
 
     # Make sure loss gets grouped, summed and scaled correctly

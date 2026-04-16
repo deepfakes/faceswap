@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 
 
+from lib.align.aligned_utils import batch_create_matrices
 from lib.logger import format_array, parse_class_init
 from lib.utils import get_module_objects
 
@@ -384,7 +385,7 @@ class Rotator:
         logger.debug(parse_class_init(locals()))
         self._size = image_size
         self._angles = self._get_angles(angles)
-        self._matrices = self._pre_compute_matrices()
+        self._matrices = batch_create_matrices(self._size, rotation=self._angles)
         self._matrices_inverse = self._pre_compute_inverse_matrices()
         self._channels_first: bool | None = None
         self.enabled = len(self._angles) > 1
@@ -431,30 +432,6 @@ class Rotator:
         retval = np.array([0] + passed_angles, dtype=np.float32)
         logger.debug("Setting rotation angles to %s from given: %s", retval, rotation)
         return retval
-
-    def _pre_compute_matrices(self) -> npt.NDArray[np.float32]:
-        """Pre-compute the rotation matrices required to perform the requested rotations for the
-        given square image size
-
-        Returns
-        -------
-        The rotation matrices for the requested rotation angles
-        """
-        theta = np.deg2rad(self._angles)
-        cos_t = np.cos(theta)
-        sin_t = np.sin(theta)
-        cx = (self._size - 1) / 2.0
-        cy = (self._size - 1) / 2.0
-
-        matrices = np.zeros((len(self._angles), 2, 3), dtype=np.float32)
-        matrices[:, 0, 0] = cos_t
-        matrices[:, 0, 1] = -sin_t
-        matrices[:, 1, 0] = sin_t
-        matrices[:, 1, 1] = cos_t
-        matrices[:, 0, 2] = (1 - cos_t) * cx + sin_t * cy
-        matrices[:, 1, 2] = (1 - cos_t) * cy - sin_t * cx
-        logger.debug("Precomputed rotation matrices: %s", matrices.tolist())
-        return matrices
 
     def _pre_compute_inverse_matrices(self) -> npt.NDArray[np.float32]:
         """Pre-compute the inverse rotation matrices required to perform translation from rotated

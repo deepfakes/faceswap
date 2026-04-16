@@ -94,12 +94,6 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         return self._model
 
     @property
-    def command_line_arguments(self) -> argparse.Namespace:
-        """The command line arguments passed to the model plugin from either the train or convert
-        script"""
-        return self._args
-
-    @property
     def coverage_ratio(self) -> float:
         """The ratio of the training image to crop out and train on as defined in user
         configuration options.

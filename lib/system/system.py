@@ -25,10 +25,10 @@ logger = logging.getLogger(__name__)
 VALID_PYTHON = ((3, 11), (3, 13))
 """ tuple[tuple[int, int], tuple[int, int]] : The minimum and maximum versions of Python that can
 run Faceswap """
-VALID_TORCH = ((2, 3), (2, 10))
+VALID_TORCH = ((2, 3), (2, 11))
 """ tuple[tuple[int, int], tuple[int, int]] : The minimum and maximum versions of Torch that can
 run Faceswap """
-VALID_KERAS = ((3, 13), (3, 13))
+VALID_KERAS = ((3, 13), (3, 14))
 """ tuple[tuple[int, int], tuple[int, int]] : The minimum and maximum versions of Keras that can
 run Faceswap """
 

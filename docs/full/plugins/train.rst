@@ -50,12 +50,7 @@ trainer package
 
 This package contains the training loop for Faceswap
 
-.. automodapi:: plugins.train.trainer._base
-   :include-all-objects:
-   :no-inheritance-diagram:
-
-|
-.. automodapi:: plugins.train.trainer._display
+.. automodapi:: plugins.train.trainer.base
    :include-all-objects:
    :no-inheritance-diagram:
 

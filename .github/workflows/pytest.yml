@@ -85,12 +85,12 @@ jobs:
         # These backends will fail as GPU drivers not available
         if: matrix.backend == 'cpu'
         run: |
-         KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
+         KERAS_BACKEND=torch KERAS_TORCH_DEVICE=CPU FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
       - name: End to End Tests
         # These backends will fail as GPU drivers not available
         if: matrix.backend == 'cpu'
         run: |
-          KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
+          KERAS_BACKEND=torch KERAS_TORCH_DEVICE=CPU FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
 
   build_linux:
     name: "pip (ubuntu-latest, ${{ matrix.backend }} ${{ matrix.python-version }})"
@@ -132,10 +132,10 @@ jobs:
         run: FACESWAP_BACKEND="${{ matrix.backend }}" python -m lib.system.sysinfo
       - name: Unit Tests
         run: |
-          KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
+          KERAS_BACKEND=torch KERAS_TORCH_DEVICE=CPU FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
       - name: End to End Tests
         run: |
-          KERAS_BACKEND=torch FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
+          KERAS_BACKEND=torch KERAS_TORCH_DEVICE=CPU FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
 
   build_windows:
     name: "pip (windows-latest, ${{ matrix.backend }} ${{ matrix.python-version }})"

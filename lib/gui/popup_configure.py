@@ -15,7 +15,7 @@ from lib.utils import get_module_objects
 
 from .control_helper import ControlPanel, ControlPanelOption
 from .custom_widgets import Tooltip
-from .utils import FileHandler, get_config, get_images, PATHCACHE
+from .utils import FileHandler, get_config, get_images, PATH_CACHE
 
 if T.TYPE_CHECKING:
     from lib.config import FaceswapConfig
@@ -700,7 +700,7 @@ class _Presets():
         logger.debug(parse_class_init(locals()))
         self._parent = parent
         self._popup = top_level
-        self._base_path = os.path.join(PATHCACHE, "presets")
+        self._base_path = os.path.join(PATH_CACHE, "presets")
         self._serializer = get_serializer("json")
         logger.debug("Initialized: %s", self.__class__.__name__)
 

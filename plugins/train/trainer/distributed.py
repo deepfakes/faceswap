@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Original Trainer """
+"""Original Trainer """
 from __future__ import annotations
 import logging
 import typing as T
@@ -13,6 +13,7 @@ from lib.utils import get_module_objects
 from .original import Trainer as OriginalTrainer
 
 if T.TYPE_CHECKING:
+    from .base import TrainConfig
     from plugins.train.model._base import ModelBase
     import keras
 
@@ -20,12 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 class WrappedModel(torch.nn.Module):
-    """ A torch module that wraps a dual input Faceswap model with a single input version that is
+    """A torch module that wraps a dual input Faceswap model with a single input version that is
     compatible with DataParallel training
 
     Parameters
     ----------
-    model : :class:`keras.Model`
+    model
         The original faceswap model that is to be wrapped
     """
     def __init__(self, model: keras.Model):
@@ -40,33 +41,32 @@ class WrappedModel(torch.nn.Module):
                 targets_a: torch.Tensor,
                 targets_b: torch.Tensor,
                 *targets: torch.Tensor) -> torch.Tensor:
-        """ Run the forward pass per GPU
+        """Run the forward pass per GPU
 
         Parameters
         ----------
-        input_a : :class:`torch.Tensor`
+        input_a
             The A batch of input images for 1 GPU
-        input_b : :class:`torch.Tensor`
+        input_b
             The B batch of input images for 1 GPU
-        targets_a : :class:`torch.Tensor` | list[torch.Tensor]
+        targets_a
             The A batch of target images for 1 GPU. If this is a multi-output model then this list
             will be the target images per output for all items in the current batch, regardless of
             GPU. If we have 1 output, this will be a Tensor for this GPUs current batch output
-        targets_b : :class:`torch.Tensor` | list[torch.Tensor]
+        targets_b
             The B batch of target images for 1 GPU. If this is a multi-output model then this list
             will be the target images per output for all items in the current batch, regardless of
             GPU. If we have 1 output, this will be a Tensor for this GPUs current batch output
-        targets : :class:`torch.Tensor` | list[torch.Tensor], optional
+        targets
             Used for multi-output models. Any additional outputs can be added here. They should be
             added in A-B order
 
 
         Returns
         -------
-        :class:`torch.Tensor`
-            The loss outputs for each side of the model for 1 GPU
+        The loss outputs for each side of the model for 1 GPU
         """
-        preds = self._keras_model((input_a, input_b), training=True)
+        predictions = self._keras_model((input_a, input_b), training=True)
         self._keras_model.zero_grad()
 
         if targets:  # Go from [A1, B1, A2, B2, A3, B3] to [A1, A2, A3, B1, B2, B3]
@@ -79,43 +79,41 @@ class WrappedModel(torch.nn.Module):
         losses = torch.stack([loss_fn(y_true, y_pred)
                               for loss_fn, y_true, y_pred in zip(self._keras_model.loss,
                                                                  loss_targets,
-                                                                 preds)])
+                                                                 predictions)])
         logger.trace("Losses: %s", losses)  # type:ignore[attr-defined]
         return losses
 
 
 class Trainer(OriginalTrainer):
-    """ Distributed training with torch.nn.DataParallel
+    """Distributed training with torch.nn.DataParallel
 
     Parameters
     ----------
-    model : plugin from :mod:`plugins.train.model`
+    model
         The model that will be running this trainer
-    batch_size : int
-        The requested batch size for iteration to be trained through the model.
+    config
+        The Training Configuration options
     """
-    def __init__(self, model: ModelBase, batch_size: int) -> None:
+    def __init__(self, model: ModelBase, config: TrainConfig) -> None:
 
         self._gpu_count = torch.cuda.device_count()
-        batch_size = self._validate_batch_size(batch_size)
         self._is_multi_out: bool | None = None
-
-        super().__init__(model, batch_size)
+        super().__init__(model, config)
+        self.batch_size = self._validate_batch_size(config.batch_size)
 
         self._distributed_model = self._set_distributed()
 
     def _validate_batch_size(self, batch_size: int) -> int:
-        """ Validate that the batch size is suitable for the number of GPUs and update accordingly.
+        """Validate that the batch size is suitable for the number of GPUs and update accordingly.
 
         Parameters
         ----------
-        batch_size : int
+        batch_size
             The requested training batch size
 
         Returns
         -------
-        int
-            A valid batch size for the GPU configuration
+        A valid batch size for the GPU configuration
         """
         if batch_size < self._gpu_count:
             logger.warning("Batch size (%s) is less than the number of GPUs (%s). Updating batch "
@@ -133,12 +131,12 @@ class Trainer(OriginalTrainer):
 
     def _handle_torch_gpu_mismatch_warning(
             self, warn_messages: list[warnings.WarningMessage] | None) -> None:
-        """ Handle the warning generated by Torch when significantly mismatched GPUs are used and
+        """Handle the warning generated by Torch when significantly mismatched GPUs are used and
         remove potentially confusing information not relevant for Faceswap
 
         Parameters
         ----------
-        warn_messages : list[:class:`warnings.WarningMessage]
+        warn_messages
             Any qualifying warning messages that may have been generated when wrapping the model
         """
         if warn_messages is None or not warn_messages:
@@ -161,8 +159,7 @@ class Trainer(OriginalTrainer):
 
         Returns
         -------
-        :class:`torch.nn.Parallel`
-            A wrapped version of the faceswap model compatible with distributed training
+        A wrapped version of the faceswap model compatible with distributed training
         """
         name = self.model.model.name
         logger.debug("Setting distributed training for '%s'", name)
@@ -182,22 +179,21 @@ class Trainer(OriginalTrainer):
     def _forward(self,
                  inputs: torch.Tensor,
                  targets: list[torch.Tensor]) -> torch.Tensor:
-        """ Perform the forward pass on the model
+        """Perform the forward pass on the model
 
         Parameters
         ----------
-        inputs : :class:`torch.Tensor`
+        inputs
             The batch of input image tensors to the model in shape `(side, batch_size,
             *dims)` with `side` 0 being input A and `side` 1 being input B
-        targets : list[:class:`torch.Tensor`]
+        targets
             The corresponding batch of target images for the model for each side's output(s). For
             each model output an array should exist in the order of model outputs in the format `(
             side, batch_size, *dims)` with `side` 0 being input A and `side` 1 being input B
 
         Returns
         -------
-        :class:`torch.Tensor`
-            The loss for each side of this batch in layout (A1, ..., An, B1, ..., Bn)
+        The loss for each side of this batch in layout (A1, ..., An, B1, ..., Bn)
         """
         if self._is_multi_out is None:
             self._is_multi_out = len(targets) > 1
