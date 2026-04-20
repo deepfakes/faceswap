@@ -34,39 +34,70 @@ class HRNetStageConfig:
     num_branches: int
     num_blocks: list[int]
     num_channels: list[int]
-    use_bottleneck: bool
+    block: T.Literal["ATTENTION", "BLOCK", "BOTTLENECK"]
 
 
 class HRNet(ExtractPlugin):
     """HRNet Face alignment"""
     def __init__(self) -> None:
-        super().__init__(input_size=256,
+        super().__init__(input_size=256,  # if cfg.weights() == "standard" else 512,
                          batch_size=cfg.batch_size(),
                          is_rgb=True,
                          dtype="float32",
                          scale=(0, 1))
-        self._stage_2_config = HRNetStageConfig(num_modules=1,
-                                                num_branches=2,
-                                                num_blocks=[4, 4],
-                                                num_channels=[18, 36],
-                                                use_bottleneck=False)
-        self._stage_3_config = HRNetStageConfig(num_modules=4,
-                                                num_branches=3,
-                                                num_blocks=[4, 4, 4],
-                                                num_channels=[18, 36, 72],
-                                                use_bottleneck=False)
-        self._stage_4_config = HRNetStageConfig(num_modules=3,
-                                                num_branches=4,
-                                                num_blocks=[4, 4, 4, 4],
-                                                num_channels=[18, 36, 72, 144],
-                                                use_bottleneck=False)
-
+        self._stage_configs = self._get_stage_configs()
+        self._hm_size = 64  # if cfg.weights() == "standard" else 128
         self.model: HighResolutionNet
         self.realign_centering = "legacy"
 
         self._mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         self._std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-        self._dark = Dark(68, 64) if cfg.dark_decoder() else None
+        self._dark = Dark(68, self._hm_size) if cfg.dark_decoder() else None
+
+    @classmethod
+    def _get_stage_configs(cls) -> tuple[HRNetStageConfig, HRNetStageConfig, HRNetStageConfig]:
+        """Obtain the model configuration for the chosen weights
+
+        Returns
+        -------
+        The model configuration
+        """
+        # weights = cfg.weights()
+        weights = "standard"
+        if weights == "standard":
+            retval = (HRNetStageConfig(num_modules=1,
+                                       num_branches=2,
+                                       num_blocks=[4, 4],
+                                       num_channels=[18, 36],
+                                       block="BLOCK"),
+                      HRNetStageConfig(num_modules=4,
+                                       num_branches=3,
+                                       num_blocks=[4, 4, 4],
+                                       num_channels=[18, 36, 72],
+                                       block="ATTENTION"),
+                      HRNetStageConfig(num_modules=3,
+                                       num_branches=4,
+                                       num_blocks=[4, 4, 4, 4],
+                                       num_channels=[18, 36, 72, 144],
+                                       block="ATTENTION"))
+        else:
+            retval = (HRNetStageConfig(num_modules=1,
+                                       num_branches=2,
+                                       num_blocks=[4, 4],
+                                       num_channels=[32, 64],
+                                       block="BLOCK"),
+                      HRNetStageConfig(num_modules=4,
+                                       num_branches=3,
+                                       num_blocks=[4, 4, 4],
+                                       num_channels=[32, 64, 128],
+                                       block="ATTENTION"),
+                      HRNetStageConfig(num_modules=3,
+                                       num_branches=4,
+                                       num_blocks=[4, 4, 4, 4],
+                                       num_channels=[32, 64, 128, 256],
+                                       block="ATTENTION"))
+        logger.debug("[HRNet] using config for weights '%s': %s", weights, retval)
+        return retval
 
     def load_model(self) -> HighResolutionNet:
         """Load the HRNet model
@@ -75,14 +106,16 @@ class HRNet(ExtractPlugin):
         -------
         The loaded HRNet model
         """
-        weights = GetModel("hrnet_landmark_v1.pth", 34).model_path
+        # version = 2 if cfg.weights() == "standard" else 3
+        version = 2
+        weights = GetModel(f"hrnet_landmark_v{version}.pth", 34).model_path
         assert isinstance(weights, str)
         model = T.cast(HighResolutionNet, self.load_torch_model(
             HighResolutionNet(num_joints=68,
                               final_conv_kernel=1,
-                              stage_2_config=self._stage_2_config,
-                              stage_3_config=self._stage_3_config,
-                              stage_4_config=self._stage_4_config),
+                              stage_2_config=self._stage_configs[0],
+                              stage_3_config=self._stage_configs[1],
+                              stage_4_config=self._stage_configs[2]),
             weights))
         return model
 
@@ -166,7 +199,7 @@ class HRNet(ExtractPlugin):
         The final landmarks in 0-1 space
         """
         if self._dark is not None:
-            return self._dark(batch) / 64.
+            return self._dark(batch) / self._hm_size
         batch_size, num_points, height, width = batch.shape
         assert height == width, "Heatmaps must be square"
         resolution = height
@@ -239,6 +272,86 @@ class BasicBlock(nn.Module):
 
         out = self.conv2(out)
         out = self.bn2(out)
+
+        if self.downsample is not None:
+            residual = self.downsample(inputs)
+
+        out += residual
+        out = self.relu(out)
+
+        return out
+
+
+class BasicBlockAttention(nn.Module):  # pylint:disable=too-many-instance-attributes
+    """ Custom Basic block for HRNet with Attention
+
+    Parameters
+    ----------
+    in_channels
+        The number of in channels
+    out_channels
+        The number of out channels
+    stride
+        The stride for the first 3x3 conv block. Default: 1
+    downsample
+        The module to use for downsampling or ``None`` for no downsample. Default: ``None``
+    """
+    expansion = 1
+
+    def __init__(self, in_channels, out_channels, stride=1, downsample=None):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_channels, momentum=0.01)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(in_channels, out_channels, 3, stride=1, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_channels, momentum=0.01)
+        self.downsample = downsample
+        self.att1 = nn.Sequential(nn.Conv2d(in_channels,
+                                            max(1, out_channels // 4),
+                                            1,
+                                            stride=1,
+                                            bias=False),
+                                  nn.BatchNorm2d(out_channels // 4),
+                                  nn.ReLU(inplace=True))
+        self.att2 = nn.Conv2d(max(1, out_channels // 4),
+                              max(1, out_channels // 4),
+                              3,
+                              stride=1,
+                              padding=1,
+                              bias=False)
+        self.att_bn1 = nn.BatchNorm2d(max(1, out_channels // 4), momentum=0.01)
+        self.att3 = nn.Conv2d(max(1, out_channels // 4), out_channels, 1, 1, bias=False)
+        self.att_bn2 = nn.BatchNorm2d(out_channels, momentum=0.01)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Forward pass through HRNet's basic block with attention
+
+        Parameters
+        ----------
+        inputs
+            Input to the conv block
+
+        Returns
+        -------
+        Output from the conv block
+        """
+        residual = inputs
+
+        out = self.conv1(inputs)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        att = self.att1(out)
+        att = self.att2(att)
+        att = self.att_bn1(att)
+        att = self.relu(att)
+        att = self.att3(att)
+        att = self.att_bn2(att)
+        att = torch.sigmoid(att)
+        out = out * att
 
         if self.downsample is not None:
             residual = self.downsample(inputs)
@@ -335,7 +448,7 @@ class HighResolutionModule(nn.Module):
     """
     def __init__(self,
                  num_branches: int,
-                 block: type[Bottleneck] | type[BasicBlock],
+                 block: type[BasicBlockAttention] | type[BasicBlock] | type[Bottleneck],
                  num_blocks: list[int],
                  num_in_channels: list[int],
                  num_channels: list[int],
@@ -391,7 +504,7 @@ class HighResolutionModule(nn.Module):
 
     def _make_one_branch(self,
                          branch_index: int,
-                         block: type[Bottleneck] | type[BasicBlock],
+                         block: type[BasicBlockAttention | BasicBlock | Bottleneck],
                          num_blocks: int,
                          num_channels: int,
                          stride: int = 1) -> nn.Sequential:
@@ -577,23 +690,27 @@ class HighResolutionNet(nn.Module):  # pylint:disable=too-many-instance-attribut
         self.sf = nn.Softmax(dim=1)
         self.layer1 = self._make_layer(Bottleneck, 64, 64, 4)
 
+        _blocks: dict[str, type[BasicBlockAttention | BasicBlock | Bottleneck]] = {
+            "ATTENTION": BasicBlockAttention, "BLOCK": BasicBlock, "BOTTLENECK": Bottleneck}
+
         num_channels = stage_2_config.num_channels
-        block = Bottleneck if stage_2_config.use_bottleneck else BasicBlock
+        block = _blocks[stage_2_config.block]
         num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
         self.transition1 = self._make_transition_layer([256], num_channels)
-        self.stage2, pre_stage_channels = self._make_stage(stage_2_config, num_channels)
+        self.stage2, pre_stage_channels = self._make_stage(block, stage_2_config, num_channels)
 
         num_channels = stage_3_config.num_channels
-        block = Bottleneck if stage_3_config.use_bottleneck else BasicBlock
+        block = _blocks[stage_3_config.block]
         num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
         self.transition2 = self._make_transition_layer(pre_stage_channels, num_channels)
-        self.stage3, pre_stage_channels = self._make_stage(stage_3_config, num_channels)
+        self.stage3, pre_stage_channels = self._make_stage(block, stage_3_config, num_channels)
 
         num_channels = stage_4_config.num_channels
-        block = Bottleneck if stage_4_config.use_bottleneck else BasicBlock
+        block = _blocks[stage_4_config.block]
         num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
         self.transition3 = self._make_transition_layer(pre_stage_channels, num_channels)
-        self.stage4, pre_stage_channels = self._make_stage(stage_4_config,
+        self.stage4, pre_stage_channels = self._make_stage(block,
+                                                           stage_4_config,
                                                            num_channels,
                                                            multi_scale_output=True)
 
@@ -661,7 +778,7 @@ class HighResolutionNet(nn.Module):  # pylint:disable=too-many-instance-attribut
         return nn.ModuleList(transition_layers)
 
     def _make_layer(self,
-                    block: type[BasicBlock] | type[Bottleneck],
+                    block: type[BasicBlockAttention | BasicBlock | Bottleneck],
                     in_channels: int,
                     out_channels: int,
                     blocks: int,
@@ -704,6 +821,7 @@ class HighResolutionNet(nn.Module):  # pylint:disable=too-many-instance-attribut
         return nn.Sequential(*layers)
 
     def _make_stage(self,
+                    block: type[BasicBlockAttention | BasicBlock | Bottleneck],
                     layer_config: HRNetStageConfig,
                     num_in_channels: list[int],
                     multi_scale_output: bool = True) -> tuple[nn.Sequential, list[int]]:
@@ -711,6 +829,8 @@ class HighResolutionNet(nn.Module):  # pylint:disable=too-many-instance-attribut
 
         Parameters
         ----------
+        block
+            The type of block to use for the layer
         layer_config
             The configuration for the stage
         num_in_channels
@@ -729,7 +849,6 @@ class HighResolutionNet(nn.Module):  # pylint:disable=too-many-instance-attribut
         num_branches = layer_config.num_branches
         num_blocks = layer_config.num_blocks
         num_channels = layer_config.num_channels
-        block = Bottleneck if layer_config.use_bottleneck else BasicBlock
 
         modules: list[HighResolutionModule] = []
         for i in range(num_modules):
