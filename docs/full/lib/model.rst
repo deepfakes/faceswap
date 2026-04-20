@@ -33,9 +33,6 @@ networks package
    :include-all-objects:
    :noindex:
 
-|
-.. automodapi:: lib.model.networks.simple_nets
-   :include-all-objects:
 
 model package
 =============

@@ -29,6 +29,7 @@ from plugins.train.train_config import Loss as cfg_loss, Optimizer as cfg_opt
 if T.TYPE_CHECKING:
     from collections.abc import Callable
     from argparse import Namespace
+    import torch
     from keras import KerasTensor
     from .state import State
 
@@ -63,8 +64,10 @@ class Loss():
     ----------
     color_order
         Color order of the model. One of `"BGR"` or `"RGB"`
+    device
+        The device to load the loss function on to, if applicable
     """
-    def __init__(self, color_order: T.Literal["bgr", "rgb"]) -> None:
+    def __init__(self, color_order: T.Literal["bgr", "rgb"], device: torch.Device) -> None:
         logger.debug(parse_class_init(locals()))
         self._mask_channels = self._get_mask_channels()
         self._inputs: list[keras.layers.Layer] = []
@@ -80,11 +83,20 @@ class Loss():
                            "laploss": LossClass(function=losses.LaplacianPyramidLoss),
                            "logcosh": LossClass(function=k_losses.LogCosh),
                            "lpips_alex": LossClass(function=losses.LPIPSLoss,
-                                                   kwargs={"trunk_network": "alex"}),
+                                                   kwargs={"trunk_network": "alex",
+                                                           "crop": True,
+                                                           "color_order": color_order,
+                                                           "device": device}),
                            "lpips_squeeze": LossClass(function=losses.LPIPSLoss,
-                                                      kwargs={"trunk_network": "squeeze"}),
+                                                      kwargs={"trunk_network": "squeeze",
+                                                              "crop": True,
+                                                              "color_order": color_order,
+                                                              "device": device}),
                            "lpips_vgg16": LossClass(function=losses.LPIPSLoss,
-                                                    kwargs={"trunk_network": "vgg16"}),
+                                                    kwargs={"trunk_network": "vgg16",
+                                                            "crop": True,
+                                                            "color_order": color_order,
+                                                            "device": device}),
                            "ms_ssim": LossClass(function=losses.MSSIMLoss),
                            "mae": LossClass(function=k_losses.MeanAbsoluteError),
                            "mse": LossClass(function=k_losses.MeanSquaredError),
