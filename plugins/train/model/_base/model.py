@@ -9,7 +9,6 @@ import os
 import sys
 import typing as T
 
-import torch
 import keras
 
 from lib.logger import parse_class_init
@@ -27,35 +26,6 @@ if T.TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-
-# TODO move this useful utility function
-def get_device(cpu: bool = False) -> torch.device:
-    """Get the correctly configured device for running inference
-
-    Parameters
-    ----------
-    cpu
-        ``True`` to force running on the CPU.
-
-    Returns
-    -------
-    The device that torch should use
-    """
-    if cpu:
-        logger.debug("CPU mode selected. Returning CPU device context")
-        return torch.device("cpu")
-
-    if torch.cuda.is_available():
-        logger.debug(" Cuda available. Returning Cuda device context")
-        return torch.device("cuda")
-
-    if torch.backends.mps.is_available():
-        logger.debug(" MPS available. Returning MPS device context")
-        return torch.device("mps")
-
-    logger.debug(" No backends available. Returning CPU device context")
-    return torch.device("cpu")
 
 
 class ModelBase():  # pylint:disable=too-many-instance-attributes
@@ -114,7 +84,7 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         self._settings = Settings(self._args,
                                   self._mixed_precision,
                                   self._is_predict)
-        self._loss = Loss(self.color_order, get_device())
+        self._loss = Loss(self.color_order)
 
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 

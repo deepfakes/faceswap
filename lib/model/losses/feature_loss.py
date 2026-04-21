@@ -229,7 +229,7 @@ class _LPIPSLinearNet(nn.Module):
         return [self.net[i](inp) for i, inp in enumerate(inputs)]
 
 
-class LPIPSLoss(nn.Module):
+class LPIPSLoss(nn.Module):  # pylint:disable=too-many-instance-attributes
     """LPIPS Loss Function.
 
     A perceptual loss function that uses linear outputs from pretrained CNNs feature layers.
@@ -279,8 +279,6 @@ class LPIPSLoss(nn.Module):
         Default: ``False``
     color_order
         The RGB/BGR order of the input images
-    device
-        The device to place the models onto. Default: `"cpu"`
     """
     def __init__(self,  # pylint:disable=too-many-arguments,too-many-positional-arguments
                  trunk_network: T.Literal["alex", "squeeze", "vgg16"],
@@ -294,8 +292,7 @@ class LPIPSLoss(nn.Module):
                  normalize: bool = True,
                  ret_per_layer: bool = False,
                  crop: bool = False,
-                 color_order: T.Literal["bgr", "rgb"] = "bgr",
-                 device: T.Literal["cuda", "cpu"] = "cpu") -> None:
+                 color_order: T.Literal["bgr", "rgb"] = "bgr") -> None:
         super().__init__()
         logger.debug(parse_class_init(locals()))
         self._spatial = spatial
@@ -305,18 +302,15 @@ class LPIPSLoss(nn.Module):
         self._crop_amount = self._get_crop_amount(crop, trunk_network)
 
         self._is_rgb = color_order == "rgb"
-        self._shift = torch.Tensor([-.030, -.088, -.188]).to(dtype=torch.float32,
-                                                             device=device)[None, :, None, None]
-        self._scale = torch.Tensor([.458, .448, .450]).to(dtype=torch.float32,
-                                                          device=device)[None, :, None, None]
+        self._initialized = False
+        self._shift = torch.Tensor([-.030, -.088, -.188]).float()[None, :, None, None]
+        self._scale = torch.Tensor([.458, .448, .450]).float()[None, :, None, None]
 
-        self._trunk_net = _LPIPSTrunkNet(trunk_network,
-                                         trunk_eval_mode,
-                                         trunk_pretrained).to(device)
+        self._trunk_net = _LPIPSTrunkNet(trunk_network, trunk_eval_mode, trunk_pretrained)
         self._linear_net = _LPIPSLinearNet(trunk_network,
                                            linear_eval_mode,
                                            linear_pretrained,
-                                           linear_use_dropout).to(device)
+                                           linear_use_dropout)
         if trunk_eval_mode and linear_eval_mode:
             self.eval()
 
@@ -406,8 +400,15 @@ class LPIPSLoss(nn.Module):
 
         Returns
         -------
-        The final  loss value
+        The final loss value for each item in the batch
         """
+        if not self._initialized:
+            self._shift = self._shift.to(y_pred.device)
+            self._scale = self._scale.to(y_pred.device)
+            self._trunk_net = self._trunk_net.to(y_pred.device)
+            self._linear_net = self._linear_net.to(y_pred.device)
+            self._initialized = True
+
         if not self._is_rgb:
             y_true = torch.flip(y_true, dims=[-1])
             y_pred = torch.flip(y_pred, dims=[-1])
@@ -434,10 +435,11 @@ class LPIPSLoss(nn.Module):
 
         dims = dims if self._spatial else y_true.shape[2:4]
         res = [self._process_output(diff, dims) for diff in self._process_diffs(diffs)]
+
         if self._spatial:
             val = torch.stack(res, dim=0).sum(dim=0)
         else:
-            val = T.cast(torch.Tensor, sum(t.sum() for t in res))
+            val = torch.stack([r.sum(dim=(1, 2, 3)) for r in res]).sum(dim=0)
 
         val *= 0.1  # Reduce by factor of 10 'cos this loss is STRONG. # TODO config
 

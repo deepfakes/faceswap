@@ -21,4 +21,4 @@ def test_loss_output(net):
     objective_output = LPIPSLoss(net)(y_a, y_b)
     output = objective_output.detach().numpy()  # type:ignore
     assert output.dtype == "float32" and not np.any(np.isnan(output))
-    assert output < 0.1  # LPIPS loss is reduced 10x
+    assert (output <= 0.1).all()  # LPIPS loss is reduced 10x

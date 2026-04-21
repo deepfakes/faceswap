@@ -7,7 +7,8 @@ Adapted from Keras tests.
 import pytest
 import numpy as np
 
-from keras import device, losses as k_losses, Variable
+from keras import device, losses as k_losses
+import torch
 
 from lib.model.losses.loss import (FocalFrequencyLoss, GeneralizedLoss, GradientLoss,
                                    LaplacianPyramidLoss, LInfNorm, LossWrapper)
@@ -28,13 +29,12 @@ _IDS = [f"{x[0].__name__}[{get_backend().upper()}]" for x in _PARAMS]
 @pytest.mark.parametrize(["loss_func", "max_target"], _PARAMS, ids=_IDS)
 def test_loss_output(loss_func, max_target):
     """ Basic dtype and value tests for loss functions. """
-    with device("cpu"):
-        y_a = Variable(np.random.random((2, 32, 32, 3)))
-        y_b = Variable(np.random.random((2, 32, 32, 3)))
-        objective_output = loss_func()(y_a, y_b)
+    y_a = torch.Tensor(np.random.random((2, 32, 32, 3))).cpu()
+    y_b = torch.Tensor(np.random.random((2, 32, 32, 3))).cpu()
+    objective_output = loss_func()(y_a, y_b)
     output = objective_output.detach().numpy()
     assert output.dtype == "float32" and not np.any(np.isnan(output))
-    assert output < max_target
+    assert (output <= max_target).all()
 
 
 _LWPARAMS = [(FocalFrequencyLoss, ()),
@@ -60,8 +60,8 @@ def test_loss_wrapper(loss_func, func_args):
         p_loss = LossWrapper()
         p_loss.add_loss(loss_func(*func_args), 1.0, -1)
         p_loss.add_loss(k_losses.MeanSquaredError(), 2.0, 3)
-        y_a = Variable(np.random.random((2, 32, 32, 4)))
-        y_b = Variable(np.random.random((2, 32, 32, 3)))
+        y_a = torch.Tensor(np.random.random((2, 32, 32, 4))).cpu()
+        y_b = torch.Tensor(np.random.random((2, 32, 32, 3))).cpu()
 
         output = p_loss(y_a, y_b)
     output = output.detach().numpy()  # type:ignore
