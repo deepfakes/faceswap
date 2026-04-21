@@ -1,5 +1,5 @@
 #! /usr/env/bin/python3
-""" Updating legacy faceswap models to the current version """
+"""Updating legacy faceswap models to the current version """
 import json
 import logging
 import os
@@ -9,7 +9,7 @@ from shutil import copyfile, copytree
 
 import h5py
 import numpy as np
-from keras import models as kmodels
+from keras import models as k_models
 
 from lib.logger import parse_class_init
 from lib.model.layers import ScalarOp
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class Legacy:  # pylint:disable=too-few-public-methods
-    """ Handles the updating of Keras 2.x models to Keras 3.x
+    """Handles the updating of Keras 2.x models to Keras 3.x
 
     Generally Keras 2.x models will open in Keras 3.x. There are a couple of bugs in Keras 3
     legacy loading code which impacts Faceswap models:
@@ -31,7 +31,7 @@ class Legacy:  # pylint:disable=too-few-public-methods
 
     Parameters
     ----------
-    model_path: str
+    model_path
         Full path to the legacy Keras 2.x model h5 file to upgrade
     """
     def __init__(self, model_path: str):
@@ -40,21 +40,18 @@ class Legacy:  # pylint:disable=too-few-public-methods
         """str: Full path to the old .h5 model file"""
         self._new_model_file = f"{os.path.splitext(model_path)[0]}.keras"
         """str: Full path to the new .keras model file"""
-        self._functionals: set[str] = set()
+        self._functional: set[str] = set()
         """set[str]: The name of any Functional models discovered in the keras 2 model config"""
-
         self._upgrade_model()
-        logger.debug("Initialized %s", self.__class__.__name__)
 
     def _get_model_config(self) -> dict[str, T.Any]:
-        """ Obtain a keras 2.x config from a keras 2.x .h5 file.
+        """Obtain a keras 2.x config from a keras 2.x .h5 file.
 
         As keras 3.x will error out loading the file, we collect it directly from the .h5 file
 
         Returns
         -------
-        dict[str, Any]
-            A keras 2.x model configuration dictionary
+        A keras 2.x model configuration dictionary
 
         Raises
         ------
@@ -77,17 +74,16 @@ class Legacy:  # pylint:disable=too-few-public-methods
 
     @classmethod
     def _unwrap_outputs(cls, outputs: list[list[T.Any]]) -> list[list[str | int]]:
-        """ Unwrap nested output tensors from a config dict to be a single list of output tensor
+        """Unwrap nested output tensors from a config dict to be a single list of output tensor
 
         Parameters
         ----------
-        outputs: list[list[Any]]
+        outputs
             The outputs that exist within the Keras 2 config dict that may be nested
 
         Returns
         -------
-        list[list[str | int]]
-            The output configuration formatted to be compatible with Keras 3
+        The output configuration formatted to be compatible with Keras 3
         """
         retval = np.array(outputs).reshape(-1, 3).tolist()
         for item in retval:
@@ -97,12 +93,11 @@ class Legacy:  # pylint:disable=too-few-public-methods
         return retval
 
     def _get_clip_config(self) -> dict[str, T.Any]:
-        """ Build a clip model from the configuration information stored in the legacy state file
+        """Build a clip model from the configuration information stored in the legacy state file
 
         Returns
         -------
-        dict[str, T.Any]
-            The new keras configuration for a Clip model
+        The new keras configuration for a Clip model
 
         Raises
         ------
@@ -139,12 +134,12 @@ class Legacy:  # pylint:disable=too-few-public-methods
         return retval
 
     def _convert_lambda_config(self, layer: dict[str, T.Any]):
-        """ Keras 2 TFLambdaOps are not compatible with Keras 3. Scalar operations can be
+        """Keras 2 TFLambdaOps are not compatible with Keras 3. Scalar operations can be
         relatively easily substituted with a :class:`~lib.model.layers.ScalarOp` layer
 
         Parameters
         ----------
-        layer: dict[str, Any]
+        layer
             An existing Keras 2 TFLambdaOp layer
 
         Raises
@@ -173,15 +168,15 @@ class Legacy:  # pylint:disable=too-few-public-methods
         layer["inbound_nodes"] = [layer["inbound_nodes"]]
         logger.debug("Converted legacy TFLambdaOp to %s", layer)
 
-    def _process_deprecations(self, layer: dict[str, T.Any]) -> None:
-        """ Some layer kwargs are deprecated between Keras 2 and Keras 3. Some are not mission
+    def _process_deprecations(self, layer: dict[str, T.Any]) -> None:  # noqa[C901]
+        """Some layer kwargs are deprecated between Keras 2 and Keras 3. Some are not mission
         critical, but updating these here prevents Keras from outputting warnings about deprecated
         arguments. Others will fail to load the legacy model (eg Clip) so are replaced with a new
         config. Operation is performed in place
 
         Parameters
         ----------
-        layer: dict[str, T.Any]
+        layer
             A keras model config item representing a keras layer
         """
         if layer["class_name"] == "LeakyReLU":
@@ -203,10 +198,16 @@ class Legacy:  # pylint:disable=too-few-public-methods
             self._convert_lambda_config(layer)
 
         if layer["class_name"] in ("DepthwiseConv2D",
+                                   "SeparableConv2D",
                                    "Conv2DTranspose") and "groups" in layer["config"]:
             # groups parameter doesn't exist in Keras 3. Hopefully it still works the same
             logger.debug("Removing groups from %s '%s'", layer["class_name"], layer["name"])
             del layer["config"]["groups"]
+
+        if layer["class_name"] == "SeparableConv2D":
+            for key in ("kernel_initializer", "kernel_regularizer", "kernel_constraint"):
+                logger.debug("Removing '%s' from %s '%s'", key, layer["class_name"], layer["name"])
+                del layer["config"][key]
 
         if "dtype" in layer["config"]:
             # Incorrectly stored dtypes error when deserializing the new config. May be a Keras bug
@@ -230,14 +231,14 @@ class Legacy:  # pylint:disable=too-few-public-methods
                           layer_name: str,
                           inbound_nodes: list[list[list[str | int]]] | list[list[str | int]]
                           ) -> None:
-        """ If the inbound nodes are from a shared functional model, decrement the node index by
+        """If the inbound nodes are from a shared functional model, decrement the node index by
         one. Operation is performed in place
 
         Parameters
         ----------
-        layer_name: str
+        layer_name
             The name of the layer (for logging)
-        inbound_nodes: list[list[list[str | int]]] | list[list[str | int]]
+        inbound_nodes
             The inbound nodes from a Keras 2 config dict to process
         """
         to_process = T.cast(
@@ -248,19 +249,19 @@ class Legacy:  # pylint:disable=too-few-public-methods
             for node in inbound:
                 name, node_index = node[0], node[1]
                 assert isinstance(name, str) and isinstance(node_index, int)
-                if name in self._functionals and node_index > 0:
+                if name in self._functional and node_index > 0:
                     logger.debug("Updating '%s' inbound node index for '%s' from %s to %s",
                                  layer_name, name, node_index, node_index - 1)
                     node[1] = node_index - 1
 
     def _update_layers(self, layer_list: list[dict[str, T.Any]]) -> None:
-        """ Given a list of keras layers from a keras 2 config dict, increment the indices for
+        """Given a list of keras layers from a keras 2 config dict, increment the indices for
         any inbound nodes that come from a shared Functional model. Flatten any nested output
         tensor lists. Operations are performed in place
 
         Parameters
         ----------
-        layers: list[dict[str, Any]]
+        layers
             A list of layers that belong to a keras 2 functional model config dictionary
         """
         for layer in layer_list:
@@ -269,7 +270,7 @@ class Legacy:  # pylint:disable=too-few-public-methods
 
                 if layer.get("name"):
                     logger.debug("Storing layer: '%s'", layer["name"])
-                    self._functionals.add(layer["name"])
+                    self._functional.add(layer["name"])
 
                 layer["config"]["output_layers"] = self._unwrap_outputs(
                     layer["config"]["output_layers"])
@@ -283,7 +284,7 @@ class Legacy:  # pylint:disable=too-few-public-methods
             self._process_inbounds(layer["name"], layer["inbound_nodes"])
 
     def _archive_model(self) -> str:
-        """ Archive an existing Keras 2 model to a new archive location
+        """Archive an existing Keras 2 model to a new archive location
 
         Raises
         ------
@@ -292,8 +293,7 @@ class Legacy:  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        str
-            The path to the archived keras 2 model folder
+        The path to the archived keras 2 model folder
         """
         model_dir = os.path.dirname(self._old_model_file)
         dst_path = f"{model_dir}_fs2_backup"
@@ -312,12 +312,12 @@ class Legacy:  # pylint:disable=too-few-public-methods
         return dst_path
 
     def _restore_files(self, archive_dir: str) -> None:
-        """ Copy the state.json file and the logs folder from the archive folder to the new model
+        """Copy the state.json file and the logs folder from the archive folder to the new model
         folder
 
         Parameters
         ----------
-        archive_dir: str
+        archive_dir
             The full path to the archived Keras 2 model
         """
         model_dir = os.path.dirname(self._new_model_file)
@@ -342,14 +342,14 @@ class Legacy:  # pylint:disable=too-few-public-methods
             logger.debug("Skipping file: '%s'", fname)
 
     def _upgrade_model(self) -> None:
-        """ Get the model configuration of a Faceswap 2 model and upgrade it to Faceswap 3
-        compatible """
+        """Get the model configuration of a Faceswap 2 model and upgrade it to Faceswap 3
+        compatible"""
         logger.info("Upgrading model file from Faceswap 2 to Faceswap 3...")
         config = self._get_model_config()
         self._update_layers([config])
 
         logger.debug("Migrating data to new model...")
-        model = kmodels.Model.from_config(config["config"])
+        model = k_models.Model.from_config(config["config"])
         model.load_weights(self._old_model_file)
 
         archive_dir = self._archive_model()
@@ -365,12 +365,12 @@ class Legacy:  # pylint:disable=too-few-public-methods
 
 
 class PatchKerasConfig:
-    """ This class exists to patch breaking changes when moving from older keras 3.x models to
+    """This class exists to patch breaking changes when moving from older keras 3.x models to
     newer versions
 
     Parameters
     ----------
-    model_path : str
+    model_path
         Full path to the keras model to be patched for the current version
     """
     def __init__(self, model_path: str) -> None:
@@ -382,14 +382,14 @@ class PatchKerasConfig:
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def _load_model(self) -> tuple[dict[str, bytes], dict[str, T.Any]]:
-        """ Load the objects from the compressed keras model
+        """Load the objects from the compressed keras model
 
         Returns
         -------
-        items : dict[str, bytes]
+        items
             The filename and file objects within the keras 3 model file that are not the model
             config
-        config : dict[str, Any]
+        config
             The model configuration dictionary from the keras 3 model file
         """
         with zipfile.ZipFile(self._model_path, "r") as zf:
@@ -401,7 +401,7 @@ class PatchKerasConfig:
         return items, config
 
     def _update_nn_blocks(self, layer: dict[str, T.Any]):
-        """ In older versions of keras our :class:`lib.model.nn_blocks.Conv2D` and
+        """In older versions of keras our :class:`lib.model.nn_blocks.Conv2D` and
         :class:`lib.model.nn_blocks.DepthwiseConv2D` inherited from their respective Keras layers.
         Sometime between 3.3.3 and 3.12 (during beta testing) this stopped working, raising a
         TypeError. Subsequently we have refactored those classes to no longer inherit, and call the
@@ -410,7 +410,7 @@ class PatchKerasConfig:
 
         Parameters
         ----------
-        layer dict[str, Any]
+        layer
             A layer config dictionary from a keras 3 model
         """
         if (layer.get("module") == "lib.model.nn_blocks" and
@@ -424,11 +424,11 @@ class PatchKerasConfig:
             layer["module"] = new_module
 
     def _parse_inbound_args(self, inbound: list | dict[str, T.Any]) -> None:
-        """ Recurse through keras inbound node args until we arrive at a dictionary
+        """Recurse through keras inbound node args until we arrive at a dictionary
 
         Parameters
         ----------
-        list[lisr | dict[str, Any]]
+        inbound
             A Keras inbound nodes args entry or the nested dictionary
         """
         if not isinstance(inbound, (list, dict)):
@@ -451,7 +451,7 @@ class PatchKerasConfig:
             arg_conf["keras_history"] = new_hist
 
     def _update_dot_naming(self, layer: dict[str, T.Any]):
-        """ Sometime between 3.3.3 and 3.12 (during beta testing) layers with "." in the name
+        """Sometime between 3.3.3 and 3.12 (during beta testing) layers with "." in the name
         started generating a KeyError. This is odd as the error comes from Torch, but dot naming is
         standard. To work around this all dots (.) in layer names have been converted to
         underscores (_). The keras config needs to be rewritten to reflect this. This only impacts
@@ -459,7 +459,7 @@ class PatchKerasConfig:
 
         Parameters
         ----------
-        layer dict[str, Any]
+        layer
             A layer config dictionary from a keras 3 model
         """
         if "." in layer["name"]:
@@ -480,17 +480,16 @@ class PatchKerasConfig:
                 self._parse_inbound_args(arg)
 
     def _update_config(self, config: dict[str, T.Any]) -> dict[str, T.Any]:
-        """ Recursively update the `config` dictionary from a full keras config in place
+        """Recursively update the `config` dictionary from a full keras config in place
 
         Parameters
         ----------
-        config : dict[str, Any]
+        config
             A 'config' section of keras config
 
         Returns
         -------
-        dict[str, Any]
-            The updated `config` section of a keras config
+        The updated `config` section of a keras config
         """
         layer: dict[str, T.Any]
         for layer in config["layers"]:
@@ -502,7 +501,7 @@ class PatchKerasConfig:
         return config
 
     def _save_model(self) -> None:
-        """ Save the updated keras model """
+        """Save the updated keras model"""
         logger.info("Updating Keras model '%s'...", self._model_path)
         with zipfile.ZipFile(self._model_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
             for filename, data in self._items.items():
@@ -510,8 +509,8 @@ class PatchKerasConfig:
             zf.writestr("config.json", json.dumps(self._config).encode("utf-8"))
 
     def __call__(self) -> None:
-        """ Update the keras configuration saved in a keras model file and save over the original
-        model """
+        """Update the keras configuration saved in a keras model file and save over the original
+        model"""
         logger.debug("Updating saved config for keras version %s", self._version)
         self._config["config"] = self._update_config(self._config["config"])
         self._save_model()
