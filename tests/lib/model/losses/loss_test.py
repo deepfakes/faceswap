@@ -31,7 +31,8 @@ def test_loss_output(loss_func, max_target):
     """ Basic dtype and value tests for loss functions. """
     y_a = torch.Tensor(np.random.random((2, 32, 32, 3))).cpu()
     y_b = torch.Tensor(np.random.random((2, 32, 32, 3))).cpu()
-    objective_output = loss_func()(y_a, y_b)
+    metric = loss_func().cpu()
+    objective_output = metric(y_a, y_b)
     output = objective_output.detach().numpy()
     assert output.dtype == "float32" and not np.any(np.isnan(output))
     assert (output <= max_target).all()

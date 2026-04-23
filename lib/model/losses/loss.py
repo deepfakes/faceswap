@@ -400,6 +400,9 @@ class LaplacianPyramidLoss(nn.Module):
     https://arxiv.org/abs/1707.05776
     https://github.com/nathanaelbosch/generative-latent-optimization/blob/master/utils.py
     """
+    _weight: torch.Tensor
+    _kernel: torch.Tensor
+
     def __init__(self,
                  max_levels: int = 5,
                  gaussian_size: int = 5,
@@ -407,26 +410,24 @@ class LaplacianPyramidLoss(nn.Module):
         logger.debug(parse_class_init(locals()))
         super().__init__()
         self._max_levels = max_levels
-        self._gaussian_size = gaussian_size
         self._gaussian_sigma = gaussian_sigma
-        self._gaussian_kernel: torch.Tensor | None = None
-        self._weight = torch.Tensor([np.power(2., -2 * idx)
-                                     for idx in range(max_levels + 1)])
+        self.register_buffer("_weight",
+                             torch.Tensor([np.power(2., -2 * idx)
+                                           for idx in range(max_levels + 1)]))
+        self.register_buffer("_kernel", self._generate_gaussian_kernel(gaussian_size))
 
-    def _generate_gaussian_kernel(self, device: torch.Device) -> None:
-        """Obtain the base gaussian kernel for the Laplacian Pyramid and set to
-        :attr:`_gaussian_kernel`
+    def _generate_gaussian_kernel(self, size: int) -> torch.Tensor:
+        """Obtain the base gaussian kernel for the Laplacian Pyramid
 
         Parameters
         ----------
-        device
-            The device to place the Gaussian kernel on to
+        size
+            The size of the kernel to create
 
         Returns
         -------
             The base three channel Gaussian kernel
         """
-        size = self._gaussian_size
         assert size % 2 == 1, ("kernel size must be uneven")
         x_1 = np.linspace(- (size // 2), size // 2, size, dtype="float32")
         x_1 /= np.sqrt(2) * self._gaussian_sigma
@@ -435,7 +436,7 @@ class LaplacianPyramidLoss(nn.Module):
         kernel /= kernel.sum()
 
         kernel = np.tile(kernel, (3, 1, 1, 1))
-        self._gaussian_kernel = torch.from_numpy(kernel).to(torch.float32).to(device)
+        return torch.from_numpy(kernel).float()
 
     def _conv_gaussian(self, inputs: torch.Tensor) -> torch.Tensor:
         """Perform Gaussian convolution on a batch of images.
@@ -449,13 +450,12 @@ class LaplacianPyramidLoss(nn.Module):
         -------
         The convolved images
         """
-        assert self._gaussian_kernel is not None
-        gauss_size = self._gaussian_kernel.shape[2]
+        gauss_size = self._kernel.shape[2]
         padded_inputs = F.pad(inputs,
                               (gauss_size // 2, gauss_size // 2, gauss_size // 2, gauss_size // 2),
                               mode="replicate")
         return F.conv2d(padded_inputs,  # pylint:disable=not-callable
-                        self._gaussian_kernel,
+                        self._kernel,
                         groups=3)
 
     def _get_laplacian_pyramid(self, inputs: torch.Tensor) -> list[torch.Tensor]:
@@ -497,10 +497,6 @@ class LaplacianPyramidLoss(nn.Module):
         # TODO remove once channels first
         y_true = y_true.permute(0, 3, 1, 2)
         y_pred = y_pred.permute(0, 3, 1, 2)
-
-        if self._gaussian_kernel is None:
-            self._generate_gaussian_kernel(y_pred.device)
-            self._weight = self._weight.to(y_pred.device)
 
         pyramid_true = self._get_laplacian_pyramid(y_true)
         pyramid_pred = self._get_laplacian_pyramid(y_pred)

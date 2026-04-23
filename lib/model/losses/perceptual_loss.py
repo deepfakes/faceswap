@@ -10,15 +10,10 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-import keras
-from keras import ops, Variable
-
-from lib.keras_utils import ColorSpaceConvert, frobenius_norm, replicate_pad
+from lib.torch_utils import ColorSpaceConvert
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
 
-if T.TYPE_CHECKING:
-    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
@@ -179,10 +174,12 @@ class GMSDLoss(nn.Module):
     http://www4.comp.polyu.edu.hk/~cslzhang/IQA/GMSD/GMSD.htm
     https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf
     """
+    _scharr_edges: torch.Tensor
+
     def __init__(self) -> None:
         logger.debug(parse_class_init(locals()))
         super().__init__()
-        self._scharr_edges = torch.from_numpy(
+        self.register_buffer("_scharr_edges", torch.from_numpy(
             np.array([[[[0.00070, 0.00070]],
                        [[0.00520, 0.00370]],
                        [[0.03700, 0.00000]],
@@ -207,8 +204,7 @@ class GMSDLoss(nn.Module):
                        [[-0.0052, 0.00370]],
                        [[-0.0370, 0.00000]],
                        [[-0.0052, -0.0037]],
-                       [[-0.0007, -0.0007]]]], dtype=np.float32))
-        self._initialized = False
+                       [[-0.0007, -0.0007]]]], dtype=np.float32)))
 
     def _map_scharr_edges(self, image: torch.Tensor, magnitude: bool) -> torch.Tensor:
         """Returns a tensor holding modified Scharr edge maps.
@@ -262,10 +258,6 @@ class GMSDLoss(nn.Module):
         -------
         The final loss value for each item in the batch
         """
-        if not self._initialized:
-            self._scharr_edges = self._scharr_edges.to(y_pred.device)
-            self._initialized = True
-
         # TODO remove once channels first
         y_true = y_true.permute(0, 3, 1, 2)
         y_pred = y_pred.permute(0, 3, 1, 2)
@@ -280,7 +272,7 @@ class GMSDLoss(nn.Module):
         return gmsd
 
 
-class LDRFLIPLoss(keras.losses.Loss):  # pylint:disable=too-many-instance-attributes
+class LDRFLIPLoss(nn.Module):  # pylint:disable=too-many-instance-attributes
     """Computes the LDR-FLIP error map between two LDR images, assuming the images are observed
     at a certain number of pixels per degree of visual angle.
 
@@ -316,25 +308,25 @@ class LDRFLIPLoss(keras.losses.Loss):  # pylint:disable=too-many-instance-attrib
 
     Parameters
     ----------
-    computed_distance_exponent: float, Optional
+    computed_distance_exponent
         The computed distance exponent to apply to Hunt adjusted, filtered colors.
         (`qc` in original paper). Default: `0.7`
-    feature_exponent: float, Optional
+    feature_exponent
         The feature exponent to apply for increasing the impact of feature difference on the
         final loss value. (`qf` in original paper). Default: `0.5`
-    lower_threshold_exponent: float, Optional
+    lower_threshold_exponent
         The `pc` exponent for the color pipeline as described in the original paper: Default: `0.4`
-    upper_threshold_exponent: float, Optional
+    upper_threshold_exponent
         The `pt` exponent  for the color pipeline as described in the original paper.
         Default: `0.95`
-    epsilon: float
+    epsilon
         A small value to improve training stability. Default: `1e-15`
-    pixels_per_degree: float, Optional
+    pixels_per_degree
         The estimated number of pixels per degree of visual angle of the observer. This effectively
         impacts the tolerance when calculating loss. The default corresponds to viewing images on a
         0.7m wide 4K monitor at 0.7m from the display. Default: ``None``
-    color_order: str
-        The `"BGR"` or `"RGB"` color order of the incoming images
+    color_order
+        The `"bgr"` or `"rgb"` color order of the incoming images
     """
     def __init__(self,
                  computed_distance_exponent: float = 0.7,
@@ -345,7 +337,7 @@ class LDRFLIPLoss(keras.losses.Loss):  # pylint:disable=too-many-instance-attrib
                  pixels_per_degree: float | None = None,
                  color_order: T.Literal["bgr", "rgb"] = "bgr") -> None:
         logger.debug(parse_class_init(locals()))
-        super().__init__(name=self.__class__.__name__)
+        super().__init__()
         self._computed_distance_exponent = computed_distance_exponent
         self._feature_exponent = feature_exponent
         self._pc = lower_threshold_exponent
@@ -358,172 +350,163 @@ class LDRFLIPLoss(keras.losses.Loss):  # pylint:disable=too-many-instance-attrib
         self._pixels_per_degree = pixels_per_degree
         self._spatial_filters = _SpatialFilters(pixels_per_degree)
         self._feature_detector = _FeatureDetection(pixels_per_degree)
-        self._col_conv = {"rgb2lab": ColorSpaceConvert(from_space="rgb", to_space="lab"),
-                          "rgb2ycxcz": ColorSpaceConvert("srgb", "ycxcz")}
-        self._hunt = {"green": Variable([[[[0.0, 1.0, 0.0]]]], dtype="float32", trainable=False),
-                      "blue": Variable([[[[0.0, 0.0, 1.0]]]], dtype="float32", trainable=False)}
+        self._rgb2lab = ColorSpaceConvert(from_space="rgb", to_space="lab")
+        self._rgb2ycxcz = ColorSpaceConvert("srgb", "ycxcz")
 
-        logger.debug("Initialized: %s ", self.__class__.__name__)
-
-    def call(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
-        """Call the LDR Flip Loss Function
+    @classmethod
+    def _hunt_adjustment(cls, image: torch.Tensor) -> torch.Tensor:
+        """Apply Hunt-adjustment to an image in L*a*b* color space
 
         Parameters
         ----------
-        y_true: :class:`keras.KerasTensor`
-            The ground truth batch of images
-        y_pred: :class:`keras.KerasTensor`
-            The predicted batch of images
+        image
+            The batch of images in L*a*b* to adjust
 
         Returns
         -------
-        :class::class:`keras.KerasTensor`
-            The calculated Flip loss value
+        The hunt adjusted batch of images in L*a*b color space
         """
-        if self._color_order == "bgr":  # Switch models training in bgr order to rgb
-            y_true = y_true[..., [2, 1, 0]]
-            y_pred = y_pred[..., [2, 1, 0]]
+        ch_l = image[:, 0:1]
+        return torch.cat([ch_l, image[:, 1:] * (ch_l * 0.01)], dim=1)
 
-        y_true = T.cast("KerasTensor", ops.clip(y_true, 0, 1.))
-        y_pred = T.cast("KerasTensor", ops.clip(y_pred, 0, 1.))
+    def _hyab(self, y_true: torch.Tensor, y_pred: torch.Tensor | float) -> torch.Tensor:
+        """Compute the HyAB distance between true and predicted images.
 
-        true_ycxcz = self._col_conv["rgb2ycxcz"](y_true)
-        pred_ycxcz = self._col_conv["rgb2ycxcz"](y_pred)
+        Parameters
+        ----------
+        y_true
+            The ground truth batch of images in standard or Hunt-adjusted L*A*B* color space
+        y_pred
+            The predicted batch of images in in standard or Hunt-adjusted L*A*B* color space
 
-        delta_e_color = self._color_pipeline(true_ycxcz, pred_ycxcz)
-        delta_e_features = self._process_features(true_ycxcz, pred_ycxcz)
+        Returns
+        -------
+        image tensor containing the per-pixel HyAB distances between true and predicted images
+        """
+        delta = y_true - y_pred
+        root = torch.sqrt(torch.clamp(torch.pow(delta[:, 0:1], 2), min=self._epsilon))
+        delta_norm = torch.norm(delta[:, 1:3], dim=1, keepdim=True)
+        return root + delta_norm
 
-        loss = ops.power(delta_e_color, 1 - delta_e_features)
-        return T.cast("KerasTensor", loss)
+    def _redistribute_errors(self,
+                             power_delta_e_hyab: torch.Tensor,
+                             c_max: torch.Tensor) -> torch.Tensor:
+        """Redistribute exponentiated HyAB errors to the [0,1] range
 
-    def _color_pipeline(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
+        Parameters
+        ----------
+        power_delta_e_hyab
+            The exponentiated HyAb distance
+        c_max
+            The exponentiated, maximum HyAB difference between two colors in Hunt-adjusted
+            L*A*B* space
+
+        Returns
+        -------
+        The redistributed per-pixel HyAB distances (in range [0,1])
+        """
+        pcc_max = self._pc * c_max
+        return torch.where(power_delta_e_hyab < pcc_max,
+                           (self._pt / pcc_max) * power_delta_e_hyab,
+                           self._pt + ((power_delta_e_hyab - pcc_max) /
+                                       (c_max - pcc_max)) * (1.0 - self._pt))
+
+    def _color_pipeline(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """Perform the color processing part of the FLIP loss function
 
         Parameters
         ----------
-        y_true: :class:`keras.KerasTensor`
+        y_true
             The ground truth batch of images in YCxCz color space
-        y_pred: :class:`keras.KerasTensor`
+        y_pred
             The predicted batch of images in YCxCz color space
 
         Returns
         -------
-        :class:`keras.KerasTensor`
-            The exponentiated, maximum HyAB difference between two colors in Hunt-adjusted
-            L*A*B* space
+        The exponentiated, maximum HyAB difference between two colors in Hunt-adjusted L*A*B* space
         """
         filtered_true = self._spatial_filters(y_true)
         filtered_pred = self._spatial_filters(y_pred)
 
-        rgb2lab = self._col_conv["rgb2lab"]
-        preprocessed_true = self._hunt_adjustment(rgb2lab(filtered_true))
-        preprocessed_pred = self._hunt_adjustment(rgb2lab(filtered_pred))
-        hunt_adjusted_green = self._hunt_adjustment(rgb2lab(self._hunt["green"]))
-        hunt_adjusted_blue = self._hunt_adjustment(rgb2lab(self._hunt["blue"]))
+        preprocessed_true = self._hunt_adjustment(self._rgb2lab(filtered_true))
+        preprocessed_pred = self._hunt_adjustment(self._rgb2lab(filtered_pred))
+        hunt_adjusted_green = self._hunt_adjustment(
+            self._rgb2lab(torch.Tensor([[[[0.0]], [[1.0]], [[0.0]]]]).float().to(y_pred.device))
+            )
+        hunt_adjusted_blue = self._hunt_adjustment(
+            self._rgb2lab(torch.Tensor([[[[0.0]], [[0.0]], [[1.0]]]]).float().to(y_pred.device))
+            )
 
         delta = self._hyab(preprocessed_true, preprocessed_pred)
-        power_delta = T.cast("KerasTensor", ops.power(delta, self._computed_distance_exponent))
-        c_max = T.cast("KerasTensor", ops.power(self._hyab(hunt_adjusted_green,
-                                                           hunt_adjusted_blue),
-                                                self._computed_distance_exponent))
+        power_delta = delta ** self._computed_distance_exponent
+        c_max = self._hyab(hunt_adjusted_green,
+                           hunt_adjusted_blue) ** self._computed_distance_exponent
         return self._redistribute_errors(power_delta, c_max)
 
-    def _process_features(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
+    def _process_features(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """Perform the color processing part of the FLIP loss function
 
         Parameters
         ----------
-        y_true: :class:`keras.KerasTensor`
+        y_true
             The ground truth batch of images in YCxCz color space
-        y_pred: :class:`keras.KerasTensor`
+        y_pred
             The predicted batch of images in YCxCz color space
 
         Returns
         -------
-        :class:`keras.KerasTensor`
-            The exponentiated features delta
+        The exponentiated features delta
         """
-        col_y_true = (y_true[..., 0:1] + 16) / 116.
-        col_y_pred = (y_pred[..., 0:1] + 16) / 116.
+        col_y_true = (y_true[:, 0:1] + 16) / 116.
+        col_y_pred = (y_pred[:, 0:1] + 16) / 116.
 
         edges_true = self._feature_detector(col_y_true, "edge")
         points_true = self._feature_detector(col_y_true, "point")
         edges_pred = self._feature_detector(col_y_pred, "edge")
         points_pred = self._feature_detector(col_y_pred, "point")
 
-        delta = ops.maximum(ops.abs(frobenius_norm(edges_true) - frobenius_norm(edges_pred)),
-                            ops.abs(frobenius_norm(points_pred) - frobenius_norm(points_true)))
+        delta = torch.maximum(torch.abs(torch.norm(edges_true, dim=1, keepdim=True) -
+                                        torch.norm(edges_pred, dim=1, keepdim=True)),
+                              torch.abs(torch.norm(points_pred, dim=1, keepdim=True) -
+                                        torch.norm(points_true, dim=1, keepdim=True)))
 
-        delta = ops.clip(delta, x_min=self._epsilon, x_max=np.inf)
-        return T.cast("KerasTensor", ops.power(((1 / np.sqrt(2)) * delta), self._feature_exponent))
+        delta = torch.clamp(delta, min=self._epsilon)
+        return ((1 / np.sqrt(2)) * delta) ** self._feature_exponent
 
-    @classmethod
-    def _hunt_adjustment(cls, image: KerasTensor) -> KerasTensor:
-        """Apply Hunt-adjustment to an image in L*a*b* color space
-
-        Parameters
-        ----------
-        image: :class:`keras.KerasTensor`
-            The batch of images in L*a*b* to adjust
-
-        Returns
-        -------
-        :class:`keras.KerasTensor`
-            The hunt adjusted batch of images in L*a*b color space
-        """
-        ch_l = image[..., 0:1]
-        adjusted = ops.concatenate([ch_l, image[..., 1:] * (ch_l * 0.01)], axis=-1)
-        return T.cast("KerasTensor", adjusted)
-
-    def _hyab(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
-        """Compute the HyAB distance between true and predicted images.
+    def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
+        """Call the LDR Flip Loss Function
 
         Parameters
         ----------
-        y_true: :class:`keras.KerasTensor`
-            The ground truth batch of images in standard or Hunt-adjusted L*A*B* color space
-        y_pred: :class:`keras.KerasTensor`
-            The predicted batch of images in in standard or Hunt-adjusted L*A*B* color space
+        y_true
+            The ground truth batch of images
+        y_pred
+            The predicted batch of images
 
         Returns
         -------
-        :class:`keras.KerasTensor`
-            image tensor containing the per-pixel HyAB distances between true and predicted images
+        The calculated Flip loss value
         """
-        delta = y_true - y_pred
-        root = T.cast("KerasTensor", ops.sqrt(ops.clip(ops.power(delta[..., 0:1], 2),
-                                                       x_min=self._epsilon,
-                                                       x_max=np.inf)))
-        delta_norm = frobenius_norm(delta[..., 1:3])
-        return root + delta_norm
+        # TODO remove once channels first
+        y_true = y_true.permute(0, 3, 1, 2)
+        y_pred = y_pred.permute(0, 3, 1, 2)
 
-    def _redistribute_errors(self,
-                             power_delta_e_hyab: KerasTensor,
-                             c_max: KerasTensor) -> KerasTensor:
-        """Redistribute exponentiated HyAB errors to the [0,1] range
+        if self._color_order == "bgr":  # Switch models training in bgr order to rgb
+            y_true = torch.flip(y_true, dims=[1])
+            y_pred = torch.flip(y_pred, dims=[1])
 
-        Parameters
-        ----------
-        power_delta_e_hyab: :class:`keras.KerasTensor`
-            The exponentiated HyAb distance
-        c_max: :class:`keras.KerasTensor`
-            The exponentiated, maximum HyAB difference between two colors in Hunt-adjusted
-            L*A*B* space
+        y_true = torch.clamp(y_true, 0, 1.)
+        y_pred = torch.clamp(y_pred, 0, 1.)
+        true_ycxcz = self._rgb2ycxcz(y_true)
+        pred_ycxcz = self._rgb2ycxcz(y_pred)
 
-        Returns
-        -------
-        :class:`keras.KerasTensor`
-            The redistributed per-pixel HyAB distances (in range [0,1])
-        """
-        pcc_max = self._pc * c_max
-        delta_e_c = ops.where(
-            power_delta_e_hyab < pcc_max,
-            (self._pt / pcc_max) * power_delta_e_hyab,
-            self._pt + ((power_delta_e_hyab - pcc_max) / (c_max - pcc_max)) * (1.0 - self._pt))
-        return T.cast("KerasTensor", delta_e_c)
+        delta_e_color = self._color_pipeline(true_ycxcz, pred_ycxcz)
+        delta_e_features = self._process_features(true_ycxcz, pred_ycxcz)
+        loss = delta_e_color ** (1 - delta_e_features)
+        return loss
 
 
-class _SpatialFilters():
+class _SpatialFilters(nn.Module):
     """Filters an image with channel specific spatial contrast sensitivity functions and clips
     result to the unit cube in linear RGB.
 
@@ -531,27 +514,54 @@ class _SpatialFilters():
 
     Parameters
     ----------
-    pixels_per_degree: float
+    pixels_per_degree
         The estimated number of pixels per degree of visual angle of the observer. This effectively
         impacts the tolerance when calculating loss.
     """
+    _spatial_filters: torch.Tensor
+
     def __init__(self, pixels_per_degree: float) -> None:
         logger.debug(parse_class_init(locals()))
+        super().__init__()
         self._pixels_per_degree = pixels_per_degree
-        self._spatial_filters, self._radius = self._generate_spatial_filters()
+        self._radius: int = 0  # Set when spatial filters are generated
+        self.register_buffer("_spatial_filters", self._generate_spatial_filters())
         self._ycxcz2rgb = ColorSpaceConvert(from_space="ycxcz", to_space="rgb")
-        logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _generate_spatial_filters(self) -> tuple[KerasTensor, int]:
+    def _get_evaluation_domain(self,
+                               b1_a: float,
+                               b2_a: float,
+                               b1_rg: float,
+                               b2_rg: float,
+                               b1_by: float,
+                               b2_by: float) -> tuple[np.ndarray, int]:
+        """Get the evaluation domain for the spatial filters"""
+        max_scale_parameter = max([b1_a, b2_a, b1_rg, b2_rg, b1_by, b2_by])
+        delta_x = 1.0 / self._pixels_per_degree
+        radius = int(np.ceil(3 * np.sqrt(max_scale_parameter / (2 * np.pi**2))
+                             * self._pixels_per_degree))
+        ax_x, ax_y = np.meshgrid(range(-radius, radius + 1), range(-radius, radius + 1))
+        domain = (ax_x * delta_x) ** 2 + (ax_y * delta_x) ** 2
+        return domain, radius
+
+    @classmethod
+    def _generate_weights(cls, channel: dict[str, float], domain: np.ndarray) -> np.ndarray:
+        """Generate the weights for the spacial filters"""
+        a_1, b_1, a_2, b_2 = channel["a1"], channel["b1"], channel["a2"], channel["b2"]
+        grad = (a_1 * np.sqrt(np.pi / b_1) * np.exp(-np.pi ** 2 * domain / b_1) +
+                a_2 * np.sqrt(np.pi / b_2) * np.exp(-np.pi ** 2 * domain / b_2))
+        grad = grad / np.sum(grad)
+        grad = np.reshape(grad, (1, *grad.shape))
+        return grad
+
+    def _generate_spatial_filters(self) -> torch.Tensor:
         """Generates spatial contrast sensitivity filters with width depending on the number of
         pixels per degree of visual angle of the observer for channels "A", "RG" and "BY"
 
         Returns
         -------
-        dict
-            the channels ("A" (Achromatic CSF), "RG" (Red-Green CSF) or "BY" (Blue-Yellow CSF)) as
-            key with the Filter kernel corresponding to the spatial contrast sensitivity function
-            of channel and kernel's radius
+        The spatial filter kernel for the channels ("A" (Achromatic CSF), "RG" (Red-Green CSF) or
+        "BY" (Blue-Yellow CSF)) corresponding to the spatial contrast sensitivity function
         """
         mapping = {"A": {"a1": 1, "b1": 0.0047, "a2": 0, "b2": 1e-5},
                    "RG": {"a1": 1, "b1": 0.0053, "a2": 0, "b2": 1e-5},
@@ -563,125 +573,91 @@ class _SpatialFilters():
                                                      mapping["RG"]["b2"],
                                                      mapping["BY"]["b1"],
                                                      mapping["BY"]["b2"])
-
+        self._radius = radius
         weights = np.array([self._generate_weights(mapping[channel], domain)
                             for channel in ("A", "RG", "BY")])
-        v_weights = Variable(np.moveaxis(weights, 0, -1), dtype="float32", trainable=False)
+        return torch.from_numpy(weights).float()
 
-        return v_weights, radius
-
-    def _get_evaluation_domain(self,
-                               b1_a: float,
-                               b2_a: float,
-                               b1_rg: float,
-                               b2_rg: float,
-                               b1_by: float,
-                               b2_by: float) -> tuple[np.ndarray, int]:
-        """TODO docstring """
-        max_scale_parameter = max([b1_a, b2_a, b1_rg, b2_rg, b1_by, b2_by])
-        delta_x = 1.0 / self._pixels_per_degree
-        radius = int(np.ceil(3 * np.sqrt(max_scale_parameter / (2 * np.pi**2))
-                             * self._pixels_per_degree))
-        ax_x, ax_y = np.meshgrid(range(-radius, radius + 1), range(-radius, radius + 1))
-        domain = (ax_x * delta_x) ** 2 + (ax_y * delta_x) ** 2
-        return domain, radius
-
-    @classmethod
-    def _generate_weights(cls, channel: dict[str, float], domain: np.ndarray) -> np.ndarray:
-        """TODO docstring """
-        a_1, b_1, a_2, b_2 = channel["a1"], channel["b1"], channel["a2"], channel["b2"]
-        grad = (a_1 * np.sqrt(np.pi / b_1) * np.exp(-np.pi ** 2 * domain / b_1) +
-                a_2 * np.sqrt(np.pi / b_2) * np.exp(-np.pi ** 2 * domain / b_2))
-        grad = grad / np.sum(grad)
-        grad = np.reshape(grad, (*grad.shape, 1))
-        return grad
-
-    def __call__(self, image: KerasTensor) -> KerasTensor:
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
         """Call the spacial filtering.
 
         Parameters
         ----------
-        image: :class:`keras.KerasTensor`
+        image
             Image tensor to filter in YCxCz color space
 
         Returns
         -------
-        :class:`keras.KerasTensor`
-            The input image transformed to linear RGB after filtering with spatial contrast
-            sensitivity functions
+        The input image transformed to linear RGB after filtering with spatial contrast sensitivity
+        functions
         """
-        padded_image = replicate_pad(image, self._radius)
-        image_tilde_opponent = T.cast("KerasTensor", ops.conv(padded_image,
-                                                              self._spatial_filters,
-                                                              strides=1,
-                                                              padding="valid"))
-        rgb = ops.clip(self._ycxcz2rgb(image_tilde_opponent), 0., 1.)
-        return T.cast("KerasTensor", rgb)
+        img_pad = F.pad(image, (self._radius, self._radius, self._radius, self._radius),
+                        mode="replicate")
+        image_tilde_opponent = F.conv2d(img_pad,  # pylint:disable=not-callable
+                                        self._spatial_filters,
+                                        groups=3)
+        return torch.clamp(self._ycxcz2rgb(image_tilde_opponent), 0., 1.)
 
 
-class _FeatureDetection():
+class _FeatureDetection(nn.Module):
     """Detect features (i.e. edges and points) in an achromatic YCxCz image.
 
     For use with LDRFlipLoss.
 
     Parameters
     ----------
-    pixels_per_degree: float
+    pixels_per_degree
         The number of pixels per degree of visual angle of the observer
     """
+    _grads_edge: torch.Tensor
+    _grads_point: torch.Tensor
+
     def __init__(self, pixels_per_degree: float) -> None:
         logger.debug(parse_class_init(locals()))
+        super().__init__()
         width = 0.082
         self._std = 0.5 * width * pixels_per_degree
         self._radius = int(np.ceil(3 * self._std))
+
         grid = np.meshgrid(range(-self._radius, self._radius + 1),
                            range(-self._radius, self._radius + 1))
-
         gradient = np.exp(-(grid[0] ** 2 + grid[1] ** 2) / (2 * (self._std ** 2)))
-        self._grads = {
-            "edge": Variable(np.multiply(-grid[0], gradient), trainable=False, dtype="float32"),
-            "point": Variable(np.multiply(grid[0] ** 2 / (self._std ** 2) - 1, gradient),
-                              trainable=False,
-                              dtype="float32")}
+        self.register_buffer("_grads_edge",
+                             torch.from_numpy(np.multiply(-grid[0], gradient)).float())
+        self.register_buffer("_grads_point",
+                             torch.from_numpy(np.multiply(grid[0] ** 2 / (self._std ** 2) - 1,
+                                                          gradient)).float())
 
-        logger.debug("Initialized: %s", self.__class__.__name__)
-
-    def __call__(self, image: KerasTensor, feature_type: str) -> KerasTensor:
+    def forward(self, image: torch.Tensor, feature_type: str) -> torch.Tensor:
         """Run the feature detection
 
         Parameters
         ----------
-        image: :class:`keras.KerasTensor`
+        image
             Batch of images in YCxCz color space with normalized Y values
-        feature_type: str
+        feature_type
             Type of features to detect (`"edge"` or `"point"`)
 
         Returns
         -------
-        :class:`keras.KerasTensor`
-            Detected features in the 0-1 range
+        Detected features in the 0-1 range
         """
         feature_type = feature_type.lower()
+        grad_x = self._grads_edge if feature_type == "edge" else self._grads_point
+        negative_weights_sum = -grad_x[grad_x < 0].sum()
+        positive_weights_sum = grad_x[grad_x > 0].sum()
 
-        grad_x = self._grads[feature_type]
-        negative_weights_sum = -ops.sum(grad_x[grad_x < 0])
-        positive_weights_sum = ops.sum(grad_x[grad_x > 0])
+        grad_x = torch.where(grad_x < 0,
+                             grad_x / negative_weights_sum,
+                             grad_x / positive_weights_sum)
+        kernel = grad_x[None, None]
+        pad = (self._radius, self._radius, self._radius, self._radius,)
 
-        grad_x = ops.where(grad_x < 0,
-                           grad_x / negative_weights_sum,
-                           grad_x / positive_weights_sum)
-        kernel = ops.expand_dims(ops.expand_dims(grad_x, axis=-1), axis=-1)
-        features_x = ops.conv(replicate_pad(image, self._radius),
-                              kernel,
-                              strides=1,
-                              padding="valid")
-        kernel = ops.transpose(kernel, (1, 0, 2, 3))
-        features_y = ops.conv(replicate_pad(image, self._radius),
-                              kernel,
-                              strides=1,
-                              padding="valid")
-        features = ops.concatenate([features_x, features_y], axis=-1)
-        return T.cast("KerasTensor", features)
+        features_x = F.conv2d(F.pad(image, pad, mode="replicate"),  # pylint:disable=not-callable
+                              kernel)
+        features_y = F.conv2d(F.pad(image, pad, mode="replicate"),  # pylint:disable=not-callable
+                              kernel.swapaxes(2, 3))
+        return torch.cat([features_x, features_y], dim=1)
 
 
 class MSSIMLoss(nn.Module):
@@ -710,6 +686,9 @@ class MSSIMLoss(nn.Module):
     You should add a regularization term like a l2 loss in addition to this one.
     Adapted from Tensorflow's ssim_multi-scale implementation
     """
+    _power_factors: torch.Tensor
+    _divisor_tensor: torch.Tensor
+
     def __init__(self,
                  k_1: float = 0.01,
                  k_2: float = 0.03,
@@ -725,10 +704,9 @@ class MSSIMLoss(nn.Module):
         self._k_1 = k_1
         self._k_2 = k_2
         self._max_value = max_value
-        self._power_factors = torch.Tensor(power_factors).float()
         self._divisor = [1, 1, 2, 2]
-        self._divisor_tensor = torch.Tensor(self._divisor[1:]).int()
-        self._initialized = False
+        self.register_buffer("_power_factors", torch.Tensor(power_factors).float())
+        self.register_buffer("_divisor_tensor", torch.Tensor(self._divisor[1:]).int())
 
     @classmethod
     def _reducer(cls, image: torch.Tensor, kernel: torch.Tensor) -> torch.Tensor:
@@ -933,10 +911,6 @@ class MSSIMLoss(nn.Module):
         -------
         The MS-SSIM Loss value
         """
-        if not self._initialized:
-            self._divisor_tensor = self._divisor_tensor.to(y_pred.device)
-            self._power_factors = self._power_factors.to(y_pred.device)
-            self._initialized = True
         # TODO remove once channels first
         y_true = y_true.permute(0, 3, 1, 2)
         y_pred = y_pred.permute(0, 3, 1, 2)

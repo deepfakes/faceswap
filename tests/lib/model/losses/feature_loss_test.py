@@ -18,7 +18,8 @@ def test_loss_output(net):
     """ Basic dtype and value tests for loss functions. """
     y_a = torch.Tensor(np.random.random((2, 32, 32, 3))).cpu()
     y_b = torch.Tensor(np.random.random((2, 32, 32, 3))).cpu()
-    objective_output = LPIPSLoss(net)(y_a, y_b)
+    lpips = LPIPSLoss(net).cpu()
+    objective_output = lpips(y_a, y_b)
     output = objective_output.detach().numpy()  # type:ignore
     assert output.dtype == "float32" and not np.any(np.isnan(output))
     assert (output <= 0.1).all()  # LPIPS loss is reduced 10x

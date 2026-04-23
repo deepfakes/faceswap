@@ -280,6 +280,9 @@ class LPIPSLoss(nn.Module):  # pylint:disable=too-many-instance-attributes
     color_order
         The RGB/BGR order of the input images
     """
+    _shift: torch.Tensor
+    _scale: torch.Tensor
+
     def __init__(self,  # pylint:disable=too-many-arguments,too-many-positional-arguments
                  trunk_network: T.Literal["alex", "squeeze", "vgg16"],
                  trunk_pretrained: bool = True,
@@ -302,10 +305,11 @@ class LPIPSLoss(nn.Module):  # pylint:disable=too-many-instance-attributes
         self._crop_amount = self._get_crop_amount(crop, trunk_network)
 
         self._is_rgb = color_order == "rgb"
-        self._initialized = False
-        self._shift = torch.Tensor([-.030, -.088, -.188]).float()[None, :, None, None]
-        self._scale = torch.Tensor([.458, .448, .450]).float()[None, :, None, None]
 
+        self.register_buffer("_shift",
+                             torch.Tensor([-.030, -.088, -.188]).float()[None, :, None, None])
+        self.register_buffer("_scale",
+                             torch.Tensor([.458, .448, .450]).float()[None, :, None, None])
         self._trunk_net = _LPIPSTrunkNet(trunk_network, trunk_eval_mode, trunk_pretrained)
         self._linear_net = _LPIPSLinearNet(trunk_network,
                                            linear_eval_mode,
@@ -402,18 +406,13 @@ class LPIPSLoss(nn.Module):  # pylint:disable=too-many-instance-attributes
         -------
         The final loss value for each item in the batch
         """
-        if not self._initialized:
-            self._shift = self._shift.to(y_pred.device)
-            self._scale = self._scale.to(y_pred.device)
-            self._trunk_net = self._trunk_net.to(y_pred.device)
-            self._linear_net = self._linear_net.to(y_pred.device)
-            self._initialized = True
-
-        if not self._is_rgb:
-            y_true = torch.flip(y_true, dims=[-1])
-            y_pred = torch.flip(y_pred, dims=[-1])
+        # TODO remove once channels first
         y_true = y_true.permute(0, 3, 1, 2)
         y_pred = y_pred.permute(0, 3, 1, 2)
+
+        if not self._is_rgb:
+            y_true = torch.flip(y_true, dims=[1])
+            y_pred = torch.flip(y_pred, dims=[1])
 
         if self._normalize:
             y_true = (y_true * 2.0) - 1.0
