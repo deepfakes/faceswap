@@ -132,7 +132,7 @@ class CommandTab(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ Build the tab """
         logger.debug("Build Tab: '%s'", self.command)
         options = get_config().cli_opts.opts[self.command]
-        cp_opts = [val.cpanel_option for val in options.values() if isinstance(val, CliOption)]
+        cp_opts = [val.panel_option for val in options.values() if isinstance(val, CliOption)]
         ControlPanel(self,
                      cp_opts,
                      label_width=16,

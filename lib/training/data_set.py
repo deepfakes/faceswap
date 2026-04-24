@@ -455,7 +455,8 @@ class _MaskProcessing:  # pylint:disable=too-many-instance-attributes
             self._name, filename, mask_type, masks, aligned)
         self._check_mask_exists(list(masks), mask_type, filename)
         if mask_type in self._lm_masks:
-            retval = self._get_landmarks_mask(self._lm_masks[mask_type], aligned)
+            retval = self._get_landmarks_mask(self._lm_masks[
+                T.cast(T.Literal["components", "extended", "eye", "mouth"], mask_type)], aligned)
         else:
             retval = self._get_face_mask(masks[mask_type], aligned.pose)
         logger.trace("[%s] Got mask '%s': %s",  # type:ignore[attr-defined]

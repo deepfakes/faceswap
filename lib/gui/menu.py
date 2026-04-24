@@ -173,7 +173,7 @@ class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         """ Load recent files into menu bar """
         logger.debug("Building Recent Files menu")
         serializer = get_serializer("json")
-        menu_file = os.path.join(self._config.pathcache, ".recent.json")
+        menu_file = os.path.join(self._config.path_cache, ".recent.json")
         recent_files = []
         if not os.path.isfile(menu_file) or os.path.getsize(menu_file) == 0:
             self._clear_recent_files(serializer, menu_file)

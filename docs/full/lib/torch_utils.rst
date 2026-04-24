@@ -1,3 +1,3 @@
-.. automodapi:: lib.keras_utils
+.. automodapi:: lib.torch_utils
    :include-all-objects:
    :no-inheritance-diagram:

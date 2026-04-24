@@ -32,7 +32,7 @@ class CliOption:
 
     Parameters
     ----------
-    cpanel_option: :class:`~lib.gui.control_helper.ControlPanelOption`:
+    panel_option: :class:`~lib.gui.control_helper.ControlPanelOption`:
         Object to hold information of a command line item for displaying in a GUI
         :class:`~lib.gui.control_helper.ControlPanel`
     opts: tuple[str, ...]:
@@ -41,7 +41,7 @@ class CliOption:
         ``None`` for not used. "+" for at least 1 argument required with values to be contained
         in a list
     """
-    cpanel_option: ControlPanelOption
+    panel_option: ControlPanelOption
     """:class:`~lib.gui.control_helper.ControlPanelOption`: Object to hold information of a command
     line item for displaying in a GUI :class:`~lib.gui.control_helper.ControlPanel`"""
     opts: tuple[str, ...]
@@ -434,7 +434,7 @@ class CliOptions():
                 logger.debug("Skipping suppressed option: %s", opt)
                 continue
             title = self._set_control_title(opt["opts"])
-            cpanel_option = ControlPanelOption(
+            panel_option = ControlPanelOption(
                 title,
                 self._get_data_type(opt),
                 group=opt.get("group", None),
@@ -448,7 +448,7 @@ class CliOptions():
                 helptext=opt["help"],
                 track_modified=True,
                 command=command)
-            retval[title] = CliOption(cpanel_option=cpanel_option,
+            retval[title] = CliOption(panel_option=panel_option,
                                       opts=opt["opts"],
                                       nargs=opt.get("nargs"))
             logger.debug("Processed: %s", retval)
@@ -534,7 +534,7 @@ class CliOptions():
         """
         logger.debug("Resetting options to default. (command: '%s'", command)
         for option in self._options_to_process(command):
-            cp_opt = option.cpanel_option
+            cp_opt = option.panel_option
             default = "" if cp_opt.default is None else cp_opt.default
             if option.nargs is not None and isinstance(default, (list, tuple)):
                 default = ' '.join(str(val) for val in default)
@@ -551,7 +551,7 @@ class CliOptions():
         """
         logger.debug("Clearing options. (command: '%s'", command)
         for option in self._options_to_process(command):
-            cp_opt = option.cpanel_option
+            cp_opt = option.panel_option
             if isinstance(cp_opt.get(), bool):
                 cp_opt.set(False)
             elif isinstance(cp_opt.get(), (int, float)):
@@ -582,7 +582,7 @@ class CliOptions():
             for key, val in opts.items():
                 if not isinstance(val, CliOption):
                     continue
-                cmd_dict[key] = val.cpanel_option.get()
+                cmd_dict[key] = val.panel_option.get()
             ctl_dict[cmd] = cmd_dict
         logger.debug("command: '%s', ctl_dict: %s", command, ctl_dict)
         return ctl_dict
@@ -605,7 +605,7 @@ class CliOptions():
         """
         for opt_title, option in self._gen_command_options(command):
             if opt_title == title:
-                return option.cpanel_option.tk_var
+                return option.panel_option.tk_var
         return None
 
     def gen_cli_arguments(self, command: str) -> T.Generator[tuple[str, ...], None, None]:
@@ -625,7 +625,7 @@ class CliOptions():
         switches = ""
         args = []
         for _, option in self._gen_command_options(command):
-            str_val = str(option.cpanel_option.get())
+            str_val = str(option.panel_option.get())
             switch = option.opts[0]
             batch_mode = command == "extract" and switch == "-b"  # Check for batch mode
             if command in ("extract", "convert") and switch == "-o":  # Output location for preview

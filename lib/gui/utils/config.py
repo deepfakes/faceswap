@@ -207,7 +207,7 @@ class Config():  # pylint:disable=too-many-public-methods
         return self._constants["scaling_factor"]
 
     @property
-    def pathcache(self) -> str:
+    def path_cache(self) -> str:
         """ str: The path to the GUI cache folder """
         return PATH_CACHE
 

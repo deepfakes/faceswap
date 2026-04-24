@@ -47,7 +47,8 @@ class _Loader(abc.ABC, T.Generic[TargetT]):
                                                             color_order.lower())
         self._sampler = tch_data.RandomSampler if sampler is None else sampler
         self._loader = self.get_loader()
-        self._iterator = iter(self._loader)
+        self._iterator = T.cast(T.Iterator[tuple[torch.Tensor, torch.Tensor | list[torch.Tensor]]],
+                                iter(self._loader))
 
     def __iter__(self) -> T.Self:
         """This is an iterator"""
