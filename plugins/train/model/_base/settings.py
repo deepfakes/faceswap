@@ -90,8 +90,10 @@ class Loss():
                                                             "crop": True,
                                                             "color_order": color_order}),
                            "ms_ssim": LossClass(function=losses.MSSIMLoss),
-                           "mae": LossClass(function=nn.MSELoss),
-                           "mse": LossClass(function=nn.L1Loss),
+                           "mae": LossClass(function=nn.MSELoss,
+                                            kwargs={"reduction": "none"}),
+                           "mse": LossClass(function=nn.L1Loss,
+                                            kwargs={"reduction": "none"}),
                            "pixel_gradient_diff": LossClass(function=losses.GradientLoss),
                            "ssim": LossClass(function=losses.DSSIMObjective),
                            "smooth_loss": LossClass(function=losses.GeneralizedLoss)}

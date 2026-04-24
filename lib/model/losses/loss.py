@@ -632,7 +632,14 @@ class LossWrapper(Loss):
                          "(func: %s, weight: %s, mask_channel: %s)",
                          func, weight, mask_channel)
             n_true, n_pred = self._apply_mask(y_true, y_pred, mask_channel)
-            loss += (func(n_true, n_pred) * weight)
+            this_loss = func(n_true, n_pred) * weight
+            if ops.ndim(this_loss) > 1:
+                # TODO this can go when we remove Keras loss wrapper. For now all sub-functions
+                # return shape (BS, ) of mean loss per item. Torch built in losses let us either
+                # reduce to scalar or return the full output, so we have to reduce to item here.
+                # When everything is all torch this hacky workaround should be removable
+                this_loss = this_loss.flatten(start_dim=1).mean(dim=1)
+            loss += this_loss
         return T.cast("KerasTensor", loss)
 
     @classmethod
