@@ -46,6 +46,8 @@ class DSSIMObjective(nn.Module):
     ------
     You should add a regularization term like a l2 loss in addition to this one.
     """
+    _kernel: torch.Tensor
+
     def __init__(self,
                  k_1: float = 0.01,
                  k_2: float = 0.03,
@@ -56,7 +58,7 @@ class DSSIMObjective(nn.Module):
         super().__init__()
         self._filter_size = filter_size
         self._filter_sigma = filter_sigma
-        self._kernel = self._get_kernel()
+        self.register_buffer("_kernel", self._get_kernel())
 
         compensation = 1.0
         self._c1 = (k_1 * max_value) ** 2
@@ -327,6 +329,9 @@ class LDRFLIPLoss(nn.Module):  # pylint:disable=too-many-instance-attributes
         0.7m wide 4K monitor at 0.7m from the display. Default: ``None``
     color_order
         The `"bgr"` or `"rgb"` color order of the incoming images
+    spatial_output
+        ``True`` to output the loss function as a HxWx1 image output. ``False`` to reduce to mean
+        for each item in the batch. Default: ``False``
     """
     def __init__(self,
                  computed_distance_exponent: float = 0.7,
@@ -335,7 +340,8 @@ class LDRFLIPLoss(nn.Module):  # pylint:disable=too-many-instance-attributes
                  upper_threshold_exponent: float = 0.95,
                  epsilon: float = 1e-15,
                  pixels_per_degree: float | None = None,
-                 color_order: T.Literal["bgr", "rgb"] = "bgr") -> None:
+                 color_order: T.Literal["bgr", "rgb"] = "bgr",
+                 spatial_output: bool = False) -> None:
         logger.debug(parse_class_init(locals()))
         super().__init__()
         self._computed_distance_exponent = computed_distance_exponent
@@ -344,6 +350,7 @@ class LDRFLIPLoss(nn.Module):  # pylint:disable=too-many-instance-attributes
         self._pt = upper_threshold_exponent
         self._epsilon = epsilon
         self._color_order = color_order.lower()
+        self._spatial_output = spatial_output
 
         if pixels_per_degree is None:
             pixels_per_degree = (0.7 * 3840 / 0.7) * np.pi / 180
@@ -503,6 +510,8 @@ class LDRFLIPLoss(nn.Module):  # pylint:disable=too-many-instance-attributes
         delta_e_color = self._color_pipeline(true_ycxcz, pred_ycxcz)
         delta_e_features = self._process_features(true_ycxcz, pred_ycxcz)
         loss = delta_e_color ** (1 - delta_e_features)
+        if not self._spatial_output:
+            loss = loss.mean(dim=(1, 2, 3))
         return loss
 
 

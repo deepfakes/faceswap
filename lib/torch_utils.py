@@ -15,6 +15,34 @@ from lib.utils import get_module_objects
 logger = logging.getLogger(__name__)
 
 
+def get_device(cpu: bool = False) -> torch.device:
+    """Get the correctly configured device for running Torch
+
+    Parameters
+    ----------
+    cpu
+        ``True`` to force running on the CPU.
+
+    Returns
+    -------
+    The device that torch should use
+    """
+    if cpu:
+        logger.debug("CPU mode selected. Returning CPU device")
+        return torch.device("cpu")
+
+    if torch.cuda.is_available():
+        logger.debug("Cuda available. Returning Cuda device")
+        return torch.device("cuda")
+
+    if torch.backends.mps.is_available():
+        logger.debug("MPS available. Returning MPS device context")
+        return torch.device("mps")
+
+    logger.debug("No backends available. Returning CPU device context")
+    return torch.device("cpu")
+
+
 class ColorSpaceConvert(nn.Module):
     """Transforms inputs between different color spaces on the GPU. Images expected in (N,C,H,W)
     order

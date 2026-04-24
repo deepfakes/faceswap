@@ -16,13 +16,16 @@ import logging
 import typing as T
 
 import keras
-from keras import config as k_config, dtype_policies, losses as k_losses, optimizers
+from keras import config as k_config, dtype_policies, optimizers
+import torch
+from torch import nn
 
 from lib.model import losses
 from lib.model.optimizers import AdaBelief
 from lib.model.autoclip import AutoClipper
 from lib.model.nn_blocks import reset_naming
 from lib.logger import parse_class_init
+from lib.torch_utils import get_device
 from lib.utils import get_module_objects
 from plugins.train.train_config import Loss as cfg_loss, Optimizer as cfg_opt
 
@@ -41,18 +44,13 @@ class LossClass:
 
     Parameters
     ----------
-    function
-        The function that takes in the true/predicted images and returns the loss
-    init
-        Whether the loss object ``True`` needs to be initialized (i.e. it's a class) or
-        ``False`` it does not require initialization (i.e. it's a function).
-        Default ``True``
+    object
+        The class object that contains the function that takes in the true/predicted images and
+        returns the loss
     kwargs
         Any keyword arguments to supply to the loss function at initialization.
     """
-    function: Callable[[KerasTensor, KerasTensor],
-                       KerasTensor] | T.Any = k_losses.MeanSquaredError
-    init: bool = True
+    function: type[nn.Module] = nn.MSELoss
     kwargs: dict[str, T.Any] = field(default_factory=dict)
 
 
@@ -69,8 +67,8 @@ class Loss():
         self._mask_channels = self._get_mask_channels()
         self._inputs: list[keras.layers.Layer] = []
         self._names: list[str] = []
-        self._functions: dict[str, losses.LossWrapper | T.Callable[[KerasTensor, KerasTensor],
-                                                                   KerasTensor]] = {}
+        self._functions: dict[str, losses.LossWrapper | T.Callable[[torch.Tensor, torch.Tensor],
+                                                                   torch.Tensor]] = {}
 
         self._loss_dict = {"ffl": LossClass(function=losses.FocalFrequencyLoss),
                            "flip": LossClass(function=losses.LDRFLIPLoss,
@@ -78,7 +76,7 @@ class Loss():
                            "gmsd": LossClass(function=losses.GMSDLoss),
                            "l_inf_norm": LossClass(function=losses.LInfNorm),
                            "laploss": LossClass(function=losses.LaplacianPyramidLoss),
-                           "logcosh": LossClass(function=k_losses.LogCosh),
+                           "logcosh": LossClass(function=losses.LogCosh),
                            "lpips_alex": LossClass(function=losses.LPIPSLoss,
                                                    kwargs={"trunk_network": "alex",
                                                            "crop": True,
@@ -92,8 +90,8 @@ class Loss():
                                                             "crop": True,
                                                             "color_order": color_order}),
                            "ms_ssim": LossClass(function=losses.MSSIMLoss),
-                           "mae": LossClass(function=k_losses.MeanAbsoluteError),
-                           "mse": LossClass(function=k_losses.MeanSquaredError),
+                           "mae": LossClass(function=nn.MSELoss),
+                           "mse": LossClass(function=nn.L1Loss),
                            "pixel_gradient_diff": LossClass(function=losses.GradientLoss),
                            "ssim": LossClass(function=losses.DSSIMObjective),
                            "smooth_loss": LossClass(function=losses.GeneralizedLoss)}
@@ -106,8 +104,8 @@ class Loss():
         return self._names
 
     @property
-    def functions(self) -> dict[str, losses.LossWrapper | T.Callable[[KerasTensor, KerasTensor],
-                                                                     KerasTensor]]:
+    def functions(self) -> dict[str, losses.LossWrapper | T.Callable[[torch.Tensor, torch.Tensor],
+                                                                     torch.Tensor]]:
         """The loss functions that apply to each model output."""
         return self._functions
 
@@ -163,7 +161,7 @@ class Loss():
                 self._names.append(f"{name}_{side}{suffix}")
         logger.debug(self._names)
 
-    def _get_function(self, name: str) -> Callable[[KerasTensor, KerasTensor], KerasTensor]:
+    def _get_function(self, name: str) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
         """Obtain the requested Loss function
 
         Parameters
@@ -176,7 +174,7 @@ class Loss():
         The requested loss function
         """
         func = self._loss_dict[name]
-        retval = func.function(**func.kwargs) if func.init else func.function  # type:ignore
+        retval = func.function(**func.kwargs).to(get_device())
         logger.debug("Obtained loss function `%s` (%s)", name, retval)
         return retval
 

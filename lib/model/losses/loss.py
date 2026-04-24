@@ -529,6 +529,29 @@ class LInfNorm(nn.Module):
         return loss
 
 
+class LogCosh(nn.Module):
+    """Logarithm of the hyperbolic cosine of the prediction error. Ported from Keras implementation
+    """
+    def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
+        """Call the LogCosh loss function.
+
+        Parameters
+        ----------
+        y_true
+            The ground truth value
+        y_pred
+            The predicted value
+
+        Returns
+        -------
+        The final loss value for each item in the batch
+        """
+        diff = y_true - y_pred
+        loss: torch.Tensor = (diff + F.softplus(diff * -2.0) -  # pylint:disable=not-callable
+                              np.log(2))
+        return loss.mean(dim=(1, 2, 3))
+
+
 class LossWrapper(Loss):
     """A wrapper class for multiple keras losses to enable multiple masked weighted loss
     functions on a single output.

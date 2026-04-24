@@ -12,6 +12,7 @@ import numpy.typing as npt
 import torch
 
 from lib.logger import parse_class_init
+from lib.torch_utils import get_device
 from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
@@ -36,7 +37,7 @@ class _TorchInfer():
     def __init__(self, name: str, force_cpu: bool) -> None:
         logger.debug(parse_class_init(locals()))
         self._name = f"{self.__class__.__name__[1:]}.{name}"
-        self.device = self._get_device(cpu=force_cpu)
+        self.device = get_device(cpu=force_cpu)
         self._model: torch.nn.Module | None = None
         self._first_batch_seen = False
         self._output_is_list = False
