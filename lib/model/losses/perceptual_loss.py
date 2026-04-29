@@ -242,7 +242,7 @@ class GMSDLoss(nn.Module):
             out = out.reshape(bs, height, width, channels, 2)
             gx = out[..., 0]
             gy = out[..., 1]
-            out = torch.atan(gx / gy)
+            out = torch.atan2(gx, gy)
         # magnitude of edges -- unified x & y edges don't work well with Neural Networks
         return out
 
@@ -333,6 +333,8 @@ class LDRFLIPLoss(nn.Module):  # pylint:disable=too-many-instance-attributes
         ``True`` to output the loss function as a HxWx1 image output. ``False`` to reduce to mean
         for each item in the batch. Default: ``False``
     """
+    _c_max: torch.Tensor
+
     def __init__(self,
                  computed_distance_exponent: float = 0.7,
                  feature_exponent: float = 0.5,
@@ -359,6 +361,14 @@ class LDRFLIPLoss(nn.Module):  # pylint:disable=too-many-instance-attributes
         self._feature_detector = _FeatureDetection(pixels_per_degree)
         self._rgb2lab = ColorSpaceConvert(from_space="rgb", to_space="lab")
         self._rgb2ycxcz = ColorSpaceConvert("srgb", "ycxcz")
+
+        hunt_adjusted_green = self._hunt_adjustment(
+            self._rgb2lab(torch.Tensor([[[[0.0]], [[1.0]], [[0.0]]]]).float()))
+        hunt_adjusted_blue = self._hunt_adjustment(
+            self._rgb2lab(torch.Tensor([[[[0.0]], [[0.0]], [[1.0]]]]).float()))
+        self.register_buffer(
+            "_c_max",
+            self._hyab(hunt_adjusted_green, hunt_adjusted_blue) ** computed_distance_exponent)
 
     @classmethod
     def _hunt_adjustment(cls, image: torch.Tensor) -> torch.Tensor:
@@ -437,18 +447,10 @@ class LDRFLIPLoss(nn.Module):  # pylint:disable=too-many-instance-attributes
 
         preprocessed_true = self._hunt_adjustment(self._rgb2lab(filtered_true))
         preprocessed_pred = self._hunt_adjustment(self._rgb2lab(filtered_pred))
-        hunt_adjusted_green = self._hunt_adjustment(
-            self._rgb2lab(torch.Tensor([[[[0.0]], [[1.0]], [[0.0]]]]).float().to(y_pred.device))
-            )
-        hunt_adjusted_blue = self._hunt_adjustment(
-            self._rgb2lab(torch.Tensor([[[[0.0]], [[0.0]], [[1.0]]]]).float().to(y_pred.device))
-            )
 
         delta = self._hyab(preprocessed_true, preprocessed_pred)
         power_delta = delta ** self._computed_distance_exponent
-        c_max = self._hyab(hunt_adjusted_green,
-                           hunt_adjusted_blue) ** self._computed_distance_exponent
-        return self._redistribute_errors(power_delta, c_max)
+        return self._redistribute_errors(power_delta, self._c_max)
 
     def _process_features(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """Perform the color processing part of the FLIP loss function
@@ -788,7 +790,7 @@ class MSSIMLoss(nn.Module):
         The gaussian kernel in channels first depthwise format (C,1,H,W)
         """
         coords = torch.arange(0, size, dtype=torch.float32, device=self._divisor_tensor.device)
-        coords -= size - 1 / 2.
+        coords -= (size - 1) / 2.
 
         gauss = coords ** 2 * (-0.5 / self._filter_sigma_sq)
 

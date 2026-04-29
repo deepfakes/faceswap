@@ -86,7 +86,7 @@ class FocalFrequencyLoss(nn.Module):
                 row_to = (i + 1) * patch_rows
                 col_from = j * patch_cols
                 col_to = (j + 1) * patch_cols
-                patch_list.append(inputs[:, row_from: row_to, col_from:col_to, :])
+                patch_list.append(inputs[:, :, row_from:row_to, col_from:col_to])
 
         retval = torch.stack(patch_list, dim=1)
         return retval
@@ -314,37 +314,37 @@ class GradientLoss(nn.Module):
         top = img[:, 1:2, 1:2, :] + img[:, 0:1, 0:1, :]
         inner = img[:, 2:, 1:2, :] + img[:, :-2, 0:1, :]
         bottom = img[:, -1:, 1:2, :] + img[:, -2:-1, 0:1, :]
-        xy_left = torch.concatenate([top, inner, bottom], dim=1)
+        xy1_left = torch.concatenate([top, inner, bottom], dim=1)
         # Mid
         top = img[:, 1:2, 2:, :] + img[:, 0:1, :-2, :]
         mid = img[:, 2:, 2:, :] + img[:, :-2, :-2, :]
         bottom = img[:, -1:, 2:, :] + img[:, -2:-1, :-2, :]
-        xy_mid = torch.concatenate([top, mid, bottom], dim=1)
+        xy1_mid = torch.concatenate([top, mid, bottom], dim=1)
         # Right
         top = img[:, 1:2, -1:, :] + img[:, 0:1, -2:-1, :]
         inner = img[:, 2:, -1:, :] + img[:, :-2, -2:-1, :]
         bottom = img[:, -1:, -1:, :] + img[:, -2:-1, -2:-1, :]
-        xy_right = torch.concatenate([top, inner, bottom], dim=1)
+        xy1_right = torch.concatenate([top, inner, bottom], dim=1)
 
         # X_out2
         # Left
         top = img[:, 0:1, 1:2, :] + img[:, 1:2, 0:1, :]
         inner = img[:, :-2, 1:2, :] + img[:, 2:, 0:1, :]
         bottom = img[:, -2:-1, 1:2, :] + img[:, -1:, 0:1, :]
-        xy_left = torch.concatenate([top, inner, bottom], dim=1)
+        xy2_left = torch.concatenate([top, inner, bottom], dim=1)
         # Mid
         top = img[:, 0:1, 2:, :] + img[:, 1:2, :-2, :]
         mid = img[:, :-2, 2:, :] + img[:, 2:, :-2, :]
         bottom = img[:, -2:-1, 2:, :] + img[:, -1:, :-2, :]
-        xy_mid = torch.concatenate([top, mid, bottom], dim=1)
+        xy2_mid = torch.concatenate([top, mid, bottom], dim=1)
         # Right
         top = img[:, 0:1, -1:, :] + img[:, 1:2, -2:-1, :]
         inner = img[:, :-2, -1:, :] + img[:, 2:, -2:-1, :]
         bottom = img[:, -2:-1, -1:, :] + img[:, -1:, -2:-1, :]
-        xy_right = torch.concatenate([top, inner, bottom], dim=1)
+        xy2_right = torch.concatenate([top, inner, bottom], dim=1)
 
-        xy_out1 = torch.concatenate([xy_left, xy_mid, xy_right], dim=2)
-        xy_out2 = torch.concatenate([xy_left, xy_mid, xy_right], dim=2)
+        xy_out1 = torch.concatenate([xy1_left, xy1_mid, xy1_right], dim=2)
+        xy_out2 = torch.concatenate([xy2_left, xy2_mid, xy2_right], dim=2)
         return (xy_out1 - xy_out2) * 0.25
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
