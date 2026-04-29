@@ -236,11 +236,17 @@ class _Taskbar():
             return
 
         for widget in reversed(self._gui_mapped):
-            if widget.winfo_ismapped():
-                logger.debug("Removing widget: %s", widget)
-                widget.pack_forget()
-                widget.destroy()
-                del widget
+            try:
+                if not widget.winfo_exists():
+                    continue
+                if widget.winfo_ismapped():
+                    logger.debug("Removing widget: %s", widget)
+                    widget.pack_forget()
+                    widget.destroy()
+            except tk.TclError:
+                # Widget was already torn down by its parent
+                continue
+        self._gui_mapped.clear()
 
         for var in list(self._vars):
             logger.debug("Deleting tk variable: %s", var)

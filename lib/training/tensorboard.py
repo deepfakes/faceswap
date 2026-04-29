@@ -61,6 +61,11 @@ class RecordIterator:
         logger.trace("EOF. Closing '%s'", self._file_path)  # type:ignore[attr-defined]
         self._log_file.close()
 
+    # Sanity cap for a single TFRecord. Tensorboard event records are tiny in practice (KB-scale);
+    # anything larger means we caught a partial write from a live writer and the length bytes are
+    # garbage.
+    _MAX_RECORD_SIZE = 1 << 30  # 1 GiB
+
     def __next__(self) -> bytes:
         """ Get the next event log from a Tensorboard event file
 
@@ -76,17 +81,33 @@ class RecordIterator:
         """
         self._on_file_read()
 
-        b_header = self._log_file.read(8)
+        record_start = self._log_file.tell()
 
-        if not b_header:
+        b_header = self._log_file.read(8)
+        if len(b_header) < 8:
+            # Partial header (live writer in progress, or true EOF). Rewind so the next call
+            # picks up at the same position once the writer has flushed more bytes.
+            self._log_file.seek(record_start, 0)
             self._on_file_end()
             raise StopIteration
 
         read_len = int(struct.unpack('Q', b_header)[0])
-        self._log_file.seek(4, 1)
-        data = self._log_file.read(read_len)
+        if read_len > self._MAX_RECORD_SIZE:
+            logger.warning("Implausible record length %s in '%s' at offset %s; treating as "
+                           "partial write and stopping.", read_len, self._file_path, record_start)
+            self._log_file.seek(record_start, 0)
+            self._on_file_end()
+            raise StopIteration
 
-        self._log_file.seek(4, 1)
+        len_crc = self._log_file.read(4)
+        data = self._log_file.read(read_len)
+        data_crc = self._log_file.read(4)
+        if len(len_crc) < 4 or len(data) < read_len or len(data_crc) < 4:
+            # Partial record body — rewind and try again later.
+            self._log_file.seek(record_start, 0)
+            self._on_file_end()
+            raise StopIteration
+
         logger.trace("Returning event data of len %s", read_len)  # type:ignore[attr-defined]
 
         return data
