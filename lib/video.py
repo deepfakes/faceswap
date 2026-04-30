@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
+import subprocess  # nosec: B404
 import typing as T
 
 from collections import deque
@@ -118,23 +118,26 @@ def count_frames(filename, fast=False):
     >>> frame_count = count_frames(filename)
     """
     logger.debug("filename: %s, fast: %s", filename, fast)
-    assert isinstance(filename, str), "Video path must be a string"
+    if not isinstance(filename, str):
+        raise TypeError("Video path must be a string")
     cmd = [str(ffmpeg.FFMPEG_PATH), "-i", filename, "-map", "0:v:0"]
     if fast:
         cmd.extend(["-c", "copy"])
     cmd.extend(["-f", "null", "-"])
 
     logger.debug("FFMPEG Command: '%s'", " ".join(cmd))
-    process = subprocess.Popen(cmd,
+    process = subprocess.Popen(cmd,  # nosemgrep: python.lang.compatibility.python36.python36-compatibility-Popen2
                                stderr=subprocess.STDOUT,
                                stdout=subprocess.PIPE,
+                               shell=False,
                                universal_newlines=True, encoding="utf8")
     p_bar = None
     duration = None
     update = 0
     frames = 0
     stdout = process.stdout
-    assert stdout is not None
+    if stdout is None:
+        raise RuntimeError("Failed to obtain stdout from subprocess")
     while True:
 
         output = stdout.readline().strip()
@@ -246,7 +249,8 @@ class VideoInfo:
         """The Presentation Time Stamp for each frame in the video"""
         if self._pts is None:
             self._get_pts_and_keyframes()
-        assert self._pts is not None
+        if self._pts is None:
+            raise RuntimeError("PTS data is not available")
         return self._pts
 
     @property
@@ -254,7 +258,8 @@ class VideoInfo:
         """The frame index of each key frame in the video"""
         if self._keyframes is None:
             self._get_pts_and_keyframes()
-        assert self._keyframes is not None
+        if self._keyframes is None:
+            raise RuntimeError("Keyframes data is not available")
         return self._keyframes
 
     def _get_stream(self, container: InputContainer) -> av.VideoStream:
@@ -325,7 +330,8 @@ class VideoInfo:
         keyframes: list[int] = []
         with av.open(self._video_file, "r") as container:
             stream = self._get_stream(container)
-            assert stream.time_base is not None
+            if stream.time_base is None:
+                raise RuntimeError("Stream time_base is not set")
 
             p_bar = tqdm(desc="Analyzing Video", leave=False, total=self.duration, unit="secs")
             i = last_update = offset = 0
@@ -339,7 +345,8 @@ class VideoInfo:
                     logger.warning("Invalid data encountered at frame %s in video '%s'",
                                    i, self._video_file)
                     continue
-                assert frame.pts is not None
+                if frame.pts is None:
+                    raise RuntimeError("Frame PTS is not set")
                 if i == 0:
                     offset = frame.pts
                 pts.append(frame.pts)
@@ -539,11 +546,13 @@ class VideoReader:
             self.__class__.__name__, index, self._current_index, target_pts)
         self._jump_to_keyframe(index, target_pts)
         frame = next(self)
-        assert frame.pts is not None
+        if frame.pts is None:
+            raise RuntimeError("Frame PTS is not set")
         current_pts = frame.pts
         while current_pts < target_pts:
             frame = next(self)
-            assert frame.pts is not None
+            if frame.pts is None:
+                raise RuntimeError("Frame PTS is not set")
             current_pts = frame.pts
         logger.trace("[%s] Returning frame: %s",  # type:ignore[attr-defined]
                      self.__class__.__name__, frame)
@@ -614,7 +623,8 @@ class VideoMux:  # pylint:disable=too-many-instance-attributes
         """
         src = T.cast("InputContainer", self._containers["src"])
         fps = src.streams.video[0].average_rate
-        assert fps is not None
+        if fps is None:
+            raise RuntimeError("Could not determine source video fps")
         logger.debug("[%s] Source fps: %s", self.__class__.__name__, fps)
 
         if not self._mux_audio:
@@ -646,7 +656,8 @@ class VideoMux:  # pylint:disable=too-many-instance-attributes
         retval:  dict[T.Literal["audio", "video"], av.AudioStream | av.VideoStream] = {}
         dst = T.cast("OutputContainer", self._containers["dst"])
         video = dst.add_stream(self._codec, rate=self._fps, options=self._codec_parameters)
-        assert isinstance(video, av.VideoStream)
+        if not isinstance(video, av.VideoStream):
+            raise TypeError("Expected video stream to be av.VideoStream")
         video.thread_type = "AUTO"
         video.pix_fmt = "yuv420p"
         retval["video"] = video
@@ -655,7 +666,8 @@ class VideoMux:  # pylint:disable=too-many-instance-attributes
             src = self._containers["src"]
             src_audio = next(s for s in src.streams if s.type == "audio")
             audio = dst.add_stream_from_template(src_audio)
-            assert isinstance(audio, av.AudioStream)
+            if not isinstance(audio, av.AudioStream):
+                raise TypeError("Expected audio stream to be av.AudioStream")
             retval["audio"] = audio
         logger.debug("[%s] Added output streams: %s", self.__class__.__name__, retval)
         return retval
@@ -753,7 +765,8 @@ class VideoMux:  # pylint:disable=too-many-instance-attributes
         -------
         The standardized timestamp
         """
-        assert packet.pts is not None
+        if packet.pts is None:
+            raise RuntimeError("Packet PTS is not set")
         return float(packet.pts * packet.time_base)
 
     def _get_audio_packet(self, timestamp: float) -> av.Packet | None:
@@ -774,7 +787,8 @@ class VideoMux:  # pylint:disable=too-many-instance-attributes
                 self.__class__.__name__, next_ts, timestamp)
             return None
 
-        assert self._audio_packets is not None
+        if self._audio_packets is None:
+            raise RuntimeError("Audio packets iterator is not initialized")
         retval = self._next_audio_packet
         self._next_audio_packet = next((self._audio_packets), None)
         logger.trace(  # type:ignore[attr-defined]
