@@ -110,8 +110,8 @@ class LossCollator(nn.Module):
         params |= {k[1:]: v for k, v in self.__dict__.items()
                    if k in ("_use_mask", "_eye_multiplier", "_mouth_multiplier",
                             "_smallest_output", "_mask_loss")}
-        return f"{self.__class__.__name__}({', '.join(f'{k}={repr(v)}'
-                                                      for k, v in params.items())})"
+        s_params = ", ".join(f"{k}={repr(v)}" for k, v in params.items())
+        return f"{self.__class__.__name__}({s_params})"
 
     @classmethod
     def _configure_functions(cls,

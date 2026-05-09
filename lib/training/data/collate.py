@@ -46,8 +46,7 @@ class BatchMeta:
 
     def __repr__(self) -> str:
         """Pretty print for logging"""
-        params = ", ".join(f"{k}={None if v is None else [(x.shape, x.dtype)
-                                                          for x in v]}"
+        params = ", ".join(f"{k}={None if v is None else [(x.shape, x.dtype) for x in v]}"
                            for k, v in self.__dict__.items())
         return f"{self.__class__.__name__}({params})"
 
