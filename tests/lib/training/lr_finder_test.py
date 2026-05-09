@@ -5,6 +5,7 @@ import pytest
 import pytest_mock
 
 import numpy as np
+import torch
 
 from lib.training.lr_finder import LearningRateFinder
 from plugins.train import train_config as cfg
@@ -13,6 +14,12 @@ from plugins.train import train_config as cfg
 from tests.lib.config.helpers import patch_config  # noqa:[F401]
 
 # pylint:disable=protected-access,invalid-name,redefined-outer-name
+
+
+class DummyLoss:  # pylint:disable=too-few-public-methods
+    """Dummy loss return value"""
+    def __init__(self, value):
+        self.total = torch.Tensor([value])
 
 
 @pytest.fixture
@@ -113,7 +120,7 @@ def test_LearningRateFinder_train(iters,  # pylint:disable=too-many-locals
     """ Test lib.train.LearingRateFinder._train """
     trainer, _, _ = _trainer_mock(iters, mode, strength)
 
-    mock_loss_return = np.random.rand(2).tolist()
+    mock_loss_return = [DummyLoss(np.random.random()) for _ in range(2)]
     trainer.train_one_batch = mocker.MagicMock(return_value=mock_loss_return)
 
     lrf = LearningRateFinder(trainer)
@@ -126,14 +133,15 @@ def test_LearningRateFinder_train(iters,  # pylint:disable=too-many-locals
     trainer.train_one_batch.assert_called()
     assert trainer.train_one_batch.call_count == iters
 
-    train_call_args = [mocker.call(x + 1, mock_loss_return[0]) for x in range(iters)]
+    train_call_args = [mocker.call(x + 1, sum(y.total for y in mock_loss_return))
+                       for x in range(iters)]
     assert lrf._on_batch_end.call_args_list == train_call_args
 
     lrf._update_description.assert_called()
     assert lrf._update_description.call_count == iters
 
     # NaN break
-    mock_loss_return = (np.nan, np.nan)
+    mock_loss_return = mock_loss_return = [DummyLoss(np.nan) for _ in range(2)]
     trainer.train_one_batch = mocker.MagicMock(return_value=mock_loss_return)
 
     lrf._train()
