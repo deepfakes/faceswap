@@ -264,10 +264,10 @@ class LPIPSLoss(nn.Module):  # pylint:disable=too-many-instance-attributes
     lpips
         ``True`` to use linear network on top of the trunk network. ``False`` to just average the
         output from the trunk network. Default ``True``
-    spatial
+    spatial_output
         ``True`` output the loss in the spatial domain (i.e. as a grayscale tensor of height and
         width of the input image). ``Bool`` reduce the spatial dimensions for loss calculation.
-        Default: ``False``
+        Default: ``True``
     normalize
         ``True`` if the input Tensor needs to be normalized from the 0. to 1. range to the -1. to
         1. range. Default: ``True``
@@ -291,14 +291,14 @@ class LPIPSLoss(nn.Module):  # pylint:disable=too-many-instance-attributes
                  linear_eval_mode: bool = True,
                  linear_use_dropout: bool = True,
                  lpips: bool = True,
-                 spatial: bool = False,
+                 spatial_output: bool = True,
                  normalize: bool = True,
                  ret_per_layer: bool = False,
                  crop: bool = False,
                  color_order: T.Literal["bgr", "rgb"] = "bgr") -> None:
         super().__init__()
         logger.debug(parse_class_init(locals()))
-        self._spatial = spatial
+        self._spatial = spatial_output
         self._use_lpips = lpips
         self._normalize = normalize
         self._ret_per_layer = ret_per_layer
@@ -406,10 +406,6 @@ class LPIPSLoss(nn.Module):  # pylint:disable=too-many-instance-attributes
         -------
         The final loss value for each item in the batch
         """
-        # TODO remove once channels first
-        y_true = y_true.permute(0, 3, 1, 2)
-        y_pred = y_pred.permute(0, 3, 1, 2)
-
         if not self._is_rgb:
             y_true = torch.flip(y_true, dims=[1])
             y_pred = torch.flip(y_pred, dims=[1])

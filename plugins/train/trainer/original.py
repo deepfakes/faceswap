@@ -6,11 +6,14 @@ import logging
 import typing as T
 
 from keras import ops
-from keras.src.tree import flatten
 import torch
 
 from lib.utils import get_module_objects
 from .base import TrainerBase
+
+if T.TYPE_CHECKING:
+    from lib.training.data import BatchMeta
+    from lib.training.loss import BatchLoss
 
 
 logger = logging.getLogger(__name__)
@@ -29,32 +32,32 @@ class Trainer(TrainerBase):
         return torch.utils.data.RandomSampler
 
     def _forward(self,
-                 inputs: torch.Tensor,
-                 targets: list[torch.Tensor]) -> torch.Tensor:
+                 inputs: list[torch.Tensor],
+                 targets: list[torch.Tensor],
+                 meta: BatchMeta) -> list[BatchLoss]:
         """Perform the forward pass on the model
 
         Parameters
         ----------
         inputs
-            The batch of input image tensors to the model in shape `(side, batch_size,
-            *dims)` with `side` 0 being input A and `side` 1 being input B
+            The batch of input image tensors to the model of length(num inputs)
         targets
-            The corresponding batch of target images for the model for each side's output(s). For
-            each model output an array should exist in the order of model outputs in the format `(
-            side, batch_size, *dims)` with `side` 0 being input A and `side` 1 being input B
+            List of len (num_outputs) of target images in shape (batch_size, num_inputs, height,
+            width, 3) at all model output sizes as float32 0.0 - 1.0 range
+        meta
+            The meta information for the batch
 
         Returns
         -------
-        The loss for each side of this batch in layout (A1, ..., An, B1, ..., Bn)
+        The loss for each input to the model in order (A, B, ...)
         """
-        feed_targets = [[t[i] for t in targets] for i in range(2)]
-        predictions = self.model.model((inputs[0], inputs[1]), training=True)
-        self.model.model.zero_grad()
-
-        losses = torch.stack([loss_fn(y_true, y_pred)
-                              for loss_fn, y_true, y_pred in zip(self.model.model.loss,
-                                                                 flatten(feed_targets),
-                                                                 predictions)])
+        predictions = self.model.model(inputs, training=True)
+        num_sides = len(inputs)
+        num_outputs = len(predictions) // num_sides
+        losses = [self.loss_func([t[:, i] for t in targets],
+                                 predictions[i * num_outputs:i * num_outputs + num_outputs],
+                                 meta[i])
+                  for i in range(num_sides)]
         logger.trace("Losses: %s", losses)  # type:ignore[attr-defined]
         return losses
 
@@ -78,27 +81,30 @@ class Trainer(TrainerBase):
             self.model.model.optimizer.apply(gradients, trainable_weights)
 
     def train_batch(self,
-                    inputs: torch.Tensor,
-                    targets: list[torch.Tensor]) -> torch.Tensor:
+                    inputs: list[torch.Tensor],
+                    targets: list[torch.Tensor],
+                    meta: BatchMeta) -> list[BatchLoss]:
         """Run a single forward and backwards pass through the model for a single batch
 
         Parameters
         ----------
         inputs
-            The batch of input image tensors to the model in shape `(side, batch_size,
-            *dims)` with `side` 0 being input A and `side` 1 being input B
+            The batch of input image tensors to the model of length(num inputs)
         targets
-            The corresponding batch of target images for the model for each side's output(s). For
-            each model output an array should exist in the order of model outputs in the format `(
-            side, batch_size, *dims)` with `side` 0 being input A and `side` 1 being input B
+            List of len (num_outputs) of target images in shape (batch_size, num_inputs, height,
+            width, 3) at all model output sizes as float32 0.0 - 1.0 range
+        meta
+            The meta information for the batch
 
         Returns
         -------
-        The loss for each side of this batch in layout (A1, ..., An, B1, ..., Bn)
+        The loss for each input to the model in order (A, B, ...)
         """
-        loss_tensor = self._forward(inputs, targets)
-        self._backwards_and_apply(loss_tensor)
-        return loss_tensor
+        self.model.model.zero_grad()  # TODO move this to optimizer
+        loss = self._forward(inputs, targets, meta)
+        total_loss = T.cast(torch.Tensor, sum(x.total for x in loss))
+        self._backwards_and_apply(total_loss)
+        return loss
 
 
 __all__ = get_module_objects(__name__)

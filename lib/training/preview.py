@@ -11,7 +11,7 @@ import numpy as np
 from lib.logger import format_array, parse_class_init
 from lib.image import hex_to_rgb
 from lib.utils import get_module_objects
-from lib.training.data_set import get_label
+from lib.training.data import get_label
 
 if T.TYPE_CHECKING:
     import numpy.typing as npt

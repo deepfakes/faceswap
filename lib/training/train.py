@@ -15,18 +15,22 @@ import torch
 from torch.cuda import OutOfMemoryError
 
 from lib.logger import format_array, parse_class_init
+from lib.torch_utils import get_device
 from lib.training import LearningRateFinder, LearningRateWarmup
 from lib.training.preview import Samples
-from lib.training.data_loader import PreviewLoader, TrainLoader
+from lib.training.data import get_label, PreviewLoader, TrainLoader
 from lib.training.tensorboard import TorchTensorBoard
 from lib.utils import get_module_objects, FaceswapError
 from plugins.train import train_config as mod_cfg
 from plugins.train.trainer import trainer_config as trn_cfg
 
+from .loss import LossCollator
+
 if T.TYPE_CHECKING:
     import numpy.typing as npt
     from collections.abc import Callable
     from plugins.train.trainer.base import TrainerBase
+    from .loss import BatchLoss
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +70,10 @@ class Trainer:  # pylint:disable=too-many-instance-attributes
         self._timelapse_folders = [] if timelapse_folders is None else timelapse_folders
         self._timelapse_output = timelapse_output
 
+        self._device = get_device()
         self._model = plugin.model
         self._out_size = max(x[1] for x in self._model.output_shapes if x[-1] != 1)
+        self._configure_model(plugin)
 
         self._train_loader = self._get_train_loader()
         self._preview_loader = self._get_preview_loader()
@@ -98,6 +104,33 @@ class Trainer:  # pylint:disable=too-many-instance-attributes
     def exit_early(self) -> bool:
         """``True`` if the trainer should exit early, without performing any training steps"""
         return self._exit_early
+
+    def _configure_model(self, plugin: TrainerBase):
+        """Add the loss functions to the model and move to the correct device
+
+        Parameters
+        ----------
+        plugin
+            The plugin that is training the model
+        """
+        loss = LossCollator(
+            functions=[mod_cfg.Loss.loss_function(),
+                       mod_cfg.Loss.loss_function_2(),
+                       mod_cfg.Loss.loss_function_3(),
+                       mod_cfg.Loss.loss_function_4()],
+            weights=[1.0,
+                     mod_cfg.Loss.loss_weight_2() / 100.,
+                     mod_cfg.Loss.loss_weight_3() / 100.,
+                     mod_cfg.Loss.loss_weight_4() / 100.],
+            use_mask=mod_cfg.Loss.penalized_mask_loss(),
+            eye_multiplier=mod_cfg.Loss.eye_multiplier(),
+            mouth_multiplier=mod_cfg.Loss.mouth_multiplier(),
+            smallest_output=min(x[1] for x in self._model.output_shapes
+                                if x[-1] != 1),
+            mask_loss=(None if not mod_cfg.Loss.learn_mask()
+                       else mod_cfg.Loss.mask_loss_function()))
+        plugin.register_loss(loss)
+        plugin.model.model.to(self._device)
 
     def _get_train_loader(self) -> TrainLoader:
         """Get the loaders for training the model
@@ -246,19 +279,19 @@ class Trainer:  # pylint:disable=too-many-instance-attributes
         """Toggle the mask overlay on or off based on user input."""
         self._samples.toggle_mask_display()
 
-    def train_one_batch(self) -> np.ndarray:
+    def train_one_batch(self) -> list[BatchLoss]:
         """Process a single batch through the model and obtain the loss
 
         Returns
         -------
-        The total loss in the first position then A losses, by output order, then B losses, by
-        output order
+        The collated loss values detached and moved to CPU in order (A, B, ...)
         """
         try:
-            inputs, targets = next(self._train_loader)
-            loss_t = self._plugin.train_batch(inputs, targets)
-            loss_cpu = loss_t.detach().cpu().numpy()
-            retval = np.array([sum(loss_cpu), *loss_cpu])
+            inputs, targets, meta = next(self._train_loader)
+            loss = self._plugin.train_batch([i.to(self._device) for i in inputs],
+                                            [t.to(self._device) for t in targets],
+                                            meta.to(self._device))
+            retval = [x.to_cpu() for x in loss]
         except OutOfMemoryError as err:
             msg = ("You do not have enough GPU memory available to train the selected model at "
                    "the selected settings. You can try a number of things:"
@@ -272,24 +305,33 @@ class Trainer:  # pylint:disable=too-many-instance-attributes
             raise FaceswapError(msg) from err
         return retval
 
-    def _log_tensorboard(self, loss: np.ndarray) -> None:
+    def _log_tensorboard(self, loss: list[BatchLoss]) -> None:
         """Log current loss to Tensorboard log files
 
         Parameters
         ----------
         loss
-            The total loss in the first position then A losses, by output order, then B losses, by
-            output order
+            The loss scalars for the batch detached and moved to cpu in order (A, B, ...)
         """
         if not self._tensorboard:
             return
-        logger.trace("[Trainer] Updating TensorBoard log")  # type: ignore
-        logs = {log[0]: float(log[1])
-                for log in zip(self._model.state.loss_names, loss)}
-
+        logger.trace("[Trainer] Updating TensorBoard log: %s", loss)  # type: ignore
+        logs: dict[str, float | dict[str, float]] = {
+            "total": T.cast(torch.Tensor, sum(x.total for x in loss)).item()}
+        for i, out in enumerate(loss):
+            lbl = get_label(i, len(loss))
+            for idx, (w, u) in enumerate(zip(out.weighted, out.unweighted)):
+                key = lbl if len(out.unweighted) == 1 else f"{lbl}_{idx}"
+                weighted = {k: v.mean() for k, v in w.items()}
+                unweighted = {k: v.mean() for k, v in u.items()}
+                logs[f"face_{key}"] = T.cast(torch.Tensor, sum(weighted.values())).item()
+                logs[f"weighted_{key}"] = {k: v.item() for k, v in weighted.items()}
+                logs[f"unweighted_{key}"] = {k: v.item() for k, v in unweighted.items()}
+            if out.mask is not None:
+                logs[f"mask_{lbl}"] = out.mask.mean().item()
         self._tensorboard.on_train_batch_end(self._model.iterations, logs=logs)
 
-    def _collate_and_store_loss(self, loss: np.ndarray) -> np.ndarray:
+    def _collate_and_store_loss(self, loss: list[BatchLoss]) -> np.ndarray:
         """Collate the loss into totals for each side.
 
         The losses are summed into a total for each side. Loss totals are added to
@@ -300,8 +342,7 @@ class Trainer:  # pylint:disable=too-many-instance-attributes
         Parameters
         ----------
         loss
-            The total loss in the first position then A losses, by output order, then B losses, by
-            output order
+            The list of loss scalars in order (A, B, ...)
 
         Returns
         -------
@@ -313,13 +354,22 @@ class Trainer:  # pylint:disable=too-many-instance-attributes
             If a NaN is detected, a :class:`FaceswapError` will be raised
         """
         # NaN protection
-        if mod_cfg.nan_protection() and not all(np.isfinite(val) for val in loss):
-            logger.critical("NaN Detected. Loss: %s", loss)
+        if mod_cfg.nan_protection() and not all(torch.isfinite(val.total).all() for val in loss):
+            loss_str = ", ".join(f"Loss {get_label(i, len(loss))}: {round(x.total.item(), 6)}"
+                                 for i, x in enumerate(loss))
+            msg = f"NaN Detected. {loss_str}"
+            failed = ", ".join(f"{key}({get_label(i, len(loss))})"
+                               for i, out in enumerate(loss)
+                               for unweighted in out.unweighted
+                               for key, sub_loss in unweighted.items()
+                               if not torch.isfinite(sub_loss).all())
+            if failed:
+                msg += f". The loss function(s) that NaN'd: {failed}"
+            logger.critical(msg)
             raise FaceswapError("A NaN was detected and you have NaN protection enabled. Training "
                                 "has been terminated.")
 
-        split = len(loss) // 2
-        combined_loss = np.array([sum(loss[:split]), sum(loss[split:])])
+        combined_loss = np.array([x.total.item() for x in loss], dtype=np.float32)
         self._model.add_history(combined_loss)
         logger.trace("[Trainer] original loss: %s, combined_loss: %s",  # type:ignore[attr-defined]
                      loss, combined_loss)
@@ -480,8 +530,8 @@ class Trainer:  # pylint:disable=too-many-instance-attributes
         self._warmup()
         loss = self.train_one_batch()
         self._log_tensorboard(loss)
-        loss = self._collate_and_store_loss(loss[1:])
-        self._print_loss(loss)
+        total_loss = self._collate_and_store_loss(loss)
+        self._print_loss(total_loss)
         if do_snapshot:
             self._model.io.snapshot()
         self._update_viewers(viewer, do_timelapse)

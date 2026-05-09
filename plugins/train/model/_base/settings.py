@@ -6,271 +6,29 @@ The objects in this module should not be called directly, but are called from
 :class:`~plugins.train.model._base.ModelBase`
 
 Handles configuration of model plugins for:
-    - Loss configuration
     - Optimizer settings
     - General global model configuration settings
 """
 from __future__ import annotations
-from dataclasses import dataclass, field
 import logging
 import typing as T
 
 import keras
 from keras import config as k_config, dtype_policies, optimizers
-import torch
-from torch import nn
 
-from lib.model import losses
 from lib.model.optimizers import AdaBelief
 from lib.model.autoclip import AutoClipper
 from lib.model.nn_blocks import reset_naming
 from lib.logger import parse_class_init
-from lib.torch_utils import get_device
 from lib.utils import get_module_objects
-from plugins.train.train_config import Loss as cfg_loss, Optimizer as cfg_opt
+from plugins.train.train_config import Optimizer as cfg_opt
 
 if T.TYPE_CHECKING:
     from collections.abc import Callable
     from argparse import Namespace
-    from keras import KerasTensor
     from .state import State
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class LossClass:
-    """Typing class for holding loss functions.
-
-    Parameters
-    ----------
-    object
-        The class object that contains the function that takes in the true/predicted images and
-        returns the loss
-    kwargs
-        Any keyword arguments to supply to the loss function at initialization.
-    """
-    function: type[nn.Module] = nn.MSELoss
-    kwargs: dict[str, T.Any] = field(default_factory=dict)
-
-
-class Loss():
-    """Holds loss names and functions for an Autoencoder.
-
-    Parameters
-    ----------
-    color_order
-        Color order of the model. One of `"BGR"` or `"RGB"`
-    """
-    def __init__(self, color_order: T.Literal["bgr", "rgb"]) -> None:
-        logger.debug(parse_class_init(locals()))
-        self._mask_channels = self._get_mask_channels()
-        self._inputs: list[keras.layers.Layer] = []
-        self._names: list[str] = []
-        self._functions: dict[str, losses.LossWrapper | T.Callable[[torch.Tensor, torch.Tensor],
-                                                                   torch.Tensor]] = {}
-
-        self._loss_dict = {"ffl": LossClass(function=losses.FocalFrequencyLoss),
-                           "flip": LossClass(function=losses.LDRFLIPLoss,
-                                             kwargs={"color_order": color_order}),
-                           "gmsd": LossClass(function=losses.GMSDLoss),
-                           "l_inf_norm": LossClass(function=losses.LInfNorm),
-                           "laploss": LossClass(function=losses.LaplacianPyramidLoss),
-                           "logcosh": LossClass(function=losses.LogCosh),
-                           "lpips_alex": LossClass(function=losses.LPIPSLoss,
-                                                   kwargs={"trunk_network": "alex",
-                                                           "crop": True,
-                                                           "color_order": color_order}),
-                           "lpips_squeeze": LossClass(function=losses.LPIPSLoss,
-                                                      kwargs={"trunk_network": "squeeze",
-                                                              "crop": True,
-                                                              "color_order": color_order}),
-                           "lpips_vgg16": LossClass(function=losses.LPIPSLoss,
-                                                    kwargs={"trunk_network": "vgg16",
-                                                            "crop": True,
-                                                            "color_order": color_order}),
-                           "ms_ssim": LossClass(function=losses.MSSIMLoss),
-                           "mae": LossClass(function=nn.MSELoss,
-                                            kwargs={"reduction": "none"}),
-                           "mse": LossClass(function=nn.L1Loss,
-                                            kwargs={"reduction": "none"}),
-                           "pixel_gradient_diff": LossClass(function=losses.GradientLoss),
-                           "ssim": LossClass(function=losses.DSSIMObjective),
-                           "smooth_loss": LossClass(function=losses.GeneralizedLoss)}
-
-        logger.debug("Initialized: %s", self.__class__.__name__)
-
-    @property
-    def names(self) -> list[str]:
-        """The loss function names"""
-        return self._names
-
-    @property
-    def functions(self) -> dict[str, losses.LossWrapper | T.Callable[[torch.Tensor, torch.Tensor],
-                                                                     torch.Tensor]]:
-        """The loss functions that apply to each model output."""
-        return self._functions
-
-    @property
-    def _mask_inputs(self) -> list | None:
-        """The list of input tensors to the model that contain the mask. Returns ``None`` if there
-        is no mask input to the model."""
-        mask_inputs = [inp for inp in self._inputs if inp.name.startswith("mask")]
-        return None if not mask_inputs else mask_inputs
-
-    @property
-    def _mask_shapes(self) -> list[tuple] | None:
-        """The list of shape tuples for the mask input tensors for the model. Returns ``None`` if
-        there is no mask input."""
-        if self._mask_inputs is None:
-            return None
-        return [mask_input.shape for mask_input in self._mask_inputs]
-
-    def configure(self, model: keras.models.Model) -> None:
-        """Configure the loss functions for the given inputs and outputs.
-
-        Parameters
-        ----------
-        model
-            The model that is to be trained
-        """
-        self._inputs = model.inputs
-        self._set_loss_names(model.outputs)
-        self._set_loss_functions(model.output_names)
-        self._names.insert(0, "total")
-
-    def _set_loss_names(self, outputs: list[KerasTensor]) -> None:
-        """Name the losses based on model output.
-
-        This is used for correct naming in the state file, for display purposes only.
-
-        Adds the loss names to :attr:`names`
-
-        Parameters
-        ----------
-        A list of output tensors from the model plugin
-        """
-        # TODO Use output names if/when these are fixed upstream
-        split_outputs = [outputs[:len(outputs) // 2], outputs[len(outputs) // 2:]]
-        for side, side_output in zip(("a", "b"), split_outputs):
-            output_names = [output.name for output in side_output]
-            output_shapes = [output.shape[1:] for output in side_output]
-            output_types = ["mask" if shape[-1] == 1 else "face" for shape in output_shapes]
-            logger.debug("side: %s, output names: %s, output_shapes: %s, output_types: %s",
-                         side, output_names, output_shapes, output_types)
-            for idx, name in enumerate(output_types):
-                suffix = "" if output_types.count(name) == 1 else f"_{idx}"
-                self._names.append(f"{name}_{side}{suffix}")
-        logger.debug(self._names)
-
-    def _get_function(self, name: str) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
-        """Obtain the requested Loss function
-
-        Parameters
-        ----------
-        name
-            The name of the loss function from the training configuration file
-
-        Returns
-        -------
-        The requested loss function
-        """
-        func = self._loss_dict[name]
-        retval = func.function(**func.kwargs).to(get_device())
-        logger.debug("Obtained loss function `%s` (%s)", name, retval)
-        return retval
-
-    def _set_loss_functions(self, output_names: list[str]) -> None:
-        """Set the loss functions and their associated weights.
-
-        Adds the loss functions to the :attr:`functions` dictionary.
-
-        Parameters
-        ----------
-        output_names
-            The output names from the model
-        """
-        loss_functions = [cfg_loss.loss_function(),
-                          cfg_loss.loss_function_2(),
-                          cfg_loss.loss_function_3(),
-                          cfg_loss.loss_function_4()]
-        loss_amount = [100,
-                       cfg_loss.loss_weight_2(),
-                       cfg_loss.loss_weight_3(),
-                       cfg_loss.loss_weight_4()]
-        face_losses = [(name, weight) for name, weight in zip(loss_functions, loss_amount)
-                       if name != "none" and weight > 0]
-
-        for name, output_name in zip(self._names, output_names):
-            if name.startswith("mask"):
-                loss_func = self._get_function(cfg_loss.mask_loss_function())
-            else:
-                loss_func = losses.LossWrapper()
-                for func, weight in face_losses:
-                    self._add_face_loss_function(loss_func, func, weight / 100.)
-
-            logger.debug("%s: (output_name: '%s', function: %s)", name, output_name, loss_func)
-            self._functions[name] = loss_func
-        logger.debug("functions: %s", self._functions)
-
-    def _add_face_loss_function(self,
-                                loss_wrapper: losses.LossWrapper,
-                                loss_function: str,
-                                weight: float) -> None:
-        """Add the given face loss function at the given weight and apply any mouth and eye
-        multipliers
-
-        Parameters
-        ----------
-        loss_wrapper
-            The wrapper loss function that holds the face losses
-        loss_function
-            The loss function to add to the loss wrapper
-        weight
-            The amount of weight to apply to the given loss function
-        """
-        logger.debug("Adding loss function: %s, weight: %s", loss_function, weight)
-        loss_wrapper.add_loss(self._get_function(loss_function),
-                              weight=weight,
-                              mask_channel=self._mask_channels[0])
-
-        channel_idx = 1
-        for section, multiplier in zip(
-                ("eye_multiplier", "mouth_multiplier"),
-                (float(cfg_loss.eye_multiplier()), float(cfg_loss.mouth_multiplier()))):
-            mask_channel = self._mask_channels[channel_idx]
-            multiplier *= 1.
-            if multiplier > 1.:
-                logger.debug("Adding section loss %s: %s", section, multiplier)
-                loss_wrapper.add_loss(self._get_function(loss_function),
-                                      weight=weight * multiplier,
-                                      mask_channel=mask_channel)
-            channel_idx += 1
-
-    def _get_mask_channels(self) -> list[int]:
-        """Obtain the channels from the face targets that the masks reside in from the training
-        data generator.
-
-        Returns
-        -------
-        A list of channel indices that contain the mask for the corresponding config item
-        """
-        eye_multiplier = cfg_loss.eye_multiplier()
-        mouth_multiplier = cfg_loss.mouth_multiplier()
-        if not cfg_loss.penalized_mask_loss() and (eye_multiplier > 1 or mouth_multiplier > 1):
-            logger.warning("You have selected eye/mouth loss multipliers greater than 1x, but "
-                           "Penalized Mask Loss is disabled. Disabling all multipliers.")
-            eye_multiplier = 1
-            mouth_multiplier = 1
-        uses_masks = (cfg_loss.penalized_mask_loss(), eye_multiplier > 1, mouth_multiplier > 1)
-        mask_channels = [-1 for _ in range(len(uses_masks))]
-        current_channel = 3
-        for idx, mask_required in enumerate(uses_masks):
-            if mask_required:
-                mask_channels[idx] = current_channel
-                current_channel += 1
-        logger.debug("uses_masks: %s, mask_channels: %s", uses_masks, mask_channels)
-        return mask_channels
 
 
 class Optimizer():

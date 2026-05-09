@@ -1,5 +1,5 @@
 #!/usr/bin python3
-""" Pytest unit tests for :mod:`lib.training.data_augmentation` """
+""" Pytest unit tests for :mod:`lib.training.data.augmentation` """
 import typing as T
 
 import cv2
@@ -8,7 +8,7 @@ import pytest
 import pytest_mock
 
 from lib.config import ConfigValueType
-from lib.training.data_augmentation import (
+from lib.training.data.augmentation import (
     ConstantsAugmentation, ConstantsColor, ConstantsTransform, ConstantsWarp, ImageAugmentation)
 from plugins.train.trainer import trainer_config as cfg
 
@@ -18,7 +18,7 @@ from tests.lib.config.helpers import patch_config  # noqa[F401]
 # pylint:disable=protected-access,redefined-outer-name
 
 
-MODULE_PREFIX = "lib.training.data_augmentation"
+MODULE_PREFIX = "lib.training.data.augmentation"
 
 
 # CONSTANTS #

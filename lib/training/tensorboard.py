@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-""" Tensorboard call back for PyTorch logging. Hopefully temporary until a native Keras version
-is implemented """
+"""Tensorboard call back for PyTorch logging. Hopefully temporary until a native Keras version
+is implemented"""
 from __future__ import annotations
 
 import logging
@@ -18,16 +18,19 @@ logger = logging.getLogger(__name__)
 
 
 class RecordIterator:
-    """ A replacement for tensorflow's :func:`compat.v1.io.tf_record_iterator`
+    """A replacement for tensorflow's :func:`compat.v1.io.tf_record_iterator`
 
     Parameters
     ----------
-    log_file : str
+    log_file
         The event log file to obtain records from
-    is_live : bool, optional
+    is_live
         ``True`` if the log file is for a live training session that will constantly provide data.
         Default: ``False``
     """
+    _max_record_size = 1024 ** 3
+    """Maximum size for a TFRecord. Caps at 1GB to protect against nonsense length bytes"""
+
     def __init__(self, log_file, is_live: bool = False) -> None:
         logger.debug(parse_class_init(locals()))
         self._file_path = log_file
@@ -37,12 +40,12 @@ class RecordIterator:
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def __iter__(self) -> RecordIterator:
-        """ Iterate over a Tensorboard event file"""
+        """Iterate over a Tensorboard event file"""
         return self
 
     def _on_file_read(self) -> None:
-        """ If the file is closed and we are reading live data, re-open the file and seek to the
-        correct position """
+        """If the file is closed and we are reading live data, re-open the file and seek to the
+        correct position"""
         if not self._is_live or not self._log_file.closed:
             return
 
@@ -52,7 +55,7 @@ class RecordIterator:
         self._log_file.seek(self._position, 0)
 
     def _on_file_end(self) -> None:
-        """ Close the event file. If live data, record the current position"""
+        """Close the event file. If live data, record the current position"""
         if self._is_live:
             self._position = self._log_file.tell()
             logger.trace("Setting live position to %s",  # type:ignore[attr-defined]
@@ -62,12 +65,11 @@ class RecordIterator:
         self._log_file.close()
 
     def __next__(self) -> bytes:
-        """ Get the next event log from a Tensorboard event file
+        """Get the next event log from a Tensorboard event file
 
         Returns
         -------
-        bytes
-            A Tensorboard event log
+        A Tensorboard event log
 
         Raises
         ------
@@ -76,17 +78,30 @@ class RecordIterator:
         """
         self._on_file_read()
 
+        record_start = self._log_file.tell()
         b_header = self._log_file.read(8)
 
-        if not b_header:
+        if len(b_header) < 8:  # Partial header. Rewind for next call
+            self._log_file.seek(record_start, 0)
             self._on_file_end()
             raise StopIteration
 
         read_len = int(struct.unpack('Q', b_header)[0])
-        self._log_file.seek(4, 1)
-        data = self._log_file.read(read_len)
+        if read_len > self._max_record_size:
+            logger.debug("Implausible record length %s in '%s' at offset %s; treating as partial "
+                         "and stopping.", read_len, self._file_path, record_start)
+            self._log_file.seek(record_start, 0)
+            self._on_file_end()
+            raise StopIteration
 
-        self._log_file.seek(4, 1)
+        len_crc = self._log_file.read(4)
+        data = self._log_file.read(read_len)
+        data_crc = self._log_file.read(4)
+        if len(len_crc) < 4 or len(data) < read_len or len(data_crc) < 4:  # Partial read
+            self._log_file.seek(record_start, 0)
+            self._on_file_end()
+            raise StopIteration
+
         logger.trace("Returning event data of len %s", read_len)  # type:ignore[attr-defined]
 
         return data
@@ -98,14 +113,14 @@ class TorchTensorBoard(keras.callbacks.Callback):
 
     Parameters
     ----------
-    log_dir str
+    log_dir
         The path of the directory where to save the log files to be parsed by TensorBoard. e.g.,
         `log_dir = os.path.join(working_dir, 'logs')`. This directory should not be reused by any
         other callbacks.
-    write_graph: bool  (Not supported at this time)
+    write_graph
         Whether to visualize the graph in TensorBoard. Note that the log file can become quite
-        large when `write_graph` is set to `True`.
-    update_freq: Literal["batch", "epoch"] | int
+        large when `write_graph` is set to `True`. Note: Not supported at this time
+    update_freq
         When using `"epoch"`, writes the losses and metrics to TensorBoard after every epoch.
         If using an integer, let's say `1000`, all metrics and losses (including custom ones
         added by `Model.compile`) will be logged to TensorBoard every 1000 batches. `"batch"`
@@ -116,7 +131,6 @@ class TorchTensorBoard(keras.callbacks.Callback):
         Scalars
         tutorial](https://www.tensorflow.org/tensorboard/scalars_and_keras#batch-level_logging)
     """
-
     def __init__(self,
                  log_dir: str = "logs",
                  write_graph: bool = True,
@@ -139,7 +153,7 @@ class TorchTensorBoard(keras.callbacks.Callback):
 
     @property
     def _train_writer(self) -> SummaryWriter:
-        """:class:`torch.utils.tensorboard.SummaryWriter`: The summary writer """
+        """The summary writer"""
         if "train" not in self._writers:
             self._writers["train"] = SummaryWriter(self._train_dir)
         return self._writers["train"]
@@ -160,7 +174,7 @@ class TorchTensorBoard(keras.callbacks.Callback):
 
         Parameters
         ----------
-        model: :class:`keras.models.Model`
+        model
             The model that is being trained
         """
         self._model = model
@@ -170,24 +184,26 @@ class TorchTensorBoard(keras.callbacks.Callback):
             self._should_write_train_graph = True
 
     def on_train_begin(self, logs=None) -> None:
-        """ Initialize the call back on train start
+        """Initialize the call back on train start
 
         Parameters
         ----------
-        logs: None
+        logs
             Unused
         """
         self._global_train_batch = 0
         self._previous_epoch_iterations = 0
 
-    def on_train_batch_end(self, batch: int, logs: dict[str, float] | None = None) -> None:
-        """ Update Tensorboard logs on batch end
+    def on_train_batch_end(self,
+                           batch: int,
+                           logs: dict[str, float | dict[str, float]] | None = None) -> None:
+        """Update Tensorboard logs on batch end
 
         Parameters
         ----------
-        batch: int
+        batch
             The current iteration count
-        logs: dict[str, float]
+        logs
             The logs to write
         """
         assert logs is not None
@@ -196,21 +212,26 @@ class TorchTensorBoard(keras.callbacks.Callback):
             self._should_write_train_graph = False
 
         for key, value in logs.items():
-            self._train_writer.add_scalar(f"batch_{key}",
-                                          value,
-                                          global_step=batch)
+            tag = f"batch_{key}"
+            if isinstance(value, float):
+                self._train_writer.add_scalar(tag, value, global_step=batch)
+            elif isinstance(value, dict):
+                for k, v in value.items():
+                    self._train_writer.add_scalar(f"{tag}/{k}", v, global_step=batch)
+            else:
+                raise ValueError(f"Unhandled Tensorboard data: {key}: {value}")
 
     def on_save(self) -> None:
-        """ Flush data to disk on save """
+        """Flush data to disk on save"""
         logger.debug("Flushing Tensorboard writer")
         self._train_writer.flush()
 
     def on_train_end(self, logs=None) -> None:
-        """ Close the writer on train completion
+        """Close the writer on train completion
 
         Parameters
         ----------
-        logs: None
+        logs
             Unused
         """
         for writer in self._writers.values():

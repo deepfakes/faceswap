@@ -17,7 +17,7 @@ from plugins.train import train_config as cfg
 
 from .inference import Inference
 from .io import IO, get_all_sub_models, Weights
-from .settings import Loss, Optimizer, Settings
+from .settings import Optimizer, Settings
 from .state import State
 
 if T.TYPE_CHECKING:
@@ -84,8 +84,6 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         self._settings = Settings(self._args,
                                   self._mixed_precision,
                                   self._is_predict)
-        self._loss = Loss(self.color_order)
-
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 
     @property
@@ -309,11 +307,7 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         weights = Weights(self)
         weights.load(self._io.model_exists)
         weights.freeze()
-
-        self._loss.configure(self.model)
-        losses = list(self._loss.functions.values())
-        self.model.compile(optimizer=optimizer, loss=losses)
-        self._state.add_session_loss_names(self._loss.names)
+        self.model.compile(optimizer=optimizer)
         logger.debug("Compiled Model: %s", self.model)
 
     def add_history(self, loss: np.ndarray) -> None:

@@ -7,8 +7,14 @@ import pytest
 import pytest_mock
 import torch
 
+from lib.training.data.collate import BatchMeta
 from plugins.train.trainer import original as mod_original
 from plugins.train.trainer import base as mod_base
+
+
+class DummyLoss:  # pylint:disable=too-few-public-methods
+    """Dummy loss return"""
+    total = 1.0
 
 
 @pytest.fixture
@@ -41,15 +47,17 @@ def test_Trainer(batch_size, _trainer_mocked):
 def test_Trainer_train_batch(_trainer_mocked, mocker):
     """ Test that original trainer calls the forward and backwards methods """
     instance = _trainer_mocked()
-    loss_return = float(np.random.rand())
+    loss_return = [DummyLoss()]
     instance._forward = mocker.MagicMock(return_value=loss_return)
     instance._backwards_and_apply = mocker.MagicMock()
+    instance.model.model.zero_grad = mocker.MagicMock()
 
-    ret_val = instance.train_batch("TEST_INPUT", "TEST_TARGET")
+    ret_val = instance.train_batch("TEST_INPUT", "TEST_TARGET", "TEST_META")
 
     assert ret_val == loss_return
-    instance._forward.assert_called_once_with("TEST_INPUT", "TEST_TARGET")
-    instance._backwards_and_apply.assert_called_once_with(loss_return)
+    instance._forward.assert_called_once_with("TEST_INPUT", "TEST_TARGET", "TEST_META")
+    instance._backwards_and_apply.assert_called_once_with(1.0)
+    instance.model.model.zero_grad.assert_called_once()
 
 
 @pytest.mark.parametrize("outputs", (1, 2, 4))
@@ -65,21 +73,17 @@ def test_Trainer_forward(batch_size,  # pylint:disable=too-many-locals
     mock_predictions = [torch.from_numpy(np.random.random((batch_size, 16, 16, 3)))
                         for _ in range(outputs * 2)]
     instance.model.model.return_value = mock_predictions
-    instance.model.model.zero_grad = mocker.MagicMock()
-    instance.model.model.loss = [mocker.MagicMock(return_value=ret) for ret in loss_returns]
+    instance.loss_func = mocker.MagicMock()
 
-    inputs = torch.from_numpy(np.random.random((2, batch_size, 16, 16, 3)))
+    inputs = list(torch.from_numpy(np.random.random((2, batch_size, 16, 16, 3))))
     targets = [torch.from_numpy(np.random.random((2, batch_size, 16, 16, 3)))
                for _ in range(outputs)]
 
     # Call forwards
-    result = instance._forward(inputs, targets)
+    result = instance._forward(inputs, targets, BatchMeta())
 
     # Output comes from loss functions
     assert (np.allclose(e.numpy(), a.numpy()) for e, a in zip(result, loss_returns))
-
-    # Model was zero'd
-    instance.model.model.zero_grad.assert_called_once()
 
     # model forward pass called with inputs split
     train_call = instance.model.model

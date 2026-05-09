@@ -15,6 +15,8 @@ from dataclasses import dataclass
 import torch
 
 if T.TYPE_CHECKING:
+    from lib.training.data import BatchMeta
+    from lib.training.loss import LossCollator, BatchLoss
     from plugins.train.model._base import ModelBase
 
 logger = logging.getLogger(__name__)
@@ -83,14 +85,29 @@ class TrainerBase(abc.ABC):
         """Training configuration options"""
         self.sampler = self.get_sampler()
         """The data sampler that the data loader should use"""
+        self.loss_func: LossCollator
+        """The selected loss functions for the model"""
 
     def __repr__(self) -> str:
         """Pretty print for logging"""
         params = f"model={repr(self.model)}, config={repr(self.config)}"
         return f"{self.__class__.__name__}({params})"
 
+    def register_loss(self, loss: LossCollator) -> None:
+        """Registers the selected loss functions to the underlying model nn.module
+
+        Parameters
+        ----------
+        loss
+            The configured loss functions
+        """
+        logger.debug("[%s] Registering loss: %s", self.__class__.__name__, loss)
+        self.model.model.add_module("loss_func", loss)
+        self.loss_func = loss
+
     @abc.abstractmethod
-    def get_sampler(self) -> type[torch.utils.data.Sampler]:
+    def get_sampler(self) -> type[torch.utils.data.RandomSampler |
+                                  torch.utils.data.DistributedSampler]:
         """Override to set the sampler that the Torch DataLoader should use
 
         Returns
@@ -99,21 +116,23 @@ class TrainerBase(abc.ABC):
         """
 
     @abc.abstractmethod
-    def train_batch(self, inputs: torch.Tensor, targets: list[torch.Tensor]) -> torch.Tensor:
-        """Override to run a single forward and backwards pass through the model for a single
-        batch
+    def train_batch(self,
+                    inputs: list[torch.Tensor],
+                    targets: list[torch.Tensor],
+                    meta: BatchMeta) -> list[BatchLoss]:
+        """Override to run a single forward and backwards pass through the model for a single batch
 
         Parameters
         ----------
         inputs
-            The batch of input image tensors to the model in shape `(side, batch_size,
-            *dims)` with `side` 0 being input A and `side` 1 being input B
+            The batch of input image tensors to the model of length(num inputs)
         targets
-            The corresponding batch of target images for the model for each side's output(s). For
-            each model output an array should exist in the order of model outputs in the format `(
-            side, batch_size, *dims)` where `side` 0 is "A" and `side` 1 is "B"
+            List of len (num_outputs) of target images in shape (batch_size, num_inputs, height,
+            width, 3) at all model output sizes as float32 0.0 - 1.0 range
+        meta
+            The meta information for the batch
 
         Returns
         -------
-        The loss for each side of this batch in layout (A1, ..., An, B1, ..., Bn)
+        The loss for each input to the model in order (A, B, ...)
         """

@@ -18,7 +18,7 @@ from lib.keypress import KBHit
 from lib.logger import parse_class_init
 from lib.multithreading import MultiThread, FSThread
 from lib.training import Preview, PreviewBuffer, TriggerType
-from lib.training.data_set import get_label
+from lib.training.data import get_label
 from lib.training.train import Trainer
 from lib.utils import (get_folder, get_image_paths, get_module_objects, handle_deprecated_cli_opts,
                        FaceswapError)
@@ -403,14 +403,21 @@ class Train():
         ``True`` if an exit keypress has been detected otherwise ``False``
         """
         retval = False
-        if keypress.kbhit():
-            console_key = keypress.getch()
-            if console_key in ("\n", "\r"):
-                logger.debug("[Train] Exit requested")
+        try:
+            if keypress.kbhit():
+                console_key = keypress.getch()
+                if console_key in ("\n", "\r"):
+                    logger.debug("[Train] Exit requested")
+                    retval = True
+                if console_key in ("s", "S"):
+                    logger.info("Save requested")
+                    self._save_now = True
+        except ValueError as err:
+            if "I/O operation on closed file" in str(err):
+                logger.debug("[Train] Error encountered: %s", str(err))
                 retval = True
-            if console_key in ("s", "S"):
-                logger.info("Save requested")
-                self._save_now = True
+            else:
+                raise
         return retval
 
     def _process_gui_triggers(self) -> dict[T.Literal["mask", "refresh"], bool]:

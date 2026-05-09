@@ -5,10 +5,10 @@ import logging
 import typing as T
 import warnings
 
-from keras import ops
 import torch
 
-
+from lib.training.data import BatchMeta
+from lib.training.loss import BatchLoss
 from lib.utils import get_module_objects
 from .original import Trainer as OriginalTrainer
 
@@ -36,52 +36,39 @@ class WrappedModel(torch.nn.Module):
         logger.debug("Wrapped keras model: %s (%s)", model.name, self)
 
     def forward(self,
-                input_a: torch.Tensor,
-                input_b: torch.Tensor,
-                targets_a: torch.Tensor,
-                targets_b: torch.Tensor,
-                *targets: torch.Tensor) -> torch.Tensor:
+                inputs: list[torch.Tensor],
+                targets: list[torch.Tensor],
+                meta_dict: dict[str, list[torch.Tensor]]) -> list[dict]:
         """Run the forward pass per GPU
 
         Parameters
         ----------
-        input_a
-            The A batch of input images for 1 GPU
-        input_b
-            The B batch of input images for 1 GPU
-        targets_a
-            The A batch of target images for 1 GPU. If this is a multi-output model then this list
-            will be the target images per output for all items in the current batch, regardless of
-            GPU. If we have 1 output, this will be a Tensor for this GPUs current batch output
-        targets_b
-            The B batch of target images for 1 GPU. If this is a multi-output model then this list
-            will be the target images per output for all items in the current batch, regardless of
-            GPU. If we have 1 output, this will be a Tensor for this GPUs current batch output
+        inputs
+            The batch of input image tensors to the model of length(num inputs)
         targets
-            Used for multi-output models. Any additional outputs can be added here. They should be
-            added in A-B order
-
+            List of len (num_outputs) of target images in shape (batch_size, num_inputs, height,
+            width, 3) at all model output sizes as float32 0.0 - 1.0 range
+        meta_dict
+            The meta information for the batch in dictionary form
 
         Returns
         -------
         The loss outputs for each side of the model for 1 GPU
         """
-        predictions = self._keras_model((input_a, input_b), training=True)
-        self._keras_model.zero_grad()
+        meta = BatchMeta(**meta_dict)
+        predictions = self._keras_model(inputs, training=True)
+        num_sides = len(inputs)
+        num_outputs = len(predictions) // num_sides
+        losses = [
+            self._keras_model.loss_func(
+                [t[:, i] for t in targets],
+                predictions[i * num_outputs:i * num_outputs + num_outputs],
+                meta=meta[i])
+            for i in range(num_sides)
+            ]
 
-        if targets:  # Go from [A1, B1, A2, B2, A3, B3] to [A1, A2, A3, B1, B2, B3]
-            all_targets = [targets_a, targets_b, *targets]
-            assert len(all_targets) % 2 == 0
-            loss_targets = all_targets[0::2] + all_targets[1::2]
-        else:
-            loss_targets = [targets_a, targets_b]
-
-        losses = torch.stack([loss_fn(y_true, y_pred)
-                              for loss_fn, y_true, y_pred in zip(self._keras_model.loss,
-                                                                 loss_targets,
-                                                                 predictions)])
         logger.trace("Losses: %s", losses)  # type:ignore[attr-defined]
-        return losses
+        return [{k: v for k, v in x.__dict__.items() if v is not None} for x in losses]
 
 
 class Trainer(OriginalTrainer):
@@ -176,42 +163,55 @@ class Trainer(OriginalTrainer):
                     name, wrapped.device_ids)
         return wrapped
 
+    @classmethod
+    def _mean_loss(cls, value: torch.Tensor | list | dict) -> torch.Tensor | list | dict:
+        """Recursively collate the loss from multiple GPUs back to single scalars
+
+        Parameters
+        ----------
+        value
+            A loss value returned from the model as either a tensor, list or dict
+
+        Returns
+        -------
+        The mean value in the same format
+
+        Raises
+        ------
+        NotImplementedError
+            If the value is in an unexpected format
+        """
+        if isinstance(value, torch.Tensor):
+            return value.mean()
+        if isinstance(value, list):
+            return [cls._mean_loss(v) for v in value]
+        if isinstance(value, dict):
+            return {k: cls._mean_loss(v) for k, v in value.items()}
+        raise NotImplementedError(f"Unsupported type in loss structure: {type(value)}")
+
     def _forward(self,
-                 inputs: torch.Tensor,
-                 targets: list[torch.Tensor]) -> torch.Tensor:
+                 inputs: list[torch.Tensor],
+                 targets: list[torch.Tensor],
+                 meta: BatchMeta) -> list[BatchLoss]:
         """Perform the forward pass on the model
 
         Parameters
         ----------
         inputs
-            The batch of input image tensors to the model in shape `(side, batch_size,
-            *dims)` with `side` 0 being input A and `side` 1 being input B
+            The batch of input image tensors to the model of length(num inputs)
         targets
-            The corresponding batch of target images for the model for each side's output(s). For
-            each model output an array should exist in the order of model outputs in the format `(
-            side, batch_size, *dims)` with `side` 0 being input A and `side` 1 being input B
+            List of len (num_outputs) of target images in shape (batch_size, num_inputs, height,
+            width, 3) at all model output sizes as float32 0.0 - 1.0 range
+        meta
+            The meta information for the batch
 
         Returns
         -------
-        The loss for each side of this batch in layout (A1, ..., An, B1, ..., Bn)
+        The loss for each input to the model in order (A, B, ...)
         """
-        if self._is_multi_out is None:
-            self._is_multi_out = len(targets) > 1
-            logger.debug("Setting multi-out to: %s", self._is_multi_out)
-
-        if self._is_multi_out:
-            multi_targets = tuple(t[i] for t in targets[1:] for i in range(2))
-        else:
-            multi_targets = ()
-
-        loss: torch.Tensor = self._distributed_model(inputs[0],
-                                                     inputs[1],
-                                                     targets[0][0],
-                                                     targets[0][1],
-                                                     *multi_targets)
-        scaled = T.cast(torch.Tensor, ops.sum(ops.reshape(loss, (self._gpu_count, 2, -1)),
-                                              axis=0) / self._gpu_count)
-        return scaled.flatten()
+        loss_dicts = self._distributed_model(inputs, targets, meta.__dict__)
+        loss = [BatchLoss(**T.cast(dict, self._mean_loss(loss_dict))) for loss_dict in loss_dicts]
+        return loss
 
 
 __all__ = get_module_objects(__name__)

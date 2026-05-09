@@ -3,21 +3,14 @@
 
 from __future__ import annotations
 import logging
-import typing as T
 
 import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
-from keras import Loss
-from keras import ops
 
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
-
-if T.TYPE_CHECKING:
-    from collections.abc import Callable
-    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
@@ -42,19 +35,25 @@ class FocalFrequencyLoss(nn.Module):
         ``False``. Default: ``False``
     epsilon
         Small epsilon for safer weights scaling division. Default: `1e-6`
+    spatial_output
+        ``True`` to output the loss values spatially. ``False`` as scalar per item.
+        Default: ``True``
 
     References
     ----------
     https://arxiv.org/pdf/2012.12821.pdf
     https://github.com/EndlessSora/focal-frequency-loss
     """
+    _epsilon: torch.Tensor
+
     def __init__(self,
                  alpha: float = 1.0,
                  patch_factor: int = 1,
                  ave_spectrum: bool = False,
                  log_matrix: bool = False,
                  batch_matrix: bool = False,
-                 epsilon: float = 1e-6) -> None:
+                 epsilon: float = 1e-6,
+                 spatial_output: bool = True) -> None:
         logger.debug(parse_class_init(locals()))
         super().__init__()
         self._alpha = alpha
@@ -62,8 +61,8 @@ class FocalFrequencyLoss(nn.Module):
         self._ave_spectrum = ave_spectrum
         self._log_matrix = log_matrix
         self._batch_matrix = batch_matrix
-        self._epsilon = torch.Tensor([epsilon])
-        self._dims: tuple[int, int] = (0, 0)
+        self.register_buffer("_epsilon", torch.Tensor([epsilon]).float())
+        self._spatial = spatial_output
 
     def _get_patches(self, inputs: torch.Tensor) -> torch.Tensor:
         """Crop the incoming batch of images into patches as defined by :attr:`_patch_factor.
@@ -78,15 +77,18 @@ class FocalFrequencyLoss(nn.Module):
         The incoming batch converted into patches
         """
         patch_list = []
-        patch_rows = self._dims[0] // self._patch_factor
-        patch_cols = self._dims[1] // self._patch_factor
+        rows, cols = inputs.shape[2:4]
+        assert cols % self._patch_factor == 0 and rows % self._patch_factor == 0, (
+            "Patch factor must be a divisor of the image height and width")
+        patch_rows = rows // self._patch_factor
+        patch_cols = cols // self._patch_factor
         for i in range(self._patch_factor):
             for j in range(self._patch_factor):
                 row_from = i * patch_rows
                 row_to = (i + 1) * patch_rows
                 col_from = j * patch_cols
                 col_to = (j + 1) * patch_cols
-                patch_list.append(inputs[:, row_from: row_to, col_from:col_to, :])
+                patch_list.append(inputs[:, :, row_from: row_to, col_from:col_to])
 
         retval = torch.stack(patch_list, dim=1)
         return retval
@@ -135,8 +137,7 @@ class FocalFrequencyLoss(nn.Module):
         weights = weights / torch.maximum(scale, self._epsilon)
         return torch.clamp(weights, min=0.0, max=1.0)
 
-    @classmethod
-    def _calculate_loss(cls,
+    def _calculate_loss(self,
                         freq_true: torch.Tensor,
                         freq_pred: torch.Tensor,
                         weight_matrix: torch.Tensor) -> torch.Tensor:
@@ -158,7 +159,7 @@ class FocalFrequencyLoss(nn.Module):
 
         freq_distance = tmp[..., 0] + tmp[..., 1]
         loss = weight_matrix * freq_distance  # dynamic spectrum weighting (Hadamard product)
-        return torch.mean(loss, dim=(1, 2, 3, 4))
+        return torch.mean(loss, dim=(1, ) if self._spatial else (1, 2, 3, 4))
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """Call the Focal Frequency Loss Function.
@@ -174,18 +175,6 @@ class FocalFrequencyLoss(nn.Module):
         -------
         The final loss value for each item in the batch
         """
-        # TODO remove once channels first
-        y_true = y_true.permute(0, 3, 1, 2)
-        y_pred = y_pred.permute(0, 3, 1, 2)
-
-        if not all(self._dims):
-            rows, cols = y_true.shape[2:4]
-            assert rows is not None and cols is not None
-            assert cols % self._patch_factor == 0 and rows % self._patch_factor == 0, (
-                "Patch factor must be a divisor of the image height and width")
-            self._dims = (rows, cols)
-            self._epsilon = self._epsilon.to(y_pred.device)
-
         patches_true = self._get_patches(y_true)
         patches_pred = self._get_patches(y_pred)
 
@@ -221,12 +210,19 @@ class GeneralizedLoss(nn.Module):
     beta
         Scale factor used to adjust to the input scale (i.e. inputs of mean `1e-4` or `256`).
         Default: `1.0/255.0`
+    spatial_output
+        ``True`` to output the loss values spatially. ``False`` as scalar per item.
+        Default: ``True``
     """
-    def __init__(self, alpha: float = 1.0, beta: float = 1.0/255.0) -> None:
+    def __init__(self,
+                 alpha: float = 1.0,
+                 beta: float = 1.0 / 255.0,
+                 spatial_output: bool = True) -> None:
         logger.debug(parse_class_init(locals()))
         super().__init__()
         self._alpha = alpha
         self._beta = beta
+        self._spatial = spatial_output
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """Call the Generalized Loss Function
@@ -246,8 +242,9 @@ class GeneralizedLoss(nn.Module):
         second = (torch.pow(torch.pow(diff/self._beta, 2.) / abs(2. - self._alpha) + 1.,
                             (self._alpha / 2.)) - 1.)
         loss = (abs(2. - self._alpha)/self._alpha) * second
-        loss = torch.mean(loss, dim=(1, 2, 3)) * self._beta
-        return loss
+        if not self._spatial:
+            loss = torch.mean(loss, dim=(1, 2, 3))
+        return loss * self._beta
 
 
 class GradientLoss(nn.Module):
@@ -258,17 +255,25 @@ class GradientLoss(nn.Module):
     image and the difference is taken. When used as a loss, its minimization will result in
     predicted images approaching the same level of sharpness / blurriness as the ground truth.
 
+    Parameters
+    ----------
+    spatial_output
+        ``True`` to output the loss values spatially. ``False`` as scalar per item.
+        Default: ``True``
+
     References
     ----------
     TV+TV2 Regularization with Non-Convex Sparseness-Inducing Penalty for Image Restoration,
     Chengwu Lu & Hua Huang, 2014 - http://downloads.hindawi.com/journals/mpe/2014/790547.pdf
     """
-    def __init__(self) -> None:
+    def __init__(self,
+                 spatial_output: bool = True) -> None:
         logger.debug(parse_class_init(locals()))
         super().__init__()
         self.generalized_loss = GeneralizedLoss(alpha=1.9999)
         self._tv_weight = 1.0
         self._tv2_weight = 1.0
+        self._spatial = spatial_output
 
     @classmethod
     def _diff_x(cls, img: torch.Tensor) -> torch.Tensor:
@@ -331,20 +336,20 @@ class GradientLoss(nn.Module):
         top = img[:, 0:1, 1:2, :] + img[:, 1:2, 0:1, :]
         inner = img[:, :-2, 1:2, :] + img[:, 2:, 0:1, :]
         bottom = img[:, -2:-1, 1:2, :] + img[:, -1:, 0:1, :]
-        xy_left = torch.concatenate([top, inner, bottom], dim=1)
+        xy1_left = torch.concatenate([top, inner, bottom], dim=1)
         # Mid
         top = img[:, 0:1, 2:, :] + img[:, 1:2, :-2, :]
         mid = img[:, :-2, 2:, :] + img[:, 2:, :-2, :]
         bottom = img[:, -2:-1, 2:, :] + img[:, -1:, :-2, :]
-        xy_mid = torch.concatenate([top, mid, bottom], dim=1)
+        xy1_mid = torch.concatenate([top, mid, bottom], dim=1)
         # Right
         top = img[:, 0:1, -1:, :] + img[:, 1:2, -2:-1, :]
         inner = img[:, :-2, -1:, :] + img[:, 2:, -2:-1, :]
         bottom = img[:, -2:-1, -1:, :] + img[:, -1:, -2:-1, :]
-        xy_right = torch.concatenate([top, inner, bottom], dim=1)
+        xy1_right = torch.concatenate([top, inner, bottom], dim=1)
 
         xy_out1 = torch.concatenate([xy_left, xy_mid, xy_right], dim=2)
-        xy_out2 = torch.concatenate([xy_left, xy_mid, xy_right], dim=2)
+        xy_out2 = torch.concatenate([xy1_left, xy1_mid, xy1_right], dim=2)
         return (xy_out1 - xy_out2) * 0.25
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
@@ -374,6 +379,8 @@ class GradientLoss(nn.Module):
                                     self._diff_xy(y_pred)) * 2.)
         loss = loss / (self._tv_weight + self._tv2_weight)
         # TODO simplify to use MSE instead
+        if not self._spatial:
+            loss = loss.mean(dim=(1, 2, 3))
         return loss
 
 
@@ -394,6 +401,9 @@ class LaplacianPyramidLoss(nn.Module):
         The gaussian sigma. Default: 2.0
     device
         The device to place the variables onto. Default: `"cpu"`
+    spatial_output
+        ``True`` to output the loss values spatially. ``False`` as scalar per item.
+        Default: ``True``
 
     References
     ----------
@@ -406,11 +416,13 @@ class LaplacianPyramidLoss(nn.Module):
     def __init__(self,
                  max_levels: int = 5,
                  gaussian_size: int = 5,
-                 gaussian_sigma: float = 1.0) -> None:
+                 gaussian_sigma: float = 1.0,
+                 spatial_output: bool = True) -> None:
         logger.debug(parse_class_init(locals()))
         super().__init__()
         self._max_levels = max_levels
         self._gaussian_sigma = gaussian_sigma
+        self._spatial = spatial_output
         self.register_buffer("_weight",
                              torch.Tensor([np.power(2., -2 * idx)
                                            for idx in range(max_levels + 1)]))
@@ -494,21 +506,25 @@ class LaplacianPyramidLoss(nn.Module):
         -------
         The final loss value for each item in the batch
         """
-        # TODO remove once channels first
-        y_true = y_true.permute(0, 3, 1, 2)
-        y_pred = y_pred.permute(0, 3, 1, 2)
-
         pyramid_true = self._get_laplacian_pyramid(y_true)
         pyramid_pred = self._get_laplacian_pyramid(y_pred)
 
-        losses = torch.stack([F.l1_loss(o, t, reduction="none").mean(dim=(1, 2, 3))
-                              for o, t in zip(pyramid_true, pyramid_pred)]).T
-        losses *= self._weight
-        return losses.sum(dim=1)
+        losses = [F.l1_loss(o, t, reduction="none") for o, t in zip(pyramid_true, pyramid_pred)]
+        if self._spatial:
+            size = y_true.shape[-2:]
+            loss = torch.stack(
+                [x if x.shape[-2:] == size else (F.interpolate(x,
+                                                               size=size,
+                                                               mode="bilinear",
+                                                               align_corners=False))
+                 for x in losses]).swapaxes(0, 1) * self._weight[..., None, None, None]
+        else:
+            loss = torch.stack([x.mean(dim=(1, 2, 3)) for x in losses]).T * self._weight
+        return loss.sum(dim=1)
 
 
 class LInfNorm(nn.Module):
-    """Calculate the L-inf norm as a loss function. """
+    """Calculate the L-inf norm as a loss function."""
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """Call the L-inf norm loss function.
@@ -531,7 +547,18 @@ class LInfNorm(nn.Module):
 
 class LogCosh(nn.Module):
     """Logarithm of the hyperbolic cosine of the prediction error. Ported from Keras implementation
+
+    Parameters
+    ----------
+    spatial_output
+        ``True`` to output the loss values spatially. ``False`` as scalar per item.
+        Default: ``True``
     """
+    def __init__(self, spatial_output: bool = True) -> None:
+        logger.debug(parse_class_init(locals()))
+        super().__init__()
+        self._spatial = spatial_output
+
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.Tensor:
         """Call the LogCosh loss function.
 
@@ -549,140 +576,9 @@ class LogCosh(nn.Module):
         diff = y_true - y_pred
         loss: torch.Tensor = (diff + F.softplus(diff * -2.0) -  # pylint:disable=not-callable
                               np.log(2))
-        return loss.mean(dim=(1, 2, 3))
-
-
-class LossWrapper(Loss):
-    """A wrapper class for multiple keras losses to enable multiple masked weighted loss
-    functions on a single output.
-
-    Notes
-    -----
-    Whilst Keras does allow for applying multiple weighted loss functions, it does not allow
-    for an easy mechanism to add additional data (in our case masks) that are batch specific
-    but are not fed in to the model.
-
-    This wrapper receives this additional mask data for the batch stacked onto the end of the
-    color channels of the received :attr:`y_true` batch of images. These masks are then split
-    off the batch of images and applied to both the :attr:`y_true` and :attr:`y_pred` tensors
-    prior to feeding into the loss functions.
-
-    For example, for an image of shape (4, 128, 128, 3) 3 additional masks may be stacked onto
-    the end of y_true, meaning we receive an input of shape (4, 128, 128, 6). This wrapper then
-    splits off (4, 128, 128, 3:6) from the end of the tensor, leaving the original y_true of
-    shape (4, 128, 128, 3) ready for masking and feeding through the loss functions.
-    """
-    def __init__(self, name="LossWrapper", reduction="sum_over_batch_size") -> None:
-        logger.debug(parse_class_init(locals()))
-        super().__init__(name=name, reduction=reduction)
-        self._loss_functions: list[Loss | Callable] = []
-        self._loss_weights: list[float] = []
-        self._mask_channels: list[int] = []
-        logger.debug("Initialized: %s", self.__class__.__name__)
-
-    def add_loss(self,
-                 function: Callable | Loss,
-                 weight: float = 1.0,
-                 mask_channel: int = -1) -> None:
-        """Add the given loss function with the given weight to the loss function chain.
-
-        Parameters
-        ----------
-        function: :class:`keras.losses.Loss`
-            The loss function to add to the loss chain
-        weight: float, optional
-            The weighting to apply to the loss function. Default: `1.0`
-        mask_channel: int, optional
-            The channel in the `y_true` image that the mask exists in. Set to `-1` if there is no
-            mask for the given loss function. Default: `-1`
-        """
-        logger.debug("Adding loss: (function: %s, weight: %s, mask_channel: %s)",
-                     function, weight, mask_channel)
-        # Loss must be compiled inside LossContainer for keras to handle distributed strategies
-        self._loss_functions.append(function)
-        self._loss_weights.append(weight)
-        self._mask_channels.append(mask_channel)
-
-    def call(self, y_true: KerasTensor, y_pred: KerasTensor) -> KerasTensor:
-        """Call the sub loss functions for the loss wrapper.
-
-        Loss is returned as the weighted sum of the chosen losses.
-
-        If masks are being applied to the loss function inputs, then they should be included as
-        additional channels at the end of :attr:`y_true`, so that they can be split off and
-        applied to the actual inputs to the selected loss function(s).
-
-        Parameters
-        ----------
-        y_true: :class:`keras.KerasTensor`
-            The ground truth batch of images, with any required masks stacked on the end
-        y_pred: :class:`keras.KerasTensor`
-            The batch of model predictions
-
-        Returns
-        -------
-        :class:`keras.KerasTensor`
-            The final weighted loss
-        """
-        loss = 0.0
-        for func, weight, mask_channel in zip(self._loss_functions,
-                                              self._loss_weights,
-                                              self._mask_channels):
-            logger.trace("Processing loss function: "  # type:ignore[attr-defined]
-                         "(func: %s, weight: %s, mask_channel: %s)",
-                         func, weight, mask_channel)
-            n_true, n_pred = self._apply_mask(y_true, y_pred, mask_channel)
-            this_loss = func(n_true, n_pred) * weight
-            if ops.ndim(this_loss) > 1:
-                # TODO this can go when we remove Keras loss wrapper. For now all sub-functions
-                # return shape (BS, ) of mean loss per item. Torch built in losses let us either
-                # reduce to scalar or return the full output, so we have to reduce to item here.
-                # When everything is all torch this hacky workaround should be removable
-                this_loss = this_loss.flatten(start_dim=1).mean(dim=1)
-            loss += this_loss
-        return T.cast("KerasTensor", loss)
-
-    @classmethod
-    def _apply_mask(cls,
-                    y_true: KerasTensor,
-                    y_pred: KerasTensor,
-                    mask_channel: int,
-                    mask_prop: float = 1.0) -> tuple[KerasTensor, KerasTensor]:
-        """Apply the mask to the input y_true and y_pred. If a mask is not required then
-        return the unmasked inputs.
-
-        Parameters
-        ----------
-        y_true: :class:`keras.KerasTensor`
-            The ground truth value
-        y_pred: :class:`keras.KerasTensor`
-            The predicted value
-        mask_channel: int
-            The channel within y_true that the required mask resides in
-        mask_prop: float, optional
-            The amount of mask propagation. Default: `1.0`
-
-        Returns
-        -------
-        :class:`keras.KerasTensor`
-            The ground truth batch of images, with the required mask applied
-        :class:`keras.KerasTensor`
-            The predicted batch of images with the required mask applied
-        """
-        if mask_channel == -1:
-            logger.trace("No mask to apply")  # type:ignore[attr-defined]
-            return y_true[..., :3], y_pred[..., :3]
-
-        logger.trace("Applying mask from channel %s", mask_channel)  # type:ignore[attr-defined]
-
-        mask = ops.tile(ops.expand_dims(y_true[..., mask_channel], axis=-1), (1, 1, 1, 3))
-        mask_as_k_inv_prop = 1 - mask_prop
-        mask = (mask * mask_prop) + mask_as_k_inv_prop
-
-        m_true = y_true[..., :3] * mask
-        m_pred = y_pred[..., :3] * mask
-
-        return m_true, m_pred
+        if not self._spatial:
+            loss = loss.mean(dim=(1, 2, 3))
+        return loss
 
 
 __all__ = get_module_objects(__name__)

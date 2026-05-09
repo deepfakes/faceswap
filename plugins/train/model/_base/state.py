@@ -53,7 +53,7 @@ class State():  # pylint:disable=too-many-instance-attributes
         """float: The lowest average loss seen between save intervals. """
 
         self._config: dict[str, ConfigValueType] = {}
-        self._updateable_options: list[str] = []
+        self._updatable_options: list[str] = []
 
         self._load()
         self._session_id = self._new_session_id()
@@ -64,11 +64,6 @@ class State():  # pylint:disable=too-many-instance-attributes
     def filename(self) -> str:
         """ str: Full path to the state filename """
         return self._filename
-
-    @property
-    def loss_names(self) -> list[str]:
-        """ list: The loss names for the current session """
-        return self._sessions[self._session_id]["loss_names"]
 
     @property
     def current_session(self) -> dict:
@@ -135,11 +130,10 @@ class State():  # pylint:disable=too-many-instance-attributes
         logger.debug("Creating new session. id: %s", self._session_id)
         self._sessions[self._session_id] = {"timestamp": time.time(),
                                             "no_logs": no_logs,
-                                            "loss_names": [],
                                             "batchsize": 0,
                                             "iterations": 0,
                                             "config": {k: v for k, v in self._config.items()
-                                                       if k in self._updateable_options}}
+                                                       if k in self._updatable_options}}
 
     def update_session_config(self, key: str, value: T.Any) -> None:
         """ Update a configuration item of the currently loaded session.
@@ -155,19 +149,6 @@ class State():  # pylint:disable=too-many-instance-attributes
         assert isinstance(value, type(old_val))
         logger.debug("Updating configuration item '%s' from '%s' to '%s'", key, old_val, value)
         self.current_session["config"][key] = value
-
-    def add_session_loss_names(self, loss_names: list[str]) -> None:
-        """ Add the session loss names to the sessions dictionary.
-
-        The loss names are used for Tensorboard logging
-
-        Parameters
-        ----------
-        loss_names: list
-            The list of loss names for this session.
-        """
-        logger.debug("Adding session loss_names: %s", loss_names)
-        self._sessions[self._session_id]["loss_names"] = loss_names
 
     def add_session_batchsize(self, batch_size: int) -> None:
         """ Add the session batch size to the sessions dictionary.
@@ -382,7 +363,7 @@ class State():  # pylint:disable=too-many-instance-attributes
             old_val = "none" if old_val is None else old_val  # We used to allow NoneType. No more
 
             if not opt.fixed:
-                self._updateable_options.append(key)
+                self._updatable_options.append(key)
 
             if not opt.fixed and val != old_val:
                 self._config[key] = val
@@ -399,7 +380,7 @@ class State():  # pylint:disable=too-many-instance-attributes
         if legacy_update:
             self.save()
         logger.info("Using configuration saved in state file")
-        logger.debug("Updateable items: %s", self._updateable_options)
+        logger.debug("Updatable items: %s", self._updatable_options)
 
     def _generate_config(self) -> None:
         """ Generate an initial state config based on the currently selected user config """
@@ -407,10 +388,10 @@ class State():  # pylint:disable=too-many-instance-attributes
         for key, val in options.items():
             self._config[key] = val.value
             if not val.fixed:
-                self._updateable_options.append(key)
+                self._updatable_options.append(key)
 
         logger.debug("Generated initial state config for '%s': %s", self._name, self._config)
-        logger.debug("Updateable items: %s", self._updateable_options)
+        logger.debug("Updatable items: %s", self._updatable_options)
 
     def _load(self) -> None:
         """ Load a state file and set the serialized values to the class instance.

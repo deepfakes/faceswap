@@ -18,6 +18,7 @@ from lib.utils import get_module_objects
 from plugins.train import train_config as cfg
 
 if T.TYPE_CHECKING:
+    import torch
     from keras import optimizers
     from . import train
 
@@ -123,11 +124,12 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
                      leave=False)
         for idx in p_bar:
             loss = self._trainer.train_one_batch()
+            total_loss = T.cast("torch.Tensor", sum(x.total for x in loss)).item()
 
-            if any(np.isnan(x) for x in loss):
+            if np.isnan(total_loss):
                 logger.warning("NaN detected! Exiting early")
                 break
-            self._on_batch_end(idx, loss[0])
+            self._on_batch_end(idx, total_loss)
             self._update_description(p_bar)
 
     def _rebuild_optimizer(self, optimizer: optimizers.Optimizer) -> optimizers.Optimizer:

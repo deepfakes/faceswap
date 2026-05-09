@@ -2,7 +2,6 @@
 """ Pytest unit tests for :mod:`lib.gui.stats.event_reader` """
 # pylint:disable=protected-access
 from __future__ import annotations
-import json
 import os
 import typing as T
 
@@ -633,7 +632,6 @@ class Test_EventParser:  # pylint:disable=invalid-name
         monkeypatch.setattr("lib.utils._FS_BACKEND", "cpu")
 
         event_parse = event_parser_instance
-        event_parse._parse_outputs = T.cast(MagicMock, mocker.MagicMock())  # type:ignore
         event_parse._process_event = T.cast(MagicMock, mocker.MagicMock())  # type:ignore
         event_parse._cache.cache_data = T.cast(MagicMock, mocker.MagicMock())  # type:ignore
 
@@ -642,10 +640,8 @@ class Test_EventParser:  # pylint:disable=invalid-name
                             "_iterator",
                             iter([self._create_example_event(0, 1., time())]))
         event_parse.cache_events(1)
-        assert event_parse._parse_outputs.called
         assert not event_parse._process_event.called
         assert event_parse._cache.cache_data.called
-        event_parse._parse_outputs.reset_mock()
         event_parse._process_event.reset_mock()
         event_parse._cache.cache_data.reset_mock()
 
@@ -654,10 +650,8 @@ class Test_EventParser:  # pylint:disable=invalid-name
                             "_iterator",
                             iter([self._create_example_event(1, 1., time())]))
         event_parse.cache_events(1)
-        assert not event_parse._parse_outputs.called
         assert event_parse._process_event.called
         assert event_parse._cache.cache_data.called
-        event_parse._parse_outputs.reset_mock()
         event_parse._process_event.reset_mock()
         event_parse._cache.cache_data.reset_mock()
 
@@ -665,66 +659,10 @@ class Test_EventParser:  # pylint:disable=invalid-name
         monkeypatch.setattr(event_parse,
                             "_iterator",
                             iter([event_pb2.Event(step=1).SerializeToString()]))
-        assert not event_parse._parse_outputs.called
         assert not event_parse._process_event.called
         assert not event_parse._cache.cache_data.called
-        event_parse._parse_outputs.reset_mock()
         event_parse._process_event.reset_mock()
         event_parse._cache.cache_data.reset_mock()
-
-    def test__parse_outputs(self,
-                            event_parser_instance: _EventParser,
-                            mocker: pytest_mock.MockerFixture) -> None:
-        """ Test _parse_outputs works correctly
-
-        Parameters
-        ----------
-        event_parser_instance: :class:`lib.gui.analysis.event_reader._EventParser`
-            The class instance to test
-        mocker: :class:`pytest_mock.MockerFixture`
-            Mocker for event object
-        """
-        event_parse = event_parser_instance
-        model = {"config": {"layers": [{"name": "decoder_a",
-                                        "config": {"output_layers": [["face_out_a", 0, 0]]}},
-                                       {"name": "decoder_b",
-                                        "config": {"output_layers": [["face_out_b", 0, 0]]}}],
-                            "output_layers": [["decoder_a", 1, 0], ["decoder_b", 1, 0]]}}
-        data = json.dumps(model).encode("utf-8")
-
-        event = mocker.MagicMock()
-        event.summary.value.__getitem__ = lambda self, x: event
-        event.tensor.string_val.__getitem__ = lambda self, x: data
-
-        assert not event_parse._loss_labels
-        event_parse._parse_outputs(event)
-        assert event_parse._loss_labels == ["face_out_a", "face_out_b"]
-
-    def test__get_outputs(self, event_parser_instance: _EventParser) -> None:
-        """ Test _get_outputs works correctly
-
-        Parameters
-        ----------
-        event_parser_instance: :class:`lib.gui.analysis.event_reader._EventParser`
-            The class instance to test
-        """
-        outputs = [["decoder_a", 1, 0], ["decoder_b", 1, 0]]
-        model_config = {"output_layers": outputs}
-
-        expected = np.array([[out] for out in outputs])
-        actual = event_parser_instance._get_outputs(model_config, is_sub_model=False)
-        assert isinstance(actual, np.ndarray)
-        assert actual.shape == (2, 1, 3)
-        np.testing.assert_equal(expected, actual)
-
-        outputs = [["encoder", 1, 0]]
-        model_config = {"output_layers": outputs}
-
-        expected = np.array([outputs])
-        actual = event_parser_instance._get_outputs(model_config, is_sub_model=True)
-        assert isinstance(actual, np.ndarray)
-        assert actual.shape == (1, 1, 3)
-        np.testing.assert_equal(expected, actual)
 
     def test__process_event(self, event_parser_instance: _EventParser) -> None:
         """ Test _process_event works correctly
