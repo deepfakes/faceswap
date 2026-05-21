@@ -68,7 +68,7 @@ class UNetDFL(FacePlugin):
         -------
         The predicted masks from the plugin
         """
-        return self.from_torch(batch.transpose(0, 3, 1, 2)).transpose(0, 2, 3, 1)
+        return self.from_torch(batch.transpose(0, 3, 1, 2))[:, 0]
 
 
 class ConvBlock(nn.Module):
