@@ -170,7 +170,7 @@ class PNet(nn.Module):
     Parameters
     ----------
     weights_path
-        The path to the keras model file
+        The path to the torch model file
     """
     def __init__(self, weights_path: str) -> None:
         super().__init__()
@@ -217,7 +217,7 @@ class PNetRunner():
     Parameters
     ----------
     weights_path
-        The path to the keras model file
+        The path to the torch model file
     device
         The device to use for model inference
     input_size
@@ -419,7 +419,7 @@ class RNetRunner():
     Parameters
     ----------
     weights_path
-        The path to the keras model file
+        The path to the torch model file
     device
         The device to run inference on
     input_size
@@ -575,7 +575,7 @@ class ONetRunner():
     Parameters
     ----------
     weights_path
-        The path to the keras model file
+        The path to the torch model file
     device
         The device to run inference on
     input_size

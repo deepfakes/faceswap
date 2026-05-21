@@ -1,29 +1,28 @@
-""" Auto clipper for clipping gradients. """
+"""Auto clipper for clipping gradients."""
 from __future__ import annotations
 
 import logging
-import typing as T
+import math
+from collections import deque
 
 import numpy as np
 import torch
+from torch import nn
 
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
-
-if T.TYPE_CHECKING:
-    from keras import KerasTensor
 
 logger = logging.getLogger(__name__)
 
 
 class AutoClipper():
-    """ AutoClip: Adaptive Gradient Clipping for Source Separation Networks
+    """AutoClip: Adaptive Gradient Clipping for Source Separation Networks
 
     Parameters
     ----------
-    clip_percentile: int
+    clip_percentile
         The percentile to clip the gradients at
-    history_size: int, optional
+    history_size
         The number of iterations of data to use to calculate the norm Default: ``10000``
 
     References
@@ -33,32 +32,32 @@ class AutoClipper():
     """
     def __init__(self, clip_percentile: int, history_size: int = 10000) -> None:
         logger.debug(parse_class_init(locals()))
-
         self._clip_percentile = clip_percentile
-        self._history_size = history_size
-        self._grad_history: list[float] = []
+        self._grad_history: deque[float] = deque(maxlen=history_size)
 
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def __call__(self, gradients: list[KerasTensor]) -> list[KerasTensor]:
-        """ Call the AutoClip function.
+    def __call__(self, parameters: list[nn.Parameter], *args) -> None:
+        """Call the AutoClip function.
 
         Parameters
         ----------
-        gradients: list[:class:`keras.KerasTensor`]
-            The list of gradient tensors for the optimizer
-
-        Returns
-        ----------
-        list[:class:`keras.KerasTensor`]
-            The autoclipped gradients
+        parameters
+            The parameters to clip
+        args
+            Unused but for compatibility
         """
-        self._grad_history.append(sum(g.data.norm(2).item() ** 2
-                                      for g in gradients if g is not None) ** (1. / 2))
-        self._grad_history = self._grad_history[-self._history_size:]
-        clip_value = np.percentile(self._grad_history, self._clip_percentile)
-        torch.nn.utils.clip_grad_norm_(gradients, T.cast(float, clip_value))
-        return gradients
+        with torch.no_grad():
+            norms = [p.grad.norm(2).item() for p in parameters if p.grad is not None]
+
+        if not norms:
+            return
+
+        global_norm = sum(n ** 2 for n in norms) ** 0.5
+        if not math.isfinite(global_norm):
+            return
+
+        self._grad_history.append(global_norm)
+        clip_value = float(np.percentile(self._grad_history, self._clip_percentile))
+        nn.utils.clip_grad_norm_(parameters, clip_value)
 
 
 __all__ = get_module_objects(__name__)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Default configurations for models """
+"""Default configurations for models"""
 
 import gettext
 import logging
@@ -23,10 +23,10 @@ _ADDITIONAL_INFO = _("\nNB: Unless specifically stated, values changed here will
 
 
 class _Config(FaceswapConfig):
-    """ Config File for Models """
+    """Config File for Models"""
     # pylint:disable=too-many-statements
     def set_defaults(self, helptext="") -> None:
-        """ Set the default values for config """
+        """Set the default values for config"""
         super().set_defaults(helptext=_("Options that apply to all models") + _ADDITIONAL_INFO)
         self._defaults_from_plugin(os.path.dirname(__file__))
         for section, opts in trainer_config.get_defaults().items():
@@ -304,7 +304,7 @@ _NON_PRIMARY_LOSS = ["flip", "lpips_alex", "lpips_squeeze", "lpips_vgg16", "none
 
 @dataclass
 class Loss(GlobalSection):
-    """ global.loss configuration section
+    """global.loss configuration section
     Loss Documentation
     MAE https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine-learners-should-know-4fb140e9d4b0
     MSE https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine-learners-should-know-4fb140e9d4b0
@@ -557,7 +557,7 @@ class Loss(GlobalSection):
 
 @dataclass
 class Optimizer(GlobalSection):
-    """ global.optimizer configuration section """
+    """global.optimizer configuration section"""
     helptext = (_("Optimizer configuration options\n"
                   "The optimizer applies the output of the loss function to the model.\n")
                 + _ADDITIONAL_INFO)
@@ -724,37 +724,6 @@ class Optimizer(GlobalSection):
         min_max=(1, 100),
         rounding=1,
         fixed=False)
-    use_ema = ConfigItem(
-        datatype=bool,
-        default=False,
-        group=_("exponential moving average"),
-        info=_(
-            "Enable exponential moving average (EMA). EMA consists of computing an "
-            "exponential moving average of the weights of the model (as the weight values "
-            "change after each training batch), and periodically overwriting the weights "
-            "with their moving average"),
-        fixed=True)
-    ema_momentum = ConfigItem(
-        datatype=float,
-        default=0.99,
-        group=_("exponential moving average"),
-        info=_(
-            "Only used if use_ema is enabled. This is the momentum to use when computing "
-            "the EMA of the model's weights: new_average = ema_momentum * old_average + "
-            "(1 - ema_momentum) * current_variable_value."),
-        min_max=(0.0, 1.0),
-        rounding=4,
-        fixed=True)
-    ema_frequency = ConfigItem(
-        datatype=int,
-        default=100,
-        group=_("exponential moving average"),
-        info=_(
-            "Only used if use_ema is enabled. Set the number of iterations, to overwrite "
-            "the model variable by its moving average. "),
-        min_max=(10, 10000),
-        rounding=10,
-        fixed=True)
     ada_beta_1 = ConfigItem(
         datatype=float,
         default=0.9,
@@ -793,11 +762,11 @@ _IS_LOADED: bool = False
 
 
 def load_config(config_file: str | None = None) -> None:
-    """ Load the Train configuration .ini file
+    """Load the Train configuration .ini file
 
     Parameters
     ----------
-    config_file : str | None, optional
+    config_file
         Path to a custom .ini configuration file to load. Default: ``None`` (use default
         configuration file)
     """

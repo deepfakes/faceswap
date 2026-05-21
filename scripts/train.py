@@ -315,6 +315,7 @@ class Train():
                              snapshot_interval=self._args.snapshot_interval)
         retval = Trainer(PluginLoader.get_trainer(trainer)(model, config),
                          self._args.preview or self._args.write_image or self._args.redirect_gui,
+                         warmup_steps=self._args.warmup,
                          timelapse_folders=[self._args.timelapse_input_a,
                                             self._args.timelapse_input_b],
                          timelapse_output=self._args.timelapse_output)

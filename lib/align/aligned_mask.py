@@ -466,7 +466,7 @@ class LandmarksMask():
                  blur_kernel: int = 0,
                  blur_type: T.Literal["gaussian", "normalized"] | None = "gaussian",
                  blur_passes: int = 1) -> None:
-        logger.debug(parse_class_init(locals()))
+        logger.trace(parse_class_init(locals()))  # type:ignore[attr-defined]
         self._area = area
         self._landmark_type = landmark_type
         self._landmarks = landmarks

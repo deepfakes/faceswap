@@ -14,7 +14,7 @@ from plugins.train.trainer import base as mod_base
 
 class DummyLoss:  # pylint:disable=too-few-public-methods
     """Dummy loss return"""
-    total = 1.0
+    total = np.random.rand()
 
 
 @pytest.fixture
@@ -52,12 +52,11 @@ def test_Trainer_train_batch(_trainer_mocked, mocker):
     instance._backwards_and_apply = mocker.MagicMock()
     instance.model.model.zero_grad = mocker.MagicMock()
 
-    ret_val = instance.train_batch("TEST_INPUT", "TEST_TARGET", "TEST_META")
+    ret_val = instance.train_batch("TEST_INPUT", "TEST_TARGET", "TEST_OPTIMIZER", "TEST_META")
 
     assert ret_val == loss_return
     instance._forward.assert_called_once_with("TEST_INPUT", "TEST_TARGET", "TEST_META")
-    instance._backwards_and_apply.assert_called_once_with(1.0)
-    instance.model.model.zero_grad.assert_called_once()
+    instance._backwards_and_apply.assert_called_once_with(loss_return, "TEST_OPTIMIZER")
 
 
 @pytest.mark.parametrize("outputs", (1, 2, 4))
@@ -114,19 +113,9 @@ def test_Trainer_backwards_and_apply(_trainer_mocked, mocker):
     """ Test that original trainer _backwards_and_apply calls the correct model methods """
     instance = _trainer_mocked()
 
-    mock_loss = mocker.MagicMock()
-    instance.model.model.optimizer.scale_loss = mocker.MagicMock(return_value=mock_loss)
-    instance.model.model.optimizer.app = mocker.MagicMock(return_value=mock_loss)
+    mock_optimizer = mocker.MagicMock()
+    all_loss = [DummyLoss]
+    instance._backwards_and_apply(all_loss, mock_optimizer)
 
-    all_loss = np.random.rand()
-    instance._backwards_and_apply(all_loss)
-
-    scale_mock = instance.model.model.optimizer.scale_loss
-    scale_mock.assert_called_once()
-    assert not scale_mock.call_args[1]
-    assert len(scale_mock.call_args[0]) == 1
-    assert np.isclose(all_loss, scale_mock.call_args[0][0].cpu().numpy())
-
-    mock_loss.backward.assert_called_once()
-
-    instance.model.model.optimizer.apply.assert_called_once()
+    mock_optimizer.backward.assert_called_once_with(all_loss[0].total)
+    mock_optimizer.step.assert_called_once()
