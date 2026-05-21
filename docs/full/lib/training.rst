@@ -21,6 +21,11 @@ The training Package handles libraries to assist with training a model
    :no-inheritance-diagram:
 
 |
+.. automodapi:: lib.training.optimizer
+   :include-all-objects:
+   :no-inheritance-diagram:
+
+|
 .. automodapi:: lib.training.preview
    :include-all-objects:
    :no-inheritance-diagram:

@@ -1,5 +1,5 @@
 #! /usr/env/bin/python3
-"""Run the training loop for a training plugin """
+"""Run the training loop for a training plugin"""
 from __future__ import annotations
 
 import logging
@@ -16,7 +16,6 @@ from torch.cuda import OutOfMemoryError
 
 from lib.logger import format_array, parse_class_init
 from lib.torch_utils import get_device
-from lib.training import LearningRateFinder, LearningRateWarmup
 from lib.training.preview import Samples
 from lib.training.data import get_label, PreviewLoader, TrainLoader
 from lib.training.tensorboard import TorchTensorBoard
@@ -25,6 +24,7 @@ from plugins.train import train_config as mod_cfg
 from plugins.train.trainer import trainer_config as trn_cfg
 
 from .loss import LossCollator
+from .optimizer import Optimizer
 
 if T.TYPE_CHECKING:
     import numpy.typing as npt
@@ -53,6 +53,8 @@ class Trainer:  # pylint:disable=too-many-instance-attributes
         The plugin that will be processing each batch
     preview
         ``True`` to generate previews
+    warmup_steps
+        The number of steps to warmup the learning rate for. Default: 0
     timelapse_folders
         The input folders to create timelapse images from. Default: ``None`` (no timelapse)
     timelapse_output
@@ -62,6 +64,7 @@ class Trainer:  # pylint:disable=too-many-instance-attributes
     def __init__(self,
                  plugin: TrainerBase,
                  preview: bool,
+                 warmup_steps: int = 0,
                  timelapse_folders: list[str] | None = None,
                  timelapse_output: str = "") -> None:
         logger.debug(parse_class_init(locals()))
@@ -74,19 +77,23 @@ class Trainer:  # pylint:disable=too-many-instance-attributes
         self._model = plugin.model
         self._out_size = max(x[1] for x in self._model.output_shapes if x[-1] != 1)
         self._configure_model(plugin)
+        self._optimizer = Optimizer(self._model,
+                                    mod_cfg.Optimizer,
+                                    mixed_precision=mod_cfg.mixed_precision(),
+                                    warmup_steps=warmup_steps)
+        self._optimizer.to(self._device)
 
         self._train_loader = self._get_train_loader()
-        self._preview_loader = self._get_preview_loader()
-        self._timelapse_loader = self._get_timelapse_loader()
 
         self._exit_early = self._handle_lr_finder()
         if self._exit_early:
             logger.debug("[Trainer] Exiting from LR Finder")
             return
 
-        self._warmup = self._get_warmup()
-        self._model.state.add_session_batchsize(plugin.batch_size)
+        self._preview_loader = self._get_preview_loader()
+        self._timelapse_loader = self._get_timelapse_loader()
 
+        self._model.state.add_session_batchsize(plugin.batch_size)
         self._tensorboard = self._set_tensorboard()
         self._samples = Samples(self._model.coverage_ratio,
                                 mod_cfg.Loss.learn_mask() or mod_cfg.Loss.penalized_mask_loss(),
@@ -227,27 +234,25 @@ class Trainer:  # pylint:disable=too-many-instance-attributes
             learning_rate = self._model.state.lr_finder
             logger.info("Setting learning rate from Learning Rate Finder to %s",
                         f"{learning_rate:.1e}")
-            self._model.model.optimizer.learning_rate.assign(learning_rate)
+            self._optimizer.set_lr(learning_rate)
             self._model.state.update_session_config("learning_rate", learning_rate)
             return False
 
         if self._model.state.iterations == 0 and self._model.state.session_id == 1:
-            lrf = LearningRateFinder(self)
-            success = lrf.find()
+            success = self._optimizer.find_learning_rate(
+                self,
+                mod_cfg.lr_finder_iterations(),
+                1e-10,
+                1e-1,
+                T.cast(T.Literal["default", "aggressive", "extreme"],
+                       mod_cfg.lr_finder_strength()),
+                T.cast(T.Literal["set", "graph_and_set", "graph_and_exit"],
+                       mod_cfg.lr_finder_mode())
+                )
             return mod_cfg.lr_finder_mode() == "graph_and_exit" or not success
 
         logger.debug("[Trainer] No learning rate finder rate. Not setting")
         return False
-
-    def _get_warmup(self) -> LearningRateWarmup:
-        """Obtain the learning rate warmup instance
-
-        Returns
-        -------
-        The Learning Rate Warmup object
-        """
-        target_lr = float(self._model.model.optimizer.learning_rate.value.cpu().numpy())
-        return LearningRateWarmup(self._model.model, target_lr, self._model.warmup_steps)
 
     def _set_tensorboard(self) -> TorchTensorBoard | None:
         """Set up Tensorboard callback for logging loss.
@@ -290,6 +295,7 @@ class Trainer:  # pylint:disable=too-many-instance-attributes
             inputs, targets, meta = next(self._train_loader)
             loss = self._plugin.train_batch([i.to(self._device) for i in inputs],
                                             [t.to(self._device) for t in targets],
+                                            self._optimizer,
                                             meta.to(self._device))
             retval = [x.to_cpu() for x in loss]
         except OutOfMemoryError as err:
@@ -527,7 +533,6 @@ class Trainer:  # pylint:disable=too-many-instance-attributes
         do_snapshot = (self._plugin.config.snapshot_interval != 0 and
                        self._model.iterations - 1 >= self._plugin.config.snapshot_interval and
                        (self._model.iterations - 1) % self._plugin.config.snapshot_interval == 0)
-        self._warmup()
         loss = self.train_one_batch()
         self._log_tensorboard(loss)
         total_loss = self._collate_and_store_loss(loss)
@@ -555,7 +560,7 @@ class Trainer:  # pylint:disable=too-many-instance-attributes
         is_exit
             ``True`` if save has been called on model exit. Default: ``False``
         """
-        self._model.io.save(is_exit=is_exit)
+        self._model.io.save(self._optimizer, is_exit=is_exit)
         assert self._tensorboard is not None
         self._tensorboard.on_save()
         if is_exit:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Custom Optimizers for Torch/keras """
+"""Legacy keras Optimizers for weight migration"""
 from __future__ import annotations
 import inspect
 import logging
@@ -12,13 +12,14 @@ from lib.logger import parse_class_init
 from lib.utils import get_module_objects
 
 if T.TYPE_CHECKING:
-    from keras import KerasTensor, Variable
+    from torch import Tensor
+    from keras import Variable
 
 logger = logging.getLogger(__name__)
 
 
 class AdaBelief(Optimizer):  # pylint:disable=too-many-instance-attributes,too-many-ancestors
-    """ Implementation of the AdaBelief Optimizer
+    """Implementation of the AdaBelief Optimizer
 
     Inherits from: keras.optimizers.Optimizer.
 
@@ -32,30 +33,30 @@ class AdaBelief(Optimizer):  # pylint:disable=too-many-instance-attributes,too-m
 
     Parameters
     ----------
-    learning_rate: `Tensor`, float or :class: `keras.optimizers.schedules.LearningRateSchedule`
+    learning_rate
         The learning rate.
-    beta_1: float
+    beta_1
         The exponential decay rate for the 1st moment estimates.
-    beta_2: float
+    beta_2
         The exponential decay rate for the 2nd moment estimates.
-    epsilon: float
+    epsilon
         A small constant for numerical stability.
-    amsgrad: bool
+    amsgrad
         Whether to apply AMSGrad variant of this algorithm from the paper "On the Convergence
         of Adam and beyond".
-    rectify: bool
+    rectify
         Whether to enable rectification as in RectifiedAdam
-    sma_threshold. float
+    sma_threshold
         The threshold for simple mean average.
-    total_steps: int
+    total_steps
         Total number of training steps. Enable warmup by setting a positive value.
-    warmup_proportion: float
+    warmup_proportion
         The proportion of increasing steps.
-    min_lr: float
+    min_lr
         Minimum learning rate after warmup.
-    name: str, optional
+    name
         Name for the operations created when applying gradients. Default: ``"AdaBeliefOptimizer"``.
-    **kwargs: dict
+    **kwargs
         Standard Keras Optimizer keyword arguments. Allowed to be (`weight_decay`, `clipnorm`,
         `clipvalue`, `global_clipnorm`, `use_ema`, `ema_momentum`, `ema_overwrite_frequency`,
         `loss_scale_factor`, `gradient_accumulation_steps`)
@@ -90,7 +91,7 @@ class AdaBelief(Optimizer):  # pylint:disable=too-many-instance-attributes,too-m
 
     References
     ----------
-    Juntang Zhuang et al. - AdaBelief Optimizer: Adapting stepsizes by the belief in observed
+    Juntang Zhuang et al. - AdaBelief Optimizer: Adapting step sizes by the belief in observed
     gradients - https://arxiv.org/abs/2010.07468.
 
     Original implementation - https://github.com/juntang-zhuang/Adabelief-Optimizer
@@ -148,13 +149,9 @@ class AdaBelief(Optimizer):  # pylint:disable=too-many-instance-attributes,too-m
         self.amsgrad = amsgrad
         self.rectify = rectify
         self.sma_threshold = sma_threshold
-        # TODO change the following 2 to "warm_up_steps"
-        # TODO Make learning rate warm up a global option
-        # Or these params can be calculated from a user "warm_up_steps" parameter
         self.total_steps = total_steps
         self.warmup_proportion = warmup_proportion
         self.min_learning_rate = min_learning_rate
-        logger.debug("Initialized %s", self.__class__.__name__)
 
         self._momentums: list[Variable] = []
         self._velocities: list[Variable] = []
@@ -168,7 +165,7 @@ class AdaBelief(Optimizer):  # pylint:disable=too-many-instance-attributes,too-m
 
         Parameters
         ----------
-        variables: list[:class:`keras.Variable`]
+        variables
             list of model variables to build AdaBelief variables on.
         """
         if self.built:
@@ -187,20 +184,19 @@ class AdaBelief(Optimizer):  # pylint:disable=too-many-instance-attributes,too-m
         logger.debug("Built AdaBelief. momentums: %s, velocities: %s, velocity_hats: %s",
                      len(self._momentums), len(self._velocities), len(self._velocity_hats))
 
-    def _maybe_warmup(self, learning_rate: KerasTensor, local_step: KerasTensor) -> KerasTensor:
-        """ Do learning rate warm up if requested
+    def _maybe_warmup(self, learning_rate: Tensor, local_step: Tensor) -> Tensor:
+        """Do learning rate warm up if requested
 
         Parameters
         ----------
-        learning_rate: :class:`keras.KerasTensor`
+        learning_rate
             The learning rate
-        local_step: :class:`keras.KerasTensor`
+        local_step
             The current training step
 
         Returns
         -------
-        :class:`keras.KerasTensor`
-            Either the original learning rate or adjusted learning rate if warmup is requested
+        Either the original learning rate or adjusted learning rate if warmup is requested
         """
         if self.total_steps <= 0:
             return learning_rate
@@ -210,74 +206,78 @@ class AdaBelief(Optimizer):  # pylint:disable=too-many-instance-attributes,too-m
         min_lr = ops.cast(self.min_learning_rate, learning_rate.dtype)
         decay_steps = ops.maximum(total_steps - warmup_steps, 1)
         decay_rate = ops.divide(min_lr - learning_rate, decay_steps)
-        return ops.where(local_step <= warmup_steps,
-                         ops.multiply(learning_rate, (ops.divide(local_step, warmup_steps))),
-                         ops.multiply(learning_rate + decay_rate,
-                                      ops.minimum(local_step - warmup_steps, decay_steps)))
+        return T.cast("Tensor",
+                      ops.where(local_step <= warmup_steps,
+                                ops.multiply(learning_rate,
+                                             (ops.divide(local_step, warmup_steps))),
+                                ops.multiply(learning_rate + decay_rate,
+                                             ops.minimum(local_step - warmup_steps, decay_steps))))
 
     def _maybe_rectify(self,
-                       momentum: KerasTensor,
-                       velocity: KerasTensor,
-                       local_step: KerasTensor,
-                       beta_2_power: KerasTensor) -> KerasTensor:
-        """ Apply rectification, if requested
+                       momentum: Tensor,
+                       velocity: Tensor,
+                       local_step: Tensor,
+                       beta_2_power: Tensor) -> Tensor:
+        """Apply rectification, if requested
 
         Parameters
         ----------
-        momentum: :class:`keras.KerasTensor`
+        momentum
             The momentum update
-        velocity: :class:`keras.KerasTensor`
+        velocity
             The velocity update
-        local_step: :class:`keras.KerasTensor`
+        local_step
             The current training step
         beta_2_power
             Adjusted exponential decay rate for the 2nd moment estimates.
 
         Returns
         -------
-        :class:`keras.KerasTensor`
-            The standard or rectified update (if rectification enabled)
+        The standard or rectified update (if rectification enabled)
         """
         if not self.rectify:
-            return ops.divide(momentum, ops.add(velocity, self.epsilon))
+            return T.cast("Tensor", ops.divide(momentum, ops.add(velocity, self.epsilon)))
 
         sma_inf = 2 / (1 - self.beta_2) - 1
         sma_t = sma_inf - 2 * local_step * beta_2_power / (1 - beta_2_power)
         rect = ops.sqrt((sma_t - 4) / (sma_inf - 4) *
                         (sma_t - 2) / (sma_inf - 2) *
                         sma_inf / sma_t)
-        return ops.where(sma_t >= self.sma_threshold,
-                         ops.divide(
-                            ops.multiply(rect, momentum),
-                            (ops.add(velocity, self.epsilon))),
-                         momentum)
+        return T.cast("Tensor",
+                      ops.where(sma_t >= self.sma_threshold,
+                                ops.divide(ops.multiply(rect, momentum),
+                                           (ops.add(velocity, self.epsilon))),
+                                momentum))
 
     def update_step(self,
-                    gradient: KerasTensor,
+                    gradient: Tensor,
                     variable: Variable,
-                    learning_rate: Variable) -> None:
+                    learning_rate: Tensor) -> None:
         """Update step given gradient and the associated model variable for AdaBelief.
 
         Parameters
         ----------
-        gradient :class:`keras.KerasTensor`
+        gradient
             The gradient to update
-        variable: :class:`keras.Variable`
+        variable
             The variable to update
-        learning_rate: :class:`keras.Variable`
+        learning_rate
             The learning rate
         """
-        local_step = ops.cast(self.iterations + 1, variable.dtype)
-        learning_rate = self._maybe_warmup(ops.cast(learning_rate, variable.dtype), local_step)
-        gradient = ops.cast(gradient, variable.dtype)
+        local_step = T.cast("Tensor", ops.cast(self.iterations + 1, variable.dtype))
+        learning_rate = self._maybe_warmup(T.cast("Tensor",
+                                                  ops.cast(learning_rate, variable.dtype)),
+                                           local_step)
+        gradient = T.cast("Tensor", ops.cast(gradient, variable.dtype))
         beta_1_power = ops.power(ops.cast(self.beta_1, variable.dtype), local_step)
-        beta_2_power = ops.power(ops.cast(self.beta_2, variable.dtype), local_step)
+        beta_2_power = T.cast("Tensor",
+                              ops.power(ops.cast(self.beta_2, variable.dtype), local_step))
 
         #     m_t = b1 * m + (1 - b1) * g
         # =>  m_t = m + (g - m) * (1 - b1)
-        momentum = self._momentums[self._get_variable_index(variable)]
+        momentum = T.cast("Variable", self._momentums[self._get_variable_index(variable)])
         self.assign_add(momentum, ops.multiply(ops.subtract(gradient, momentum), 1 - self.beta_1))
-        momentum_corr = ops.divide(momentum, (1 - beta_1_power))
+        momentum_corr = T.cast("Tensor", ops.divide(momentum, (1 - beta_1_power)))
 
         #    v_t = b2 * v + (1 - b2) * (g - m_t)^2 + e
         # => v_t = v + ((g - m_t)^2 - v) * (1 - b2) + e
@@ -291,16 +291,17 @@ class AdaBelief(Optimizer):  # pylint:disable=too-many-instance-attributes,too-m
         if self.amsgrad:
             velocity_hat = self._velocity_hats[self._get_variable_index(variable)]
             self.assign(velocity_hat, ops.maximum(velocity, velocity_hat))
-            velocity_corr = ops.sqrt(ops.divide(velocity_hat, (1 - beta_2_power)))
+            velocity_corr = T.cast("Tensor",
+                                   ops.sqrt(ops.divide(velocity_hat, (1 - beta_2_power))))
         else:
-            velocity_corr = ops.sqrt(ops.divide(velocity, (1 - beta_2_power)))
+            velocity_corr = T.cast("Tensor", ops.sqrt(ops.divide(velocity, (1 - beta_2_power))))
 
         var_t = self._maybe_rectify(momentum_corr, velocity_corr, local_step, beta_2_power)
 
         self.assign_sub(variable, ops.multiply(learning_rate, var_t))
 
     def get_config(self) -> dict[str, T.Any]:
-        """ Returns the config of the optimizer.
+        """Returns the config of the optimizer.
 
         Optimizer configuration for AdaBelief.
 

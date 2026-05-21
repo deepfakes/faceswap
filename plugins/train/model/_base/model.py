@@ -17,7 +17,7 @@ from plugins.train import train_config as cfg
 
 from .inference import Inference
 from .io import IO, get_all_sub_models, Weights
-from .settings import Optimizer, Settings
+from .settings import Settings
 from .state import State
 
 if T.TYPE_CHECKING:
@@ -138,11 +138,6 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
     def iterations(self) -> int:
         """The total number of iterations that the model has trained."""
         return self._state.iterations
-
-    @property
-    def warmup_steps(self) -> int:
-        """The number of steps to perform learning rate warmup"""
-        return self._args.warmup
 
     @property
     def freeze_layers(self) -> list[str]:
@@ -294,20 +289,15 @@ class ModelBase():  # pylint:disable=too-many-instance-attributes
         parent.summary(print_fn=print_fn)
 
     def _compile_model(self) -> None:
-        """Compile the model to include the Optimizer and Loss Function(s)."""
+        """Legacy from Keras code. Now just load and freeze weights"""
         logger.debug("Compiling Model")
 
         if self.state.model_needs_rebuild:
             self._model = self._settings.check_model_precision(self._model, self._state)
 
-        optimizer = Optimizer().optimizer
-        if self._settings.use_mixed_precision:
-            optimizer = self._settings.loss_scale_optimizer(optimizer)
-
         weights = Weights(self)
         weights.load(self._io.model_exists)
         weights.freeze()
-        self.model.compile(optimizer=optimizer)
         logger.debug("Compiled Model: %s", self.model)
 
     def add_history(self, loss: np.ndarray) -> None:

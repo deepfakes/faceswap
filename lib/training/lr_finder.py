@@ -15,11 +15,10 @@ from tqdm import tqdm
 
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
-from plugins.train import train_config as cfg
 
 if T.TYPE_CHECKING:
-    import torch
-    from keras import optimizers
+    from torch import Tensor
+    from torch.optim.lr_scheduler import ExponentialLR
     from . import train
 
 logger = logging.getLogger(__name__)
@@ -39,40 +38,48 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
     ----------
     trainer
         The training loop with the loaded training plugin
+    scheduler
+        The LRFinder scheduler
+    steps
+        The number of steps to run the finder for
+    strength
+        How aggressively to set the optimal learning rate
+    mode
+        The mode to run the Learning Rate Finder in
     stop_factor
         When to stop finding the optimal learning rate
     beta
         Amount to smooth loss by, for graphing purposes
     """
-    def __init__(self,  # pylint:disable=too-many-positional-arguments
+    def __init__(self,
                  trainer: train.Trainer,
+                 scheduler: ExponentialLR,
+                 steps: int,
+                 strength: T.Literal["default", "aggressive", "extreme"],
+                 mode: T.Literal["set", "graph_and_set", "graph_and_exit"],
                  stop_factor: int = 4,
                  beta: float = 0.98) -> None:
         logger.debug(parse_class_init(locals()))
-        self._iterations = cfg.lr_finder_iterations()
-        self._save_graph = cfg.lr_finder_mode() in ("graph_and_set", "graph_and_exit")
-        self._strength = LRStrength[cfg.lr_finder_strength().upper()].value
-
-        self._start_lr = 1e-10
-        end_lr = 1e+1
-
         self._trainer = trainer
-
-        self._model = trainer._plugin.model
-        self._optimizer = trainer._plugin.model.model.optimizer
-
+        self._scheduler = scheduler
+        self._steps = steps
+        self._strength = LRStrength[strength.upper()].value
+        self._mode = mode
         self._stop_factor = stop_factor
         self._beta = beta
-        self._lr_multiplier: float = (end_lr / self._start_lr) ** (1.0 / self._iterations)
 
-        self._metrics: dict[T.Literal["learning_rates", "losses"], list[float]] = {
-            "learning_rates": [],
-            "losses": []}
+        self._model = trainer._plugin.model
+        self._losses: list[float] = []
+        self._learning_rates: list[float] = []
         self._loss: dict[T.Literal["avg", "best"], float] = {"avg": 0.0, "best": 1e9}
+        self._best_lr: None | float = None
 
-        logger.debug("Initialized %s", self.__class__.__name__)
+    @property
+    def best_lr(self) -> None | float:
+        """The discovered best learning rate or ``None`` if not found"""
+        return self._best_lr
 
-    def _on_batch_end(self, iteration: int, loss: float) -> None:
+    def _on_batch_end(self, iteration: int, loss: float) -> bool:
         """Learning rate actions to perform at the end of a batch
 
         Parameters
@@ -81,26 +88,29 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
             The current iteration
         loss
             The loss value for the current batch
-        """
-        learning_rate = float(self._optimizer.learning_rate.numpy())
-        self._metrics["learning_rates"].append(learning_rate)
 
+        Returns
+        -------
+        ``True`` if training should cease. ``False`` to continue
+        """
+        if np.isnan(loss):
+            logger.info("Loss has NaN'd. Exiting early")
+            return True
+
+        self._learning_rates.append(T.cast(float, self._scheduler.get_last_lr()[0]))
         self._loss["avg"] = (self._beta * self._loss["avg"]) + ((1 - self._beta) * loss)
         smoothed = self._loss["avg"] / (1 - (self._beta ** iteration))
-        self._metrics["losses"].append(smoothed)
+        self._losses.append(smoothed)
 
         stop_loss = self._stop_factor * self._loss["best"]
-
         if iteration > 1 and smoothed > stop_loss:
-            self._model.model.stop_training = True
-            return
+            logger.info("Loss has diverged. Exiting early")
+            return True
 
         if iteration == 1 or smoothed < self._loss["best"]:
             self._loss["best"] = smoothed
 
-        learning_rate *= self._lr_multiplier
-
-        self._optimizer.learning_rate.assign(learning_rate)
+        return False
 
     def _update_description(self, progress_bar: tqdm) -> None:
         """Update the description of the progress bar for the current iteration
@@ -110,105 +120,45 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
         progress_bar
             The learning rate finder progress bar to update
         """
-        current = self._metrics['learning_rates'][-1]
-        best_idx = self._metrics["losses"].index(self._loss["best"])
-        best = self._metrics["learning_rates"][best_idx] / self._strength
+        current = self._learning_rates[-1]
+        best_idx = self._losses.index(self._loss["best"])
+        best = self._learning_rates[best_idx] / self._strength
         progress_bar.set_description(f"Current: {current:.1e}  Best: {best:.1e}")
 
     def _train(self) -> None:
         """Train the model for the given number of iterations to find the optimal
         learning rate and show progress"""
         logger.info("Finding optimal learning rate...")
-        p_bar = tqdm(range(1, self._iterations + 1),
+        p_bar = tqdm(range(1, self._steps + 1),
                      desc="Current: N/A      Best: N/A    ",
                      leave=False)
         for idx in p_bar:
             loss = self._trainer.train_one_batch()
-            total_loss = T.cast("torch.Tensor", sum(x.total for x in loss)).item()
+            total_loss = T.cast("Tensor", sum(x.total for x in loss)).item()
 
-            if np.isnan(total_loss):
-                logger.warning("NaN detected! Exiting early")
+            if self._on_batch_end(idx, total_loss):
+                logger.debug("[LearningRateFinder] Exiting early")
                 break
-            self._on_batch_end(idx, total_loss)
+
             self._update_description(p_bar)
 
-    def _rebuild_optimizer(self, optimizer: optimizers.Optimizer) -> optimizers.Optimizer:
-        """Pass through nested Optimizers (eg LossScaleOptimizer) and create new nested
-        optimizers based on their original config
-
-        Returns
-        -------
-        A new optimizer of the same type as the given one, with the same config
-        """
-        logger.debug("Processing optimizer: '%s'", optimizer.name)
-        config = optimizer.get_config()
-        if hasattr(optimizer, "inner_optimizer"):
-            config["inner_optimizer"] = self._rebuild_optimizer(optimizer.inner_optimizer)
-        retval = optimizer.__class__(**config)
-        logger.debug("Created optimizer '%s': (old: %s, new: %s)",
-                     optimizer.name, optimizer, retval)
-        return retval
-
-    def _reset_model(self, original_lr: float, new_lr: float) -> None:
+    def _reset_model(self, new_lr: float) -> None:
         """Reset the model's weights to initial values, reset the model's optimizer and set the
         learning rate
 
         Parameters
         ----------
-        original_lr
-            The model's original learning rate
         new_lr
             The discovered optimal learning rate
         """
         self._model.state.add_lr_finder(new_lr)
         self._model.state.save()
 
-        if cfg.lr_finder_mode() == "graph_and_exit":
+        if self._mode == "graph_and_exit":
             return
-
-        logger.debug("Resetting optimizer")
-        optimizer = self._rebuild_optimizer(self._optimizer)
-        del self._optimizer
-        del self._model.model.optimizer
 
         logger.info("Loading initial weights")
         self._model.model.load_weights(self._model.io.filename)
-
-        self._model.model.compile(optimizer=optimizer,
-                                  loss=self._model.model.loss,
-                                  metrics=self._model.model.loss)
-
-        logger.info("Updating Learning Rate from %s to %s", f"{original_lr:.1e}", f"{new_lr:.1e}")
-        self._model.model.optimizer.learning_rate.assign(new_lr)
-        self._optimizer = self._model.model.optimizer
-
-    def find(self) -> bool:
-        """Find the optimal learning rate
-
-        Returns
-        -------
-        ``True`` if the learning rate was successfully discovered otherwise ``False``
-        """
-        if not self._model.io.model_exists:
-            self._model.io.save()
-
-        original_lr = float(self._model.model.optimizer.learning_rate.numpy())
-        self._model.model.optimizer.learning_rate.assign(self._start_lr)
-
-        self._train()
-        print("\x1b[2K", end="\r")  # Clear line
-
-        best_idx = self._metrics["losses"].index(self._loss["best"])
-        new_lr = self._metrics["learning_rates"][best_idx] / self._strength
-        if new_lr < 1e-9:
-            logger.error("The optimal learning rate could not be found. This is most likely "
-                         "because you did not run the finder for enough iterations.")
-            shutil.rmtree(self._model.io.model_dir)
-            return False
-
-        self._plot_loss()
-        self._reset_model(original_lr, new_lr)
-        return True
 
     def _plot_loss(self, skip_begin: int = 10, skip_end: int = 1) -> None:
         """Plot a graph of loss vs learning rate and save to the training folder
@@ -220,15 +170,15 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
         skip_end
             Number of iterations to skip at the end. Default: `1`
         """
-        if not self._save_graph:
+        if self._mode not in ("graph_and_set", "graph_and_exit"):
             return
 
         matplotlib.use("Agg")
-        lrs = self._metrics["learning_rates"][skip_begin:-skip_end]
-        losses = self._metrics["losses"][skip_begin:-skip_end]
+        lrs = self._learning_rates[skip_begin:-skip_end]
+        losses = self._losses[skip_begin:-skip_end]
         plt.plot(lrs, losses, label="Learning Rate")
-        best_idx = self._metrics["losses"].index(self._loss["best"])
-        best_lr = self._metrics["learning_rates"][best_idx]
+        best_idx = self._losses.index(self._loss["best"])
+        best_lr = self._learning_rates[best_idx]
         for val, color in zip(LRStrength, ("g", "y", "r")):
             l_r = best_lr / val.value
             idx = lrs.index(next(r for r in lrs if r >= l_r))
@@ -246,6 +196,26 @@ class LearningRateFinder:  # pylint:disable=too-many-instance-attributes
         output = os.path.join(self._model.io.model_dir, f"learning_rate_finder_{now}.png")
         logger.info("Saving Learning Rate Finder graph to: '%s'", output)
         plt.savefig(output)
+
+    def find(self) -> None:
+        """Find the optimal learning rate"""
+        if not self._model.io.model_exists:
+            self._model.io.save()
+
+        self._train()
+        print("\x1b[2K", end="\r")  # Clear line
+
+        best_idx = self._losses.index(self._loss["best"])
+        new_lr = self._learning_rates[best_idx] / self._strength
+        if new_lr < 1e-9:
+            logger.error("The optimal learning rate could not be found. This is most likely "
+                         "because you did not run the finder for enough iterations.")
+            shutil.rmtree(self._model.io.model_dir)
+            return
+
+        self._best_lr = new_lr
+        self._plot_loss()
+        self._reset_model(new_lr)
 
 
 __all__ = get_module_objects(__name__)
