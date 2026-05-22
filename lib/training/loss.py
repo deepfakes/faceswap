@@ -59,7 +59,7 @@ class BatchLoss:
         return self
 
 
-class LossCollator(nn.Module):
+class LossCollator(nn.Module):  # pylint:disable=too-many-instance-attributes
     """Compiles the chosen loss functions and calculates the values in the training loop
 
     Parameters
@@ -68,6 +68,8 @@ class LossCollator(nn.Module):
         List of lost function names from configuration file to collate for loss calculation
     weights
         List of weights, corresponding to the the list of functions, to apply to each loss function
+    color_order
+        The color order that the model is training in
     use_mask
         ``True`` if loss should be masked as `penalize mask loss` has been selected
     eye_multiplier
@@ -82,13 +84,15 @@ class LossCollator(nn.Module):
     def __init__(self,
                  functions: list[str],
                  weights: list[float],
+                 color_order: T.Literal["bgr", "rgb"],
                  use_mask: bool,
                  eye_multiplier: float,
                  mouth_multiplier: float,
                  smallest_output: int,
                  mask_loss: str | None = None) -> None:
-        logger.debug(parse_class_init(locals()))
+        logger.info(parse_class_init(locals()))
         super().__init__()
+        self._color_order: T.Literal["bgr", "rgb"] = color_order
         self._use_mask = use_mask
         self._eye_multiplier = eye_multiplier
         self._mouth_multiplier = mouth_multiplier
@@ -108,13 +112,12 @@ class LossCollator(nn.Module):
         params = {"functions": list(self._functions),
                   "weights": list(self._weights.values())}
         params |= {k[1:]: v for k, v in self.__dict__.items()
-                   if k in ("_use_mask", "_eye_multiplier", "_mouth_multiplier",
+                   if k in ("_color_order", "_use_mask", "_eye_multiplier", "_mouth_multiplier",
                             "_smallest_output", "_mask_loss")}
         s_params = ", ".join(f"{k}={repr(v)}" for k, v in params.items())
         return f"{self.__class__.__name__}({s_params})"
 
-    @classmethod
-    def _configure_functions(cls,
+    def _configure_functions(self,
                              names: list[str],
                              weights: list[float]) -> tuple[nn.ModuleDict, dict[str, float]]:
         """Configure the selected loss functions and send to the correct device
@@ -148,7 +151,7 @@ class LossCollator(nn.Module):
         for name, weight in zip(names, weights):
             if name is None or name == "none" or weight <= 0.0:
                 continue
-            functions[name] = get_loss_function(name)
+            functions[name] = get_loss_function(name, self._color_order)
             weight_dict[name] = weight
 
         logger.debug("[Loss] Configured loss functions: %s",

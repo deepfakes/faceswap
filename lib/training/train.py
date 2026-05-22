@@ -129,6 +129,7 @@ class Trainer:  # pylint:disable=too-many-instance-attributes
                      mod_cfg.Loss.loss_weight_2() / 100.,
                      mod_cfg.Loss.loss_weight_3() / 100.,
                      mod_cfg.Loss.loss_weight_4() / 100.],
+            color_order=self._model.color_order,
             use_mask=mod_cfg.Loss.penalized_mask_loss(),
             eye_multiplier=mod_cfg.Loss.eye_multiplier(),
             mouth_multiplier=mod_cfg.Loss.mouth_multiplier(),
