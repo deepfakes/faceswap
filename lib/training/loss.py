@@ -90,7 +90,7 @@ class LossCollator(nn.Module):  # pylint:disable=too-many-instance-attributes
                  mouth_multiplier: float,
                  smallest_output: int,
                  mask_loss: str | None = None) -> None:
-        logger.info(parse_class_init(locals()))
+        logger.debug(parse_class_init(locals()))
         super().__init__()
         self._color_order: T.Literal["bgr", "rgb"] = color_order
         self._use_mask = use_mask

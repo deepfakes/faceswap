@@ -125,6 +125,8 @@ class _LPIPSTrunkNet(nn.Module):
 
         if self._eval_mode:
             net.eval()
+            for p in net.parameters():
+                p.requires_grad = False
         return net
 
     @classmethod
@@ -212,6 +214,8 @@ class _LPIPSLinearNet(nn.Module):
 
         if self._eval_mode:
             net.eval()
+            for p in net.parameters():
+                p.requires_grad = False
         return net
 
     def forward(self, inputs: list[torch.Tensor]) -> list[torch.Tensor]:
