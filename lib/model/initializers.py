@@ -10,7 +10,7 @@ import typing as T
 import torch
 
 from keras import backend as K, initializers
-from keras import saving, Variable
+from keras import saving
 from keras.src.initializers.random_initializers import compute_fans
 
 import numpy as np
@@ -202,7 +202,7 @@ class ConvolutionAware(initializers.Initializer):
 
     def __call__(self,  # pylint: disable=too-many-locals
                  shape: list[int] | tuple[int, ...],
-                 dtype: str | None = None) -> Variable:
+                 dtype: str | None = None) -> torch.Tensor:
         """Call function for the ICNR initializer.
 
         Parameters
@@ -217,7 +217,7 @@ class ConvolutionAware(initializers.Initializer):
         The modified kernel weights
         """
         if self._initialized:   # Avoid re-calculating initializer when loading a saved model
-            return T.cast("Variable", self._he_uniform(shape, dtype=dtype))
+            return T.cast(torch.Tensor, self._he_uniform(shape, dtype=dtype))
         dtype = K.floatx() if dtype is None else dtype
         logger.info("Calculating Convolution Aware Initializer for shape: %s", shape)
         rank = len(shape)
@@ -259,7 +259,7 @@ class ConvolutionAware(initializers.Initializer):
 
         else:
             self._initialized = True
-            return Variable(self._orthogonal(shape), dtype=dtype)
+            return T.cast(torch.Tensor, self._orthogonal(shape))
 
         kernel_fourier_shape = correct_fft(np.zeros(kernel_shape)).shape
 
@@ -270,9 +270,9 @@ class ConvolutionAware(initializers.Initializer):
         basis = basis.reshape((filters_size, stack_size,) + kernel_fourier_shape)
         randoms = np.random.normal(0, self._eps_std, basis.shape[:-2] + kernel_shape)
         init = correct_ifft(basis, kernel_shape) + randoms
-        init = self._scale_filters(init, variance)
+        init = self._scale_filters(init, variance).astype(dtype)
         self._initialized = True
-        retval = Variable(init.transpose(transpose_dimensions), dtype=dtype, name="conv_aware")
+        retval = torch.from_numpy(init.transpose(transpose_dimensions))
         logger.debug("ConvAware output: %s", retval)
         return retval
 
