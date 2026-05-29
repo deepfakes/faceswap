@@ -89,12 +89,6 @@ def test_TorchTensorBoard_set_model(write_graph, _get_ttb_instance):
     """ Test that :class:`lib.training.tensorboard.set_model` functions """
     log_dir, instance = _get_ttb_instance(write_graph=write_graph)
 
-    return
-    # TODO reinstate this test or migrate to torch. Currently fails in keras on Github actions but
-    # runs locally:
-    # RuntimeError: Expected one of cpu, cuda, ipu, xpu, mkldnn, opengl, opencl, ideep,
-    # hip, ve, fpga, maia, xla, lazy, vulkan, mps, meta, hpu, mtia, privateuseone device
-    # type at start of device string: CPU
     model = Sequential()
     model.add(layers.Input(shape=(8, )))
     model.add(layers.Dense(4))
