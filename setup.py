@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Install packages for faceswap.py """
+"""Install packages for faceswap.py"""
 # pylint:disable=too-many-lines
 from __future__ import annotations
 
@@ -43,17 +43,17 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type:ignore[union-
 
 
 class _InstallState:  # pylint:disable=too-few-public-methods
-    """ Marker to track if a step has failed installing """
+    """Marker to track if a step has failed installing"""
     failed = False
     messages: list[str] = []
 
 
 class Environment():
-    """ The current install environment
+    """The current install environment
 
     Parameters
     ----------
-    updater : bool, Optional
+    updater
         ``True`` if the script is being called by Faceswap's internal updater. ``False`` if full
         setup is running. Default: ``False``
     """
@@ -68,7 +68,6 @@ class Environment():
         self.is_installer: bool = False  # Flag setup is being run by installer to skip steps
         self.include_dev_tools: bool = False
         self.backend: T.Literal["nvidia", "apple_silicon", "cpu", "rocm"] | None = None
-        self.enable_docker: bool = False
         self.cuda_cudnn = ["", ""]
         self.requirement_version = ""
         self.rocm_version: tuple[int, ...] = (0, 0, 0)
@@ -78,32 +77,32 @@ class Environment():
 
     @property
     def cuda_version(self) -> str:
-        """ str : The detected globally installed Cuda Version """
+        """The detected globally installed Cuda Version"""
         return self.cuda_cudnn[0]
 
     @property
     def cudnn_version(self) -> str:
-        """ str : The detected globally installed cuDNN Version """
+        """The detected globally installed cuDNN Version"""
         return self.cuda_cudnn[1]
 
     def set_backend(self, backend: T.Literal["nvidia", "apple_silicon", "cpu", "rocm"]) -> None:
-        """ Set the backend to install for
+        """Set the backend to install for
 
         Parameters
         ----------
-        backend : Literal["nvidia", "apple_silicon", "cpu", "rocm"]
+        backend
             The backend to setup faceswap for
         """
         logger.debug("Setting backend to '%s'", backend)
         self.backend = backend
 
     def set_requirements(self, requirements: str) -> None:
-        """ Validate that the requirements are compatible with the running Python version and
+        """Validate that the requirements are compatible with the running Python version and
         set the requirements file version to install use
 
         Parameters
         ----------
-        backend : str
+        backend
             The requirements file version to use for install
         """
         if requirements in PYTHON_VERSIONS:
@@ -112,11 +111,11 @@ class Environment():
         self.requirement_version = requirements
 
     def _parse_backend_from_cli(self, arg: str) -> None:
-        """ Parse a command line argument and populate :attr:`backend` if valid
+        """Parse a command line argument and populate :attr:`backend` if valid
 
         Parameters
         ----------
-        arg : str
+        arg
             The command line argument to parse
         """
         arg = arg.lower()
@@ -145,7 +144,7 @@ class Environment():
         self.set_requirements(req_files[lookup.index(arg)])
 
     def _process_arguments(self) -> None:
-        """ Process any cli arguments and dummy in cli arguments if calling from updater. """
+        """Process any cli arguments and dummy in cli arguments if calling from updater."""
         args = sys.argv[:]
         if self.updater:
             get_backend = T.cast("lib_utils",  # type:ignore[attr-defined,valid-type]
@@ -166,7 +165,7 @@ class Environment():
                 self._parse_backend_from_cli(arg[2:])
 
     def _output_runtime_info(self) -> None:
-        """ Output run time info """
+        """Output run time info"""
         logger.info("Setup in %s %s", self.system.system.title(), self.system.release)
         logger.info("Running as %s", "Root/Admin" if self.system.is_admin else "User")
         if self.system.is_conda:
@@ -176,7 +175,7 @@ class Environment():
         logger.info("Encoding: %s", self.system.encoding)
 
     def _check_pip(self) -> None:
-        """ Check installed pip version """
+        """Check installed pip version"""
         for i in range(2):
             try:
                 _pip = T.cast("pip", import_module("pip"))  # type:ignore[valid-type]
@@ -191,7 +190,7 @@ class Environment():
         logger.info("Pip version: %s", _pip.__version__)  # type:ignore[attr-defined]
 
     def _configure_keras(self) -> None:
-        """ Set up the keras.json file to use Torch as the backend """
+        """Set up the keras.json file to use Torch as the backend"""
         if "KERAS_HOME" in os.environ:
             keras_dir = os.environ["KERAS_HOME"]
         else:
@@ -215,7 +214,7 @@ class Environment():
         logger.info("Keras config written to: %s", conf_file)
 
     def set_config(self) -> None:
-        """ Set the backend in the faceswap config file """
+        """Set the backend in the faceswap config file"""
         config = {"backend": self.backend}
         py_path = os.path.dirname(os.path.realpath(__file__))
         config_file = os.path.join(py_path, "config", ".faceswap")
@@ -226,12 +225,12 @@ class Environment():
 
 
 class RequiredPackages():
-    """ Holds information about installed and required packages.
+    """Holds information about installed and required packages.
     Handles updating dependencies based on running platform/backend
 
     Parameters
     ----------
-    environment : :class:`Environment`
+    environment
         Environment class holding information about the running system
     """
     def __init__(self, environment: Environment) -> None:
@@ -246,16 +245,16 @@ class RequiredPackages():
             x.strip()
             for p in self._requirements.global_options[self._env.requirement_version]
             for x in p.split()]
-        """ list[str] : Any additional pip arguments that are required for installing from pip for
-        the given backend """
+        """Any additional pip arguments that are required for installing from pip for the given
+        backend"""
 
     @property
     def packages_need_install(self) -> bool:
-        """bool : ``True`` if there are packages available that need to be installed """
+        """``True`` if there are packages available that need to be installed"""
         return bool(self.conda or self.python)
 
     def _check_packaging(self) -> None:
-        """ Install packaging if it is not available  """
+        """Install packaging if it is not available"""
         if self._requirements.packaging_available:
             return
         cmd = [sys.executable, "-u", "-m", "pip", "install", "--no-cache-dir"]
@@ -270,17 +269,16 @@ class RequiredPackages():
 
     def _get_missing_python(self, requirements: list[Requirement]
                             ) -> list[dict[T.Literal["name", "package"], str]]:
-        """ Check for missing Python dependencies
+        """Check for missing Python dependencies
 
         Parameters
         ----------
-        requirements : list[:class:`packaging.requirements.Requirement]`
+        requirements
             The packages that are required to be installed
 
         Returns
         -------
-        list[dict[Literal["name", "package"], str]]
-            List of missing Python packages to install
+        List of missing Python packages to install
         """
         retval: list[dict[T.Literal["name", "package"], str]] = []
         for req in requirements:
@@ -302,12 +300,11 @@ class RequiredPackages():
         return retval
 
     def _get_required_conda(self) -> list[dict[T.Literal["package", "channel"], str]]:
-        """ Add backend specific packages to Conda required packages
+        """Add backend specific packages to Conda required packages
 
         Returns
         -------
-        list[tuple[Literal["package", "channel"], str]]
-            List of required Conda package names and the channel to install from
+        List of required Conda package names and the channel to install from
         """
         retval: list[dict[T.Literal["package", "channel"], str]] = []
         assert self._env.backend is not None
@@ -328,12 +325,11 @@ class RequiredPackages():
         return retval
 
     def _get_missing_conda(self) -> dict[str, list[dict[T.Literal["name", "package"], str]]]:
-        """ Check for conda missing dependencies
+        """Check for conda missing dependencies
 
         Returns
         -------
-        dict[str, list[dict[Literal["name", "package"], str]]]
-            The Conda packages to install grouped by channel
+        The Conda packages to install grouped by channel
         """
         retval: dict[str, list[dict[T.Literal["name", "package"], str]]] = {}
         if not self._env.system.is_conda:
@@ -375,11 +371,11 @@ class RequiredPackages():
 
 
 class Checks():  # pylint:disable=too-few-public-methods
-    """ Pre-installation checks
+    """Pre-installation checks
 
     Parameters
     ----------
-    environment : :class:`Environment`
+    environment
         Environment class holding information about the running system
     """
     def __init__(self, environment: Environment) -> None:
@@ -398,7 +394,7 @@ class Checks():  # pylint:disable=too-few-public-methods
             self._tips.pip()
 
     def _rocm_ask_enable(self) -> None:
-        """ Set backend to 'rocm' if OS is Linux and ROCm support required """
+        """Set backend to 'rocm' if OS is Linux and ROCm support required"""
         if not self._env.system.is_linux:
             return
         logger.info("ROCm support:\r\nIf you are using an AMD GPU, then select 'yes'."
@@ -423,22 +419,8 @@ class Checks():  # pylint:disable=too-few-public-methods
         logger.info("ROCm Version %s Selected", i)
         self._env.set_requirements(f"rocm_{i.replace('.', '')}")
 
-    def _docker_ask_enable(self) -> None:
-        """ Enable or disable Docker """
-        i = input("Enable  Docker? [y/N] ").strip()
-        if i not in ("", "Y", "y", "n", "N"):
-            logger.warning("Invalid selection '%s'", i)
-            self._docker_ask_enable()
-            return
-        if i in ("Y", "y"):
-            logger.info("Docker Enabled")
-            self._env.enable_docker = True
-        else:
-            logger.info("Docker Disabled")
-            self._env.enable_docker = False
-
     def _cuda_ask_enable(self) -> None:
-        """ Enable or disable CUDA """
+        """Enable or disable CUDA"""
         i = input("Enable  CUDA? [Y/n] ").strip()
         if i not in ("", "Y", "y", "n", "N"):
             logger.warning("Invalid selection '%s'", i)
@@ -459,39 +441,15 @@ class Checks():  # pylint:disable=too-few-public-methods
         logger.info("CUDA Version %s Selected", i)
         self._env.set_requirements(f"nvidia_{i}")
 
-    def _docker_confirm(self) -> None:
-        """ Warn if nvidia-docker on non-Linux system """
-        logger.warning("Nvidia-Docker is only supported on Linux.\r\n"
-                       "Only CPU is supported in Docker for your system")
-        self._docker_ask_enable()
-        if self._env.enable_docker:
-            logger.warning("CUDA Disabled")
-            self._env.set_backend("cpu")
-
-    def _docker_tips(self) -> None:
-        """ Provide tips for Docker use """
-        if self._env.backend != "nvidia":
-            self._tips.docker_no_cuda()
-        else:
-            self._tips.docker_cuda()
-
     def _user_input(self) -> None:
-        """ Get user input for AMD/ROCm/Cuda/Docker """
+        """Get user input for AMD/ROCm/Cuda"""
         if self._env.backend is None:
             self._rocm_ask_enable()
         if self._env.backend is None:
-            self._docker_ask_enable()
             self._cuda_ask_enable()
-        if not self._env.system.is_linux and (self._env.enable_docker
-                                              and self._env.backend == "nvidia"):
-            self._docker_confirm()
-        if self._env.enable_docker:
-            self._docker_tips()
-            self._env.set_config()
-            sys.exit(0)
 
     def _check_cuda(self) -> None:
-        """ Check for Cuda and cuDNN Locations. """
+        """Check for Cuda and cuDNN Locations."""
         if self._env.backend != "nvidia":
             logger.debug("Skipping Cuda checks as not enabled")
             return
@@ -518,7 +476,7 @@ class Checks():  # pylint:disable=too-few-public-methods
             logger.debug("cuDNN version: %s", self._env.cudnn_version)
 
     def _check_rocm(self) -> None:
-        """ Check for ROCm version """
+        """Check for ROCm version"""
         if self._env.backend != "rocm" or not self._env.system.is_linux:
             logger.debug("Skipping ROCm checks as not enabled")
             return
@@ -551,11 +509,11 @@ class Checks():  # pylint:disable=too-few-public-methods
 
 
 class Status():
-    """ Simple Status output for intercepting Conda/Pip installs and keeping the terminal clean
+    """Simple Status output for intercepting Conda/Pip installs and keeping the terminal clean
 
     Parameters
     ----------
-    is_conda : bool
+    is_conda
         ``True`` if installing packages from Conda. ``False`` if installing from pip
     """
     def __init__(self, is_conda: bool):
@@ -571,15 +529,15 @@ class Status():
             r"(?P<lib>^\S+)\s+\|\s+(?P<tot>\d+\.?\d*\s\w+).*\|\s+(?P<prg>\d+)%")
 
     def _clear_line(self) -> None:
-        """ Clear the last printed line from the console """
+        """Clear the last printed line from the console"""
         print(" " * self._max_width, end="\r")
 
     def _print(self, line: str) -> None:
-        """ Clear the last line and print the new line to the console
+        """Clear the last line and print the new line to the console
 
         Parameters
         ----------
-        line : str
+        line
             The line to print
         """
         full_line = f"{self._prefix}{line}"
@@ -592,17 +550,16 @@ class Status():
         print(output, end="\r")
 
     def _parse_size(self, size: str) -> float:
-        """ Parse the string representation of a package size and return as megabytes
+        """Parse the string representation of a package size and return as megabytes
 
         Parameters
         ----------
-        size : str
+        size
             The string representation of a package size
 
         Returns
         -------
-        float
-            The size in megabytes
+        The size in megabytes
         """
         size, unit = size.strip().split(" ", maxsplit=1)
         if unit.lower() == "b":
@@ -616,11 +573,11 @@ class Status():
         return float(size)  # Should never happen, but to prevent error
 
     def _print_conda(self, line: str) -> None:
-        """ Output progress for Conda installs
+        """Output progress for Conda installs
 
         Parameters
         ----------
-        line : str
+        line
             The conda install line to parse
         """
         progress = self._re_conda.match(line)
@@ -639,11 +596,11 @@ class Status():
         self._print(f"Downloading {count} packages ({total_size:.1f} MB) {prog:.1f}%")
 
     def _print_pip(self, line: str) -> None:
-        """ Output progress for Pip installs
+        """Output progress for Pip installs
 
         Parameters
         ----------
-        line : str
+        line
             The pip install line to parse
         """
         if (line.lower().startswith("installing collected packages:") and
@@ -664,11 +621,11 @@ class Status():
         self._print(f"{last_line} {done:.1f}%")
 
     def __call__(self, line: str) -> None:
-        """ Update the output status with the given line
+        """Update the output status with the given line
 
         Parameters
         ----------
-        line : str
+        line
             A cleansed line from either Conda or Pip installers
         """
         if self._is_conda:
@@ -677,24 +634,24 @@ class Status():
             self._print_pip(line.strip())
 
     def close(self) -> None:
-        """ Reset all progress bars and re-enable the cursor """
+        """Reset all progress bars and re-enable the cursor """
         self._clear_line()
 
 
 class Installer():
-    """ Uses the python Subprocess module to install packages.
+    """Uses the python Subprocess module to install packages.
 
     Parameters
     ----------
-    environment : :class:`Environment`
+    environment
         Environment class holding information about the running system
-    packages : list[str]
+    packages
         The list of package names that are to be installed
-    command : list
+    command
         The command to run
-    is_conda : bool
+    is_conda
         ``True`` if conda install command is running. ``False`` if pip install command is running
-    is_gui : bool
+    is_gui
         ``True`` if the process is being called from the Faceswap GUI
     """
     def __init__(self,  # pylint:disable=too-many-positional-arguments
@@ -717,12 +674,12 @@ class Installer():
 
     @classmethod
     def _output_information(cls, packages: list[str]):
-        """ INFO log the packages to be installed, splitting along multiple lines for long package
+        """INFO log the packages to be installed, splitting along multiple lines for long package
         lists (68 chars = 79 chars - (log-level spacing + indent))
 
         Parameters
         ----------
-        packages : list[str]
+        packages
             The list of package names that are to be installed
         """
         output = ""
@@ -742,33 +699,30 @@ class Installer():
 
         Parameters
         ----------
-        text : str
+        text
             The text to clean
 
         Returns
         -------
-        str
-            The cleansed text
+        The cleansed text
         """
         clean = self._re_ansi_escape.sub("", text.rstrip())
         return ''.join(c for c in clean if c in set(printable))
 
     def _seen_line_log(self, text: str, is_error: bool = False) -> str:
-        """ Output gets spammed to the log file when conda is waiting/processing. Only log each
+        """Output gets spammed to the log file when conda is waiting/processing. Only log each
         unique line once.
 
         Parameters
         ----------
-        text : str
+        text
             The text to log
-        is_error : bool, optional
+        is_error
             ``True`` if the line comes from an error. Default: ``False``
 
         Returns
         -------
-        str
-            The cleansed log line
-
+        The cleansed log line
         """
         clean = self._clean_line(text)
         if clean in self._seen_lines:
@@ -779,12 +733,11 @@ class Installer():
         return clean
 
     def __call__(self) -> int:
-        """ Install a package using the Subprocess module
+        """Install a package using the Subprocess module
 
         Returns
         -------
-        int
-            The return code of the package install process
+        The return code of the package install process
         """
         with Popen(self._command,
                    bufsize=0, stdout=PIPE, stderr=PIPE) as proc:
@@ -813,16 +766,16 @@ class Installer():
 
 
 class Install():  # pylint:disable=too-few-public-methods
-    """ Handles installation of Faceswap requirements
+    """Handles installation of Faceswap requirements
 
     Parameters
     ----------
-    environment : :class:`Environment`
+    environment
         Environment class holding information about the running system
-    is_gui : bool, Optional
+    is_gui
         ``True`` if the caller is the Faceswap GUI. Used to prevent output of progress bars
         which get scrambled in the GUI
-     """
+    """
     def __init__(self, environment: Environment, is_gui: bool = False) -> None:
         self._env = environment
         self._is_gui = is_gui
@@ -836,7 +789,7 @@ class Install():  # pylint:disable=too-few-public-methods
         self._finalize()
 
     def _ask_continue(self) -> None:
-        """ Ask Continue with Install """
+        """Ask Continue with Install"""
         if _InstallState.messages:
             for msg in _InstallState.messages:
                 logger.warning(msg)
@@ -853,13 +806,13 @@ class Install():  # pylint:disable=too-few-public-methods
     def _from_pip(self,
                   packages: list[dict[T.Literal["name", "package"], str]],
                   extra_args: list[str] | None = None) -> None:
-        """ Install packages from pip
+        """Install packages from pip
 
         Parameters
         ----------
-        packages : list[dict[T.Literal["name", "package"], str]
+        packages
             The formatted list of packages to be installed
-        extra_args : list[str] | None, optional
+        extra_args
             Any extra arguments to provide to pip. Default: ``None`` (no extra arguments)
         """
         pip_exe = [sys.executable,
@@ -882,19 +835,18 @@ class Install():  # pylint:disable=too-few-public-methods
     def _from_conda(self,
                     packages: list[dict[T.Literal["name", "package"], str]],
                     channel: str) -> None:
-        """ Install packages from conda
+        """Install packages from conda
 
         Parameters
         ----------
-        packages : list[dict[T.Literal["name", "package"], str]]
+        packages
             The full formatted packages to be installed
-        channel : str
+        channel
             The Conda channel to install from.
 
         Returns
         -------
-        bool
-            ``True`` if the package was successfully installed otherwise ``False``
+        ``True`` if the package was successfully installed otherwise ``False``
         """
         conda = which("conda")
         assert conda is not None
@@ -909,7 +861,7 @@ class Install():  # pylint:disable=too-few-public-methods
             _InstallState.failed = True
 
     def _install_packages(self) -> None:
-        """ Install the required packages """
+        """Install the required packages"""
         if self._packages.conda:
             logger.info("Installing Conda packages...")
             for channel, packages in self._packages.conda.items():
@@ -920,7 +872,7 @@ class Install():  # pylint:disable=too-few-public-methods
             self._from_pip(packages, extra_args=self._packages.pip_arguments)
 
     def _finalize(self) -> None:
-        """ Output final information on completion """
+        """Output final information on completion"""
         if self._env.updater:
             return
         if not _InstallState.failed:
@@ -945,53 +897,10 @@ class Install():  # pylint:disable=too-few-public-methods
 
 
 class Tips():
-    """ Display installation Tips """
-    @classmethod
-    def docker_no_cuda(cls) -> None:
-        """ Output Tips for Docker without Cuda """
-        logger.info(
-            "1. Install Docker from: https://www.docker.com/get-started\n\n"
-            "2. Enter the Faceswap folder and build the Docker Image For Faceswap:\n"
-            "   docker build -t faceswap-cpu -f Dockerfile.cpu .\n\n"
-            "3. Launch and enter the Faceswap container:\n"
-            "  a. Headless:\n"
-            "     docker run --rm -it -v ./:/srv faceswap-cpu\n\n"
-            "  b. GUI:\n"
-            "     xhost +local: && \\ \n"
-            "     docker run --rm -it \\ \n"
-            "     -v ./:/srv \\ \n"
-            "     -v /tmp/.X11-unix:/tmp/.X11-unix \\ \n"
-            "     -e DISPLAY=${DISPLAY} \\ \n"
-            "     faceswap-cpu \n")
-        logger.info("That's all you need to do with docker. Have fun.")
-
-    @classmethod
-    def docker_cuda(cls) -> None:
-        """ Output Tips for Docker with Cuda"""
-        logger.info(
-            "1. Install Docker from: https://www.docker.com/get-started\n\n"
-            "2. Install latest CUDA 11 and cuDNN 8 from: https://developer.nvidia.com/cuda-"
-            "downloads\n\n"
-            "3. Install the the Nvidia Container Toolkit from https://docs.nvidia.com/datacenter/"
-            "cloud-native/container-toolkit/latest/install-guide\n\n"
-            "4. Restart Docker Service\n\n"
-            "5. Enter the Faceswap folder and build the Docker Image For Faceswap:\n"
-            "   docker build -t faceswap-gpu -f Dockerfile.gpu .\n\n"
-            "6. Launch and enter the Faceswap container:\n"
-            "  a. Headless:\n"
-            "     docker run --runtime=nvidia --rm -it -v ./:/srv faceswap-gpu\n\n"
-            "  b. GUI:\n"
-            "     xhost +local: && \\ \n"
-            "     docker run --runtime=nvidia --rm -it \\ \n"
-            "     -v ./:/srv \\ \n"
-            "     -v /tmp/.X11-unix:/tmp/.X11-unix \\ \n"
-            "     -e DISPLAY=${DISPLAY} \\ \n"
-            "     faceswap-gpu \n")
-        logger.info("That's all you need to do with docker. Have fun.")
-
+    """Display installation Tips"""
     @classmethod
     def macos(cls) -> None:
-        """ Output Tips for macOS"""
+        """Output Tips for macOS"""
         logger.info(
             "setup.py does not directly support macOS. The following tips should help:\n\n"
             "1. Install system dependencies:\n"
@@ -1000,7 +909,7 @@ class Tips():
 
     @classmethod
     def pip(cls) -> None:
-        """ Pip Tips """
+        """Pip Tips"""
         logger.info("1. Install PIP requirements\n"
                     "You may want to execute `chcp 65001` in cmd line\n"
                     "to fix Unicode issues on Windows when installing dependencies")
