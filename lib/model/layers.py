@@ -295,6 +295,7 @@ class PixelShuffler(Layer):  # pylint:disable=too-many-ancestors,abstract-method
     ----------
     https://gist.github.com/t-ae/6e1016cc188104d123676ccef3264981
     """
+    # TODO. When this is ported to nn.PixelShuffle: ICNR init must be updated as commented in code
     def __init__(self,
                  size: int | tuple[int, int] = (2, 2),
                  data_format: str | None = None,
@@ -464,7 +465,7 @@ class QuickGELU(Layer):  # pylint:disable=too-many-ancestors,abstract-method
 
     def call(self, inputs: KerasTensor, *args, **kwargs  # pylint:disable=arguments-differ
              ) -> KerasTensor:
-        """ Call the QuickGELU layerr
+        """ Call the QuickGELU layer
 
         Parameters
         ----------

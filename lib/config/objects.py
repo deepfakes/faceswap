@@ -440,7 +440,7 @@ class ConfigSection:
     options: dict[str, ConfigItem]
 
 
-class ConfigReprMeta(type):
+class _ConfigReprMeta(type):  # Must be private or breaks automodsumm
     """A custom repr for printing currently selected config values"""
     def __repr__(cls) -> str:
         params = ", ".join(f"{k}={repr(v.value)}"
@@ -450,7 +450,7 @@ class ConfigReprMeta(type):
 
 
 @dataclass
-class GlobalSection(metaclass=ConfigReprMeta):
+class GlobalSection(metaclass=_ConfigReprMeta):
     """A dataclass for holding and identifying global sub-sections for plugin groups. Any global
     subsections must inherit from this.
 

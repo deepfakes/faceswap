@@ -1,6 +1,5 @@
 #! /usr/env/bin/python
-"""
-Queries information about system installed Machine Learning Libraries.
+"""Queries information about system installed Machine Learning Libraries.
 NOTE: Only packages from Python's Standard Library should be imported in this module
 """
 from __future__ import annotations
@@ -31,20 +30,20 @@ logger = logging.getLogger(__name__)
 
 
 _TORCH_ROCM_REQUIREMENTS = {">=2.2.1,<2.4.0": ((6, 0), (6, 0))}
-"""dict[str, tuple[tuple[int, int], tuple[int, int]]]: Minumum and maximum ROCm versions """
+"""Minimum and maximum ROCm versions"""
 
 
 def _check_dynamic_linker(lib: str) -> list[str]:
-    """ Locate the folders that contain a given library in ldconfig and $LD_LIBRARY_PATH
+    """Locate the folders that contain a given library in ldconfig and $LD_LIBRARY_PATH
 
     Parameters
     ----------
-    lib: str The library to locate
+    lib
+        The library to locate
 
     Returns
     -------
-    list[str]
-        All real existing folders from ldconfig or $LD_LIBRARY_PATH that contain the given lib
+    All real existing folders from ldconfig or $LD_LIBRARY_PATH that contain the given lib
     """
     paths: set[str] = set()
     ldconfig = which("ldconfig")
@@ -65,19 +64,18 @@ def _check_dynamic_linker(lib: str) -> list[str]:
 
 
 def _files_from_folder(folder: str, prefix: str) -> list[str]:
-    """ Obtain all filenames from the given folder that start with the given prefix
+    """Obtain all filenames from the given folder that start with the given prefix
 
     Parameters
     ----------
-    folder : str
+    folder
         The folder to search for files in
-    prefix : str
+    prefix
         The filename prefix to search for
 
     Returns
     -------
-    list[str]
-        All filenames that exist in the given folder with the given prefic
+    All filenames that exist in the given folder with the given prefix
     """
     if not os.path.exists(folder):
         return []
@@ -85,11 +83,11 @@ def _files_from_folder(folder: str, prefix: str) -> list[str]:
 
 
 class _Alternatives:
-    """ Holds output from the update-alternatives command for the given package
+    """Holds output from the update-alternatives command for the given package
 
     Parameters
     ----------
-    package : str
+    package
         The package to query update-alternatives for information
     """
     def __init__(self, package: str) -> None:
@@ -101,7 +99,7 @@ class _Alternatives:
 
     @property
     def alternatives(self) -> list[str]:
-        """ list[str] : Full path to alternatives listed for the given package """
+        """Full path to alternatives listed for the given package"""
         if self._output is None:
             self._query()
         if not self._output:
@@ -113,7 +111,7 @@ class _Alternatives:
 
     @property
     def default(self) -> str:
-        """ str : Full path to the default package """
+        """Full path to the default package"""
         if self._output is None:
             self._query()
         if not self._output:
@@ -125,8 +123,8 @@ class _Alternatives:
         return retval
 
     def _query(self) -> None:
-        """ Query update-alternatives for the given package and place stripped output into
-        :attr:`_output` """
+        """Query update-alternatives for the given package and place stripped output into
+        :attr:`_output`"""
         if not self._bin:
             self._output = []
             return
@@ -138,17 +136,17 @@ class _Alternatives:
 
 
 class _Cuda(ABC):
-    """ Find the location of system installed Cuda and cuDNN on Windows and Linux. """
+    """Find the location of system installed Cuda and cuDNN on Windows and Linux."""
     def __init__(self) -> None:
         self.versions: list[tuple[int, int]] = []
-        """ list[tuple[int, int]] : All detected globally installed Cuda versions """
+        """All detected globally installed Cuda versions"""
         self.version: tuple[int, int] = (0, 0)
-        """ tuple[int, int] : Default installed Cuda version. (0, 0) if not detected """
+        """Default installed Cuda version. (0, 0) if not detected"""
         self.cudnn_versions: dict[tuple[int, int], tuple[int, int, int]] = {}
-        """ dict[tuple[int, int], tuple[int, int, int]] : Detected cuDNN version for each installed
-        Cuda. key (0, 0) denotes globally installed cudnn """
+        """Detected cuDNN version for each installed Cuda. key (0, 0) denotes globally installed
+        cudnn"""
         self._paths: list[str] = []
-        """ list[str] : list of path to Cuda install folders relating to :attr:`versions` """
+        """list of path to Cuda install folders relating to :attr:`versions`"""
 
         self._version_file = "version.json"
         self._lib = "libcudart.so"
@@ -162,24 +160,23 @@ class _Cuda(ABC):
             self._get_cudnn_versions()
 
     def __repr__(self) -> str:
-        """ Pretty representation of this class """
+        """Pretty representation of this class"""
         attrs = ", ".join(f"{k}={repr(v)}" for k, v in self.__dict__.items()
                           if not k.startswith("_"))
         return f"{self.__class__.__name__}({attrs})"
 
     @classmethod
     def _tuple_from_string(cls, version: str) -> tuple[int, int] | None:
-        """ Convert a Cuda version string to a version tuple
+        """Convert a Cuda version string to a version tuple
 
         Parameters
         ----------
-        version : str
+        version
             The Cuda version string to convert
 
         Returns
         -------
-        tuple[int, int] | None
-            The converted Cuda version string. ``None`` if not a valid version string
+        The converted Cuda version string. ``None`` if not a valid version string
         """
         if version.startswith("."):
             version = version[1:]
@@ -193,47 +190,42 @@ class _Cuda(ABC):
 
     @abstractmethod
     def get_versions(self) -> dict[tuple[int, int], str]:
-        """ Overide to Attempt to detect all installed Cuda versions on Linux or Windows systems
+        """Override to Attempt to detect all installed Cuda versions on Linux or Windows systems
 
         Returns
         -------
-        dict[tuple[int, int], str]
-            The Cuda versions to the folder path on the system
+        The Cuda versions to the folder path on the system
         """
 
     @abstractmethod
     def get_version(self) -> tuple[int, int] | None:
-        """ Override to attempt to locate the default Cuda version on Linux or Windows
+        """Override to attempt to locate the default Cuda version on Linux or Windows
 
         Returns
         -------
-        tuple[int, int] | None
-            The Default global Cuda version or ``None`` if not found
+        The Default global Cuda version or ``None`` if not found
         """
 
     @abstractmethod
     def get_cudnn_versions(self) -> dict[tuple[int, int], tuple[int, int, int]]:
-        """ Override to attempt to locate any installed cuDNN versions
+        """Override to attempt to locate any installed cuDNN versions
 
         Returns
         -------
-        dict[tuple[int, int], tuple[int, int, int]]
-            Detected cuDNN version for each installed Cuda. key (0, 0) denotes globally installed
-            cudnn
+        Detected cuDNN version for each installed Cuda. key (0, 0) denotes globally installed cudnn
         """
 
     def version_from_version_file(self, folder: str) -> tuple[int, int] | None:
-        """ Attempt to get an installed Cuda version from its version.json file
+        """Attempt to get an installed Cuda version from its version.json file
 
         Parameters
         ----------
-        folder : str
+        folder
             Full path to the folder to check for a version file
 
         Returns
         -------
-        tuple[int, int] | None
-            The detected Cuda version or ``None`` if not detected
+        The detected Cuda version or ``None`` if not detected
         """
         vers_file = os.path.join(folder, self._version_file)
         if not os.path.exists(vers_file):
@@ -245,12 +237,11 @@ class _Cuda(ABC):
         return retval
 
     def _version_from_nvcc(self) -> tuple[int, int] | None:
-        """ Obtain the version from NVCC output if it is on PATH
+        """Obtain the version from NVCC output if it is on PATH
 
         Returns
         -------
-        tuple[int, int] | None
-            The detected default Cuda version. ``None`` if not version detected
+        The detected default Cuda version. ``None`` if not version detected
         """
         retval = None
         nvcc = which("nvcc")
@@ -266,7 +257,7 @@ class _Cuda(ABC):
         return retval
 
     def _get_versions(self) -> None:
-        """ Attempt to detect all installed Cuda versions and populate to :attr:`versions` """
+        """Attempt to detect all installed Cuda versions and populate to :attr:`versions`"""
         versions = self.get_versions()
         if versions:
             logger.debug("Cuda Versions: %s", versions)
@@ -276,7 +267,7 @@ class _Cuda(ABC):
         logger.debug("Could not locate any Cuda versions")
 
     def _get_version(self) -> None:
-        """ Attempt to detect the default Cuda version and populate to :attr:`version` """
+        """Attempt to detect the default Cuda version and populate to :attr:`version`"""
         version: tuple[int, int] | None = None
         if len(self.versions) == 1:
             version = self.versions[0]
@@ -290,7 +281,7 @@ class _Cuda(ABC):
         logger.debug("Cuda version: %s", self.version if version else "not detected")
 
     def _get_cudnn_versions(self) -> None:
-        """ Attempt to locate any installed cuDNN versions and add to :attr`cudnn_versions` """
+        """Attempt to locate any installed cuDNN versions and add to :attr`cudnn_versions`"""
         versions = self.get_cudnn_versions()
         if versions:
             logger.debug("cudnn versions: %s", versions)
@@ -299,17 +290,16 @@ class _Cuda(ABC):
         logger.debug("No cudnn versions found")
 
     def cudnn_version_from_header(self, folder: str) -> tuple[int, int, int] | None:
-        """ Attempt to detect the cuDNN version from the version header file
+        """Attempt to detect the cuDNN version from the version header file
 
         Parameters
         ----------
-        folder : str
+        folder
             The folder to check for the cuDNN header file
 
         Returns
         -------
-        tuple[int, int, int] | None
-            The cuDNN version found from the given folder or ``None`` if not detected
+        The cuDNN version found from the given folder or ``None`` if not detected
         """
         path = os.path.join(folder, self._cudnn_header)
         if not os.path.exists(path):
@@ -331,25 +321,24 @@ class _Cuda(ABC):
 
 
 class CudaLinux(_Cuda):
-    """ Find the location of system installed Cuda and cuDNN on Linux. """
+    """Find the location of system installed Cuda and cuDNN on Linux."""
     def __init__(self) -> None:
         self._folder_prefix = "cuda-"
         super().__init__()
 
     def _version_from_lib(self, folder: str) -> tuple[int, int] | None:
-        """ Attempt to locate the version from the existence of libcudart.so within a Cuda
+        """Attempt to locate the version from the existence of libcudart.so within a Cuda
         targets/x86_64-linux/lib folder
 
         Parameters
         ----------
-        folder : str
+        folder
             Full file path to the Cuda folder
 
         Returns
         -------
-        tuple[int, int] | None
-            The Cuda version identified by the existence of the libcudart.so file. ``None`` if
-            not detected
+        The Cuda version identified by the existence of the libcudart.so file. ``None`` if not
+        detected
         """
         lib_folder = os.path.join(folder, "targets", "x86_64-linux", "lib")
         lib_versions = [f.replace(self._lib, "")
@@ -366,15 +355,14 @@ class CudaLinux(_Cuda):
         return retval
 
     def _versions_from_usr(self) -> dict[tuple[int, int], str]:
-        """ Attempt to detect all installed Cuda versions from the /usr/local folder
+        """Attempt to detect all installed Cuda versions from the /usr/local folder
 
         Scan /usr/local for cuda-x.x folders containing either a version.json file or
         include/lib/libcudart.so.x.
 
         Returns
         -------
-        dict[tuple[int, int], str]
-            A dictionary of detected Cuda versions to their install paths
+        A dictionary of detected Cuda versions to their install paths
         """
         retval: dict[tuple[int, int], str] = {}
         usr = os.path.join(os.sep, "usr", "local")
@@ -389,13 +377,11 @@ class CudaLinux(_Cuda):
         return retval
 
     def _versions_from_alternatives(self) -> dict[tuple[int, int], str]:
-        """ Attempt to detect all installed Cuda versions from update-alternatives
+        """Attempt to detect all installed Cuda versions from update-alternatives
 
         Returns
         -------
-        list[tuple[int, int, int]]
-            A dictionary of detected Cuda versions to their install paths found in
-            update-alternatives
+        A dictionary of detected Cuda versions to their install paths found in update-alternatives
         """
         retval: dict[tuple[int, int], str] = {}
         alts = self._alternatives.alternatives
@@ -407,28 +393,26 @@ class CudaLinux(_Cuda):
         return retval
 
     def _parent_from_targets(self, folder: str) -> str:
-        """ Obtain the Cuda parent folder from a path obtained from child targets folder
+        """Obtain the Cuda parent folder from a path obtained from child targets folder
 
         Parameters
         ----------
-        folder : str
+        folder
             Full path to a folder that has a 'targets' folder in its path
 
         Returns
         -------
-        str
-            The potential parent Cuda folder, or an empty string if not detected
+        The potential parent Cuda folder, or an empty string if not detected
         """
         split = folder.split(os.sep)
         return os.sep.join(split[:split.index("targets")]) if "targets" in split else ""
 
     def _versions_from_dynamic_linker(self) -> dict[tuple[int, int], str]:
-        """ Attempt to detect all installed Cuda versions from ldconfig
+        """Attempt to detect all installed Cuda versions from ldconfig
 
         Returns
         -------
-        dict[tuple[int, int], str]
-            The Cuda version to the folder path found from ldconfig
+        The Cuda version to the folder path found from ldconfig
         """
         retval: dict[tuple[int, int], str] = {}
         folders = _check_dynamic_linker(self._lib)
@@ -444,12 +428,11 @@ class CudaLinux(_Cuda):
         return retval
 
     def get_versions(self) -> dict[tuple[int, int], str]:
-        """ Attempt to detect all installed Cuda versions on Linux systems
+        """Attempt to detect all installed Cuda versions on Linux systems
 
         Returns
         -------
-        dict[tuple[int, int], str]
-            The Cuda version to the folder path on Linux
+        The Cuda version to the folder path on Linux
         """
         versions = (self._versions_from_usr() |
                     self._versions_from_alternatives() |
@@ -457,12 +440,11 @@ class CudaLinux(_Cuda):
         return {k: versions[k] for k in sorted(versions)}
 
     def _version_from_alternatives(self) -> tuple[int, int] | None:
-        """ Attempt to get the default Cuda version from update-alternatives
+        """Attempt to get the default Cuda version from update-alternatives
 
         Returns
         -------
-        tuple[int, int] | None
-            The detected default Cuda version. ``None`` if not version detected
+        The detected default Cuda version. ``None`` if not version detected
         """
         default = self._alternatives.default
         if not default:
@@ -472,12 +454,11 @@ class CudaLinux(_Cuda):
         return retval
 
     def _version_from_link(self) -> tuple[int, int] | None:
-        """ Attempt to get the default Cuda version from the /usr/local/cuda file
+        """Attempt to get the default Cuda version from the /usr/local/cuda file
 
         Returns
         -------
-        tuple[int, int] | None
-            The detected default Cuda version. ``None`` if not version detected
+        The detected default Cuda version. ``None`` if not version detected
         """
         path = os.path.join(os.sep, "usr", "local", "cuda")
         if not os.path.exists(path):
@@ -488,12 +469,11 @@ class CudaLinux(_Cuda):
         return retval
 
     def _version_from_dynamic_linker(self) -> tuple[int, int] | None:
-        """ Attempt to get the default version from ldconfig or $LD_LIBRARY_PATH
+        """Attempt to get the default version from ldconfig or $LD_LIBRARY_PATH
 
         Returns
         -------
-        tuple[int, int, int] | None
-            The detected default ROCm version. ``None`` if not version detected
+        The detected default ROCm version. ``None`` if not version detected
         """
         paths = _check_dynamic_linker(self._lib)
         if len(paths) != 1:  # Multiple or None
@@ -504,27 +484,24 @@ class CudaLinux(_Cuda):
         return retval
 
     def get_version(self) -> tuple[int, int] | None:
-        """ Attempt to locate the default Cuda version on Linux
+        """Attempt to locate the default Cuda version on Linux
 
         Checks, in order: update-alternatives, /usr/local/cuda, ldconfig, nvcc
 
         Returns
         -------
-        tuple[int, int] | None
-            The Default global Cuda version or ``None`` if not found
+        The Default global Cuda version or ``None`` if not found
         """
         return (self._version_from_alternatives() or
                 self._version_from_link() or
                 self._version_from_dynamic_linker())
 
     def get_cudnn_versions(self) -> dict[tuple[int, int], tuple[int, int, int]]:
-        """ Attempt to locate any installed cuDNN versions on Linux
+        """Attempt to locate any installed cuDNN versions on Linux
 
         Returns
         -------
-        dict[tuple[int, int], tuple[int, int, int]]
-            Detected cuDNN version for each installed Cuda. key (0, 0) denotes globally installed
-            cudnn
+        Detected cuDNN version for each installed Cuda. key (0, 0) denotes globally installed cudnn
         """
         retval: dict[tuple[int, int], tuple[int, int, int]] = {}
         gbl = ["/usr/include", "/usr/local/include"]
@@ -543,21 +520,20 @@ class CudaLinux(_Cuda):
 
 
 class CudaWindows(_Cuda):
-    """ Find the location of system installed Cuda and cuDNN on Windows. """
+    """Find the location of system installed Cuda and cuDNN on Windows."""
 
     @classmethod
-    def _enum_subkeys(cls, key: HKEYType) -> T.Generator[str, None, None]:
-        """ Iterate through a Registry key's sub-keys
+    def _enum_sub_keys(cls, key: HKEYType) -> T.Generator[str, None, None]:
+        """Iterate through a Registry key's sub-keys
 
         Parameters
         ----------
-        key : :class:`winreg.HKEYType`
+        key
             The Registry key to iterate
 
         Yields
         ------
-        str
-            A sub-key name from the given registry key
+        A sub-key name from the given registry key
         """
         assert winreg is not None
         i = 0
@@ -569,12 +545,11 @@ class CudaWindows(_Cuda):
             i += 1
 
     def get_versions(self) -> dict[tuple[int, int], str]:
-        """ Attempt to detect all installed Cuda versions on Windows systems from the registry
+        """Attempt to detect all installed Cuda versions on Windows systems from the registry
 
         Returns
         -------
-        dict[tuple[int, int], str]
-            The Cuda version to the folder path on Windows
+        The Cuda version to the folder path on Windows
         """
         retval: dict[tuple[int, int], str] = {}
         assert winreg is not None
@@ -585,7 +560,7 @@ class CudaWindows(_Cuda):
         try:
             with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,  # type:ignore[attr-defined]
                                 reg_key) as key:
-                for version in self._enum_subkeys(key):
+                for version in self._enum_sub_keys(key):
                     vers_tuple = self._tuple_from_string(version[1:])
                     if vers_tuple is not None:
                         retval[vers_tuple] = paths.get(version, "")
@@ -594,12 +569,11 @@ class CudaWindows(_Cuda):
         return {k: retval[k] for k in sorted(retval)}
 
     def get_version(self) -> tuple[int, int] | None:
-        """ Attempt to get the default Cuda version from the Environment Variable
+        """Attempt to get the default Cuda version from the Environment Variable
 
         Returns
         -------
-        tuple[int, int] | None
-            The Default global Cuda version or ``None`` if not found
+        The Default global Cuda version or ``None`` if not found
         """
         path = os.environ.get("CUDA_PATH")
         if not path or path not in self._paths:
@@ -610,12 +584,11 @@ class CudaWindows(_Cuda):
         return retval
 
     def _get_cudnn_paths(self) -> list[str]:  # noqa[C901]
-        """ Attempt to locate the locations of cuDNN installs for Windows
+        """Attempt to locate the locations of cuDNN installs for Windows
 
         Returns
         -------
-        list[str]
-            Full path to existing cuDNN installs under Windows
+        Full path to existing cuDNN installs under Windows
         """
         assert winreg is not None
         paths: set[str] = set()
@@ -628,24 +601,24 @@ class CudaWindows(_Cuda):
                 key = winreg.OpenKey(lookup, reg_key)  # type:ignore[attr-defined]
             except FileNotFoundError:
                 continue
-            for name in self._enum_subkeys(key):
+            for name in self._enum_sub_keys(key):
                 if cudnn_key not in name.lower():
-                    logger.debug("Skipping subkey '%s'", name)
+                    logger.debug("Skipping sub_keys '%s'", name)
                     continue
                 try:
-                    subkey = winreg.OpenKey(key, name)  # type:ignore[attr-defined]
-                    logger.debug("Skipping subkey not found '%s'", name)
+                    sub_keys = winreg.OpenKey(key, name)  # type:ignore[attr-defined]
+                    logger.debug("Skipping sub_keys not found '%s'", name)
                 except FileNotFoundError:
                     continue
                 logger.debug("Parsing cudnn key '%s'", cudnn_key)
                 try:
-                    path, _ = winreg.QueryValueEx(subkey,  # type:ignore[attr-defined]
+                    path, _ = winreg.QueryValueEx(sub_keys,  # type:ignore[attr-defined]
                                                   "InstallLocation")
                 except (FileNotFoundError, OSError):
-                    logger.debug("Skipping missing InstallLocation for sub-key '%s'", subkey)
+                    logger.debug("Skipping missing InstallLocation for sub-key '%s'", sub_keys)
                     continue
                 if not os.path.isdir(path):
-                    logger.debug("Skipping non-existant path '%s'", path)
+                    logger.debug("Skipping non-existent path '%s'", path)
                     continue
                 paths.add(path)
         retval = list(paths)
@@ -653,13 +626,11 @@ class CudaWindows(_Cuda):
         return retval
 
     def get_cudnn_versions(self) -> dict[tuple[int, int], tuple[int, int, int]]:
-        """ Attempt to locate any installed cuDNN versions on Windows
+        """Attempt to locate any installed cuDNN versions on Windows
 
         Returns
         -------
-        dict[tuple[int, int], tuple[int, int, int]]
-            Detected cuDNN version for each installed Cuda. key (0, 0) denotes globally installed
-            cudnn
+        Detected cuDNN version for each installed Cuda. key (0, 0) denotes globally installed cudnn
         """
         retval: dict[tuple[int, int], tuple[int, int, int]] = {}
         gbl = self._get_cudnn_paths()
@@ -682,8 +653,7 @@ def get_cuda_finder() -> type[_Cuda]:
 
     Returns
     -------
-    type[_Cuda]
-        The OS specific finder for system-wide Cuda
+    The OS specific finder for system-wide Cuda
     """
     if platform.system().lower() == "windows":
         return CudaWindows
@@ -694,14 +664,14 @@ Cuda = get_cuda_finder()
 
 
 class ROCm():
-    """ Find the location of system installed ROCm on Linux """
+    """Find the location of system installed ROCm on Linux"""
     def __init__(self) -> None:
         self.version_min = min(v[0] for v in _TORCH_ROCM_REQUIREMENTS.values())
         self.version_max = max(v[1] for v in _TORCH_ROCM_REQUIREMENTS.values())
         self.versions: list[tuple[int, int, int]] = []
-        """ list[tuple[int, int, int]] : All detected ROCm installed versions """
+        """All detected ROCm installed versions"""
         self.version: tuple[int, int, int] = (0, 0, 0)
-        """ tuple[int, int, int] : Default ROCm installed version. (0, 0, 0) if not detected """
+        """Default ROCm installed version. (0, 0, 0) if not detected"""
 
         self._folder_prefix = "rocm-"
         self._version_files = ["version-rocm", "version"]
@@ -713,39 +683,38 @@ class ROCm():
             self._rocm_check()
 
     def __repr__(self) -> str:
-        """ Pretty representation of this class """
+        """Pretty representation of this class"""
         attrs = ", ".join(f"{k}={repr(v)}" for k, v in self.__dict__.items()
                           if not k.startswith("_"))
         return f"{self.__class__.__name__}({attrs})"
 
     @property
     def valid_versions(self) -> list[tuple[int, int, int]]:
-        """ list[tuple[int, int, int]] """
+        """Valid ROCm versions"""
         return [v for v in self.versions if self.version_min <= v[:2] <= self.version_max]
 
     @property
     def valid_installed(self) -> bool:
-        """ bool : ``True`` if a valid version of ROCm is installed """
+        """``True`` if a valid version of ROCm is installed"""
         return any(self.valid_versions)
 
     @property
     def is_valid(self):
-        """ bool : ``True`` if the default ROCm version is valid """
+        """``True`` if the default ROCm version is valid"""
         return self.version_min <= self.version[:2] <= self.version_max
 
     @classmethod
     def _tuple_from_string(cls, version: str) -> tuple[int, int, int] | None:
-        """ Convert a ROCm version string to a version tuple
+        """Convert a ROCm version string to a version tuple
 
         Parameters
         ----------
-        version : str
+        version
             The ROCm version string to convert
 
         Returns
         -------
-        tuple[int, int, int] | None
-            The converted ROCm version string. ``None`` if not a valid version string
+        The converted ROCm version string. ``None`` if not a valid version string
         """
         split = version.split(".")
         if len(split) != 3:
@@ -755,17 +724,16 @@ class ROCm():
         return (int(split[0]), int(split[1]), int(split[2]))
 
     def _version_from_string(self, string: str) -> tuple[int, int, int] | None:
-        """ Obtain the ROCm version from the end of a string
+        """Obtain the ROCm version from the end of a string
 
         Parameters
         ----------
-        string : str
+        string
             The string to test for a valid ROCm version
 
         Returns
         -------
-        tuple[int, int, int] | None
-            The ROCm version from the end of the string or ``None`` if not detected
+        The ROCm version from the end of the string or ``None`` if not detected
         """
         re_vers = self._re_version.search(string)
         if re_vers is None:
@@ -773,18 +741,17 @@ class ROCm():
         return self._tuple_from_string(re_vers.group(1))
 
     def _version_from_info(self, folder: str) -> tuple[int, int, int] | None:
-        """ Attempt to locate the version from a version file within a ROCm .info folder
+        """Attempt to locate the version from a version file within a ROCm .info folder
 
         Parameters
         ----------
-        file_path : str
+        file_path
             Full path to the ROCm .info folder
 
         Returns
         -------
-        tuple[int, int, int] | None
-            The ROCm version extracted from a version file within the .info folder. ``None`` if
-            not detected
+        The ROCm version extracted from a version file within the .info folder. ``None`` if not
+        detected
         """
         info_loc = [os.path.join(folder, ".info", v) for v in self._version_files]
         for info_file in info_loc:
@@ -802,19 +769,18 @@ class ROCm():
         return None
 
     def _version_from_lib(self, folder: str) -> tuple[int, int, int] | None:
-        """ Attempt to locate the version from the existence of librocm-core.so within a ROCm
+        """Attempt to locate the version from the existence of librocm-core.so within a ROCm
         lib folder
 
         Parameters
         ----------
-        folder : str
+        folder
             Full file path to the ROCm folder
 
         Returns
         -------
-        tuple[int, int, int] | None
-            The ROCm version identified by the existence of the librocm-core.so file. ``None`` if
-            not detected
+        The ROCm version identified by the existence of the librocm-core.so file. ``None`` if not
+        detected
         """
         lib_folder = os.path.join(folder, "lib")
         lib_files = _files_from_folder(lib_folder, self._lib)
@@ -830,14 +796,13 @@ class ROCm():
         return retval
 
     def _versions_from_opt(self) -> list[tuple[int, int, int]]:
-        """ Attempt to detect all installed ROCm versions from the /opt folder
+        """Attempt to detect all installed ROCm versions from the /opt folder
 
         Scan /opt for rocm.x.x.x folders containing either .info or lib/librocm-core.so.x
 
         Returns
         -------
-        list[tuple[int, int, int]]
-            Any ROCm versions found in the /opt folder
+        Any ROCm versions found in the /opt folder
         """
         retval: list[tuple[int, int, int]] = []
         opt = os.path.join(os.sep, "opt")
@@ -851,12 +816,11 @@ class ROCm():
         return retval
 
     def _versions_from_alternatives(self) -> list[tuple[int, int, int]]:
-        """ Attempt to detect all installed ROCm versions from update-alternatives
+        """Attempt to detect all installed ROCm versions from update-alternatives
 
         Returns
         -------
-        list[tuple[int, int, int]]
-            Any ROCm versions found in update-alternatives
+        Any ROCm versions found in update-alternatives
         """
         alts = self._alternatives.alternatives
         if not alts:
@@ -867,12 +831,11 @@ class ROCm():
         return retval
 
     def _versions_from_dynamic_linker(self) -> list[tuple[int, int, int]]:
-        """ Attempt to detect all installed ROCm versions from ldconfig
+        """Attempt to detect all installed ROCm versions from ldconfig
 
         Returns
         -------
-        dict[tuple[int, int], str]
-            The ROCm versions found from ldconfig
+        The ROCm versions found from ldconfig
         """
         retval: list[tuple[int, int, int]] = []
         folders = _check_dynamic_linker(self._lib)
@@ -886,7 +849,7 @@ class ROCm():
         return retval
 
     def _get_versions(self) -> None:
-        """ Attempt to detect all installed ROCm versions and populate to :attr:`rocm_versions` """
+        """Attempt to detect all installed ROCm versions and populate to :attr:`rocm_versions`"""
         versions = list(sorted(set(self._versions_from_opt()) |
                                set(self._versions_from_alternatives()) |
                                set(self._versions_from_dynamic_linker())))
@@ -897,12 +860,11 @@ class ROCm():
         logger.debug("Could not locate any ROCm versions")
 
     def _version_from_hipconfig(self) -> tuple[int, int, int] | None:
-        """ Attempt to get the default version from hipconfig
+        """Attempt to get the default version from hipconfig
 
         Returns
         -------
-        tuple[int, int, int] | None
-            The detected default ROCm version. ``None`` if not version detected
+        The detected default ROCm version. ``None`` if not version detected
         """
         retval: tuple[int, int, int] | None = None
         exe = which("hipconfig")
@@ -925,12 +887,11 @@ class ROCm():
         return retval
 
     def _version_from_alternatives(self) -> tuple[int, int, int] | None:
-        """ Attempt to get the default version from update-alternatives
+        """Attempt to get the default version from update-alternatives
 
         Returns
         -------
-        tuple[int, int, int] | None
-            The detected default ROCm version. ``None`` if not version detected
+        The detected default ROCm version. ``None`` if not version detected
         """
         default = self._alternatives.default
         if not default:
@@ -940,12 +901,11 @@ class ROCm():
         return retval
 
     def _version_from_link(self) -> tuple[int, int, int] | None:
-        """ Attempt to get the default version from the /opt/rocm file
+        """Attempt to get the default version from the /opt/rocm file
 
         Returns
         -------
-        tuple[int, int, int] | None
-            The detected default ROCm version. ``None`` if not version detected
+        The detected default ROCm version. ``None`` if not version detected
         """
         path = os.path.join(os.sep, "opt", "rocm")
         if not os.path.exists(path):
@@ -956,12 +916,11 @@ class ROCm():
         return retval
 
     def _version_from_dynamic_linker(self) -> tuple[int, int, int] | None:
-        """ Attempt to get the default version from ldconfig or $LD_LIBRARY_PATH
+        """Attempt to get the default version from ldconfig or $LD_LIBRARY_PATH
 
         Returns
         -------
-        tuple[int, int, int] | None
-            The detected default ROCm version. ``None`` if not version detected
+        The detected default ROCm version. ``None`` if not version detected
         """
         paths = _check_dynamic_linker("librocm-core.so.")
         if len(paths) != 1:  # Multiple or None
@@ -972,7 +931,7 @@ class ROCm():
         return retval
 
     def _get_version(self) -> None:
-        """ Attempt to detect the default ROCm version """
+        """Attempt to detect the default ROCm version"""
         version = (self._version_from_hipconfig() or
                    self._version_from_alternatives() or
                    self._version_from_link() or
@@ -984,7 +943,7 @@ class ROCm():
         logger.debug("Could not locate default ROCm version")
 
     def _rocm_check(self) -> None:
-        """ Attempt to locate the installed ROCm versions and the default ROCm version """
+        """Attempt to locate the installed ROCm versions and the default ROCm version"""
         self._get_versions()
         self._get_version()
         logger.debug("ROCm Versions: %s, Version: %s", self.versions, self.version)

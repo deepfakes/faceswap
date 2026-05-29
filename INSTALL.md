@@ -38,9 +38,6 @@
   - [Getting the faceswap code](#getting-the-faceswap-code)
   - [Setup](#setup-2)
     - [About some of the options](#about-some-of-the-options)
-- [Docker Install Guide](#docker-install-guide)
-  - [Docker CPU](#docker-cpu)
-  - [Docker Nvidia](#docker-nvidia)
 - [Run the project](#run-the-project)
   - [Notes](#notes)
 
@@ -73,8 +70,6 @@ The type of computations that the process does are well suited for graphics card
   Experimental support for GPU-accelerated, native Apple Silicon processing (e.g. Apple M1 chips). Installation instructions can be found [further down this page](#macos-apple-silicon-install-guide).
   Intel based macOS systems should work, but you will need to follow the [Manual Install](#manual-install) instructions.
 - All operating systems must be 64-bit.
-
-Alternatively, there is a docker image that is based on Debian.
 
 # Important before you proceed
 **In its current iteration, the project relies heavily on the use of the command line, although a gui is available. if you are unfamiliar with command line tools, you may have difficulty setting up the environment and should perhaps not attempt any of the steps described in this guide.** This guide assumes you have intermediate knowledge of the command line.
@@ -131,7 +126,7 @@ To enter the virtual environment:
 - If you have issues/errors follow the Manual install steps below.
 
 #### Manual install
-Do not follow these steps if the Easy Install above completed succesfully.
+Do not follow these steps if the Easy Install above completed successfully.
 If you are using an Nvidia card make sure you have the correct versions of Cuda/cuDNN installed for the required version of Torch
 - Install tkinter (required for the GUI) by typing: `conda install tk`
 - Install requirements:
@@ -251,7 +246,7 @@ Alternatively you can install Python (3.14 64-bit) for your distribution (links 
 
   If using Conda3 then setting up virtual environments is relatively straight forward. More information can be found at [Conda Docs](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html)
 
-  If using a default Python distribution then [virtualenv](https://github.com/pypa/virtualenv) and [virtualenvwrapper](https://virtualenvwrapper.readthedocs.io) may help when you are not using docker.
+  If using a default Python distribution then [virtualenv](https://github.com/pypa/virtualenv) and [virtualenvwrapper](https://virtualenvwrapper.readthedocs.io) may help.
 
 
 ## Getting the faceswap code
@@ -270,87 +265,8 @@ If setup fails for any reason you can still manually install the packages listed
 
 ### About some of the options
    - CUDA: For acceleration. Requires a good nVidia Graphics Card (which supports CUDA inside)
-   - Docker: Provide a ready-made image. Hide trivial details. Get you straight to the project.
-   - nVidia-Docker: Access to the nVidia GPU on host machine from inside container.
+   - ROCm: For AMD GPUs under Linux/WSL2 only. Make sure you install the correct version of faceswap for your installed ROCm version
 
-# Docker Install Guide
-
-This Faceswap repo contains Docker build scripts for CPU and Nvidia backends. The scripts will set up a Docker container for you and install the latest version of the Faceswap software.
-
-You must first ensure that Docker is installed and running on your system. Follow the guide for downloading and installing Docker from their website:
-
-  - https://www.docker.com/get-started
-
-Once Docker is installed and running, follow the relevant steps for your chosen backend
-## Docker CPU
-To run the CPU version of Faceswap follow these steps:
-
-1. Build the Docker image For faceswap:
-```
-docker build \
--t faceswap-cpu \
-https://raw.githubusercontent.com/deepfakes/faceswap/master/Dockerfile.cpu
-```
-2. Launch and enter the Faceswap container:
-
-    a. For the **headless/command line** version of Faceswap run:
-    ```
-    docker run --rm -it faceswap-cpu
-    ```
-    You can then execute faceswap the standard way:
-    ```
-    python faceswap.py --help
-    ```
-    b. For the **GUI** version of Faceswap run:
-    ```
-    xhost +local: && \
-    docker run --rm -it \
-    -v /tmp/.X11-unix:/tmp/.X11-unix \
-    -e DISPLAY=${DISPLAY} \
-    faceswap-cpu
-    ```
-    You can then launch the GUI with
-    ```
-    python faceswap.py gui
-    ```
-  ## Docker Nvidia
-To build the NVIDIA GPU version of Faceswap, follow these steps:
-
-1. Nvidia Docker builds need extra resources to provide the Docker container with access to your GPU.
-
-    a. Follow the instructions to install and apply the `Nvidia Container Toolkit` for your distribution from:
-    -  https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
-
-    b. If Docker is already running, restart it to pick up the changes made by the Nvidia Container Toolkit.
-
-2. Build the Docker image For faceswap
-```
-docker build \
--t faceswap-gpu \
-https://raw.githubusercontent.com/deepfakes/faceswap/master/Dockerfile.gpu
-```
-1. Launch and enter the Faceswap container:
-
-    a. For the **headless/command line** version of Faceswap run:
-    ```
-    docker run --runtime=nvidia --rm -it faceswap-gpu
-    ```
-    You can then execute faceswap the standard way:
-    ```
-    python faceswap.py --help
-    ```
-    b. For the **GUI** version of Faceswap run:
-    ```
-    xhost +local: && \
-    docker run --runtime=nvidia --rm -it \
-    -v /tmp/.X11-unix:/tmp/.X11-unix \
-    -e DISPLAY=${DISPLAY} \
-    faceswap-gpu
-    ```
-    You can then launch the GUI with
-    ```
-    python faceswap.py gui
-    ```
 # Run the project
 Once all these requirements are installed, you can attempt to run the faceswap tools. Use the `-h` or `--help` options for a list of options.
 

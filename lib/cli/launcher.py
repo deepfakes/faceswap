@@ -11,6 +11,7 @@ from importlib import import_module
 
 from lib.gpu_stats import GPUStats
 from lib.logger import crash_log, log_setup
+from lib.system.system import VALID_TORCH
 from lib.utils import (FaceswapError, get_backend, get_torch_version,
                        get_module_objects, safe_shutdown, set_backend)
 
@@ -77,8 +78,7 @@ class ScriptExecutor():
         FaceswapError
             If PyTorch is not found, or is not between versions 2.3 and 2.11
         """
-        min_ver = (2, 3)
-        max_ver = (2, 11)
+        min_ver, max_ver = VALID_TORCH
         try:
             import torch  # noqa:F401 pylint:disable=unused-import,import-outside-toplevel
         except ImportError as err:
