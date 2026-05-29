@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Custom Initializers for faceswap.py """
+"""Custom Initializers for faceswap.py"""
 from __future__ import annotations
 
 import logging
@@ -7,7 +7,9 @@ import sys
 import inspect
 import typing as T
 
-from keras import backend as K, initializers, ops
+import torch
+
+from keras import backend as K, initializers
 from keras import saving, Variable
 from keras.src.initializers.random_initializers import compute_fans
 
@@ -16,27 +18,23 @@ import numpy as np
 from lib.logger import parse_class_init
 from lib.utils import get_module_objects
 
-if T.TYPE_CHECKING:
-    from keras import KerasTensor
-
 logger = logging.getLogger(__name__)
 
 
 class ICNR(initializers.Initializer):
-    """ ICNR initializer for checkerboard artifact free sub pixel convolution
+    """ICNR initializer for checkerboard artifact free sub pixel convolution
 
     Parameters
     ----------
-    initializer: :class:`keras.initializers.Initializer`
+    initializer
         The initializer used for sub kernels (orthogonal, glorot uniform, etc.)
-    scale: int, optional
+    scale
         scaling factor of sub pixel convolution (up sampling from 8x8 to 16x16 is scale 2).
         Default: `2`
 
     Returns
     -------
-    :class:`keras.KerasTensor`
-        The modified kernel weights
+    The modified kernel weights
 
     Example
     -------
@@ -46,95 +44,44 @@ class ICNR(initializers.Initializer):
     ----------
     Andrew Aitken et al. Checkerboard artifact free sub-pixel convolution
     https://arxiv.org/pdf/1707.02937.pdf,  https://distill.pub/2016/deconv-checkerboard/
+    https://gist.github.com/A03ki/2305398458cb8e2155e8e81333f0a965
     """
 
     def __init__(self,
                  initializer: dict[str, T.Any] | initializers.Initializer,
                  scale: int = 2) -> None:
         logger.debug(parse_class_init(locals()))
-
         self._scale = scale
         self._initializer = initializer
 
-        logger.debug("Initialized %s", self.__class__.__name__)
-
     def __call__(self,
                  shape: list[int] | tuple[int, ...],
-                 dtype: str | None = "float32") -> KerasTensor:
-        """ Call function for the ICNR initializer.
-
-        Parameters
-        ----------
-        shape: list[int] | tuple[int, ...]
-            The required resized shape for the output tensor
-        dtype: str
-            The data type for the tensor
-        kwargs: dict[str, Any]
-            Standard keras initializer keyword arguments
-
-        Returns
-        -------
-        :class:`keras.KerasTensor`
-            The modified kernel weights
-        """
+                 dtype: str | None = "float32") -> torch.Tensor:
         shape = list(shape)
-
-        if self._scale == 1:
+        if self._scale == 1:  # TODO validate when moved to full torch
             if isinstance(self._initializer, dict):
                 return next(i for i in self._initializer.values())
             return self._initializer(shape)
 
         new_shape = shape[:3] + [shape[3] // (self._scale ** 2)]
-        size = [s * self._scale for s in new_shape[:2]]
 
-        if isinstance(self._initializer, dict):
+        if isinstance(self._initializer, dict):  # TODO remove when full torch
             self._initializer = initializers.deserialize(self._initializer)
 
-        var_x = self._initializer(new_shape, dtype)
-        var_x = ops.transpose(var_x, [2, 0, 1, 3])
-        var_x = ops.image.resize(var_x,
-                                 size,
-                                 interpolation="nearest",
-                                 data_format="channels_last")
-        var_x = self._space_to_depth(T.cast("KerasTensor", var_x))
-        var_x = ops.transpose(var_x, [1, 2, 0, 3])
+        x: torch.Tensor = self._initializer(new_shape, dtype)
 
-        logger.debug("ICNR Output shape: %s", var_x.shape)
-        return T.cast("KerasTensor", var_x)
-
-    def _space_to_depth(self, input_tensor: KerasTensor) -> KerasTensor:
-        """ Space to depth Keras implementation.
-
-        Parameters
-        ----------
-        input_tensor: :class:`keras.KerasTensor`
-            The tensor to be manipulated
-
-        Returns
-        -------
-        :class:`keras.KerasTensor`
-            The manipulated input tensor
-        """
-        batch, height, width, depth = input_tensor.shape
-        assert height is not None and width is not None
-        new_height, new_width = height // 2, width // 2
-        inter_shape = (batch, new_height, self._scale, new_width, self._scale, depth)
-
-        var_x = ops.reshape(input_tensor, inter_shape)
-        var_x = ops.transpose(var_x, (0, 1, 3, 2, 4, 5))
-        retval = ops.reshape(var_x, (batch, new_height, new_width, -1))
-
-        logger.debug("Space to depth - Input shape: %s, Output shape: %s",
-                     input_tensor.shape, retval.shape)
-        return T.cast("KerasTensor", retval)
+        # TODO repeat needs to be replaced with repeat_interleave when pixel-shuffler is ported:
+        # x = x.repeat_interleave(self._scale ** 2, dim = -1)
+        x = x.repeat(*([1] * (x.dim() - 1)), self._scale ** 2)
+        logger.debug("ICNR Output shape: %s", x.shape)
+        return x
 
     def get_config(self) -> dict[str, T.Any]:
-        """ Return the ICNR Initializer configuration.
+        """Return the ICNR Initializer configuration.
 
         Returns
         -------
-        dict[str, Any]
-            The configuration for ICNR Initialization
+        The configuration for ICNR Initialization
         """
         config = {"scale": self._scale, "initializer": self._initializer}
         base_config = super().get_config()
@@ -142,8 +89,7 @@ class ICNR(initializers.Initializer):
 
 
 class ConvolutionAware(initializers.Initializer):
-    """
-    Initializer that generates orthogonal convolution filters in the Fourier space. If this
+    """Initializer that generates orthogonal convolution filters in the Fourier space. If this
     initializer is passed a shape that is not 3D or 4D, orthogonal initialization will be used.
 
     Adapted, fixed and optimized from:
@@ -151,26 +97,26 @@ class ConvolutionAware(initializers.Initializer):
 
     Parameters
     ----------
-    eps_std: float, optional
+    eps_std
         The Standard deviation for the random normal noise used to break symmetry in the inverse
         Fourier transform. Default: 0.05
-    seed: int | None, optional
+    seed
         Used to seed the random generator. Default: ``None``
-    initialized: bool, optional
+    initialized
         This should always be set to ``False``. To avoid Keras re-calculating the values every time
         the model is loaded, this parameter is internally set on first time initialization.
         Default:``False``
 
     Returns
     -------
-    :class:`keras.Variable`
-        The modified kernel weights
+    The modified kernel weights
 
     References
     ----------
     Armen Aghajanyan, https://arxiv.org/abs/1702.06295
     """
-
+    # TODO this needs to be done after porting models to torch as it depends on underlying model
+    # structure
     def __init__(self,
                  eps_std: float = 0.05,
                  seed: int | None = None,
@@ -187,17 +133,16 @@ class ConvolutionAware(initializers.Initializer):
 
     @classmethod
     def _symmetrize(cls, inputs: np.ndarray) -> np.ndarray:
-        """ Make the given tensor symmetrical.
+        """Make the given tensor symmetrical.
 
         Parameters
         ----------
-        inputs: :class:`numpy.ndarray`
+        inputs
             The input tensor to make symmetrical
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The symmetrical output
+        The symmetrical output
         """
         var_a = np.transpose(inputs, axes=(0, 1, 3, 2))
         diag = var_a.diagonal(axis1=2, axis2=3)
@@ -207,21 +152,20 @@ class ConvolutionAware(initializers.Initializer):
         return retval
 
     def _create_basis(self, filters_size: int, filters: int, size: int, dtype: str) -> np.ndarray:
-        """ Create the basis for convolutional aware initialization
+        """Create the basis for convolutional aware initialization
 
         Parameters
         ----------
-        filters_size: int
+        filters_size
             The size of the filter
-        filters: int
+        filters
             The number of filters
-        dtype: str
+        dtype
             The data type
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The output array
+        The output array
         """
         if size == 1:
             return np.random.normal(0.0, self._eps_std, (filters_size, filters, size))
@@ -236,19 +180,18 @@ class ConvolutionAware(initializers.Initializer):
 
     @classmethod
     def _scale_filters(cls, filters: np.ndarray, variance: float) -> np.ndarray:
-        """ Scale the given filters.
+        """Scale the given filters.
 
         Parameters
         ----------
-        filters: :class:`numpy.ndarray`
+        filters
             The filters to scale
-        variance: float
+        variance
             The amount of variance
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The scaled filters
+        The scaled filters
         """
         c_var = np.var(filters)
         var_p = np.sqrt(variance / c_var)
@@ -260,19 +203,18 @@ class ConvolutionAware(initializers.Initializer):
     def __call__(self,  # pylint: disable=too-many-locals
                  shape: list[int] | tuple[int, ...],
                  dtype: str | None = None) -> Variable:
-        """ Call function for the ICNR initializer.
+        """Call function for the ICNR initializer.
 
         Parameters
         ----------
-        shape: list[int] | tuple[int, ...]
+        shape
             The required shape for the output tensor
-        dtype: str
+        dtype
             The data type for the tensor
 
         Returns
         -------
-        :class:`keras.Variable`
-            The modified kernel weights
+        The modified kernel weights
         """
         if self._initialized:   # Avoid re-calculating initializer when loading a saved model
             return T.cast("Variable", self._he_uniform(shape, dtype=dtype))
@@ -335,12 +277,11 @@ class ConvolutionAware(initializers.Initializer):
         return retval
 
     def get_config(self) -> dict[str, T.Any]:
-        """ Return the Convolutional Aware Initializer configuration.
+        """Return the Convolutional Aware Initializer configuration.
 
         Returns
         -------
-        dict[str, Any]
-            The configuration for Convolutional Aware Initialization
+        The configuration for Convolutional Aware Initialization
         """
         config = {"eps_std": self._eps_std,
                   "seed": self._seed,
