@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from keras import layers, Sequential
+from keras import layers, Model
 import numpy as np
 from tensorboard.compat.proto import event_pb2
 from torch.utils.tensorboard import SummaryWriter
@@ -89,10 +89,10 @@ def test_TorchTensorBoard_set_model(write_graph, _get_ttb_instance):
     """ Test that :class:`lib.training.tensorboard.set_model` functions """
     log_dir, instance = _get_ttb_instance(write_graph=write_graph)
 
-    model = Sequential()
-    model.add(layers.Input(shape=(8, )))
-    model.add(layers.Dense(4))
-    model.add(layers.Dense(4))
+    inp = layers.Input(shape=(8, ))
+    x = layers.Dense(4)(inp)
+    x = layers.Dense(4)(x)
+    model = Model(inp, x)
 
     assert not os.path.exists(os.path.join(log_dir, "train"))
     instance.set_model(model)
