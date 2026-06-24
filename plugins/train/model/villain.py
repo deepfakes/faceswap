@@ -20,7 +20,7 @@ class Model(OriginalModel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.input_shape = (128, 128, 3)
-        self.encoder_dim = 512 if self.low_mem else 1024
+        self.encoder_dim = 512 if cfg.lowmem() else 1024
         self.kernel_initializer = initializers.RandomNormal(0, 0.02)
 
     def encoder(self):
