@@ -383,11 +383,15 @@ def update_existing_metadata(filename: str, metadata: PNGHeader | bytes) -> None
     if not isinstance(metadata, bytes):
         metadata = str(metadata.to_dict()).encode("utf-8", errors="strict")
 
-    tmp_filename = filename + "~"
-    with open(filename, "rb") as png, open(tmp_filename, "wb") as tmp:
+    safe_path = os.path.realpath(filename)
+    if not safe_path.lower().endswith(".png"):
+        raise ValueError(f"Expected a .png file: {safe_path}")
+
+    tmp_filename = safe_path + "~"
+    with open(safe_path, "rb") as png, open(tmp_filename, "wb") as tmp:
         chunk = png.read(8)
         if chunk != b"\x89PNG\r\n\x1a\n":
-            raise ValueError(f"Invalid header found in png: {filename}")
+            raise ValueError(f"Invalid header found in png: {safe_path}")
         tmp.write(chunk)
 
         while True:
