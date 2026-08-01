@@ -25,9 +25,12 @@ class FaceswapGui(tk.Tk):
         Output to the terminal rather than to Faceswap's internal console
     config_file : str | None
         Path to a custom .ini configuration file. ``None`` to use the default config file
+    logfile : str | None
+        Path to the logfile used by commands launched from the GUI. ``None`` to use the default
+        logfile
     """
 
-    def __init__(self, debug, config_file):
+    def __init__(self, debug, config_file, logfile):
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__()
         cfg.load_config(config_file)
@@ -37,7 +40,7 @@ class FaceswapGui(tk.Tk):
         self.set_fonts()
         self._config.set_geometry(1200, 640, cfg.fullscreen())
 
-        self.wrapper = ProcessWrapper()
+        self.wrapper = ProcessWrapper(logfile)
         self.objects = {}
 
         get_images().delete_preview()
@@ -186,7 +189,7 @@ class FaceswapGui(tk.Tk):
 class Gui():
     """ The GUI process. """
     def __init__(self, arguments):
-        self.root = FaceswapGui(arguments.debug, arguments.config_file)
+        self.root = FaceswapGui(arguments.debug, arguments.config_file, arguments.logfile)
 
     def process(self):
         """ Builds the GUI """

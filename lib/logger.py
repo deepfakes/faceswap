@@ -435,6 +435,9 @@ def _file_handler(loglevel,
     """
     if log_file:
         filename = log_file
+        if command == "gui":
+            stem, extension = os.path.splitext(filename)
+            filename = f"{stem}_gui{extension}"
     else:
         filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "faceswap")
         # Windows has issues sharing the log file with sub-processes, so log GUI separately

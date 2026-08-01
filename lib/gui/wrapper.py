@@ -28,10 +28,17 @@ logger = logging.getLogger(__name__)
 
 class ProcessWrapper():
     """ Builds command, launches and terminates the underlying
-        faceswap process. Updates GUI display depending on state """
+        faceswap process. Updates GUI display depending on state
 
-    def __init__(self) -> None:
+    Parameters
+    ----------
+    logfile : str | None
+        The GUI startup logfile to pass to child commands. ``None`` to use their default logfile
+    """
+
+    def __init__(self, logfile: str | None = None) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
+        self._logfile = logfile
         self._tk_vars = get_config().tk_vars
         self._set_callbacks()
         self._command: str | None = None
@@ -164,11 +171,15 @@ class ProcessWrapper():
         args.extend([pathexecscript, command])
 
         cli_opts = get_config().cli_opts
+        has_logfile = False
         for cliopt in cli_opts.gen_cli_arguments(command):
             args.extend(cliopt)
+            has_logfile |= cliopt[0] in ("-F", "--logfile")
             if command == "train" and not generate:
                 self._get_training_session_info(cliopt)
 
+        if self._logfile and not has_logfile:
+            args.extend(("-F", self._logfile))
         if not generate:
             args.append("-G")  # Indicate to Faceswap that we are running the GUI
         if generate:
