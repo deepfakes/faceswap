@@ -39,7 +39,7 @@ jobs:
           - os: "macos-latest"
             backend: "nvidia"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
       - name: Cleanup space
         # We run out of space on rocm. Ref: https://github.com/actions/runner-images/issues/709
         if: matrix.backend == 'rocm'
@@ -58,7 +58,7 @@ jobs:
       #    path: ~/conda_pkgs_dir
       #    key: ${{ runner.os }}-${{ matrix.backend }}-conda-${{ matrix.python-version }}-${{ env.CACHE_NUMBER }}-${{ env.DATE }}-${{ hashFiles('./requirements/requirements.txt', env.REQ_FILE) }}
       - name: Set up Conda
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: ${{ matrix.python-version }}
           miniconda-version: "latest"
