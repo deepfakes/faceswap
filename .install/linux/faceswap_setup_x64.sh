@@ -109,7 +109,7 @@ ask () {
     read -rp $'\e[36m'"$1 [default: '$default']: "$'\e[97m' inp
     inp="${inp:-${default}}"
     if [ "$inp" == "\n" ] ; then inp=${!2} ; fi
-    printf -v $2 "$inp"
+    printf -v "$2" '%s' "$inp"
 }
 
 ask_yesno () {
