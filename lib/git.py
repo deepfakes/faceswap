@@ -35,8 +35,8 @@ class Git():
             The output lines from stdout if there was no error, otherwise from stderr
         """
         logger.debug("command: '%s'", command)
-        cmd = f"git {command}"
-        with Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE, cwd=self._working_dir) as proc:
+        cmd = ["git"] + command.split()
+        with Popen(cmd, shell=False, stdout=PIPE, stderr=PIPE, cwd=self._working_dir) as proc:
             stdout, stderr = proc.communicate()
         retcode = proc.returncode
         success = retcode == 0
