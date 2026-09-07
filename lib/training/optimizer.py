@@ -435,6 +435,8 @@ class Optimizer:
             p["lr"] = lr
             if "initial_lr" in p:
                 p["initial_lr"] = lr
+        if self._warmup is not None:
+            self._warmup.base_lrs = [p["lr"] for p in self._optimizer.param_groups]
 
     def find_learning_rate(self,
                            trainer: Trainer,
