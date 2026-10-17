@@ -198,6 +198,28 @@ class _SSIM(nn.Module):  # pylint:disable=abstract-method
         gauss = F.softmax(gauss, dim=-1)
         return gauss.reshape(1, 1, size, size)
 
+    def _sync_device(self, device: torch.device) -> None:
+        """Make sure that this module's registered buffers (the gaussian kernel and, for MS-SSIM,
+        the power factors/divisors) are on the same device as the images being processed.
+
+        The loss functions are probed with CPU tensors when they are configured, before the model
+        (and the losses attached to it) is moved to the training device. Any buffer that is still
+        on a different device from the incoming images would raise a device mismatch error inside
+        :func:`torch.nn.functional.conv2d`, so move it across here. This is a no-op once all
+        buffers are on the correct device.
+
+        Parameters
+        ----------
+        device
+            The device that the incoming images are on
+        """
+        for name, buffer in list(self.named_buffers(recurse=False)):
+            if buffer.device == device:
+                continue
+            logger.debug("[%s] Moving buffer '%s' from '%s' to '%s'",
+                         self.__class__.__name__, name, buffer.device, device)
+            setattr(self, name, buffer.to(device))
+
     def _reducer(self, image: torch.Tensor) -> torch.Tensor:
         """Computes local averages from a set of images
 
@@ -331,6 +353,7 @@ class SSIMLoss(_SSIM):
         -------
         The final SSIM for each item in the batch
         """
+        self._sync_device(y_true.device)
         ssim_per_channel, _ = self._ssim_per_channel(y_true, y_pred)
         loss = 1.0 - ssim_per_channel
         if not self._spatial:
@@ -449,14 +472,15 @@ class MSSIMLoss(_SSIM):
         logger.warning("[MSSIM] Output size %spx is below 176px. The MS-SSIM kernel must be "
                        "adjusted to accommodate. You will likely get better results using SSIM.",
                        im_size)
-        del self._kernel
         flt = smallest_scale - 1 if smallest_scale % 2 == 0 else smallest_scale
         if flt < 3:
             raise FaceswapError("The output size of the selected model is too small for MS-SSIM. "
                                 "Use SSIM instead.")
         logger.debug("[MSSIM] Adjusting filter kernel to %s from %s for smallest scale %s.",
                      flt, kernel_size, smallest_scale)
-        self._kernel = self._fspecial_gauss(flt, self._filter_sigma).to(image.device)
+        del self._kernel
+        self.register_buffer("_kernel",
+                             self._fspecial_gauss(flt, self._filter_sigma).to(image.device))
         self._validated = True
 
     @classmethod
@@ -548,6 +572,7 @@ class MSSIMLoss(_SSIM):
         -------
         The MS-SSIM Loss value
         """
+        self._sync_device(y_true.device)
         self._validate_kernel(y_true)
         ms_ssim = self._mssism(y_true, y_pred)
         ms_ssim_loss = 1. - ms_ssim

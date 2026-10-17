@@ -209,6 +209,17 @@ class Legacy:  # pylint:disable=too-few-public-methods
                 logger.debug("Removing '%s' from %s '%s'", key, layer["class_name"], layer["name"])
                 del layer["config"][key]
 
+        if layer["class_name"] in ("SpatialDropout1D", "SpatialDropout2D", "SpatialDropout3D"):
+            # Keras 3 SpatialDropout layers no longer accept the generic layer kwargs that Keras 2
+            # serialized with them ('trainable', 'noise_shape'), so strip anything that is not in
+            # the Keras 3 signature. (Hit when upgrading the 'unbalanced' model)
+            allowed = {"rate", "seed", "name", "dtype"}
+            if layer["class_name"] != "SpatialDropout1D":
+                allowed.add("data_format")
+            for key in [k for k in layer["config"] if k not in allowed]:
+                logger.debug("Removing '%s' from %s '%s'", key, layer["class_name"], layer["name"])
+                del layer["config"][key]
+
         if "dtype" in layer["config"]:
             # Incorrectly stored dtypes error when deserializing the new config. May be a Keras bug
             actual_dtype = None
@@ -265,7 +276,10 @@ class Legacy:  # pylint:disable=too-few-public-methods
             A list of layers that belong to a keras 2 functional model config dictionary
         """
         for layer in layer_list:
-            if layer["class_name"] == "Functional":
+            if layer["class_name"] in ("Functional", "Model"):
+                # Older Keras 2 (TF < 2.4) serialized functional models with class_name
+                # "Model" rather than "Functional". Treat both the same, otherwise none of the
+                # legacy fixes below are applied and the model fails to load
                 logger.debug("Found Functional layer. Keys: %s", list(layer))
 
                 if layer.get("name"):
