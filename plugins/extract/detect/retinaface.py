@@ -52,7 +52,7 @@ class RetinaFace(ExtractPlugin):
     def __init__(self) -> None:
         super().__init__(input_size=640,
                          batch_size=cfg.batch_size(),
-                         is_rgb=True,
+                         is_rgb=False,
                          dtype="float32",
                          scale=(0, 255),
                          force_cpu=cfg.cpu())
