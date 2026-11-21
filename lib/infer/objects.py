@@ -850,9 +850,11 @@ class FrameFaces:  # pylint:disable=too-many-instance-attributes
                                            storage_centering=m.centering).add(
                                                m.masks[idx],
                                                m.matrices[idx])
-                                   for k, m in self.masks.items()},
+                                   for k, m in self.masks.items()
+                                   if m.masks.size and idx < m.masks.shape[0]
+                                   and idx < m.matrices.shape[0]},
                              identity={k: i[idx] for k, i in self.identities.items()
-                                       if i.size})
+                                       if i.size and idx < i.shape[0]})
                 for idx, box in enumerate(self.bboxes)]
 
     @detected_faces.setter
